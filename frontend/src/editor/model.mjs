@@ -215,6 +215,8 @@ function poly(mat, pts, hint, uvf) {
   if (pts.length < 3) return;
   let n = norm(cross(sub(pts[1],pts[0]), sub(pts[2],pts[0])));
   if (hint && dot(n, hint) < 0) { pts = pts.slice().reverse(); n = neg(n); }
+  // Undersides of the roof, dormer roofs and canopies (eave soffits) are painted boards, not tiles.
+  if (mat === "roof" && n[1] < -0.3) mat = "trim";
   const g = G[mat], base = g.p.length / 3;
   const ax = Math.abs(n[0]), ay = Math.abs(n[1]), az = Math.abs(n[2]);
   for (const q of pts) {

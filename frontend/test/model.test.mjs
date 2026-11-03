@@ -102,6 +102,21 @@ test("geometry: overlapping windows are hidden instead of cut twice", () => {
   assert.equal(p.windows.filter(w => w._hidden).length, 1);
 });
 
+// The underside of eaves, dormer roofs and canopies is painted like the trim, not tiled like the roof.
+for (const roofType of ["gable", "hip", "flat"]) {
+  test(`geometry: roof undersides use the trim, not the roof covering (${roofType})`, () => {
+    const p = sanitize({ roofType, overhang: 0.6, entrance: "gable", halfStorey: roofType !== "flat",
+      dormers: roofType === "flat" ? [] : [{ type: "gable", side: 1, pos: 0.3 }, { type: "shed", side: -1, pos: 0.6 }] });
+    const { G, dims } = buildGeometry(p);
+    const down = g => Array.from({ length: g.n.length / 3 }, (_, i) => g.n[i*3+1]).filter(y => y < -0.3).length;
+    assert.equal(down(G.roof), 0, "roof faces pointing down");
+    // the eave soffit is there, in the trim, under the overhang
+    const soffit = Array.from({ length: G.trim.p.length / 3 }, (_, i) => i)
+      .filter(i => G.trim.n[i*3+1] < -0.3 && G.trim.p[i*3+1] >= dims.top - 1.5 && Math.abs(G.trim.p[i*3]) > dims.W / 2);
+    assert.ok(soffit.length > 0, "no trim soffit outside the walls");
+  });
+}
+
 test("geometry: building the same settings twice gives the same result", () => {
   const a = buildGeometry(sanitize({})).G, b = buildGeometry(sanitize({})).G;
   assert.deepEqual(a, b);
