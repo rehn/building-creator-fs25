@@ -1,0 +1,27 @@
+{
+  "name": "house-to-i3d-web",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"test/**/*.test.mjs\""
+  },
+  "dependencies": {
+    "jszip": "3.10.1",
+    "next": "16.4.1",
+    "react": "19.2.5",
+    "react-dom": "19.2.5",
+    "three": "0.128.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/react": "^19.2",
+    "@types/react-dom": "^19.2",
+    "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": ">=20.9"
+  }
+}

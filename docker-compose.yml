@@ -1,0 +1,29 @@
+# Runs the whole app: docker compose up -d   (settings come from .env)
+services:
+  api:
+    image: ${DOCKERHUB_USERNAME:-local}/house-to-i3d-api:${TAG:-latest}
+    build: ./backend
+    environment:
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3000}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?Set ADMIN_EMAIL in .env}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      TRUST_PROXY: "true"
+    volumes:
+      - data:/data
+    restart: unless-stopped
+
+  web:
+    image: ${DOCKERHUB_USERNAME:-local}/house-to-i3d-web:${TAG:-latest}
+    build: ./frontend
+    environment:
+      API_URL: http://api:8080
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  data:

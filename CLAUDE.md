@@ -1,0 +1,29 @@
+# House to i3d – notes for Claude
+
+Web app for building Farming Simulator 25 houses and exporting them as .i3d
+(zipped with textures) for Giants Editor. Invite-only accounts, houses saved per user.
+
+## Layout
+- backend/  Go 1.25 API, stdlib net/http + SQLite (modernc.org/sqlite, no cgo).
+  internal/auth (PBKDF2 passwords, tokens), internal/store (SQLite),
+  internal/api (handlers), internal/config (env vars), cmd/server.
+- frontend/ Next.js 16 (App Router, TypeScript). /api/* is proxied to the Go API
+  by src/app/api/[...path]/route.ts.
+  src/editor/model.mjs = pure house logic (settings, geometry, i3d export), no DOM.
+  src/editor/editor.mjs = controls + three.js r128 preview, mounted by Editor.tsx.
+- docker-compose.yml runs api + web; CI in .github/workflows/ci.yml pushes
+  house-to-i3d-api and house-to-i3d-web to Docker Hub on releases (vX.Y.Z).
+
+## How we work
+- TDD: write the failing test first, then the code.
+- Backend tests: cd backend && go test ./...
+- Frontend tests: cd frontend && npm test (node --test, no browser needed)
+
+## Status
+- Go tests (40) pass, go vet is clean. Frontend tests (25) pass.
+- npm run build succeeds.
+- go.sum and package-lock.json are committed.
+
+## Dev environment (WSL)
+- Node 22 and gh live in ~/.local/bin (installed without sudo).
+- Docker is not integrated into WSL; Docker Desktop runs on the Windows side.

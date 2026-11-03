@@ -1,0 +1,8 @@
+.DS_Store
+.env
+*.zip
+*.i3d
+*.db
+*.db-shm
+*.db-wal
+node_modules/
