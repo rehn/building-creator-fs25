@@ -106,8 +106,24 @@ table.list th { color: var(--muted); font-weight: 500; font-size: 14px; }
 .loading { padding: 40px; color: var(--muted); text-align: center; }
 
 /* ---------- Editor (markup from editor.mjs) ---------- */
-.hx-editor { flex: 1; min-height: 0; display: grid; grid-template-columns: 350px 1fr; }
-.hx-panel { overflow-y: auto; border-right: 1px solid var(--line); background: var(--panel); padding: 4px 16px 32px; }
+/* Settings in two sides: "build" and "finish". One column with tabs, or on wide screens one panel
+   each side of the 3D view. The editor's data-tab says which side the tabs show. */
+.hx-editor { flex: 1; min-height: 0; display: grid; grid-template-columns: 350px 1fr; grid-template-rows: auto 1fr; }
+.hx-panel { overflow-y: auto; min-height: 0; border-right: 1px solid var(--line); background: var(--panel); padding: 4px 16px 32px; }
+.hx-tabs { grid-column: 1; grid-row: 1; display: flex; gap: 4px; padding: 6px 16px 0; background: var(--panel); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.hx-tabs button { flex: 1; justify-content: center; border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: none; padding: 8px 0 7px; font-weight: 600; font-size: 15px; color: var(--muted); }
+.hx-tabs button:hover { color: var(--ink); background: none; }
+.hx-tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.hx-build, .hx-finish { grid-column: 1; grid-row: 2; }
+.hx-editor[data-tab="build"] .hx-finish, .hx-editor[data-tab="finish"] .hx-build { display: none; }
+.hx-panel .hx-side { display: none; margin: 14px 0 2px; font-size: 12.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+@media (min-width: 1400px) {
+  .hx-editor { grid-template-columns: 340px 1fr 340px; }
+  .hx-tabs { display: none; }
+  .hx-editor[data-tab] .hx-build, .hx-editor[data-tab] .hx-finish { display: block; grid-row: 1 / span 2; }   /* both sides, whatever the tab */
+  .hx-finish { grid-column: 3; border-right: 0; border-left: 1px solid var(--line); }
+  .hx-panel .hx-side { display: block; }
+}
 .hx-panel details { border-bottom: 1px solid var(--line); padding: 4px 0 12px; }
 .hx-panel summary { font-family: var(--font-display), "Arial Narrow", sans-serif; font-weight: 600; font-size: 19px; padding: 8px 0; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
 .hx-panel summary::-webkit-details-marker { display: none; }
@@ -139,7 +155,7 @@ table.list th { color: var(--muted); font-weight: 500; font-size: 14px; }
 .hx-panel .sub { font-weight: 600; margin: 16px 0 0; }
 .hx-panel button.wide { width: 100%; margin-top: 8px; justify-content: center; }
 .hx-panel .addrow { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 4px; }
-.hx-stage { position: relative; min-width: 0; min-height: 0; background: var(--stage); }
+.hx-stage { position: relative; min-width: 0; min-height: 0; background: var(--stage); grid-column: 2; grid-row: 1 / span 2; }
 .hx-stage canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
 .hx-stage canvas:active { cursor: grabbing; }
 .hx-stage .readout { position: absolute; left: 14px; bottom: 12px; display: flex; gap: 14px; flex-wrap: wrap; font-size: 13.5px; color: var(--muted); pointer-events: none; }
@@ -155,7 +171,8 @@ table.list th { color: var(--muted); font-weight: 500; font-size: 14px; }
 @media (max-width: 820px) {
   .editor-page { height: auto; min-height: 100dvh; overflow: visible; }
   .hx-editor { display: flex; flex-direction: column; }
-  .hx-stage { height: 52vh; flex: none; }
+  .hx-stage { height: 52vh; flex: none; order: -1; }   /* the house first, then the settings */
+  .hx-tabs { border-right: 0; }
   .hx-panel { border-right: 0; overflow: visible; }
   .hx-stage .orbit-hint { display: none; }
 }

@@ -23,7 +23,8 @@ const pickRoom = v => ROOM_TYPES.includes(v) ? v : "auto";
 const pickCurtain = v => CURTAIN_STYLES.includes(v) ? v : "default";
 const pickColor = v => typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v) ? v : "default";
 export const SCHEMA = [
-  {title:"Size", fields:[
+  // side: where the editor shows the section, "build" (left / first tab) or "finish" (right / second tab).
+  {title:"Size", side:"build", fields:[
     {k:"width", label:"Front wall length", min:4, max:30, step:0.1, unit:" m"},
     {k:"depth", label:"Side wall length", min:4, max:25, step:0.1, unit:" m"},
     {k:"floors", label:"Full floors", min:1, max:3, step:1},
@@ -31,7 +32,7 @@ export const SCHEMA = [
     {k:"kneeWall", label:"Knee wall height", min:0.2, max:1.6, step:0.05, unit:" m"},
     {k:"floorHeight", label:"Floor height", min:2.3, max:4, step:0.05, unit:" m"},
     {k:"foundation", label:"Foundation height", min:0, max:1.2, step:0.05, unit:" m"}]},
-  {title:"Roof", fields:[
+  {title:"Roof", side:"build", fields:[
     {k:"roofType", label:"Roof type", type:"select", options:[["gable","Gable"],["hip","Hip"],["flat","Flat"]]},
     {k:"ridge", label:"Ridge direction", type:"select", options:[["width","Parallel to the front"],["depth","Front to back"]]},
     {k:"roofPitch", label:"Pitch", min:5, max:60, step:1, unit:"\u00B0"},
@@ -39,37 +40,27 @@ export const SCHEMA = [
     {k:"chimney", label:"Chimney", type:"check"},
     {k:"gutters", label:"Rain gutters", type:"check"},
     {k:"downpipes", label:"Downpipes per long side", min:0, max:2, step:1}]},
-  {title:"Kupor (dormers)", custom:"dormers", fields:[]},
-  {title:"Windows", custom:"windows", hint:"Set how many windows each floor has. To change one window, choose it below or tap it in the preview.", fields:[
+  {title:"Kupor (dormers)", side:"build", custom:"dormers", fields:[]},
+  {title:"Windows", side:"build", custom:"windows", hint:"Set how many windows each floor has. To change one window, choose it below or tap it in the preview.", fields:[
     {k:"winW", label:"Width", min:0.4, max:2.5, step:0.05, unit:" m"},
     {k:"winH", label:"Height", min:0.4, max:2.2, step:0.05, unit:" m"},
     {k:"sill", label:"Sill height", min:0.2, max:1.5, step:0.05, unit:" m"}]},
-  {title:"Door", fields:[
+  {title:"Door", side:"build", fields:[
     {k:"doorWall", label:"Wall", type:"select", options:[["front","Front"],["back","Back"],["left","Left side"],["right","Right side"]]},
     {k:"doorPos", label:"Position, left to right", min:-1, max:1, step:0.05},
     {k:"doorW", label:"Width", min:0.7, max:2.5, step:0.05, unit:" m"},
     {k:"doorH", label:"Height", min:1.8, max:2.6, step:0.05, unit:" m"}]},
-  {title:"Entrance", fields:[
+  {title:"Entrance", side:"build", fields:[
     {k:"entrance", label:"Canopy", type:"select", options:[["none","None"],["shed","Shed canopy on brackets"],["gable","Gable canopy on brackets"],["porch","Porch with posts (förstukvist)"]]},
     {k:"entranceWidth", label:"Width", min:1.2, max:5, step:0.05, unit:" m"},
     {k:"entranceDepth", label:"Depth", min:0.6, max:3, step:0.05, unit:" m"}]},
-  {title:"Interior", hint:"A small furnished room behind each window, seen through the glass. To pick the room or curtains for one window, choose it under Windows (or a kupa under Kupor).", fields:[
-    {k:"interior", label:"Rooms behind the windows", type:"check"},
-    {k:"curtainStyle", label:"Curtains", type:"select", options:CURTAIN_OPTIONS}]},
-  {title:"Farmhouse", hint:"Players sleep outside the door, where the bed icon floats. With this on, the export is a farmhouse placeable with a sleep trigger, spawn point and farm map icon.", fields:[
-    {k:"sleepPoint", label:"Sleep point with bed icon", type:"check"}]},
-  {title:"Surfaces", fields:[
+  {title:"Surfaces", side:"finish", fields:[
     {k:"wallCladding", label:"Wall cladding", type:"select", options:[["lockpanel","Board and batten (lockpanel)"],["horizontal","Horizontal boards"],["plaster","Plaster"]]},
     {k:"panelSpacing", label:"Board width", min:0.12, max:0.4, step:0.005, cm:true},
     {k:"battenWidth", label:"Batten width", min:0.03, max:0.1, step:0.005, cm:true},
     {k:"roofMaterial", label:"Roof covering", type:"select", options:[["tiles","Concrete tiles"],["metal","Standing seam metal"],["plain","Plain color"]]},
     {k:"chimneyStyle", label:"Chimney", type:"select", options:[["brick","Brick"],["plain","Plain color"]]}]},
-  {title:"Game mod", hint:"Used by \u201CExport game mod\u201D: what the house costs in the shop and who made it. The project name is the name in the shop.", fields:[
-    {k:"modPrice", label:"Price", min:0, max:2000000, step:500, money:true},
-    {k:"modUpkeep", label:"Daily upkeep", min:0, max:5000, step:5, money:true},
-    {k:"modAuthor", label:"Author (empty: your name)", type:"text", max:60},
-    {k:"modDescription", label:"Description in the mod list (empty: made for you)", type:"text", max:1000, multiline:true}]},
-  {title:"Colors", colors:true, fields:[
+  {title:"Colors", side:"finish", colors:true, fields:[
     {k:"wallColor", label:"Walls", type:"color"},
     {k:"trimColor", label:"Trim", type:"color"},
     {k:"roofColor", label:"Roof", type:"color"},
@@ -77,7 +68,17 @@ export const SCHEMA = [
     {k:"foundationColor", label:"Base", type:"color"},
     {k:"chimneyColor", label:"Chimney", type:"color"},
     {k:"gutterColor", label:"Gutters", type:"color"},
-    {k:"curtainColor", label:"Curtains", type:"color"}]}
+    {k:"curtainColor", label:"Curtains", type:"color"}]},
+  {title:"Interior", side:"finish", hint:"A small furnished room behind each window, seen through the glass. To pick the room or curtains for one window, choose it under Windows (or a kupa under Kupor).", fields:[
+    {k:"interior", label:"Rooms behind the windows", type:"check"},
+    {k:"curtainStyle", label:"Curtains", type:"select", options:CURTAIN_OPTIONS}]},
+  {title:"Farmhouse", side:"finish", hint:"Players sleep outside the door, where the bed icon floats. With this on, the export is a farmhouse placeable with a sleep trigger, spawn point and farm map icon.", fields:[
+    {k:"sleepPoint", label:"Sleep point with bed icon", type:"check"}]},
+  {title:"Game mod", side:"finish", hint:"Used by \u201CExport game mod\u201D: what the house costs in the shop and who made it. The project name is the name in the shop.", fields:[
+    {k:"modPrice", label:"Price", min:0, max:2000000, step:500, money:true},
+    {k:"modUpkeep", label:"Daily upkeep", min:0, max:5000, step:5, money:true},
+    {k:"modAuthor", label:"Author (empty: your name)", type:"text", max:60},
+    {k:"modDescription", label:"Description in the mod list (empty: made for you)", type:"text", max:1000, multiline:true}]}
 ];
 export const FIELD = {};
 SCHEMA.forEach(g => g.fields.forEach(f => FIELD[f.k] = f));
@@ -269,6 +270,60 @@ export function pipeMesh(path, r, {seg = 16, bend = 0.12} = {}) {
   const ring = R => R.verts.map(k => m.v(k));
   cap(m, pts[0], ring(m.rings[0]), neg(T[0]));
   cap(m, pts[pts.length - 1], ring(m.rings[m.rings.length - 1]), T[T.length - 1]);
+  delete m.v; delete m.add;
+  return m;
+}
+
+/**
+ * Half-round ridge cap from x = a0 to a1, in local coordinates: x along the ridge, y up, z across,
+ * with the roof's top surface at y = ridgeY - tanP * |z|. The round runs down each side until it is
+ * tucked into the roof, so it rests on the slopes at any pitch. Smooth shading; open underneath.
+ * arc: the indices of the round surface's vertices; axisY: height of its axis (for tests).
+ */
+export function ridgeCapMesh(a0, a1, ridgeY, tanP, r, {seg = 24} = {}) {
+  const m = newMesh(), axisY = ridgeY + 0.01, roofAt = z => ridgeY - tanP * Math.abs(z) - 0.008;
+  const at2 = th => [r * Math.sin(th), axisY + r * Math.cos(th)];         // [z, y] on the round
+  // The round goes down each side to where it meets the roof, but no further than 105 degrees,
+  // so it never faces downwards; from there a short straight skirt carries on along its tangent.
+  const END = 105 * Math.PI / 180;
+  let end = Math.PI / 2;
+  while (at2(end)[1] > roofAt(at2(end)[0]) && end < END) end += Math.PI / 360;
+  end = Math.min(end, END);
+  const n = Math.max(seg, Math.ceil(2 * end / (7.5 * Math.PI / 180)));
+  const ths = Array.from({length: n + 1}, (_, k) => -end + 2 * end * k / n);
+  // Skirt: from the end of the round along its tangent until tucked into the roof.
+  const skirt = sg => {
+    const [z0, y0] = at2(sg * end), dz = sg * Math.cos(end), dy = -Math.sin(end);
+    let s = 0;
+    while (y0 + dy * s > roofAt(z0 + dz * s) && s < 4 * r) s += r / 50;
+    return s > 0 ? [z0 + dz * s, y0 + dy * s] : null;
+  };
+  // The profile, left to right: [z, y, normal z, normal y, v]
+  const prof = [];
+  const sL = skirt(-1), sR = skirt(1), nL = [Math.sin(-end), Math.cos(end)], nR = [Math.sin(end), Math.cos(end)];
+  if (sL) prof.push([sL[0], sL[1], nL[0], nL[1], -r * end - Math.hypot(sL[0] - at2(-end)[0], sL[1] - at2(-end)[1])]);
+  for (const th of ths) { const [z, y] = at2(th); prof.push([z, y, Math.sin(th), Math.cos(th), r * th]); }
+  if (sR) prof.push([sR[0], sR[1], nR[0], nR[1], r * end + Math.hypot(sR[0] - at2(end)[0], sR[1] - at2(end)[1])]);
+  const first = sL ? 1 : 0;   // where the round starts in prof
+  m.arc = []; m.rim = [];
+  const row = x => prof.map(([z, y, nz, ny, v], k) => {
+    const i = m.add([x, y, z], [0, ny, nz], [x, v]);
+    if (k >= first && k <= first + n) m.arc.push(i);
+    if (k === 0 || k === prof.length - 1) m.rim.push(i);
+    return i;
+  });
+  const A = row(a0), B = row(a1);
+  for (let k = 0; k + 1 < prof.length; k++) {
+    const hint = [0, (prof[k][3] + prof[k + 1][3]) / 2, (prof[k][2] + prof[k + 1][2]) / 2];
+    tri(m, A[k], B[k], B[k + 1], hint); tri(m, A[k], B[k + 1], A[k + 1], hint);
+  }
+  // Ends: a fan from the axis, like the end of a ridge tile.
+  for (const [x, sg] of [[a0, -1], [a1, 1]]) {
+    const nrm = [sg, 0, 0], c = m.add([x, axisY, 0], nrm, [0.5, 0.5]);
+    const vs = prof.map(([z, y]) => m.add([x, y, z], nrm, [0, 0]));
+    for (let k = 0; k + 1 < vs.length; k++) tri(m, c, vs[k], vs[k + 1], nrm);
+  }
+  m.axisY = axisY;
   delete m.v; delete m.add;
   return m;
 }
@@ -567,6 +622,17 @@ function addMesh(mat, m) {
   for (const k of m.i) g.i.push(k + base);
   if (g.c) for (let k = 0; k < m.p.length / 3; k++) g.c.push(...curtainRGB);
 }
+/** The ridge cap along the ridge from a0 to a1 (ridge coordinates), placed with M. */
+function ridgeCap(a0, a1, ridgeY, tanP, M, ridgeX) {
+  const m = ridgeCapMesh(a0, a1, ridgeY, tanP, 0.12), q = [];
+  for (let k = 0; k < m.p.length; k += 3) q.push(...M(m.p[k], m.p[k + 1], m.p[k + 2]));
+  const nn = [];
+  for (let k = 0; k < m.n.length; k += 3) nn.push(...M(m.n[k], m.n[k + 1], m.n[k + 2]));
+  const idx = [];
+  // Swapping x and z mirrors the mesh, which turns its triangles inside out: turn them back.
+  for (let k = 0; k < m.i.length; k += 3) idx.push(...(ridgeX ? [m.i[k], m.i[k + 1], m.i[k + 2]] : [m.i[k], m.i[k + 2], m.i[k + 1]]));
+  addMesh("roof", {p: q, n: nn, uv: m.uv, i: idx});
+}
 function gutterRun(c0, c1, out, r) { addMesh("gutter", gutterMesh(c0, c1, out, r)); }
 function sbox(mat, w, sc, thk, p0, p1) {
   const ad = p1[0] - p0[0], at = p1[1] - p0[1], l = Math.hypot(ad, at), ud = ad / l, ut = at / l, pd = -ut, pt = ud;
@@ -799,7 +865,7 @@ function build() {
       poly("trim", [t[1],t[2],b[2],b[1]], M(1,0,0));
       poly("trim", [t[3],t[0],b[0],b[3]], M(-1,0,0));
     }
-    abox("roof", M(-hA, ridgeY - 0.04, -0.1), M(hA, ridgeY + 0.07, 0.1));
+    ridgeCap(-hA, hA, ridgeY, tanP, M, ridgeX);
     // Collision: the roof as one solid, from the eaves up to the ridge, gable end to gable end.
     prism("collision", [[-hB, eaveY], [hB, eaveY], [0, ridgeY]], ([b, y], k) => M(k ? hA : -hA, y, b));
   } else if (p.roofType === "hip") {
@@ -813,7 +879,7 @@ function build() {
       poly("roof", e, eu, uvEnd); poly("roof", eb, neg(eu), uvEnd);
       poly("trim", [e[0],e[1],eb[1],eb[0]], M(s,0,0));
     }
-    if (rh > 0.05) abox("roof", M(-rh, ridgeY - 0.04, -0.1), M(rh, ridgeY + 0.07, 0.1));
+    if (rh > 0.05) ridgeCap(-rh, rh, ridgeY, tanP, M, ridgeX);
     // Collision: eave rectangle up to the ridge (a pyramid when the ridge has no length).
     const E = (a, b) => M(a * hA, eaveY, b * hB), Rr = a => M(a * rh, ridgeY, 0);
     solid("collision", [

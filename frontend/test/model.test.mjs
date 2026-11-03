@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULTS, sanitize, buildGeometry, buildI3d, serialize, MATS, placementAreas, placeableSnippet, sleepPoint, boxMesh, WP, ROOM_TYPES, CURTAIN_STYLES, rgb, pipeMesh, gutterMesh, surfaceSpec, scaledUV } from "../src/editor/model.mjs";
+import { DEFAULTS, SCHEMA, sanitize, buildGeometry, buildI3d, serialize, MATS, placementAreas, placeableSnippet, sleepPoint, boxMesh, WP, ROOM_TYPES, CURTAIN_STYLES, rgb, pipeMesh, gutterMesh, surfaceSpec, scaledUV, ridgeCapMesh } from "../src/editor/model.mjs";
 
 const cross3 = (a, b) => [a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0]];
 const countOn = (p, wall, floor) => p.windows.filter(w => w.wall === wall && w.floor === floor).length;
@@ -24,6 +24,14 @@ test("sanitize: invalid selects, colors and booleans fall back to defaults", () 
   assert.equal(p.roofType, DEFAULTS.roofType);
   assert.equal(p.wallColor, DEFAULTS.wallColor);
   assert.equal(p.chimney, DEFAULTS.chimney);
+});
+
+// The editor shows "build" on the left (or the first tab) and "finish" on the right (or the second tab).
+test("schema: sections are split into building the house and finishing it", () => {
+  const side = s => SCHEMA.filter(g => g.side === s).map(g => g.title);
+  assert.ok(SCHEMA.every(g => g.side === "build" || g.side === "finish"), "every section has a side");
+  assert.deepEqual(side("build"), ["Size", "Roof", "Kupor (dormers)", "Windows", "Door", "Entrance"]);
+  assert.deepEqual(side("finish"), ["Surfaces", "Colors", "Interior", "Farmhouse", "Game mod"]);
 });
 
 test("sanitize: unknown keys are dropped", () => {
@@ -173,6 +181,37 @@ for (const roofType of ["gable", "hip"]) {
     }
     assert.ok(long > 10, "no long trim boards found");
     if (roofType === "gable") assert.ok(sloped > 0, "no sloped boards checked");
+  });
+}
+
+/* ---------- Ridge cap ---------- */
+// Local coordinates: x along the ridge, y up, z across; the roof's top surface is y = ridgeY - tanP * |z|.
+for (const pitch of [10, 38, 60]) {
+  test(`ridgeCapMesh: a half-round cap resting on the slopes (${pitch} degrees)`, () => {
+    const ridgeY = 7, tanP = Math.tan(pitch * Math.PI / 180), r = 0.12;
+    const m = ridgeCapMesh(-4, 4, ridgeY, tanP, r);
+    assertMeshValid(m, "ridge cap");
+    const arc = m.arc, roofAt = z => ridgeY - tanP * Math.abs(z);
+    assert.ok(arc.length >= 2 * 12, "arc too coarse");
+    for (const i of arc) {
+      const y = m.p[i*3+1] - m.axisY, z = m.p[i*3+2], n = [m.n[i*3], m.n[i*3+1], m.n[i*3+2]];
+      assert.ok(Math.abs(Math.hypot(y, z) - r) < 1e-6, "arc vertex off the half round");
+      assert.ok(Math.abs(n[0]) < 1e-9 && Math.abs(n[1] * z - n[2] * y) < 1e-6 && n[1] * y + n[2] * z > 0, "arc normal not radial (flat shading)");
+    }
+    // round on top, and its edges tucked into the roof (no gap you can see through)
+    assert.ok(Math.max(...arc.map(i => m.p[i*3+1])) >= ridgeY + 0.5 * r, "cap does not stand above the ridge");
+    assert.ok(m.rim.length >= 4, "no rim");
+    for (const i of m.rim) assert.ok(m.p[i*3+1] <= roofAt(m.p[i*3+2]) - 0.005, "cap edge floats above the roof");
+    for (const side of [-1, 1]) assert.ok(m.rim.some(i => Math.sign(m.p[i*3+2]) === side), "rim missing on one side");
+  });
+}
+
+for (const roofType of ["gable", "hip"]) {
+  test(`geometry: the ridge is round, not a box (${roofType})`, () => {
+    const { G, dims } = buildGeometry(sanitize({ roofType, width: 12, depth: 7 }));
+    const g = G.roof, normals = new Set();
+    for (let i = 0; i < g.p.length / 3; i++) if (g.p[i*3+1] > dims.ridgeY + 0.03) normals.add([g.n[i*3], g.n[i*3+1], g.n[i*3+2]].map(v => v.toFixed(2)).join(","));
+    assert.ok(normals.size >= 8, `only ${normals.size} directions on top of the ridge: still a box`);
   });
 }
 

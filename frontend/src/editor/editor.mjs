@@ -11,13 +11,20 @@ import { paintInterior, paintGlass } from "./interior.mjs";
 export { slugify };
 
 const lerp = (a, b, t) => a + (b - a) * t;
-const MARKUP = `<div class="hx-editor">
-  <aside class="hx-panel"><div id="controls"></div></aside>
+// Two sides of settings: building the house (left) and finishing it (right). On narrower
+// screens they share one column and the tabs switch between them (see globals.css).
+const MARKUP = `<div class="hx-editor" data-tab="build">
+  <div class="hx-tabs" role="tablist" aria-label="Settings">
+    <button type="button" role="tab" id="tab-build" aria-controls="panel-build">Build</button>
+    <button type="button" role="tab" id="tab-finish" aria-controls="panel-finish">Finish</button>
+  </div>
+  <aside class="hx-panel hx-build" id="panel-build" role="tabpanel" aria-labelledby="tab-build"><h2 class="hx-side">Build the house</h2><div id="controls-build"></div></aside>
   <section class="hx-stage" id="stage" aria-label="3D preview">
     <canvas id="view"></canvas>
     <div class="readout" id="readout"></div>
     <div class="orbit-hint">Drag to orbit, scroll to zoom</div>
   </section>
+  <aside class="hx-panel hx-finish" id="panel-finish" role="tabpanel" aria-labelledby="tab-finish"><h2 class="hx-side">Finish and export</h2><div id="controls-finish"></div></aside>
   <div id="toast" class="hx-toast" role="status" aria-live="polite"></div>
   <dialog id="textDlg" class="hx-dialog">
     <h2 id="dlgTitle">Copy file</h2>
@@ -43,7 +50,33 @@ let p = sanitize(initial || {});
 let G = null, dims = {}, opsByWall = {};
 function persist() { if (!destroyed && onChange) onChange(serialize(p)); }
 
-const controls = $("controls");
+// Which sections are open, and which tab: remembered in this browser only (a convenience).
+const remember = {
+  get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* private window etc. */ } },
+};
+const openState = remember.get("hx-open-sections") || {};
+const sideSeen = {};
+const editorEl = root.querySelector(".hx-editor");
+function setTab(t) {
+  editorEl.dataset.tab = t;
+  for (const s of ["build", "finish"]) {
+    const b = $("tab-" + s);
+    b.setAttribute("aria-selected", String(s === t));
+    b.tabIndex = s === t ? 0 : -1;
+  }
+  remember.set("hx-tab", t);
+}
+for (const s of ["build", "finish"]) {
+  const b = $("tab-" + s);
+  b.onclick = () => setTab(s);
+  b.onkeydown = e => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    const other = s === "build" ? "finish" : "build";
+    setTab(other); $("tab-" + other).focus(); e.preventDefault();
+  };
+}
+setTab(remember.get("hx-tab") === "finish" ? "finish" : "build");
 const inputs = {};
 function fmt(f, v) {
   if (f.k === "doorPos") return v < -0.05 ? "Left" : v > 0.05 ? "Right" : "Center";
@@ -54,7 +87,10 @@ function fmt(f, v) {
 }
 SCHEMA.forEach(g => {
   const d = document.createElement("details");
-  d.open = g.title !== "Colors";
+  // First time: only the first section of each side is open. After that, as the user left them.
+  d.open = g.title in openState ? !!openState[g.title] : !sideSeen[g.side];
+  sideSeen[g.side] = true;
+  d.addEventListener("toggle", () => { openState[g.title] = d.open; remember.set("hx-open-sections", openState); });
   d.innerHTML = `<summary>${g.title}</summary>` + (g.hint ? `<p class="hint">${g.hint}</p>` : "");
   const wrap = document.createElement("div");
   if (g.colors) wrap.className = "colors";
@@ -103,7 +139,7 @@ SCHEMA.forEach(g => {
     b.onclick = () => { p.windows.forEach(w => { w.w = p.winW; w.h = p.winH; w.sill = p.sill; }); persist(); rebuild(false); renderWinUI(); toast("All windows now use this size"); };
     d.appendChild(b);
   }
-  controls.appendChild(d);
+  $("controls-" + g.side).appendChild(d);
 });
 function syncControls() {
   for (const k in inputs) {
@@ -561,6 +597,7 @@ function pick(e) {
     const op = ops.find(o => o.kind === "window" && s > o.s0 - 0.12 && s < o.s1 + 0.12 && t > o.t0 - 0.12 && t < o.t1 + 0.12);
     if (op) {
       selId = op.id;
+      setTab("build");
       const det = $("winEditor").closest("details"); det.open = true;
       renderWinUI(); updateHighlight();
       if (!window.matchMedia("(max-width: 820px)").matches) $("winSel").scrollIntoView({block:"nearest"});
@@ -583,7 +620,7 @@ function makeSleepMarker() {
   x.beginPath(); x.arc(50, 64, 9, 0, Math.PI * 2); x.fill();  // pillow / head
   x.fillRect(62, 56, 42, 16);            // blanket
   const tex = new THREE.CanvasTexture(c);
-  const icon = new THREE.Sprite(new THREE.SpriteMaterial({map:tex, depthTest:false, transparent:true}));
+  const icon = new THREE.Sprite(new THREE.SpriteMaterial({map:tex, transparent:true, depthWrite:false}));
   icon.scale.set(0.8, 0.8, 1); icon.renderOrder = 10;
   group.add(box, icon);
   const dispose = () => { box.geometry.dispose(); box.material.dispose(); tex.dispose(); icon.material.dispose(); };
