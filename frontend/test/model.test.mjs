@@ -370,6 +370,33 @@ test("sleep point: the trigger box is a closed mesh turned outwards", () => {
   assertClosed(g, "trigger");
 });
 
+// Placing a placeable turns its physics off and on again. Without the "CPU Mesh" flag
+// (meshUsage="256") the game can't rebuild it from our inline geometry, so walls and the
+// sleep trigger end up with no physics at all.
+test("i3d: physics shapes are CPU meshes, visual shapes are not", () => {
+  const xml = buildI3d(sanitize({}));
+  const sets = Object.fromEntries([...xml.matchAll(/<IndexedTriangleSet name="([^"]+)"[^>]*?(?: meshUsage="(\d+)")?>/g)].map(m => [m[1], m[2]]));
+  assert.equal(sets.collision, "256");
+  assert.equal(sets.sleepingTrigger, "256");
+  for (const m of ["walls", "roof", "glass"]) assert.equal(sets[m], undefined, m);
+});
+
+test("i3d: a farmhouse has an indoor area over the house, matching the snippet", () => {
+  const p = sanitize({});
+  const geo = buildGeometry(p), tree = sceneTree(buildI3d(p)), snippet = placeableSnippet(p);
+  const map = Object.fromEntries([...snippet.matchAll(/<i3dMapping id="([^"]+)" node="([^"]+)"\/>/g)].map(m => [m[1], m[2]]));
+  assert.match(snippet, /<indoorAreas>\s*<indoorArea startNode="indoorAreaStart01" widthNode="indoorAreaWidth01" heightNode="indoorAreaHeight01"\/>\s*<\/indoorAreas>/);
+  for (const id of ["indoorAreaStart01", "indoorAreaWidth01", "indoorAreaHeight01"]) assert.equal(resolve(tree, map[id]).node.name, id);
+  const at = id => resolve(tree, map[id]).pos;
+  const s = at("indoorAreaStart01"), w = at("indoorAreaWidth01"), h = at("indoorAreaHeight01");
+  const xs = [s[0], w[0], h[0]], zs = [s[2], w[2], h[2]], { W, D } = geo.dims;
+  const near = (a, b) => Math.abs(a - b) < 1e-3;
+  assert.ok(near(Math.min(...xs), -W / 2) && near(Math.max(...xs), W / 2) && near(Math.min(...zs), -D / 2) && near(Math.max(...zs), D / 2), "indoor area is the walls' footprint");
+  // same convention as the other areas: width along z, height along x
+  assert.ok(near(w[0], s[0]) && w[2] > s[2] && near(h[2], s[2]) && h[0] > s[0]);
+  assert.doesNotMatch(placeableSnippet(sanitize({ sleepPoint: false })), /indoorArea/);
+});
+
 test("i3d: no sleep point when it is turned off", () => {
   const p = sanitize({ sleepPoint: false });
   const xml = buildI3d(p), snippet = placeableSnippet(p);

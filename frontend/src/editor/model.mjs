@@ -865,12 +865,20 @@ function placeableBlocks(p) {
     <farmhouse spawnNode="spawnPoint">
         <sleeping triggerNode="sleepingTrigger" cameraNode="sleepCamera"/>
     </farmhouse>
+
+    <!-- Inside the walls: no rain, and the farmhouse knows where indoors is. -->
+    <indoorAreas>
+        <indoorArea startNode="indoorAreaStart01" widthNode="indoorAreaWidth01" heightNode="indoorAreaHeight01"/>
+    </indoorAreas>
 ` : "";
   const sleepMaps = p.sleepPoint ? `
         <i3dMapping id="sleepingTrigger" node="0>6|0"/>
         <i3dMapping id="sleepTriggerMarker" node="0>6|1"/>
         <i3dMapping id="spawnPoint" node="0>6|2"/>
-        <i3dMapping id="sleepCamera" node="0>6|3"/>` : "";
+        <i3dMapping id="sleepCamera" node="0>6|3"/>
+        <i3dMapping id="indoorAreaStart01" node="0>7|0"/>
+        <i3dMapping id="indoorAreaWidth01" node="0>7|0|0"/>
+        <i3dMapping id="indoorAreaHeight01" node="0>7|0|1"/>` : "";
   return `${sleep}
     <placement useRandomYRotation="false" useManualYRotation="true">
         <testAreas>
@@ -998,13 +1006,19 @@ export function rgb(hex) { const n = parseInt(hex.slice(1), 16); return [(n >> 1
 /** Opacity of the window glass when there are rooms behind it. */
 export const GLASS_ALPHA = 0.22;
 const NO_SHADOW = ["glass", "interior", "curtain"];
-function shapeXml(name, id, g, uv) {
+/**
+ * "CPU Mesh" flag, as Giants Editor writes it. The game keeps these meshes in memory so it can
+ * rebuild their physics: placing a placeable turns its physics off and on again, and without
+ * the flag our (inline, not pre-cooked) collision and trigger meshes would come back empty.
+ */
+const CPU_MESH = 256;
+function shapeXml(name, id, g, uv, {cpu = false} = {}) {
   uv = uv || g.uv;
   const nv = g.p.length / 3, nt = g.i.length / 3;
   const v = [], t = [];
   for (let i = 0; i < nv; i++) v.push(`        <v p="${num(g.p[i*3])} ${num(g.p[i*3+1])} ${num(g.p[i*3+2])}" n="${num(g.n[i*3])} ${num(g.n[i*3+1])} ${num(g.n[i*3+2])}" t0="${num(uv[i*2])} ${num(uv[i*2+1])}"/>`);
   for (let i = 0; i < nt; i++) t.push(`        <t vi="${g.i[i*3]} ${g.i[i*3+1]} ${g.i[i*3+2]}"/>`);
-  return `    <IndexedTriangleSet name="${name}" shapeId="${id}">
+  return `    <IndexedTriangleSet name="${name}" shapeId="${id}"${cpu ? ` meshUsage="${CPU_MESH}"` : ""}>
       <Vertices count="${nv}" normal="true" uv0="true">
 ${v.join("\n")}
       </Vertices>
@@ -1078,9 +1092,9 @@ export function buildI3d(p, {withTex = false} = {}) {
   });
   const shapes = parts.map(({name, m, g}, k) => shapeXml(name, k + 1, g, scaledUV(p, m, g)));
   const cid = used.length + 1;
-  shapes.push(shapeXml("collision", cid, col));
+  shapes.push(shapeXml("collision", cid, col, null, {cpu: true}));
   const sleep = p.sleepPoint ? sleepPoint(geo) : null, tid = cid + 1;
-  if (sleep) shapes.push(shapeXml("sleepingTrigger", tid, boxMesh(sleep.trigger.size)));
+  if (sleep) shapes.push(shapeXml("sleepingTrigger", tid, boxMesh(sleep.trigger.size), null, {cpu: true}));
   let nid = 2;
   // Empty transform group; kids() builds its children after this node got its id, so ids run top-down.
   const tg = (name, pos, depth, kids) => {
@@ -1114,7 +1128,8 @@ export function buildI3d(p, {withTex = false} = {}) {
         <TransformGroup name="sleepTriggerMarker" translation="${v3(sleep.marker)}" nodeId="${mkId}"/>
         <TransformGroup name="spawnPoint" translation="${v3(sleep.spawn.pos)}" rotation="${v3(sleep.spawn.rot)}" nodeId="${spId}"/>
         <Camera name="sleepCamera" translation="${v3(sleep.camera.pos)}" rotation="${v3(sleep.camera.rot)}" fov="54.4322" nearClip="0.1" farClip="560" nodeId="${caId}"/>
-      </TransformGroup>`;
+      </TransformGroup>
+${rect("indoor", {x0: -geo.dims.W / 2, x1: geo.dims.W / 2, z0: -geo.dims.D / 2, z1: geo.dims.D / 2})}`;
   }
   return `<?xml version="1.0" encoding="iso-8859-1"?>
 <i3D name="house" version="1.6" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://i3d.giants.ch/schema/i3d-1.6.xsd">
