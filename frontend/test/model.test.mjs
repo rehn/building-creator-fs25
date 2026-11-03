@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULTS, sanitize, buildGeometry, buildI3d, serialize, MATS } from "../src/editor/model.mjs";
+import { DEFAULTS, sanitize, buildGeometry, buildI3d, serialize, MATS, placementAreas, placeableSnippet } from "../src/editor/model.mjs";
 
 const countOn = (p, wall, floor) => p.windows.filter(w => w.wall === wall && w.floor === floor).length;
 
@@ -203,6 +203,84 @@ test("collision: the entrance canopy is solid", () => {
     const canopy = verts(collision).filter(([, y, z]) => z > dims.D / 2 + 0.3 && y > dims.F + 2);
     assert.ok(canopy.length > 0, `no collision for the ${entrance} canopy`);
   }
+});
+
+/* ---------- Placement areas (leveling, clear, test, tip occlusion) ---------- */
+// Scene tree of an i3d: [{name, translation, children}], enough to resolve "0>2|1|0" paths.
+function sceneTree(xml) {
+  const scene = xml.slice(xml.indexOf("<Scene>"), xml.indexOf("</Scene>"));
+  const root = { children: [] }, stack = [root];
+  for (const m of scene.matchAll(/<(\/?)(TransformGroup|Shape)\b([^>]*?)(\/?)>/g)) {
+    if (m[1]) { stack.pop(); continue; }
+    const attr = k => (m[3].match(new RegExp(`\\b${k}="([^"]*)"`)) || [])[1];
+    const node = { name: attr("name"), translation: (attr("translation") || "0 0 0").split(" ").map(Number), children: [] };
+    stack[stack.length - 1].children.push(node);
+    if (!m[4]) stack.push(node);
+  }
+  return root.children;
+}
+function resolve(tree, path) {
+  const [comp, rest] = path.split(">");
+  let node = tree[+comp], pos = node.translation.slice();
+  for (const i of rest.split("|").map(Number)) {
+    node = node.children[i];
+    pos = pos.map((v, k) => v + node.translation[k]);
+  }
+  return { node, pos };
+}
+const allVisual = G => MATS.flatMap(m => verts(G[m]));
+
+test("areas: the level area covers the house, porch and steps on the ground", () => {
+  const p = sanitize({ entrance: "porch", doorWall: "front", foundation: 0.6 });
+  const geo = buildGeometry(p);
+  const { level } = placementAreas(geo);
+  const ground = MATS.flatMap(m => verts(geo.G[m])).filter(([, y]) => y < 0.01);
+  assert.ok(ground.length > 0);
+  for (const [x, , z] of ground) assert.ok(x >= level.x0 && x <= level.x1 && z >= level.z0 && z <= level.z1, `ground point ${x},${z} outside the level area`);
+  assert.ok(level.z1 > geo.dims.D / 2 + p.entranceDepth, "porch not inside the level area");
+});
+
+test("areas: the test area is a box around the whole house", () => {
+  const geo = buildGeometry(sanitize({ chimney: true, dormers: [{ type: "gable", side: 1, pos: 0.5 }], halfStorey: true }));
+  const { test: box } = placementAreas(geo);
+  for (const [x, y, z] of allVisual(geo.G)) {
+    assert.ok(x >= box.min[0] - 1e-9 && x <= box.max[0] + 1e-9 && z >= box.min[2] - 1e-9 && z <= box.max[2] + 1e-9, "outside in x/z");
+    assert.ok(y >= box.min[1] - 1e-9 && y <= box.max[1] + 1e-9, "outside in height");
+  }
+});
+
+test("i3d: area nodes match the placeable snippet's i3dMappings", () => {
+  const p = sanitize({ entrance: "porch" });
+  const geo = buildGeometry(p);
+  const areas = placementAreas(geo);
+  const tree = sceneTree(buildI3d(p));
+  const snippet = placeableSnippet();
+  const map = Object.fromEntries([...snippet.matchAll(/<i3dMapping id="([^"]+)" node="([^"]+)"\/>/g)].map(m => [m[1], m[2]]));
+  // every mapping points at the node with that name
+  for (const [id, path] of Object.entries(map)) assert.equal(resolve(tree, path).node.name, id, path);
+  // every node referenced by the blocks has a mapping
+  for (const m of snippet.matchAll(/(?:startNode|widthNode|heightNode|endNode)="([^"]+)"/g)) assert.ok(map[m[1]], `${m[1]} has no i3dMapping`);
+  assert.match(snippet, /<leveling requireLeveling="true"/);
+  // the level area's three nodes span exactly the computed rectangle
+  const at = id => resolve(tree, map[id]).pos;
+  const s = at("levelAreaStart01"), w = at("levelAreaWidth01"), h = at("levelAreaHeight01");
+  const xs = [s[0], w[0], h[0]], zs = [s[2], w[2], h[2]];
+  const near = (a, b, what) => a.forEach((v, i) => assert.ok(Math.abs(v - b[i]) < 1e-3, `${what}: ${a} vs ${b}`));
+  near([Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)], [areas.level.x0, areas.level.x1, areas.level.z0, areas.level.z1], "level area");
+  // Giants' convention (base-game garden shed): width runs along z, height along x
+  assert.ok(Math.abs(w[0] - s[0]) < 1e-9 && w[2] > s[2], "width node should be along +z");
+  assert.ok(Math.abs(h[2] - s[2]) < 1e-9 && h[0] > s[0], "height node should be along +x");
+  // the test area runs from one bottom corner to the opposite top corner; end is a child of start
+  near(at("testAreaStart01"), areas.test.min, "test area start");
+  near(at("testAreaEnd01"), areas.test.max, "test area end");
+  assert.match(map.testAreaEnd01, new RegExp("^" + map.testAreaStart01.replace(/[|>]/g, "\\$&") + "\\|"));
+  // AI update areas reuse the tip occlusion nodes, as in the base game
+  assert.match(snippet, /<updateArea startNode="tipOcclusionUpdateAreaStart01" endNode="tipOcclusionUpdateAreaEnd01"\/>/);
+});
+
+test("i3d: collision uses the base game's building collision filter", () => {
+  const xml = buildI3d(sanitize({}));
+  assert.match(xml, /<Shape name="collision"[^>]*collisionFilterGroup="0x3e"[^>]*collisionFilterMask="0xfffffbff"/);
 });
 
 test("i3d: one shape per used material plus a collision shape", () => {

@@ -4,7 +4,7 @@ import * as THREE from "three";
 import JSZip from "jszip";
 import {
   SCHEMA, FIELD, WALLS, WALL_NAMES, DTYPES, DORM_DEF, MATS,
-  genRow, sanitize, serialize, slugify, buildGeometry, buildI3d, surfaceSpec, scaledUV, colorFor, WP
+  genRow, sanitize, serialize, slugify, buildGeometry, buildI3d, placeableSnippet, surfaceSpec, scaledUV, colorFor, WP
 } from "./model.mjs";
 export { slugify };
 
@@ -577,6 +577,7 @@ async function exportModel(name) {
   try {
     const zip = new JSZip(), dir = zip.folder(slug);
     dir.file("house.i3d", buildI3d(p, {withTex: true}));
+    dir.file("placeable_snippet.xml", placeableSnippet());
     for (const m of ["walls", "roof", "chimney"]) {
       if (!G[m].i.length) continue;
       const st = ensureSurface(m); if (!st) continue;

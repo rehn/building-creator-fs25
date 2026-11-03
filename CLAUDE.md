@@ -20,7 +20,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Frontend tests: cd frontend && npm test (node --test, no browser needed)
 
 ## Status
-- Go tests (40) pass, go vet is clean. Frontend tests (47) pass.
+- Go tests (40) pass, go vet is clean. Frontend tests (51) pass.
 - npm run build succeeds.
 - go.sum and package-lock.json are committed.
 
@@ -29,3 +29,9 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   ./dev.sh --reset wipes it. Reachable from the Windows browser at localhost:3000.
 - Node 22 and gh live in ~/.local/bin (installed without sudo).
 - Docker is not integrated into WSL; Docker Desktop runs on the Windows side.
+
+## FS25 reference (read-only, on the Windows side)
+- Game install: /c/Program Files (x86)/Farming Simulator 2025 (Git Bash path).
+  shared/xml/schema/placeable.xsd is the authoritative placeable XML schema;
+  data/placeables/brandless/gardenSheds/level01 is the template the export's
+  area nodes (clear/level/test/tipOcclusion) and collision filter follow.

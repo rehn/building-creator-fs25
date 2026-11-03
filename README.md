@@ -97,7 +97,7 @@ What the tests cover:
 
 - **backend/internal/api**: signing up (admin without invite, everyone else with one), invites that only work once and only for their email, login and logout, rate limiting, Google sign-in against a fake Google, project create/read/update/delete, version conflicts between tabs, users not seeing each other's houses, and cross-site requests being refused.
 - **backend/internal/store**: the SQLite layer, including expiry of sessions and invites.
-- **frontend/test**: settings validation, window generation, valid geometry for every roof type, closed collision for walls, roof, dormers, chimney and entrance, i3d output, export file names and the API proxy.
+- **frontend/test**: settings validation, window generation, valid geometry for every roof type, closed collision for walls, roof, dormers, chimney and entrance, placement areas (leveling, clear, test, tip occlusion), i3d output, export file names and the API proxy.
 
 ## Lock files
 
