@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DEFAULTS, sanitize, buildGeometry, buildI3d, serialize, MATS, placementAreas, placeableSnippet, sleepPoint, boxMesh, WP, ROOM_TYPES, CURTAIN_STYLES, rgb, pipeMesh, gutterMesh, surfaceSpec, scaledUV } from "../src/editor/model.mjs";
 
+const cross3 = (a, b) => [a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0]];
 const countOn = (p, wall, floor) => p.windows.filter(w => w.wall === wall && w.floor === floor).length;
 
 test("sanitize: empty input gives the defaults plus generated windows", () => {
@@ -145,17 +146,35 @@ test("surfaces: trim is painted wood, textured in the export", () => {
   assert.match(buildI3d(p, { withTex: true }), /filename="textures\/trim_diffuse.png"/);
 });
 
-test("geometry: trim grain runs along each board", () => {
-  const p = sanitize({ overhang: 0.6 }), g = buildGeometry(p).G.trim, uv = scaledUV(p, "trim", g);
-  let long = 0;
-  for (let t = 0; t < g.i.length; t += 3) {
-    const ks = [g.i[t], g.i[t+1], g.i[t+2]];
-    const us = ks.map(k => uv[k*2]), vs = ks.map(k => uv[k*2+1]);
-    const du = Math.max(...us) - Math.min(...us), dv = Math.max(...vs) - Math.min(...vs);
-    if (Math.max(du, dv) > 3 * Math.min(du, dv) && Math.max(du, dv) > 0.2) { long++; assert.ok(dv >= du, "grain across a long board"); }
-  }
-  assert.ok(long > 10, "no long trim boards found");
-});
+// The texture's grain runs along v. On every long, thin trim triangle (a board's face), going
+// along its longest edge must only move along the grain (v), not across it (u); this holds for
+// sloped boards too, like the fascia up a gable.
+for (const roofType of ["gable", "hip"]) {
+  test(`geometry: trim grain runs along each board, sloped ones too (${roofType})`, () => {
+    const p = sanitize({ roofType, overhang: 0.6, entrance: "gable" }), g = buildGeometry(p).G.trim, uv = scaledUV(p, "trim", g);
+    const P = k => [g.p[k*3], g.p[k*3+1], g.p[k*3+2]];
+    let long = 0, sloped = 0;
+    for (let t = 0; t < g.i.length; t += 3) {
+      const ks = [g.i[t], g.i[t+1], g.i[t+2]];
+      const edges = [[0, 1], [1, 2], [2, 0]].map(([a, b]) => ({ a: ks[a], b: ks[b], d: P(ks[b]).map((x, i) => x - P(ks[a])[i]) }));
+      const e = edges.reduce((m, x) => Math.hypot(...x.d) > Math.hypot(...m.d) ? x : m);
+      const L = Math.hypot(...e.d), c = cross3(edges[0].d, edges[1].d), height = Math.hypot(...c) / L;
+      if (L < 0.3 || L < 4 * height) continue;   // only long, thin faces
+      // ...that are half of a board's rectangle (a right angle), not slivers of a big soffit
+      const rightAngle = edges.some((x, i) => { const y = edges[(i + 1) % 3]; return Math.abs(x.d[0]*y.d[0] + x.d[1]*y.d[1] + x.d[2]*y.d[2]) < 1e-6 * Math.hypot(...x.d) * Math.hypot(...y.d) + 1e-9; });
+      if (!rightAngle) continue;
+      long++;
+      if (Math.abs(e.d[1]) / L > 0.2 && Math.abs(e.d[1]) / L < 0.95) sloped++;
+      // A board face is split in two triangles whose longest edge is the diagonal,
+      // so the board's side is one of the two longest edges.
+      const two = edges.slice().sort((x, y) => Math.hypot(...y.d) - Math.hypot(...x.d)).slice(0, 2);
+      const ok = two.some(x => Math.abs(uv[x.b*2] - uv[x.a*2]) <= 0.02 * Math.abs(uv[x.b*2+1] - uv[x.a*2+1]));
+      assert.ok(ok, `grain crosses a board along ${e.d.map(x => x.toFixed(2))}`);
+    }
+    assert.ok(long > 10, "no long trim boards found");
+    if (roofType === "gable") assert.ok(sloped > 0, "no sloped boards checked");
+  });
+}
 
 /* ---------- Gutters and downpipes ---------- */
 const angle = (a, b) => Math.acos(Math.max(-1, Math.min(1, (a[0]*b[0] + a[1]*b[1] + a[2]*b[2]) / (Math.hypot(...a) * Math.hypot(...b))))) * 180 / Math.PI;

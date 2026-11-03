@@ -333,9 +333,12 @@ function poly(mat, pts, hint, uvf) {
   const ax = Math.abs(n[0]), ay = Math.abs(n[1]), az = Math.abs(n[2]);
   let uvs = pts.map(q => uvf ? uvf(q) : (ay >= ax && ay >= az) ? [q[0], q[2]] : (ax >= az) ? [q[2], q[1]] : [q[0], q[1]]);
   if (mat === "trim") {
-    // Painted wood: the grain runs along v, so turn v along the board's length.
-    const ext = k => Math.max(...uvs.map(t => t[k])) - Math.min(...uvs.map(t => t[k]));
-    if (ext(0) > ext(1)) uvs = uvs.map(t => [t[1], t[0]]);
+    // Painted wood: the grain runs along v. Lay v along the face's longest edge, the board's
+    // length, whatever its angle (sloped fascia, soffits, frames), and u across it.
+    let along = null, best = -1;
+    pts.forEach((q, k) => { const e = sub(pts[(k + 1) % pts.length], q), l = Math.hypot(...e); if (l > best) { best = l; along = e; } });
+    const v = norm(along), u = norm(cross(n, v));
+    uvs = pts.map(q => [dot(q, u), dot(q, v)]);
   }
   pts.forEach((q, k) => { g.p.push(q[0], q[1], q[2]); g.n.push(n[0], n[1], n[2]); g.uv.push(uvs[k][0], uvs[k][1]); });
   for (let k = 1; k < pts.length - 1; k++) g.i.push(base, base + k, base + k + 1);
