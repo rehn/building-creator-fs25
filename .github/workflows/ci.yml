@@ -18,6 +18,19 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    # The store tests run twice: on SQLite and on this Postgres.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -30,6 +43,21 @@ jobs:
         run: go vet ./...
       - name: Test
         run: go test -race -count=1 ./...
+      - name: Test the store on Postgres
+        env:
+          TEST_DATABASE_URL: postgres://postgres:test@localhost:5432/postgres?sslmode=disable
+        run: go test -race -count=1 ./internal/store/
+
+  chart:
+    name: Helm chart
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v4
+        with:
+          version: v4.0.5
+      - name: Lint and render tests
+        run: bash charts/test.sh
 
   frontend:
     name: Frontend tests and build
@@ -51,7 +79,7 @@ jobs:
 
   docker:
     name: Docker image (${{ matrix.name }})
-    needs: [backend, frontend]
+    needs: [backend, frontend, chart]
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -95,3 +123,26 @@ jobs:
           build-args: VERSION=${{ steps.meta.outputs.version }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,scope=${{ matrix.name }},mode=max
+
+  # Release v1.2.3 -> chart 1.2.3 (app version 1.2.3) at oci://registry-1.docker.io/<DOCKERHUB_USERNAME>/house-to-i3d
+  helm:
+    name: Publish Helm chart
+    needs: [docker]
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v4
+        with:
+          version: v4.0.5
+      - name: Package
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          helm package charts/house-to-i3d --version "$version" --app-version "$version" --destination dist
+      - name: Push to Docker Hub
+        env:
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          echo "$DOCKERHUB_TOKEN" | helm registry login registry-1.docker.io --username "$DOCKERHUB_USERNAME" --password-stdin
+          helm push dist/house-to-i3d-*.tgz "oci://registry-1.docker.io/$DOCKERHUB_USERNAME"

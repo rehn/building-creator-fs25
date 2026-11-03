@@ -1,0 +1,14 @@
+apiVersion: v2
+name: house-to-i3d
+description: Build Farming Simulator 25 houses in the browser and export them as .i3d models or game mods.
+type: application
+# Released charts get the release version for both (see .github/workflows/ci.yml).
+version: 0.0.0-dev
+appVersion: "latest"
+home: https://github.com/rehn/house-to-i3d
+sources:
+  - https://github.com/rehn/house-to-i3d
+keywords:
+  - farming-simulator
+  - giants-editor
+  - i3d

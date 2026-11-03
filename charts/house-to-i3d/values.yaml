@@ -1,0 +1,99 @@
+# House to i3d: a Next.js web app (the only part exposed) and a Go API behind it.
+
+# The address people open, without a trailing slash, e.g. https://hus.example.se.
+# Leave empty to use the ingress host (https when ingress TLS is on).
+publicUrl: ""
+
+# This email can sign up without an invite and becomes the admin.
+adminEmail: ""
+
+# Optional "Continue with Google". Either set clientId and clientSecret, or point existingSecret
+# at a Secret with the keys GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.
+google:
+  clientId: ""
+  clientSecret: ""
+  existingSecret: ""
+
+image:
+  registry: docker.io
+  pullPolicy: IfNotPresent
+  api:
+    repository: rehn/house-to-i3d-api
+    tag: ""          # default: the chart's appVersion
+  web:
+    repository: rehn/house-to-i3d-web
+    tag: ""          # default: the chart's appVersion
+imagePullSecrets: []
+
+database:
+  # sqlite (default): one file on a PVC, one API pod.
+  # postgres: run Postgres in this release (deploy: true) or use your own server.
+  type: sqlite
+
+  sqlite:
+    persistence:
+      size: 1Gi
+      storageClass: ""        # "" = the cluster's default
+      accessModes: [ReadWriteOnce]
+      existingClaim: ""       # use this PVC instead of creating one
+      keep: true              # keep the PVC (and so every house) when the release is uninstalled
+
+  postgres:
+    # true: a Postgres StatefulSet in this release, with its data on a PVC.
+    # false: your own server, given by url or existingSecret.
+    deploy: true
+
+    # Your own server (deploy: false). url ends up in a Secret; or put it in your own Secret.
+    url: ""                   # postgres://user:password@host:5432/house?sslmode=require
+    existingSecret: ""
+    existingSecretKey: DATABASE_URL
+
+    # The bundled server (deploy: true).
+    image:
+      repository: library/postgres
+      tag: "17-alpine"
+    database: house
+    username: house
+    # Empty: a random password is made on install and kept on upgrades. The Secret holding it
+    # is kept on uninstall, like the data, so a reinstall still matches the database.
+    password: ""
+    persistence:
+      size: 5Gi
+      storageClass: ""
+      accessModes: [ReadWriteOnce]
+    resources: {}
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+
+api:
+  # Must be 1 with SQLite. With Postgres you can run more.
+  replicas: 1
+  # Use X-Forwarded-For for rate limiting. Safe because only the web app can reach the API.
+  trustProxy: true
+  resources: {}
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+web:
+  replicas: 1
+  resources: {}
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+service:
+  type: ClusterIP
+  port: 3000
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: ""                  # e.g. hus.example.se
+  tls:
+    enabled: false
+    secretName: ""          # e.g. made by cert-manager through an annotation above

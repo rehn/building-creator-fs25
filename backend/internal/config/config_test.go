@@ -51,3 +51,33 @@ func TestInvalidAdminEmail(t *testing.T) {
 		t.Fatal("accepted an invalid ADMIN_EMAIL")
 	}
 }
+
+func TestDatabaseURLChoosesPostgres(t *testing.T) {
+	c, err := Load(env(map[string]string{"PUBLIC_URL": "http://localhost:3000", "DATABASE_URL": " postgres://u:p@db:5432/hus?sslmode=disable "}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.DatabaseURL != "postgres://u:p@db:5432/hus?sslmode=disable" {
+		t.Fatalf("DatabaseURL %q", c.DatabaseURL)
+	}
+	if c.Database() != c.DatabaseURL {
+		t.Fatalf("Database() = %q, want the URL", c.Database())
+	}
+	c, _ = Load(env(map[string]string{"PUBLIC_URL": "http://localhost:3000"}))
+	if c.Database() != "/data/house-to-i3d.db" {
+		t.Fatalf("without DATABASE_URL, Database() = %q, want the SQLite path", c.Database())
+	}
+}
+
+func TestDatabaseURLMustBePostgres(t *testing.T) {
+	for _, u := range []string{"mysql://x", "http://db", "not a url"} {
+		if _, err := Load(env(map[string]string{"PUBLIC_URL": "http://localhost:3000", "DATABASE_URL": u})); err == nil {
+			t.Fatalf("accepted DATABASE_URL %q", u)
+		}
+	}
+	for _, u := range []string{"postgres://db/hus", "postgresql://u@db/hus"} {
+		if _, err := Load(env(map[string]string{"PUBLIC_URL": "http://localhost:3000", "DATABASE_URL": u})); err != nil {
+			t.Fatalf("rejected DATABASE_URL %q: %v", u, err)
+		}
+	}
+}

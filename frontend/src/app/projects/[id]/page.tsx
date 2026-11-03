@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { api, ApiError, type Project } from "@/lib/api";
 import { useUser } from "@/lib/useUser";
 import type { EditorHandle, Settings } from "@/editor/editor.mjs";
+import { authorName } from "@/editor/model.mjs";
 
 const Editor = dynamic(() => import("@/editor/Editor"), {
   ssr: false,
@@ -144,7 +145,8 @@ export default function ProjectPage() {
         }} />
         <button type="button" disabled={!project} onClick={() => fileInput.current?.click()}>Import settings</button>
         <button type="button" disabled={!project} onClick={() => editor.current?.exportSettings(name)}>Download settings</button>
-        <button type="button" className="primary" disabled={!project} onClick={() => editor.current?.exportModel(name)}>Export model</button>
+        <button type="button" disabled={!project} onClick={() => editor.current?.exportModel(name)}>Export model</button>
+        <button type="button" className="primary" disabled={!project} onClick={() => editor.current?.exportMod(name)}>Export game mod</button>
       </div>
       {status === "conflict" && (
         <div className="editor-bar" role="alert">
@@ -154,7 +156,7 @@ export default function ProjectPage() {
         </div>
       )}
       {project
-        ? <Editor initial={project.data} onChange={s => queue({ data: s })} onReady={ed => {
+        ? <Editor author={authorName(user)} initial={project.data} onChange={s => queue({ data: s })} onReady={ed => {
             editor.current = ed;
             // a new house has no preview yet: save once so the list shows one
             if (ed && !project.thumbnail) queue({ data: ed.getSettings() }, 1500);

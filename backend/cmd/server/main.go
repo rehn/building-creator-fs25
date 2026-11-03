@@ -30,9 +30,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	st, err := store.Open(cfg.DatabasePath)
+	st, err := store.Open(cfg.Database())
 	if err != nil {
-		log.Fatalf("opening database %s: %v", cfg.DatabasePath, err)
+		where := cfg.DatabasePath
+		if cfg.DatabaseURL != "" {
+			where = "from DATABASE_URL" // the URL holds the password, so don't log it
+		}
+		log.Fatalf("opening database %s: %v", where, err)
 	}
 	defer st.Close()
 
@@ -55,7 +59,11 @@ func main() {
 		srv.Shutdown(shutdown)
 	}()
 
-	log.Printf("listening on %s (public URL %s, Google sign-in %v)", cfg.Addr, cfg.API.PublicURL, cfg.API.GoogleEnabled())
+	db := "SQLite " + cfg.DatabasePath
+	if cfg.DatabaseURL != "" {
+		db = "Postgres"
+	}
+	log.Printf("listening on %s (public URL %s, Google sign-in %v, %s)", cfg.Addr, cfg.API.PublicURL, cfg.API.GoogleEnabled(), db)
 	if cfg.API.AdminEmail == "" {
 		log.Printf("warning: ADMIN_EMAIL is not set, so nobody can create the first account")
 	}

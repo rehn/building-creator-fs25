@@ -2,23 +2,117 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 )
 
 var ctx = context.Background()
 
+// openTest opens an empty store: in-memory SQLite, or, when TEST_DATABASE_URL is set
+// (postgres://...), a fresh schema in that Postgres database that is dropped afterwards.
+// CI runs the suite both ways.
 func openTest(t *testing.T) *Store {
 	t.Helper()
-	s, err := Open(":memory:")
+	url := os.Getenv("TEST_DATABASE_URL")
+	if url == "" {
+		s, err := Open(":memory:")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { s.Close() })
+		return s
+	}
+	admin, err := sql.Open("pgx", url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { admin.Close() })
+	schema := "t_" + newID()
+	if _, err := admin.Exec(`CREATE SCHEMA ` + schema); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { admin.Exec(`DROP SCHEMA ` + schema + ` CASCADE`) })
+	sep := "?"
+	if strings.Contains(url, "?") {
+		sep = "&"
+	}
+	s, err := Open(url + sep + "search_path=" + schema)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
+	if s.dialect != postgres {
+		t.Fatal("TEST_DATABASE_URL did not open Postgres")
+	}
 	return s
+}
+
+func TestIsPostgresURL(t *testing.T) {
+	for in, want := range map[string]bool{
+		"postgres://u:p@db/hus": true, "postgresql://db/hus?sslmode=disable": true, "POSTGRES://db/x": true,
+		":memory:": false, "/data/house-to-i3d.db": false, "postgres.db": false, "./postgres://x": false,
+	} {
+		if got := IsPostgresURL(in); got != want {
+			t.Errorf("IsPostgresURL(%q) = %v", in, got)
+		}
+	}
+}
+
+func TestRebindNumbersPlaceholdersForPostgres(t *testing.T) {
+	q := `SELECT a FROM t WHERE x = ? AND y = '?' AND z IN (?, ?)`
+	if got := rebind(sqlite, q); got != q {
+		t.Fatalf("sqlite changed: %s", got)
+	}
+	want := `SELECT a FROM t WHERE x = $1 AND y = '?' AND z IN ($2, $3)`
+	if got := rebind(postgres, q); got != want {
+		t.Fatalf("got %s\nwant %s", got, want)
+	}
+}
+
+// Two saves of the same version at the same time: exactly one wins, the other gets ErrConflict.
+func TestConcurrentUpdatesConflict(t *testing.T) {
+	s := openTest(t)
+	u := mustUser(t, s, "anna@example.se")
+	p, err := s.CreateProject(ctx, u.ID, "Hus", json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for round := 0; round < 20; round++ {
+		const n = 4
+		var wg sync.WaitGroup
+		errs := make([]error, n)
+		for i := 0; i < n; i++ {
+			wg.Add(1)
+			go func(i int) {
+				defer wg.Done()
+				name := fmt.Sprintf("v%d-%d", round, i)
+				_, errs[i] = s.UpdateProject(ctx, u.ID, p.ID, ProjectUpdate{Name: &name}, p.Version)
+			}(i)
+		}
+		wg.Wait()
+		ok := 0
+		for _, err := range errs {
+			if err == nil {
+				ok++
+			} else if !errors.Is(err, ErrConflict) {
+				t.Fatalf("unexpected error %v", err)
+			}
+		}
+		if ok != 1 {
+			t.Fatalf("round %d: %d saves of version %d won, want exactly 1", round, ok, p.Version)
+		}
+		if p, err = s.GetProject(ctx, u.ID, p.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 func mustUser(t *testing.T, s *Store, email string) User {

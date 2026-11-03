@@ -1,0 +1,13 @@
+adminEmail: me@example.se
+database:
+  type: postgres
+  postgres:
+    deploy: false
+    url: postgres://house:secret@db.example.se:5432/house?sslmode=require
+ingress:
+  enabled: true
+  className: nginx
+  host: hus.example.se
+  tls:
+    enabled: true
+    secretName: hus-tls

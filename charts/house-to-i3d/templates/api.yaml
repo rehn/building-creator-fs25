@@ -1,0 +1,140 @@
+{{- include "hx.validate" . -}}
+{{- $sqlite := eq .Values.database.type "sqlite" -}}
+{{- $g := .Values.google -}}
+{{- $google := or $g.existingSecret (and $g.clientId $g.clientSecret) -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "hx.fullname" . }}-api
+  labels:
+    {{- include "hx.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  replicas: {{ .Values.api.replicas }}
+  strategy:
+    {{- if $sqlite }}
+    # SQLite: the old pod lets go of the database file before the new one opens it.
+    type: Recreate
+    {{- else }}
+    type: RollingUpdate
+    {{- end }}
+  selector:
+    matchLabels:
+      {{- include "hx.selector" (list . "api") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "hx.selector" (list . "api") | nindent 8 }}
+      annotations:
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with .Values.api.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- include "hx.podSecurity" . | nindent 8 }}
+        runAsUser: 65532
+        runAsGroup: 65532
+        {{- if $sqlite }}
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+        {{- end }}
+      containers:
+        - name: api
+          image: {{ include "hx.image" (list . .Values.image.api) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: PUBLIC_URL
+              value: {{ include "hx.publicUrl" . | quote }}
+            {{- with .Values.adminEmail }}
+            - name: ADMIN_EMAIL
+              value: {{ . | quote }}
+            {{- end }}
+            - name: TRUST_PROXY
+              value: {{ .Values.api.trustProxy | toString | quote }}
+            {{- if $google }}
+            - name: GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (include "hx.fullname" .) $g.existingSecret }}
+                  key: GOOGLE_CLIENT_ID
+            - name: GOOGLE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (include "hx.fullname" .) $g.existingSecret }}
+                  key: GOOGLE_CLIENT_SECRET
+            {{- end }}
+            {{- if $sqlite }}
+            - name: DATABASE_PATH
+              value: /data/house-to-i3d.db
+            {{- else }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  {{- include "hx.databaseUrlRef" . | nindent 18 }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          securityContext:
+            {{- include "hx.containerSecurity" . | nindent 12 }}
+            readOnlyRootFilesystem: true
+          {{- with .Values.api.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if $sqlite }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          {{- end }}
+      {{- if $sqlite }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ default (printf "%s-data" (include "hx.fullname" .)) .Values.database.sqlite.persistence.existingClaim }}
+      {{- end }}
+      {{- with .Values.api.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.api.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.api.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "hx.fullname" . }}-api
+  labels:
+    {{- include "hx.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "hx.selector" (list . "api") | nindent 4 }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

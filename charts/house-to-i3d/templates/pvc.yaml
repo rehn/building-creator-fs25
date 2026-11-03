@@ -1,0 +1,24 @@
+{{- $p := .Values.database.sqlite.persistence -}}
+{{- if and (eq .Values.database.type "sqlite") (not $p.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "hx.fullname" . }}-data
+  labels:
+    {{- include "hx.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+  {{- if $p.keep }}
+  annotations:
+    # Every house is in this volume: keep it when the release is uninstalled.
+    helm.sh/resource-policy: keep
+  {{- end }}
+spec:
+  accessModes:
+    {{- toYaml $p.accessModes | nindent 4 }}
+  {{- with $p.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $p.size }}
+{{- end }}
