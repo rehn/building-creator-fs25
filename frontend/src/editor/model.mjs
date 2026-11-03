@@ -185,6 +185,17 @@ function abox(mat, p1, p2) {
   const mn = [0,1,2].map(i => Math.min(p1[i], p2[i])), mx = [0,1,2].map(i => Math.max(p1[i], p2[i]));
   box(mat, (a,b,c) => [lerp(mn[0],mx[0],a), lerp(mn[1],mx[1],b), lerp(mn[2],mx[2],c)], [1,0,0], UP, [0,0,1]);
 }
+const mid = pts => [0,1,2].map(i => pts.reduce((s, q) => s + q[i], 0) / pts.length);
+/** Closed convex solid from its (convex) faces, each turned away from the middle. */
+function solid(mat, faces) {
+  const c = mid(faces.flat());
+  for (const f of faces) poly(mat, f, sub(mid(f), c));
+}
+/** Convex 2D section sec, placed at both ends by at(q, 0) and at(q, 1), closed into a prism. */
+function prism(mat, sec, at) {
+  const f0 = sec.map(q => at(q, 0)), f1 = sec.map(q => at(q, 1));
+  solid(mat, [f0, f1, ...sec.map((_, i) => { const j = (i + 1) % sec.length; return [f0[i], f0[j], f1[j], f1[i]]; })]);
+}
 
 function layoutWall(key, L, fh, topAt) {
   const nf = p.floors + (p.halfStorey ? 1 : 0);
@@ -266,7 +277,10 @@ function buildWall(w, ops, H, gableRise, F) {
     wbox("trim", w, o.s1, o.s1 + fr, b0, o.t1 + fr, -0.02, out);
     wbox("trim", w, o.s0, o.s1, o.t1, o.t1 + fr, -0.02, out);
     if (isDoor) {
-      if (F > 0.05 && p.entrance !== "porch") wbox("foundation", w, o.s0 - 0.3, o.s1 + 0.3, -F, 0, 0, 0.7);
+      if (F > 0.05 && p.entrance !== "porch") {
+        wbox("foundation", w, o.s0 - 0.3, o.s1 + 0.3, -F, 0, 0, 0.7);
+        wbox("collision", w, o.s0 - 0.3, o.s1 + 0.3, -F, 0, 0, 0.7);
+      }
       const hx = o.s1 - 0.12;
       wbox("trim", w, hx - 0.03, hx, o.t0 + 0.95, o.t0 + 1.08, -r, -r + 0.06);
     } else {
@@ -333,6 +347,7 @@ function buildEntrance(w, o, limit, F, mainEave) {
     poly("trim", [T[2], T[3], B[3], B[2]], hv(0, 0, 1));
     poly("trim", [T[1], T[2], B[2], B[1]], hv(1, 0, 0));
     poly("trim", [T[0], T[3], B[3], B[0]], hv(-1, 0, 0));
+    prism("collision", [[0, ta - 0.16], [d1, ta - 0.16], [d1, tL], [0, ta + rise]], ([d, t], k) => WP(w, k ? sR + 0.1 : sL - 0.1, t, d));
   } else {
     const cosc = Math.cos(Math.atan2(rise, hw)), d1 = cd + 0.15, ov = 0.12;
     const tE = ta - ov * rise / hw, tP = ta + rise;
@@ -348,29 +363,41 @@ function buildEntrance(w, o, limit, F, mainEave) {
     }
     const gt = [WP(w, sL, ta, cd), WP(w, sR, ta, cd), WP(w, cs, tP - thc - 0.02, cd)];
     poly("walls", gt, w.n); poly("walls", gt, neg(w.n));
+    const sl = cs - hw - ov, sr = cs + hw + ov;
+    prism("collision", [[sl, ta - 0.16], [sr, ta - 0.16], [sr, tE], [cs, tP], [sl, tE]], ([sv, t], k) => WP(w, sv, t, k ? d1 : d0));
   }
   wbox("trim", w, sL, sR, ta - 0.16, ta, cd - 0.1, cd);
   for (const sg of [-1, 1]) {
     const sb = cs + sg * (hw - 0.08);
     wbox("trim", w, sb - 0.05, sb + 0.05, ta - 0.16, ta, 0, cd);
-    if (type === "porch") wbox("trim", w, sb - 0.06, sb + 0.06, 0, ta - 0.16, cd - 0.14, cd - 0.02);
+    if (type === "porch") {
+      wbox("trim", w, sb - 0.06, sb + 0.06, 0, ta - 0.16, cd - 0.14, cd - 0.02);
+      wbox("collision", w, sb - 0.06, sb + 0.06, 0, ta - 0.16, cd - 0.14, cd - 0.02);
+    }
     else sbox("trim", w, sb, 0.08, [0.02, ta - 0.9], [cd * 0.7, ta - 0.16]);
   }
   if (type === "porch") {
     wbox("foundation", w, sL, sR, -Math.max(F, 0.06), 0, 0, cd);
+    wbox("collision", w, sL, sR, -Math.max(F, 0.06), 0, 0, cd);
     const n = F > 0.1 ? Math.max(1, Math.round(F / 0.18)) : 0, rh = n ? F / n : 0, stw = Math.min(cw - 0.3, 1.4);
-    for (let k = 1; k < n; k++) wbox("foundation", w, cs - stw/2, cs + stw/2, -F, -k * rh, cd, cd + k * 0.28);
+    for (let k = 1; k < n; k++) {
+      wbox("foundation", w, cs - stw/2, cs + stw/2, -F, -k * rh, cd, cd + k * 0.28);
+      wbox("collision", w, cs - stw/2, cs + stw/2, -F, -k * rh, cd, cd + k * 0.28);
+    }
     for (const sg of [-1, 1]) {
       const sr = cs + sg * (hw - 0.08);
       wbox("trim", w, sr - 0.04, sr + 0.04, 0.85, 0.92, 0, cd - 0.14);
       wbox("trim", w, sr - 0.03, sr + 0.03, 0.08, 0.14, 0, cd - 0.14);
       for (let d = 0.12; d < cd - 0.2; d += 0.14) wbox("trim", w, sr - 0.02, sr + 0.02, 0.14, 0.85, d - 0.02, d + 0.02);
+      // The railing as one solid panel, so nothing slips between the balusters.
+      wbox("collision", w, sr - 0.04, sr + 0.04, 0, 0.92, 0, cd - 0.14);
     }
   }
 }
 
 function build() {
-  G = {}; MATS.forEach(m => G[m] = {p:[], n:[], uv:[], i:[]});
+  // "collision" collects simple closed solids next to the visual meshes; it is split off at the end.
+  G = {}; [...MATS, "collision"].forEach(m => G[m] = {p:[], n:[], uv:[], i:[]});
   const W = p.width, D = p.depth, F = p.foundation, fh = p.floorHeight, H = p.floors * fh + (p.halfStorey ? p.kneeWall : 0), top = F + H;
   const tanP = Math.tan(p.roofPitch * Math.PI / 180), o = p.overhang, th = 0.16;
   const ridgeX = p.roofType === "hip" ? W >= D : p.ridge === "width";
@@ -460,6 +487,16 @@ function build() {
         poly("trim", [T[1], T[2], Bt[2], Bt[1]], M(0, 0, s));
       }
     }
+    // Collision: from the front wall back to where the dormer meets the main roof. The part
+    // below the main roof is hidden inside the roof's own collision.
+    const at = k => (k ? bf : br) * s;
+    if (d.type === "shed") {
+      const ys = b => ye + (bf - b) * tanD;
+      prism("collision", [[br, yb], [bf, yb], [bf, ys(bf)], [br, ys(br)]], ([b, y], k) => M(k ? ac + hw : ac - hw, y, s * b));
+    } else {
+      const yc = yrd - hw * tanD;
+      prism("collision", [[ac - hw, yb], [ac + hw, yb], [ac + hw, yc], [ac, yrd], [ac - hw, yc]], ([a, y], k) => M(a, y, at(k)));
+    }
   };
 
   const WS = {
@@ -499,6 +536,7 @@ function build() {
     box("trim", (a, b, c) => { const x = lerp(x0, x1, a), z = lerp(z0, z1, c); return [x, b ? roofUnder(x, z) : F, z]; }, [1,0,0], UP, [0,0,1]);
   }
   if (F > 0.01) abox("foundation", [-W/2 - 0.06, 0, -D/2 - 0.06], [W/2 + 0.06, F, D/2 + 0.06]);
+  abox("collision", [-W/2, 0, -D/2], [W/2, top, D/2]);
 
   if (p.roofType === "gable") {
     const hA = Lr/2 + Math.min(o, 0.5), hB = span/2 + o;
@@ -511,6 +549,8 @@ function build() {
       poly("trim", [t[3],t[0],b[0],b[3]], M(-1,0,0));
     }
     abox("roof", M(-hA, ridgeY - 0.04, -0.1), M(hA, ridgeY + 0.07, 0.1));
+    // Collision: the roof as one solid, from the eaves up to the ridge, gable end to gable end.
+    prism("collision", [[-hB, eaveY], [hB, eaveY], [0, ridgeY]], ([b, y], k) => M(k ? hA : -hA, y, b));
   } else if (p.roofType === "hip") {
     const hA = Lr/2 + o, hB = span/2 + o, rh = Math.max(0, Lr/2 - span/2);
     for (const s of [1,-1]) {
@@ -523,9 +563,16 @@ function build() {
       poly("trim", [e[0],e[1],eb[1],eb[0]], M(s,0,0));
     }
     if (rh > 0.05) abox("roof", M(-rh, ridgeY - 0.04, -0.1), M(rh, ridgeY + 0.07, 0.1));
+    // Collision: eave rectangle up to the ridge (a pyramid when the ridge has no length).
+    const E = (a, b) => M(a * hA, eaveY, b * hB), Rr = a => M(a * rh, ridgeY, 0);
+    solid("collision", [
+      [E(-1,-1), E(1,-1), E(1,1), E(-1,1)],
+      ...[1, -1].map(s => [E(-1,s), E(1,s), Rr(1), Rr(-1)]),
+      ...[1, -1].map(s => [E(s,-1), E(s,1), Rr(s)])]);
   } else {
     const oo = Math.min(o, 0.4);
     abox("roof", [-W/2 - oo, top, -D/2 - oo], [W/2 + oo, top + 0.3, D/2 + oo]);
+    abox("collision", [-W/2 - oo, top, -D/2 - oo], [W/2 + oo, top + 0.3, D/2 + oo]);
   }
 
   for (const s of [1, -1]) for (const X of DORMS[s]) buildDormer(X);
@@ -556,14 +603,12 @@ function build() {
     const ytop = p.roofType === "flat" ? top + 1.3 : ridgeY + 0.7;
     abox("chimney", [c[0]-0.3, top - 0.2, c[2]-0.3], [c[0]+0.3, ytop, c[2]+0.3]);
     abox("chimney", [c[0]-0.36, ytop, c[2]-0.36], [c[0]+0.36, ytop + 0.1, c[2]+0.36]);
+    abox("collision", [c[0]-0.3, top - 0.2, c[2]-0.3], [c[0]+0.3, ytop + 0.1, c[2]+0.3]);
   }
   dims = {W, D, top, ridgeY, F};
 }
 build();
-const visual = G;
-G = {collision: {p:[], n:[], uv:[], i:[]}};
-abox("collision", [-dims.W/2, 0, -dims.D/2], [dims.W/2, dims.top, dims.D/2]);
-const collision = G.collision;
+const {collision, ...visual} = G;
 return {G: visual, dims, opsByWall, collision};
 }
 

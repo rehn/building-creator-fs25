@@ -107,6 +107,104 @@ test("geometry: building the same settings twice gives the same result", () => {
   assert.deepEqual(a, b);
 });
 
+/* ---------- Collision ---------- */
+const verts = g => Array.from({ length: g.p.length / 3 }, (_, i) => [g.p[i*3], g.p[i*3+1], g.p[i*3+2]]);
+const maxY = g => Math.max(...verts(g).map(v => v[1]));
+
+// Closed and turned outwards: every edge is matched by the same edge the other
+// way round, and the enclosed volume is positive.
+function assertClosed(g, name) {
+  const key = i => [0, 1, 2].map(k => g.p[i*3+k].toFixed(4)).join(",");
+  const edges = new Map();
+  let vol = 0;
+  for (let t = 0; t < g.i.length; t += 3) {
+    const [a, b, c] = [g.i[t], g.i[t+1], g.i[t+2]];
+    for (const [u, v] of [[a, b], [b, c], [c, a]]) {
+      const e = key(u) + ">" + key(v);
+      edges.set(e, (edges.get(e) || 0) + 1);
+    }
+    const P = [a, b, c].map(i => [g.p[i*3], g.p[i*3+1], g.p[i*3+2]]);
+    vol += (P[0][0] * (P[1][1]*P[2][2] - P[1][2]*P[2][1]) - P[0][1] * (P[1][0]*P[2][2] - P[1][2]*P[2][0]) + P[0][2] * (P[1][0]*P[2][1] - P[1][1]*P[2][0])) / 6;
+  }
+  for (const [e, n] of edges) {
+    const [u, v] = e.split(">");
+    assert.equal(edges.get(v + ">" + u) || 0, n, `${name}: edge ${e} is open`);
+  }
+  assert.ok(vol > 0, `${name}: collision is inside out`);
+}
+
+const dormers = [
+  { type: "frontespis", side: 1, pos: 0.5 },
+  { type: "gable", side: -1, pos: 0.25 },
+  { type: "shed", side: -1, pos: 0.7 },
+];
+
+for (const roofType of ["gable", "hip", "flat"]) for (const entrance of ["porch", "shed", "gable", "none"]) {
+  test(`collision: closed mesh for a ${roofType} roof with a ${entrance} entrance`, () => {
+    const { collision } = buildGeometry(sanitize({ roofType, entrance, halfStorey: true, chimney: true, dormers }));
+    assertMeshValid(collision, "collision");
+    assertClosed(collision, "collision");
+  });
+}
+
+for (const roofType of ["gable", "hip"]) {
+  test(`collision: covers the ${roofType} roof up to the ridge`, () => {
+    const { collision, dims } = buildGeometry(sanitize({ roofType, chimney: false }));
+    assert.ok(maxY(collision) >= dims.ridgeY - 1e-6, `collision top ${maxY(collision)} < ridge ${dims.ridgeY}`);
+  });
+}
+
+test("collision: covers the flat roof", () => {
+  const { collision, dims } = buildGeometry(sanitize({ roofType: "flat", chimney: false }));
+  assert.ok(maxY(collision) >= dims.ridgeY - 1e-6);
+});
+
+test("collision: covers the chimney", () => {
+  const { collision, dims } = buildGeometry(sanitize({ chimney: true }));
+  assert.ok(maxY(collision) >= dims.ridgeY + 0.7);
+});
+
+for (const type of ["frontespis", "gable", "shed"]) {
+  test(`collision: a ${type} dormer gets its own collision`, () => {
+    // Ridge parallel to the front, so a side 1 dormer faces +z from the roof.
+    const base = { roofType: "gable", ridge: "width", halfStorey: true, chimney: false };
+    const without = buildGeometry(sanitize(base));
+    const p = sanitize({ ...base, dormers: [{ type, side: 1, pos: 0.5 }] });
+    const withD = buildGeometry(p);
+    assert.equal(p.dormers[0]._hidden, false, "dormer should fit");
+    assert.ok(withD.collision.i.length > without.collision.i.length);
+    // The dormer's front wall stands on the roof slope, above the eaves.
+    const roofAt = z => withD.dims.ridgeY - Math.tan(p.roofPitch * Math.PI / 180) * Math.abs(z);
+    const hw = p.dormers[0].w / 2 + 1e-6;
+    const sticksOut = verts(withD.collision).some(([x, y, z]) => z > 0.3 && Math.abs(x) <= hw && y > roofAt(z) + 0.5);
+    assert.ok(sticksOut, "no collision above the roof slope where the dormer is");
+  });
+}
+
+test("collision: dormers that don't fit add no collision", () => {
+  const base = { roofType: "flat" };
+  const a = buildGeometry(sanitize(base)).collision;
+  const b = buildGeometry(sanitize({ ...base, dormers: [{ type: "gable", side: 1, pos: 0.5 }] })).collision;
+  assert.deepEqual(b, a);
+});
+
+test("collision: the porch deck, posts and steps are solid", () => {
+  const p = sanitize({ entrance: "porch", doorWall: "front", foundation: 0.6, entranceDepth: 1.6 });
+  const { collision, dims } = buildGeometry(p);
+  const front = verts(collision).filter(([, , z]) => z > dims.D / 2 + 0.5);
+  assert.ok(front.some(([, y]) => Math.abs(y - dims.F) < 1e-6), "no porch deck");
+  assert.ok(front.some(([, y]) => y > dims.F + 2), "no posts or roof on the porch");
+  assert.ok(front.some(([, , z]) => z > dims.D / 2 + 1.6), "no steps in front of the porch");
+});
+
+test("collision: the entrance canopy is solid", () => {
+  for (const entrance of ["shed", "gable"]) {
+    const { collision, dims } = buildGeometry(sanitize({ entrance, doorWall: "front" }));
+    const canopy = verts(collision).filter(([, y, z]) => z > dims.D / 2 + 0.3 && y > dims.F + 2);
+    assert.ok(canopy.length > 0, `no collision for the ${entrance} canopy`);
+  }
+});
+
 test("i3d: one shape per used material plus a collision shape", () => {
   const p = sanitize({});
   const xml = buildI3d(p, { withTex: false });

@@ -20,7 +20,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Frontend tests: cd frontend && npm test (node --test, no browser needed)
 
 ## Status
-- Go tests (40) pass, go vet is clean. Frontend tests (25) pass.
+- Go tests (40) pass, go vet is clean. Frontend tests (47) pass.
 - npm run build succeeds.
 - go.sum and package-lock.json are committed.
 
