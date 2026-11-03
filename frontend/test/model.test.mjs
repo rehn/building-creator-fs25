@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULTS, sanitize, buildGeometry, buildI3d, serialize, MATS, placementAreas, placeableSnippet, sleepPoint, boxMesh, WP, ROOM_TYPES, CURTAIN_STYLES, rgb } from "../src/editor/model.mjs";
+import { DEFAULTS, sanitize, buildGeometry, buildI3d, serialize, MATS, placementAreas, placeableSnippet, sleepPoint, boxMesh, WP, ROOM_TYPES, CURTAIN_STYLES, rgb, pipeMesh, gutterMesh } from "../src/editor/model.mjs";
 
 const countOn = (p, wall, floor) => p.windows.filter(w => w.wall === wall && w.floor === floor).length;
 
@@ -116,6 +116,65 @@ for (const roofType of ["gable", "hip", "flat"]) {
     assert.ok(soffit.length > 0, "no trim soffit outside the walls");
   });
 }
+
+/* ---------- Gutters and downpipes ---------- */
+const angle = (a, b) => Math.acos(Math.max(-1, Math.min(1, (a[0]*b[0] + a[1]*b[1] + a[2]*b[2]) / (Math.hypot(...a) * Math.hypot(...b))))) * 180 / Math.PI;
+
+test("pipeMesh: one closed, round pipe with rounded elbows", () => {
+  // the downpipe route: down from the gutter, slanting in to the wall, down, kick out at the bottom
+  const path = [[0, 6, 0.6], [0, 5.85, 0.6], [0, 5.5, 0.15], [0, 0.3, 0.15], [0, 0.1, 0.35]];
+  const r = 0.045, m = pipeMesh(path, r);
+  assertMeshValid(m, "pipe");
+  assertClosed(m, "pipe");
+  // smooth and round: side normals are unit length and point straight out from the pipe's axis
+  const rings = m.rings;
+  assert.ok(rings.length > path.length, "no extra rings in the bends");
+  for (const ring of rings) {
+    assert.ok(ring.verts.length >= 16, "pipe has fewer than 16 sides");
+    for (const i of ring.verts) {
+      const n = [m.n[i*3], m.n[i*3+1], m.n[i*3+2]], d = [m.p[i*3] - ring.c[0], m.p[i*3+1] - ring.c[1], m.p[i*3+2] - ring.c[2]];
+      assert.ok(Math.abs(Math.hypot(...n) - 1) < 1e-6, "normal not unit length");
+      assert.ok(Math.abs(Math.hypot(...d) - r) < 1e-6, "vertex not on the pipe's surface");
+      assert.ok(angle(n, d) < 1e-3, "normal not radial (flat shading)");
+    }
+  }
+  // elbows are round: the pipe never turns more than 20 degrees from one ring to the next
+  for (let k = 1; k < rings.length; k++) assert.ok(angle(rings[k - 1].t, rings[k].t) <= 20 + 1e-6, `kink of ${angle(rings[k - 1].t, rings[k].t).toFixed(1)} degrees`);
+  // it still follows the route: starts and ends at the path's ends
+  assert.deepEqual(rings[0].c, path[0]);
+  assert.deepEqual(rings.at(-1).c, path.at(-1));
+});
+
+test("gutterMesh: a smooth half-round gutter with a rolled lip", () => {
+  const c0 = [-5, 4, 4], c1 = [5, 4, 4], out = [0, 0, 1], r = 0.065;
+  const m = gutterMesh(c0, c1, out, r);
+  assertMeshValid(m, "gutter");
+  // the trough: profile points on the half circle below the rim, normals radial (smooth, both sides)
+  let trough = 0;
+  for (let i = 0; i < m.p.length / 3; i++) {
+    if (!m.trough[i]) continue;
+    trough++;
+    const d = [0, m.p[i*3+1] - c0[1], m.p[i*3+2] - c0[2]], n = [m.n[i*3], m.n[i*3+1], m.n[i*3+2]];
+    assert.ok(Math.abs(Math.hypot(...d) - r) < 1e-6, "trough vertex off the half circle");
+    assert.ok(d[1] <= 1e-9, "trough above the rim");
+    assert.ok(Math.min(angle(n, d), angle(n, d.map(v => -v))) < 1e-3, "trough normal not radial");
+  }
+  assert.ok(trough >= 2 * 2 * 13, "profile has fewer than 12 segments");
+});
+
+test("geometry: each downpipe is one pipe from the gutter to the ground", () => {
+  const geo = buildGeometry(sanitize({ gutters: true, downpipes: 2, roofType: "gable", ridge: "width" })), g = geo.G.gutter;
+  assertMeshValid(g, "gutter");
+  assert.equal(geo.downpipes.length, 4, "two downpipes on each long side");
+  const key = (a, i) => [a[i*3], a[i*3+1], a[i*3+2]].map(v => v.toFixed(5)).join(",");
+  const have = new Set(Array.from({ length: g.p.length / 3 }, (_, i) => key(g.p, i)));
+  for (const { path, r } of geo.downpipes) {
+    assert.ok(path[0][1] > geo.dims.top - 0.5, "starts at the gutter");
+    assert.ok(path.at(-1)[1] < 0.2, "ends near the ground");
+    const m = pipeMesh(path, r);
+    for (let i = 0; i < m.p.length / 3; i++) assert.ok(have.has(key(m.p, i)), "downpipe is not one pipeMesh along its route");
+  }
+});
 
 test("geometry: building the same settings twice gives the same result", () => {
   const a = buildGeometry(sanitize({})).G, b = buildGeometry(sanitize({})).G;

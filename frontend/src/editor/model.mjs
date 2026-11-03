@@ -201,6 +201,117 @@ const norm = a => { const l = Math.hypot(a[0],a[1],a[2]) || 1; return [a[0]/l, a
 const neg = a => [-a[0], -a[1], -a[2]];
 const lerp = (a,b,t) => a + (b-a)*t;
 const UP = [0,1,0];
+const add = (a,b) => [a[0]+b[0], a[1]+b[1], a[2]+b[2]];
+const scl = (a,k) => [a[0]*k, a[1]*k, a[2]*k];
+const dist = (a,b) => Math.hypot(...sub(a,b));
+
+/* ---------- Pipes and gutters (smooth meshes) ---------- */
+/** Adds a triangle a, b, c to mesh m, turned so it faces along hint. */
+function tri(m, a, b, c, hint) {
+  const n = cross(sub(m.v(b), m.v(a)), sub(m.v(c), m.v(a)));
+  if (dot(n, hint) < 0) m.i.push(a, c, b); else m.i.push(a, b, c);
+}
+function newMesh() {
+  const m = {p: [], n: [], uv: [], i: []};
+  m.v = k => [m.p[k*3], m.p[k*3+1], m.p[k*3+2]];
+  m.add = (pos, nrm, uv) => { m.p.push(...pos); m.n.push(...nrm); m.uv.push(...uv); return m.p.length / 3 - 1; };
+  return m;
+}
+/** Flat disc (or fan) closing a ring of vertex positions, facing along nrm. */
+function cap(m, center, ring, nrm) {
+  const c = m.add(center, nrm, [0.5, 0.5]);
+  const vs = ring.map(q => m.add(q, nrm, [0, 0]));
+  for (let k = 0; k < vs.length; k++) tri(m, c, vs[k], vs[(k + 1) % vs.length], nrm);
+}
+
+/**
+ * A round pipe along path (points), radius r, as one closed mesh with smooth normals.
+ * Corners become rounded elbows (bend: their radius, in metres). Also returns the rings
+ * (centre c, direction t, vertex indices) for tests.
+ */
+export function pipeMesh(path, r, {seg = 16, bend = 0.12} = {}) {
+  const pts = [path[0]];
+  const push = q => { if (dist(q, pts[pts.length - 1]) > 1e-6) pts.push(q); };
+  for (let i = 1; i < path.length - 1; i++) {
+    const P = path[i], d0 = norm(sub(P, path[i - 1])), d1 = norm(sub(path[i + 1], P));
+    const th = Math.acos(Math.max(-1, Math.min(1, dot(d0, d1))));
+    if (th < 1e-3) { push(P); continue; }
+    // Round the corner with a curve from A (on the way in) to B (on the way out).
+    const t = Math.min(bend * Math.tan(th / 2), 0.45 * dist(P, path[i - 1]), 0.45 * dist(path[i + 1], P));
+    const A = sub(P, scl(d0, t)), B = add(P, scl(d1, t));
+    const n = Math.max(2, Math.ceil(th / (8 * Math.PI / 180)));
+    for (let k = 0; k <= n; k++) {
+      const u = k / n;
+      push(add(add(scl(A, (1 - u) * (1 - u)), scl(P, 2 * u * (1 - u))), scl(B, u * u)));
+    }
+  }
+  push(path[path.length - 1]);
+
+  const m = newMesh();
+  const T = pts.map((q, i) => norm(add(i > 0 ? norm(sub(q, pts[i - 1])) : [0, 0, 0], i < pts.length - 1 ? norm(sub(pts[i + 1], q)) : [0, 0, 0])));
+  let e1 = norm(cross(T[0], Math.abs(T[0][1]) < 0.9 ? UP : [1, 0, 0]));
+  m.rings = pts.map((c, i) => {
+    e1 = norm(sub(e1, scl(T[i], dot(e1, T[i]))));    // carried along the pipe, so the sides don't twist
+    const e2 = cross(T[i], e1);
+    const verts = Array.from({length: seg}, (_, k) => {
+      const a = k / seg * Math.PI * 2, d = add(scl(e1, Math.cos(a)), scl(e2, Math.sin(a)));
+      return m.add(add(c, scl(d, r)), d, [k / seg, i]);
+    });
+    return {c, t: T[i], verts};
+  });
+  for (let i = 0; i + 1 < m.rings.length; i++) {
+    const A = m.rings[i].verts, B = m.rings[i + 1].verts;
+    for (let k = 0; k < seg; k++) {
+      const a = A[k], b = B[k], c = B[(k + 1) % seg], d = A[(k + 1) % seg], out = m.n.slice(a * 3, a * 3 + 3);
+      tri(m, a, b, c, out); tri(m, a, c, d, out);
+    }
+  }
+  const ring = R => R.verts.map(k => m.v(k));
+  cap(m, pts[0], ring(m.rings[0]), neg(T[0]));
+  cap(m, pts[pts.length - 1], ring(m.rings[m.rings.length - 1]), T[T.length - 1]);
+  delete m.v; delete m.add;
+  return m;
+}
+
+/**
+ * A half-round gutter from c0 to c1 (centres of the rim), opening upwards, the outer rim towards out.
+ * Thin sheet with smooth shading on both sides, closed ends and a rolled lip on the outer rim.
+ * trough[i] marks the vertices of the curved sheet (for tests).
+ */
+export function gutterMesh(c0, c1, out, r, {seg = 12} = {}) {
+  const m = newMesh();
+  m.trough = [];
+  const dir = norm(sub(c1, c0));
+  const radial = th => [out[0] * Math.cos(th), -Math.sin(th), out[2] * Math.cos(th)];
+  const pt = (c, th) => add(c, scl(radial(th), r));
+  for (const side of [1, -1]) {
+    const row = c => Array.from({length: seg + 1}, (_, k) => {
+      const th = k / seg * Math.PI, d = radial(th);
+      const v = m.add(pt(c, th), scl(d, side), [k / seg, c === c0 ? 0 : 1]);
+      m.trough[v] = true;
+      return v;
+    });
+    const A = row(c0), B = row(c1);
+    for (let k = 0; k < seg; k++) {
+      const hint = scl(radial((k + 0.5) / seg * Math.PI), side);
+      tri(m, A[k], B[k], B[k + 1], hint); tri(m, A[k], B[k + 1], A[k + 1], hint);
+    }
+  }
+  // End plates, seen from both sides.
+  for (const [c, sg] of [[c0, -1], [c1, 1]]) {
+    const edge = Array.from({length: seg + 1}, (_, k) => pt(c, k / seg * Math.PI));
+    for (const face of [1, -1]) {
+      const nrm = scl(dir, sg * face), vs = edge.map(q => m.add(q, nrm, [0, 0]));
+      for (let k = 1; k < seg; k++) tri(m, vs[0], vs[k], vs[k + 1], nrm);
+    }
+  }
+  // Rolled lip on the outer rim.
+  const lip = pipeMesh([pt(c0, 0), pt(c1, 0)], 0.012, {seg: 10});
+  const base = m.p.length / 3;
+  m.p.push(...lip.p); m.n.push(...lip.n); m.uv.push(...lip.uv); m.i.push(...lip.i.map(k => k + base));
+  delete m.v; delete m.add;
+  return m;
+}
 
 /**
  * Builds the house mesh for settings p. Returns one mesh per material in G,
@@ -208,7 +319,7 @@ const UP = [0,1,0];
  * Marks windows and dormers that don't fit with _hidden = true.
  */
 export function buildGeometry(p) {
-let G, opsByWall = {}, dims = {}, rooms = [];
+let G, opsByWall = {}, dims = {}, rooms = [], downpipes = [];
 
 function poly(mat, pts, hint, uvf) {
   pts = pts.filter((q,i) => { const r = pts[(i+1) % pts.length]; return Math.hypot(...sub(q,r)) > 1e-6; });
@@ -443,30 +554,13 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null} = {
   if (p.interior) for (const o of ops) if (o.kind === "window") { const R = roomFor(w, o, ops, r, topAt, !!dormer, dormer || p.windows.find(x => x.id === o.id)); rooms.push(R); buildRoom(R); }
 }
 
-function tube(mat, a, b, r, seg = 10) {
-  const dir = norm(sub(b, a)), ref = Math.abs(dir[1]) < 0.9 ? UP : [1,0,0];
-  const e1 = norm(cross(dir, ref)), e2 = cross(dir, e1);
-  const v = k => { const t = k / seg * Math.PI * 2, c = Math.cos(t), s = Math.sin(t); return [e1[0]*c + e2[0]*s, e1[1]*c + e2[1]*s, e1[2]*c + e2[2]*s]; };
-  const P = (q, d) => [q[0] + d[0]*r, q[1] + d[1]*r, q[2] + d[2]*r];
-  for (let k = 0; k < seg; k++) poly(mat, [P(a, v(k)), P(b, v(k)), P(b, v(k + 1)), P(a, v(k + 1))], v(k + 0.5));
-  poly(mat, Array.from({length: seg}, (_, k) => P(a, v(k))), neg(dir));
-  poly(mat, Array.from({length: seg}, (_, k) => P(b, v(k))), dir);
+function addMesh(mat, m) {
+  const g = G[mat], base = g.p.length / 3;
+  g.p.push(...m.p); g.n.push(...m.n); g.uv.push(...m.uv);
+  for (const k of m.i) g.i.push(k + base);
+  if (g.c) for (let k = 0; k < m.p.length / 3; k++) g.c.push(...curtainRGB);
 }
-function gutterRun(c0, c1, out, r) {
-  const N = 6, pt = (c, th) => [c[0] + out[0]*r*Math.cos(th), c[1] - r*Math.sin(th), c[2] + out[2]*r*Math.cos(th)];
-  for (let k = 0; k < N; k++) {
-    const a0 = k * Math.PI / N, a1 = (k + 1) * Math.PI / N, am = (a0 + a1) / 2;
-    const nrm = [out[0]*Math.cos(am), -Math.sin(am), out[2]*Math.cos(am)];
-    const q = [pt(c0, a0), pt(c1, a0), pt(c1, a1), pt(c0, a1)];
-    poly("gutter", q, nrm); poly("gutter", q, neg(nrm));
-  }
-  const dir = norm(sub(c1, c0));
-  for (const [c, sg] of [[c0, -1], [c1, 1]]) {
-    const cap = Array.from({length: N + 1}, (_, k) => pt(c, k * Math.PI / N));
-    poly("gutter", cap, dir.map(x => x * sg)); poly("gutter", cap, dir.map(x => -x * sg));
-  }
-  tube("gutter", pt(c0, 0), pt(c1, 0), 0.012, 6);
-}
+function gutterRun(c0, c1, out, r) { addMesh("gutter", gutterMesh(c0, c1, out, r)); }
 function sbox(mat, w, sc, thk, p0, p1) {
   const ad = p1[0] - p0[0], at = p1[1] - p0[1], l = Math.hypot(ad, at), ud = ad / l, ut = at / l, pd = -ut, pt = ud;
   box(mat, (a, b, c) => {
@@ -545,7 +639,7 @@ function buildEntrance(w, o, limit, F, mainEave) {
 
 function build() {
   // "collision" collects simple closed solids next to the visual meshes; it is split off at the end.
-  rooms = [];
+  rooms = []; downpipes = [];
   G = {}; [...MATS, "collision"].forEach(m => G[m] = {p:[], n:[], uv:[], i:[]});
   G.curtain.c = [];
   const W = p.width, D = p.depth, F = p.foundation, fh = p.floorHeight, H = p.floors * fh + (p.halfStorey ? p.kneeWall : 0), top = F + H;
@@ -742,7 +836,10 @@ function build() {
         const q0 = M(ap, yb + 0.03, bg), q1 = M(ap, yb - 0.12, bg);
         const q2 = M(ap, yb - 0.12 - Math.abs(bg - bw) * 0.9, bw);
         const q3 = M(ap, 0.3, bw), q4 = M(ap, 0.1, s * (span/2 + 0.28));
-        tube("gutter", q0, q1, 0.045); tube("gutter", q1, q2, 0.045); tube("gutter", q2, q3, 0.045); tube("gutter", q3, q4, 0.045);
+        // One pipe with rounded elbows: out of the gutter, in to the wall, down, and out at the foot.
+        const route = [q0, q1, q2, q3, q4];
+        downpipes.push({path: route, r: 0.045});
+        addMesh("gutter", pipeMesh(route, 0.045));
         for (let y = 1.0; y < q2[1] - 0.4; y += 1.6) abox("gutter", M(ap - 0.015, y, s * span/2), M(ap + 0.015, y + 0.04, bw));
       }
     }
@@ -759,7 +856,7 @@ function build() {
 }
 build();
 const {collision, ...visual} = G;
-return {G: visual, dims, opsByWall, collision, rooms};
+return {G: visual, dims, opsByWall, collision, rooms, downpipes};
 }
 
 /* ---------- Materials ---------- */
