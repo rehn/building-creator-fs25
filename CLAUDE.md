@@ -25,5 +25,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - go.sum and package-lock.json are committed.
 
 ## Dev environment (WSL)
+- ./dev.sh starts API (:8080) + Next dev server (:3000); data in .dev/ (gitignored),
+  ./dev.sh --reset wipes it. Reachable from the Windows browser at localhost:3000.
 - Node 22 and gh live in ~/.local/bin (installed without sudo).
 - Docker is not integrated into WSL; Docker Desktop runs on the Windows side.

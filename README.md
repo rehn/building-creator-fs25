@@ -55,7 +55,16 @@ Put the `web` service behind a reverse proxy with HTTPS (Caddy, Traefik, nginx) 
 
 ## Develop
 
-With Go 1.25+ and Node 22+ installed you can run both parts without Docker:
+With Go 1.25+ and Node 22+ installed, start everything with one command:
+
+```sh
+./dev.sh            # API on :8080, app on http://localhost:3000, Ctrl+C stops both
+./dev.sh --reset    # same, but delete the local database first
+```
+
+The first run creates `.env` with your git email as `ADMIN_EMAIL`. The local database lives in `.dev/`, which git ignores.
+
+Or start the two parts yourself:
 
 ```sh
 # terminal 1
