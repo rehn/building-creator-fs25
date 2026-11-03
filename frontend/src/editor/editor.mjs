@@ -583,7 +583,7 @@ function makeSleepMarker() {
   x.beginPath(); x.arc(50, 64, 9, 0, Math.PI * 2); x.fill();  // pillow / head
   x.fillRect(62, 56, 42, 16);            // blanket
   const tex = new THREE.CanvasTexture(c);
-  const icon = new THREE.Sprite(new THREE.SpriteMaterial({map:tex, depthTest:false, transparent:true}));
+  const icon = new THREE.Sprite(new THREE.SpriteMaterial({map:tex, transparent:true, depthWrite:false}));
   icon.scale.set(0.8, 0.8, 1); icon.renderOrder = 10;
   group.add(box, icon);
   const dispose = () => { box.geometry.dispose(); box.material.dispose(); tex.dispose(); icon.material.dispose(); };

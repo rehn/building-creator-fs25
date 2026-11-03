@@ -274,6 +274,60 @@ export function pipeMesh(path, r, {seg = 16, bend = 0.12} = {}) {
 }
 
 /**
+ * Half-round ridge cap from x = a0 to a1, in local coordinates: x along the ridge, y up, z across,
+ * with the roof's top surface at y = ridgeY - tanP * |z|. The round runs down each side until it is
+ * tucked into the roof, so it rests on the slopes at any pitch. Smooth shading; open underneath.
+ * arc: the indices of the round surface's vertices; axisY: height of its axis (for tests).
+ */
+export function ridgeCapMesh(a0, a1, ridgeY, tanP, r, {seg = 24} = {}) {
+  const m = newMesh(), axisY = ridgeY + 0.01, roofAt = z => ridgeY - tanP * Math.abs(z) - 0.008;
+  const at2 = th => [r * Math.sin(th), axisY + r * Math.cos(th)];         // [z, y] on the round
+  // The round goes down each side to where it meets the roof, but no further than 105 degrees,
+  // so it never faces downwards; from there a short straight skirt carries on along its tangent.
+  const END = 105 * Math.PI / 180;
+  let end = Math.PI / 2;
+  while (at2(end)[1] > roofAt(at2(end)[0]) && end < END) end += Math.PI / 360;
+  end = Math.min(end, END);
+  const n = Math.max(seg, Math.ceil(2 * end / (7.5 * Math.PI / 180)));
+  const ths = Array.from({length: n + 1}, (_, k) => -end + 2 * end * k / n);
+  // Skirt: from the end of the round along its tangent until tucked into the roof.
+  const skirt = sg => {
+    const [z0, y0] = at2(sg * end), dz = sg * Math.cos(end), dy = -Math.sin(end);
+    let s = 0;
+    while (y0 + dy * s > roofAt(z0 + dz * s) && s < 4 * r) s += r / 50;
+    return s > 0 ? [z0 + dz * s, y0 + dy * s] : null;
+  };
+  // The profile, left to right: [z, y, normal z, normal y, v]
+  const prof = [];
+  const sL = skirt(-1), sR = skirt(1), nL = [Math.sin(-end), Math.cos(end)], nR = [Math.sin(end), Math.cos(end)];
+  if (sL) prof.push([sL[0], sL[1], nL[0], nL[1], -r * end - Math.hypot(sL[0] - at2(-end)[0], sL[1] - at2(-end)[1])]);
+  for (const th of ths) { const [z, y] = at2(th); prof.push([z, y, Math.sin(th), Math.cos(th), r * th]); }
+  if (sR) prof.push([sR[0], sR[1], nR[0], nR[1], r * end + Math.hypot(sR[0] - at2(end)[0], sR[1] - at2(end)[1])]);
+  const first = sL ? 1 : 0;   // where the round starts in prof
+  m.arc = []; m.rim = [];
+  const row = x => prof.map(([z, y, nz, ny, v], k) => {
+    const i = m.add([x, y, z], [0, ny, nz], [x, v]);
+    if (k >= first && k <= first + n) m.arc.push(i);
+    if (k === 0 || k === prof.length - 1) m.rim.push(i);
+    return i;
+  });
+  const A = row(a0), B = row(a1);
+  for (let k = 0; k + 1 < prof.length; k++) {
+    const hint = [0, (prof[k][3] + prof[k + 1][3]) / 2, (prof[k][2] + prof[k + 1][2]) / 2];
+    tri(m, A[k], B[k], B[k + 1], hint); tri(m, A[k], B[k + 1], A[k + 1], hint);
+  }
+  // Ends: a fan from the axis, like the end of a ridge tile.
+  for (const [x, sg] of [[a0, -1], [a1, 1]]) {
+    const nrm = [sg, 0, 0], c = m.add([x, axisY, 0], nrm, [0.5, 0.5]);
+    const vs = prof.map(([z, y]) => m.add([x, y, z], nrm, [0, 0]));
+    for (let k = 0; k + 1 < vs.length; k++) tri(m, c, vs[k], vs[k + 1], nrm);
+  }
+  m.axisY = axisY;
+  delete m.v; delete m.add;
+  return m;
+}
+
+/**
  * A half-round gutter from c0 to c1 (centres of the rim), opening upwards, the outer rim towards out.
  * Thin sheet with smooth shading on both sides, closed ends and a rolled lip on the outer rim.
  * trough[i] marks the vertices of the curved sheet (for tests).
@@ -567,6 +621,17 @@ function addMesh(mat, m) {
   for (const k of m.i) g.i.push(k + base);
   if (g.c) for (let k = 0; k < m.p.length / 3; k++) g.c.push(...curtainRGB);
 }
+/** The ridge cap along the ridge from a0 to a1 (ridge coordinates), placed with M. */
+function ridgeCap(a0, a1, ridgeY, tanP, M, ridgeX) {
+  const m = ridgeCapMesh(a0, a1, ridgeY, tanP, 0.12), q = [];
+  for (let k = 0; k < m.p.length; k += 3) q.push(...M(m.p[k], m.p[k + 1], m.p[k + 2]));
+  const nn = [];
+  for (let k = 0; k < m.n.length; k += 3) nn.push(...M(m.n[k], m.n[k + 1], m.n[k + 2]));
+  const idx = [];
+  // Swapping x and z mirrors the mesh, which turns its triangles inside out: turn them back.
+  for (let k = 0; k < m.i.length; k += 3) idx.push(...(ridgeX ? [m.i[k], m.i[k + 1], m.i[k + 2]] : [m.i[k], m.i[k + 2], m.i[k + 1]]));
+  addMesh("roof", {p: q, n: nn, uv: m.uv, i: idx});
+}
 function gutterRun(c0, c1, out, r) { addMesh("gutter", gutterMesh(c0, c1, out, r)); }
 function sbox(mat, w, sc, thk, p0, p1) {
   const ad = p1[0] - p0[0], at = p1[1] - p0[1], l = Math.hypot(ad, at), ud = ad / l, ut = at / l, pd = -ut, pt = ud;
@@ -799,7 +864,7 @@ function build() {
       poly("trim", [t[1],t[2],b[2],b[1]], M(1,0,0));
       poly("trim", [t[3],t[0],b[0],b[3]], M(-1,0,0));
     }
-    abox("roof", M(-hA, ridgeY - 0.04, -0.1), M(hA, ridgeY + 0.07, 0.1));
+    ridgeCap(-hA, hA, ridgeY, tanP, M, ridgeX);
     // Collision: the roof as one solid, from the eaves up to the ridge, gable end to gable end.
     prism("collision", [[-hB, eaveY], [hB, eaveY], [0, ridgeY]], ([b, y], k) => M(k ? hA : -hA, y, b));
   } else if (p.roofType === "hip") {
@@ -813,7 +878,7 @@ function build() {
       poly("roof", e, eu, uvEnd); poly("roof", eb, neg(eu), uvEnd);
       poly("trim", [e[0],e[1],eb[1],eb[0]], M(s,0,0));
     }
-    if (rh > 0.05) abox("roof", M(-rh, ridgeY - 0.04, -0.1), M(rh, ridgeY + 0.07, 0.1));
+    if (rh > 0.05) ridgeCap(-rh, rh, ridgeY, tanP, M, ridgeX);
     // Collision: eave rectangle up to the ridge (a pyramid when the ridge has no length).
     const E = (a, b) => M(a * hA, eaveY, b * hB), Rr = a => M(a * rh, ridgeY, 0);
     solid("collision", [
