@@ -4,8 +4,10 @@ import * as THREE from "three";
 import JSZip from "jszip";
 import {
   SCHEMA, FIELD, WALLS, WALL_NAMES, DTYPES, DORM_DEF, MATS,
-  genRow, sanitize, serialize, slugify, buildGeometry, buildI3d, placeableSnippet, surfaceSpec, scaledUV, colorFor, WP
+  genRow, sanitize, serialize, slugify, buildGeometry, buildI3d, placeableSnippet, sleepPoint, surfaceSpec, scaledUV, colorFor, WP
 } from "./model.mjs";
+import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription } from "./model.mjs";
+import { paintInterior, paintGlass } from "./interior.mjs";
 export { slugify };
 
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -32,7 +34,7 @@ const MARKUP = `<div class="hx-editor">
  * options.onChange(settings): called after every edit with the settings to save
  * Returns {getSettings, setSettings, exportModel, exportSettings, importSettings, snapshot, toast, destroy}.
  */
-export function createEditor(root, {initial, onChange} = {}) {
+export function createEditor(root, {initial, onChange, author = ""} = {}) {
 root.innerHTML = MARKUP;
 const $ = id => root.querySelector("#" + id);
 const cleanups = [];
@@ -46,6 +48,7 @@ const inputs = {};
 function fmt(f, v) {
   if (f.k === "doorPos") return v < -0.05 ? "Left" : v > 0.05 ? "Right" : "Center";
   if (f.cm) return (Math.round(v * 1000) / 10) + " cm";
+  if (f.money) return Math.round(v).toLocaleString("en-US");
   const dec = f.step >= 1 ? 0 : f.step >= 0.1 ? 1 : 2;
   return (+v).toFixed(dec) + (f.unit || "");
 }
@@ -61,6 +64,11 @@ SCHEMA.forEach(g => {
     if (f.type === "check") {
       el = document.createElement("label"); el.className = "check";
       el.innerHTML = `<input type="checkbox" id="${id}"> ${f.label}`;
+    } else if (f.type === "text") {
+      el = document.createElement("div"); el.className = "field";
+      el.innerHTML = `<div class="fl"><label for="${id}">${f.label}</label></div>` + (f.multiline
+        ? `<textarea id="${id}" rows="3" maxlength="${f.max}"></textarea>` : `<input type="text" id="${id}" maxlength="${f.max}">`);
+      if (f.k === "modAuthor" && author) el.querySelector("input").placeholder = author;
     } else if (f.type === "select") {
       el = document.createElement("div"); el.className = "field";
       el.innerHTML = `<div class="fl"><label for="${id}">${f.label}</label></div><select id="${id}">${f.options.map(o => `<option value="${o[0]}">${o[1]}</option>`).join("")}</select>`;
@@ -72,14 +80,16 @@ SCHEMA.forEach(g => {
       el.innerHTML = `<div class="fl"><label for="${id}">${f.label}</label><output id="${id}-o"></output></div><input type="range" id="${id}" min="${f.min}" max="${f.max}" step="${f.step}">`;
     }
     wrap.appendChild(el);
-    const input = el.querySelector("input,select");
+    const input = el.querySelector("input,select,textarea");
     inputs[f.k] = input;
     input.addEventListener("input", () => {
-      let v = f.type === "check" ? input.checked : (f.type === "select" || f.type === "color") ? input.value : +input.value;
+      let v = f.type === "check" ? input.checked : (f.type === "select" || f.type === "color" || f.type === "text") ? input.value : +input.value;
       p[f.k] = v;
+      // Mod details don't change the house, so skip the rebuild.
+      if (f.k.startsWith("mod")) { syncOutputs(); persist(); return; }
       if (f.k === "halfStorey" && v) p.windows = p.windows.filter(w => !(w.floor >= p.floors && !gableWall(w.wall)));
       syncOutputs(); persist(); rebuild(false);
-      if (["floors", "halfStorey", "roofType", "ridge"].includes(f.k)) { renderWinUI(); renderDormUI(); }
+      if (["floors", "halfStorey", "roofType", "ridge", "interior", "curtainStyle", "curtainColor"].includes(f.k)) { renderWinUI(); renderDormUI(); }
     });
   });
   if (g.custom === "dormers") { const ed = document.createElement("div"); ed.id = "dormEditor"; d.appendChild(ed); }
@@ -119,6 +129,8 @@ function syncOutputs() {
   inputs.gutters.disabled = p.roofType === "flat";
   inputs.downpipes.disabled = !p.gutters || p.roofType === "flat";
   inputs.entranceWidth.disabled = inputs.entranceDepth.disabled = p.entrance === "none";
+  inputs.curtainStyle.disabled = inputs.curtainColor.disabled = !p.interior;
+  inputs.modDescription.placeholder = defaultModDescription(p);
 }
 
 const TEX = 1024;
@@ -216,7 +228,9 @@ function ensureSurface(m) {
 const canvas = $("view");
 const stage = $("stage");
 const readout = $("readout");
-let renderer, scene, camera, groundMat, selMesh = null, meshes = {}, matObjs = {}, needs = true;
+let interiorTex = null, interiorCv = null, groundObj = null, gridObj = null;
+const interiorCanvas = () => interiorCv || (interiorCv = paintInterior(document));
+let renderer, scene, camera, groundMat, selMesh = null, sleepObj = null, meshes = {}, matObjs = {}, needs = true;
 
 function initThree() {
   renderer = new THREE.WebGLRenderer({canvas, antialias:true});
@@ -237,17 +251,23 @@ function initThree() {
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), groundMat);
   ground.rotation.x = -Math.PI / 2; ground.position.y = -0.001; ground.receiveShadow = true;
   scene.add(ground);
-  const grid = new THREE.GridHelper(60, 60, 0x000000, 0x000000);
+  groundObj = ground;
+  const grid = gridObj = new THREE.GridHelper(60, 60, 0x000000, 0x000000);
   grid.material.transparent = true; grid.material.opacity = 0.08; grid.position.y = 0.002;
   scene.add(grid);
+  interiorTex = new THREE.CanvasTexture(interiorCanvas());
+  interiorTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
   MATS.forEach(m => {
-    matObjs[m] = new THREE.MeshStandardMaterial(m === "glass" ? {roughness:0.12, metalness:0.4} : m === "gutter" ? {roughness:0.45, metalness:0.35} : {roughness:0.85, metalness:0});
+    // The rooms are unlit and a little dark, so they read as indoors behind the glass.
+    matObjs[m] = m === "interior" ? new THREE.MeshBasicMaterial({map: interiorTex, color: 0xc8c8c8})
+      : new THREE.MeshStandardMaterial(m === "glass" ? {roughness:0.12, metalness:0.4} : m === "gutter" ? {roughness:0.45, metalness:0.35} : m === "curtain" ? {roughness:0.95, metalness:0, vertexColors:true} : {roughness:0.85, metalness:0});
     const mesh = new THREE.Mesh(new THREE.BufferGeometry(), matObjs[m]);
-    mesh.castShadow = true; mesh.receiveShadow = true;
+    mesh.castShadow = !["glass", "interior", "curtain"].includes(m); mesh.receiveShadow = m !== "interior";
     meshes[m] = mesh; scene.add(mesh);
   });
   selMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({transparent:true, opacity:0.45, depthWrite:false, side:THREE.DoubleSide}));
   selMesh.visible = false; scene.add(selMesh);
+  sleepObj = makeSleepMarker(); scene.add(sleepObj.group);
   applyTheme();
   const mq = window.matchMedia("(prefers-color-scheme: dark)");
   mq.addEventListener("change", applyTheme);
@@ -354,6 +374,32 @@ const WIN_FIELDS = [
   {k:"h", label:"Height", min:0.3, max:2.4, step:0.05},
   {k:"sill", label:"Sill height", min:0, max:2, step:0.05}];
 const winOut = (f, s) => f.k === "pos" ? `${(s.pos * wallLen(s.wall)).toFixed(2)} m from left` : `${s[f.k].toFixed(2)} m`;
+/** Room and curtain choices for one window or kupa (obj), with ids starting with prefix. */
+function choiceFields(prefix, obj) {
+  const dis = p.interior ? "" : "disabled";
+  const house = (CURTAIN_OPTIONS.find(o => o[0] === p.curtainStyle) || CURTAIN_OPTIONS[0])[1].toLowerCase();
+  const own = obj.curtainColor && obj.curtainColor !== "default";
+  const opt = (v, label, cur) => `<option value="${v}" ${v === cur ? "selected" : ""}>${label}</option>`;
+  return (p.interior ? "" : `<p class="hint">Turn on “Rooms behind the windows” under Interior to choose the room and curtains.</p>`)
+    + `<div class="field"><div class="fl"><label for="${prefix}-room">Room behind the glass</label></div><select id="${prefix}-room" ${dis}>${opt("auto", "Automatic", obj.room)}${ROOM_OPTIONS.map(o => opt(o[0], o[1], obj.room)).join("")}</select></div>`
+    + `<div class="field"><div class="fl"><label for="${prefix}-curtain">Curtains</label></div><select id="${prefix}-curtain" ${dis}>${opt("default", `Same as the house (${house})`, obj.curtain)}${CURTAIN_OPTIONS.map(o => opt(o[0], o[1], obj.curtain)).join("")}</select></div>`
+    + `<label class="check"><input type="checkbox" id="${prefix}-owncol" ${own ? "checked" : ""} ${dis}> Own curtain color</label>`
+    + `<div class="field"><input type="color" id="${prefix}-col" value="${own ? obj.curtainColor : p.curtainColor}" ${own && p.interior ? "" : "disabled"}><label for="${prefix}-col">${own ? "Curtain color" : "Curtain color (same as the house)"}</label></div>`;
+}
+function bindChoices(prefix, obj) {
+  const room = $(prefix + "-room"), cur = $(prefix + "-curtain");
+  if (room) room.onchange = () => { obj.room = room.value; persist(); rebuild(false); };
+  if (cur) cur.onchange = () => { obj.curtain = cur.value; persist(); rebuild(false); };
+  const own = $(prefix + "-owncol"), col = $(prefix + "-col");
+  if (own) own.onchange = () => {
+    obj.curtainColor = own.checked ? col.value : "default";
+    col.disabled = !own.checked;
+    col.nextElementSibling.textContent = own.checked ? "Curtain color" : "Curtain color (same as the house)";
+    if (!own.checked) col.value = p.curtainColor;
+    persist(); rebuild(false);
+  };
+  if (col) col.oninput = () => { obj.curtainColor = col.value; persist(); rebuild(false); };
+}
 function renderWinUI() {
   const ed = $("winEditor");
   if (!ed) return;
@@ -376,6 +422,7 @@ function renderWinUI() {
   if (s) {
     html += `<div class="wincard"><p class="warn" id="winWarn" ${s._hidden ? "" : "hidden"}>This window overlaps the door or another window, so it\u2019s hidden. Move it or make it smaller.</p>`;
     for (const f of WIN_FIELDS) html += `<div class="field"><div class="fl"><label for="wf-${f.k}">${f.label}</label><output id="wf-${f.k}-o">${winOut(f, s)}</output></div><input type="range" id="wf-${f.k}" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}" value="${s[f.k]}"></div>`;
+    html += choiceFields("wc", s);
     html += `<button type="button" id="winRemove">Remove this window</button></div>`;
   }
   ed.innerHTML = html;
@@ -401,6 +448,7 @@ function renderWinUI() {
       $(`wf-${inp.dataset.k}-o`).textContent = winOut(WIN_FIELDS.find(f => f.k === inp.dataset.k), s);
       persist(); rebuild(false);
     });
+    bindChoices("wc", s);
     $("winRemove").onclick = () => { p.windows = p.windows.filter(w => w.id !== selId); selId = null; persist(); rebuild(false); renderWinUI(); };
   }
 }
@@ -442,13 +490,14 @@ function renderDormUI() {
       const dis = f.k === "setback" && d.type === "frontespis";
       html += `<div class="field"><div class="fl"><label for="df-${f.k}">${f.label}</label><output id="df-${f.k}-o">${dis ? "Flush with the wall" : dOut(f, d)}</output></div><input type="range" id="df-${f.k}" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}" value="${d[f.k]}" ${dis ? "disabled" : ""}></div>`;
     }
+    html += choiceFields("dc", d);
     html += `<button type="button" id="dormRemove">Remove this kupa</button></div>`;
   }
   ed.innerHTML = html;
   ed.querySelectorAll("[data-add]").forEach(b => b.onclick = () => {
     const t = b.dataset.add, id = p.dormers.reduce((m, x) => Math.max(m, x.id), 0) + 1;
     const taken = p.dormers.filter(x => x.side === 1).length;
-    p.dormers.push({id, type: t, side: 1, pos: taken ? Math.min(0.85, 0.25 + taken * 0.5) : 0.5, ...DORM_DEF[t]});
+    p.dormers.push({id, type: t, side: 1, pos: taken ? Math.min(0.85, 0.25 + taken * 0.5) : 0.5, ...DORM_DEF[t], room: "auto", curtain: "default", curtainColor: "default"});
     dSel = id; persist(); rebuild(false); renderDormUI();
   });
   const sel = $("dormSel");
@@ -461,6 +510,7 @@ function renderDormUI() {
       $(`df-${inp.dataset.k}-o`).textContent = dOut(DFIELDS.find(f => f.k === inp.dataset.k), d);
       persist(); rebuild(false);
     });
+    bindChoices("dc", d);
     $("dormRemove").onclick = () => { p.dormers = p.dormers.filter(x => x.id !== dSel); dSel = null; persist(); rebuild(false); renderDormUI(); };
   }
 }
@@ -513,8 +563,38 @@ function pick(e) {
   }
 }
 
+/** Preview of the sleep point: the trigger as a faint box and the floating bed icon. */
+function makeSleepMarker() {
+  const group = new THREE.Group();
+  const box = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({color:0x3d7bd9, transparent:true, opacity:0.12, depthWrite:false}));
+  const c = document.createElement("canvas"); c.width = c.height = 128;
+  const x = c.getContext("2d");
+  x.fillStyle = "#2f6fd0"; x.beginPath(); x.arc(64, 64, 60, 0, Math.PI * 2); x.fill();
+  x.fillStyle = "#fff";
+  x.fillRect(26, 40, 10, 54);            // headboard
+  x.fillRect(26, 74, 78, 10);            // frame
+  x.fillRect(96, 74, 8, 20);             // foot
+  x.beginPath(); x.arc(50, 64, 9, 0, Math.PI * 2); x.fill();  // pillow / head
+  x.fillRect(62, 56, 42, 16);            // blanket
+  const tex = new THREE.CanvasTexture(c);
+  const icon = new THREE.Sprite(new THREE.SpriteMaterial({map:tex, depthTest:false, transparent:true}));
+  icon.scale.set(0.8, 0.8, 1); icon.renderOrder = 10;
+  group.add(box, icon);
+  const dispose = () => { box.geometry.dispose(); box.material.dispose(); tex.dispose(); icon.material.dispose(); };
+  return {group, box, icon, dispose};
+}
+function updateSleepMarker(geo) {
+  if (!sleepObj) return;
+  sleepObj.group.visible = !!p.sleepPoint;
+  if (!p.sleepPoint) return;
+  const sp = sleepPoint(geo);
+  sleepObj.box.position.set(...sp.trigger.center); sleepObj.box.scale.set(...sp.trigger.size);
+  sleepObj.icon.position.set(sp.marker[0], sp.marker[1] + 1.3, sp.marker[2]);
+}
+
 function rebuild(fit) {
-  ({G, dims, opsByWall} = buildGeometry(p));
+  const geo = buildGeometry(p);
+  ({G, dims, opsByWall} = geo);
   let tris = 0;
   if (renderer) {
     MATS.forEach(m => {
@@ -522,13 +602,20 @@ function rebuild(fit) {
       geo.setAttribute("position", new THREE.Float32BufferAttribute(g.p, 3));
       geo.setAttribute("normal", new THREE.Float32BufferAttribute(g.n, 3));
       geo.setAttribute("uv", new THREE.Float32BufferAttribute(scaledUV(p, m, g), 2));
+      if (g.c) geo.setAttribute("color", new THREE.Float32BufferAttribute(g.c, 3));
       geo.setIndex(g.i);
       meshes[m].geometry.dispose(); meshes[m].geometry = geo;
+      if (m === "interior") return;
+      if (m === "glass") {
+        const mat = matObjs.glass, see = !!p.interior;
+        if (mat.transparent !== see) { mat.transparent = see; mat.opacity = see ? GLASS_ALPHA : 1; mat.depthWrite = !see; mat.needsUpdate = true; }
+        meshes.glass.renderOrder = see ? 2 : 0;
+      }
       if (!surfaceSpec(p, m)) {
         const mat = matObjs[m];
         if (mat.map) { mat.map.dispose(); mat.map = null; mat.userData = {}; }
         if (mat.normalMap) { mat.normalMap.dispose(); mat.normalMap = null; }
-        mat.color.set(colorFor(p, m)); mat.needsUpdate = true;
+        mat.color.set(m === "curtain" ? "#ffffff" : colorFor(p, m)); mat.needsUpdate = true;
       }
     });
     scheduleSurfaces();
@@ -536,6 +623,7 @@ function rebuild(fit) {
     if (fit) view.r = Math.max(dims.W, dims.D, dims.ridgeY) * 2.3 + 6;
     updateCam();
     updateHighlight();
+    updateSleepMarker(geo);
   }
   refreshWin(); refreshDorm();
   MATS.forEach(m => tris += G[m].i.length / 3);
@@ -570,6 +658,58 @@ function saveFile(name, data, fallback) {
   } catch (e) { (fallback || (() => showText(name, typeof data === "string" ? data : "")))(); }
 }
 const canvasBlob = c => new Promise(res => c.toBlob(res, "image/png"));
+/** Adds the texture files that buildI3d(p, {withTex: true}) refers to. */
+async function addTextures(dir) {
+  for (const m of ["walls", "roof", "chimney"]) {
+    if (!G[m].i.length) continue;
+    const st = ensureSurface(m); if (!st) continue;
+    dir.file(`textures/${m}_diffuse.png`, await canvasBlob(st.diffuse));
+    dir.file(`textures/${m}_normal.png`, await canvasBlob(st.base.normal));
+  }
+  if (p.interior) {
+    dir.file("textures/interior_diffuse.png", await canvasBlob(interiorCanvas()));
+    dir.file("textures/glass_diffuse.png", await canvasBlob(paintGlass(document)));
+  }
+}
+/** Square picture of the house from the front corner on a transparent background, for the shop. */
+function renderStoreImage(size) {
+  if (!renderer) return null;
+  const r2 = new THREE.WebGLRenderer({alpha: true, antialias: true, preserveDrawingBuffer: true});
+  try {
+    r2.setPixelRatio(1); r2.setSize(size, size, false);
+    r2.shadowMap.enabled = true; r2.shadowMap.type = THREE.PCFSoftShadowMap;
+    r2.setClearColor(0x000000, 0);
+    const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 600);
+    const target = new THREE.Vector3(0, dims.ridgeY * 0.45, 0);
+    const radius = 0.5 * Math.hypot(dims.W + 2, dims.D + 2, dims.ridgeY);
+    cam.position.copy(target).addScaledVector(new THREE.Vector3(0.8, 0.5, 1).normalize(), radius / Math.sin(15 * Math.PI / 180));
+    cam.lookAt(target);
+    const hide = [groundObj, gridObj, selMesh, sleepObj && sleepObj.group].filter(Boolean), was = hide.map(o => o.visible);
+    const bg = scene.background, fog = scene.fog;
+    hide.forEach(o => o.visible = false); scene.background = null; scene.fog = null;
+    r2.render(scene, cam);
+    hide.forEach((o, i) => o.visible = was[i]); scene.background = bg; scene.fog = fog;
+    const c = document.createElement("canvas"); c.width = c.height = size;
+    c.getContext("2d").drawImage(r2.domElement, 0, 0);
+    return c;
+  } finally { r2.dispose(); r2.forceContextLoss(); needs = true; }
+}
+/** The house as a game mod: FS25_Name.zip with modDesc, store XML, i3d, textures, icon and shop picture. */
+async function exportMod(name) {
+  const mod = modName(name);
+  toast("Packing the game mod\u2026");
+  try {
+    const zip = new JSZip();
+    zip.file("modDesc.xml", modDescXml(p, name, {author}));
+    zip.file(MOD_FILES.xml, placeableXml(p, name));
+    zip.file(MOD_FILES.i3d, buildI3d(p, {withTex: true}));
+    await addTextures(zip);
+    const store = renderStoreImage(512), icon = renderStoreImage(256);
+    if (store) zip.file(MOD_FILES.store, await canvasBlob(store));
+    if (icon) zip.file(MOD_FILES.icon, await canvasBlob(icon));
+    saveFile(`${mod}.zip`, await zip.generateAsync({type: "blob"}), () => toast("The download didn\u2019t start. Try again or use another browser."));
+  } catch (e) { toast("Couldn\u2019t pack the mod. Try again."); }
+}
 async function exportModel(name) {
   const slug = slugify(name);
   const plain = () => showText("house.i3d", buildI3d(p, {withTex: false}));
@@ -577,13 +717,8 @@ async function exportModel(name) {
   try {
     const zip = new JSZip(), dir = zip.folder(slug);
     dir.file("house.i3d", buildI3d(p, {withTex: true}));
-    dir.file("placeable_snippet.xml", placeableSnippet());
-    for (const m of ["walls", "roof", "chimney"]) {
-      if (!G[m].i.length) continue;
-      const st = ensureSurface(m); if (!st) continue;
-      dir.file(`textures/${m}_diffuse.png`, await canvasBlob(st.diffuse));
-      dir.file(`textures/${m}_normal.png`, await canvasBlob(st.base.normal));
-    }
+    dir.file("placeable_snippet.xml", placeableSnippet(p));
+    await addTextures(dir);
     saveFile(`${slug}.zip`, await zip.generateAsync({type: "blob"}), plain);
   } catch (e) { plain(); }
 }
@@ -597,14 +732,14 @@ function setSettings(obj) { p = sanitize(obj); selId = null; dSel = null; syncCo
 /** A small JPEG of the current view, for the project list. */
 function snapshot() {
   if (!renderer) return null;
-  const wasVisible = selMesh.visible;
-  selMesh.visible = false;
+  const wasVisible = selMesh.visible, sleepVisible = sleepObj.group.visible;
+  selMesh.visible = false; sleepObj.group.visible = false;
   renderer.render(scene, camera);
   const src = renderer.domElement, W = 480, H = 300;
   const c = document.createElement("canvas"); c.width = W; c.height = H;
   const k = Math.max(W / src.width, H / src.height), sw = W / k, sh = H / k;
   c.getContext("2d").drawImage(src, (src.width - sw) / 2, (src.height - sh) / 2, sw, sh, 0, 0, W, H);
-  selMesh.visible = wasVisible; needs = true;
+  selMesh.visible = wasVisible; sleepObj.group.visible = sleepVisible; needs = true;
   return c.toDataURL("image/jpeg", 0.8);
 }
 
@@ -613,6 +748,8 @@ function destroy() {
   cancelAnimationFrame(raf);
   cleanups.forEach(f => f());
   for (const m of MATS) { if (meshes[m]) meshes[m].geometry.dispose(); const mat = matObjs[m]; if (mat) { if (mat.map) mat.map.dispose(); if (mat.normalMap) mat.normalMap.dispose(); mat.dispose(); } }
+  if (sleepObj) sleepObj.dispose();
+  if (interiorTex) interiorTex.dispose();
   if (renderer) renderer.dispose();
   root.innerHTML = "";
 }
@@ -621,5 +758,5 @@ syncControls();
 initThree();
 rebuild(true);
 
-return {getSettings: () => serialize(p), setSettings, exportModel, exportSettings, importSettings, snapshot, toast, destroy};
+return {getSettings: () => serialize(p), setSettings, exportModel, exportMod, exportSettings, importSettings, snapshot, toast, destroy};
 }

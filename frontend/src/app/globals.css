@@ -118,7 +118,7 @@ table.list th { color: var(--muted); font-weight: 500; font-size: 14px; }
 .hx-panel .fl label { font-weight: 500; }
 .hx-panel output { color: var(--muted); font-variant-numeric: tabular-nums; }
 .hx-panel input[type=range] { width: 100%; accent-color: var(--accent); margin: 4px 0 0; }
-.hx-panel select, .hx-panel input[type=number] { font: inherit; width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--field); color: var(--ink); margin-top: 4px; }
+.hx-panel select, .hx-panel input[type=number], .hx-panel input[type=text], .hx-panel textarea { font: inherit; width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--field); color: var(--ink); margin-top: 4px; }
 .hx-panel .check { display: flex; align-items: center; gap: 8px; margin: 12px 0; font-weight: 500; }
 .hx-panel .check input { accent-color: var(--accent); width: 18px; height: 18px; }
 .hx-panel .colors { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
