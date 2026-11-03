@@ -554,6 +554,7 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null} = {
   if (p.interior) for (const o of ops) if (o.kind === "window") { const R = roomFor(w, o, ops, r, topAt, !!dormer, dormer || p.windows.find(x => x.id === o.id)); rooms.push(R); buildRoom(R); }
 }
 
+/** Appends a ready-made mesh (with its own normals) to material mat. */
 function addMesh(mat, m) {
   const g = G[mat], base = g.p.length / 3;
   g.p.push(...m.p); g.n.push(...m.n); g.uv.push(...m.uv);
