@@ -328,15 +328,16 @@ function poly(mat, pts, hint, uvf) {
   if (hint && dot(n, hint) < 0) { pts = pts.slice().reverse(); n = neg(n); }
   // Undersides of the roof, dormer roofs and canopies (eave soffits) are painted boards, not tiles.
   if (mat === "roof" && n[1] < -0.3) mat = "trim";
+  if (mat === "trim") uvf = null;
   const g = G[mat], base = g.p.length / 3;
   const ax = Math.abs(n[0]), ay = Math.abs(n[1]), az = Math.abs(n[2]);
-  for (const q of pts) {
-    g.p.push(q[0], q[1], q[2]); g.n.push(n[0], n[1], n[2]);
-    if (uvf) { const t = uvf(q); g.uv.push(t[0], t[1]); }
-    else if (ay >= ax && ay >= az) g.uv.push(q[0], q[2]);
-    else if (ax >= az) g.uv.push(q[2], q[1]);
-    else g.uv.push(q[0], q[1]);
+  let uvs = pts.map(q => uvf ? uvf(q) : (ay >= ax && ay >= az) ? [q[0], q[2]] : (ax >= az) ? [q[2], q[1]] : [q[0], q[1]]);
+  if (mat === "trim") {
+    // Painted wood: the grain runs along v, so turn v along the board's length.
+    const ext = k => Math.max(...uvs.map(t => t[k])) - Math.min(...uvs.map(t => t[k]));
+    if (ext(0) > ext(1)) uvs = uvs.map(t => [t[1], t[0]]);
   }
+  pts.forEach((q, k) => { g.p.push(q[0], q[1], q[2]); g.n.push(n[0], n[1], n[2]); g.uv.push(uvs[k][0], uvs[k][1]); });
   for (let k = 1; k < pts.length - 1; k++) g.i.push(base, base + k, base + k + 1);
 }
 function box(mat, P, ax, ay, az) {
@@ -529,7 +530,9 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null} = {
     poly("walls", [WP(w,o.s0,o.t1,0), WP(w,o.s1,o.t1,0), WP(w,o.s1,o.t1,-r), WP(w,o.s0,o.t1,-r)], neg(UP));
     poly("walls", [WP(w,o.s0,o.t0,0), WP(w,o.s0,o.t1,0), WP(w,o.s0,o.t1,-r), WP(w,o.s0,o.t0,-r)], w.u);
     poly("walls", [WP(w,o.s1,o.t0,0), WP(w,o.s1,o.t1,0), WP(w,o.s1,o.t1,-r), WP(w,o.s1,o.t0,-r)], neg(w.u));
-    poly(isDoor ? "door" : "glass", [WP(w,o.s0,o.t0,-r), WP(w,o.s1,o.t0,-r), WP(w,o.s1,o.t1,-r), WP(w,o.s0,o.t1,-r)], w.n);
+    // The glass sits 12 mm in front of the back of the window bars: in the same plane they flicker.
+    const dg = isDoor ? -r : -r + 0.012;
+    poly(isDoor ? "door" : "glass", [WP(w,o.s0,o.t0,dg), WP(w,o.s1,o.t0,dg), WP(w,o.s1,o.t1,dg), WP(w,o.s0,o.t1,dg)], w.n);
     const b0 = isDoor ? o.t0 : o.t0 - fr;
     wbox("trim", w, o.s0 - fr, o.s0, b0, o.t1 + fr, -0.02, out);
     wbox("trim", w, o.s1, o.s1 + fr, b0, o.t1 + fr, -0.02, out);
@@ -867,13 +870,15 @@ export function colorFor(p, m) {
 export function surfaceSpec(p, m) {
   const kind = m === "walls" ? p.wallCladding
     : m === "roof" ? (p.roofType === "flat" ? "felt" : p.roofMaterial === "plain" ? null : p.roofMaterial)
-    : m === "chimney" ? (p.chimneyStyle === "brick" ? "brick" : null) : null;
+    : m === "chimney" ? (p.chimneyStyle === "brick" ? "brick" : null)
+    : m === "trim" ? "paintedwood" : null;
   if (!kind) return null;
   const sp = p.panelSpacing;
   if (kind === "lockpanel") { const n = Math.max(2, Math.round(1.2 / sp)); return {kind, n, bw: Math.min(0.8, p.battenWidth / sp), w: n*sp, h: n*sp}; }
   if (kind === "horizontal") { const n = Math.max(2, Math.round(1.2 / sp)); return {kind, n, w: n*sp, h: n*sp}; }
   if (kind === "tiles") return {kind, w: 1.2, h: 1.36};
   if (kind === "brick") return {kind, w: 1.0, h: 0.6};
+  if (kind === "paintedwood") return {kind, w: 1.5, h: 1.5};
   return {kind, w: 2, h: 2};
 }
 export function scaledUV(p, m, g) {

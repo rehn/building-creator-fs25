@@ -149,7 +149,7 @@ function vnoise(x, y, px, py, s) {
 
 function genBase(s) {
   const N = TEX, H = new Float32Array(N*N), S = new Float32Array(N*N), Mk = s.kind === "brick" ? new Uint8Array(N*N) : null;
-  const strength = {lockpanel:10, horizontal:40, plaster:1.5, felt:1.2, tiles:60, metal:4.5, brick:3}[s.kind];
+  const strength = {lockpanel:10, horizontal:40, plaster:1.5, felt:1.2, tiles:60, metal:4.5, brick:3, paintedwood:2.5}[s.kind];
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
     let h = 0, sh = 1;
     if (s.kind === "lockpanel") {
@@ -187,6 +187,12 @@ function genBase(s) {
         h = 0.6 + 0.4 * Math.min(1, e / 3);
         sh = 0.85 + hash(col, row, 29) * 0.25 + (vnoise(x/4, y/4, N/4, N/4, 31) - 0.5) * 0.12;
       }
+    } else if (s.kind === "paintedwood") {
+      // Paint over wood: fine grain lines along y, a few soft growth rings, no board seams.
+      const fine = vnoise(x/4, y/128, N/4, N/128, 41), wide = vnoise(x/16, y/256, N/16, N/256, 43);
+      const ring = 0.5 + 0.5 * Math.sin((x / 22 + wide * 6) * Math.PI);
+      h = fine * 0.55 + ring * 0.3 + wide * 0.15;
+      sh = 0.965 + (fine - 0.5) * 0.05 + (ring - 0.5) * 0.025 + (wide - 0.5) * 0.04;
     } else if (s.kind === "metal") {
       const Px = N / 4, lx = x % Px, d = Math.min(lx, Px - lx);
       h = d < 4 ? 1 : d < 7 ? (7 - d) / 3 : 0;
@@ -340,7 +346,7 @@ function mkTex(c) {
 }
 function applySurfaces() {
   if (!renderer || destroyed) return;
-  for (const m of ["walls", "roof", "chimney"]) {
+  for (const m of ["walls", "roof", "chimney", "trim"]) {
     const st = ensureSurface(m), mat = matObjs[m];
     if (!st) continue;
     if (st.dirty || mat.userData.key !== st.key || !mat.map) {
@@ -660,7 +666,7 @@ function saveFile(name, data, fallback) {
 const canvasBlob = c => new Promise(res => c.toBlob(res, "image/png"));
 /** Adds the texture files that buildI3d(p, {withTex: true}) refers to. */
 async function addTextures(dir) {
-  for (const m of ["walls", "roof", "chimney"]) {
+  for (const m of ["walls", "roof", "chimney", "trim"]) {
     if (!G[m].i.length) continue;
     const st = ensureSurface(m); if (!st) continue;
     dir.file(`textures/${m}_diffuse.png`, await canvasBlob(st.diffuse));

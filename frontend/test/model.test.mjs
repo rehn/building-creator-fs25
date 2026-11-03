@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULTS, sanitize, buildGeometry, buildI3d, serialize, MATS, placementAreas, placeableSnippet, sleepPoint, boxMesh, WP, ROOM_TYPES, CURTAIN_STYLES, rgb, pipeMesh, gutterMesh } from "../src/editor/model.mjs";
+import { DEFAULTS, sanitize, buildGeometry, buildI3d, serialize, MATS, placementAreas, placeableSnippet, sleepPoint, boxMesh, WP, ROOM_TYPES, CURTAIN_STYLES, rgb, pipeMesh, gutterMesh, surfaceSpec, scaledUV } from "../src/editor/model.mjs";
 
 const countOn = (p, wall, floor) => p.windows.filter(w => w.wall === wall && w.floor === floor).length;
 
@@ -116,6 +116,46 @@ for (const roofType of ["gable", "hip", "flat"]) {
     assert.ok(soffit.length > 0, "no trim soffit outside the walls");
   });
 }
+
+/* ---------- Trim and glass ---------- */
+// Triangles' planes as "nx,ny,nz,offset" keys, rounded to 1 mm.
+const planesOf = g => {
+  const out = new Set();
+  for (let t = 0; t < g.i.length; t += 3) {
+    const [a, b, c] = [g.i[t], g.i[t+1], g.i[t+2]].map(k => [g.p[k*3], g.p[k*3+1], g.p[k*3+2]]);
+    const u = [b[0]-a[0], b[1]-a[1], b[2]-a[2]], v = [c[0]-a[0], c[1]-a[1], c[2]-a[2]];
+    let n = [u[1]*v[2]-u[2]*v[1], u[2]*v[0]-u[0]*v[2], u[0]*v[1]-u[1]*v[0]];
+    const l = Math.hypot(...n); if (l < 1e-12) continue;
+    n = n.map(x => x / l);
+    if (n[0] + n[1] + n[2] < 0 || (Math.abs(n[0] + n[1] + n[2]) < 1e-9 && (n[0] < 0 || (n[0] === 0 && n[1] < 0)))) n = n.map(x => -x); // same plane either way round
+    out.add([...n.map(x => x.toFixed(3)), (n[0]*a[0] + n[1]*a[1] + n[2]*a[2]).toFixed(3)].join(","));
+  }
+  return out;
+};
+
+test("geometry: no trim or wall face lies in the plane of the glass (no flicker)", () => {
+  const { G } = buildGeometry(sanitize({ halfStorey: true, dormers: [{ type: "gable", side: 1, pos: 0.5 }] }));
+  const glass = planesOf(G.glass);
+  for (const m of ["trim", "walls", "door"]) for (const pl of planesOf(G[m])) assert.ok(!glass.has(pl), `${m} face in the glass plane ${pl}`);
+});
+
+test("surfaces: trim is painted wood, textured in the export", () => {
+  const p = sanitize({});
+  assert.equal(surfaceSpec(p, "trim").kind, "paintedwood");
+  assert.match(buildI3d(p, { withTex: true }), /filename="textures\/trim_diffuse.png"/);
+});
+
+test("geometry: trim grain runs along each board", () => {
+  const p = sanitize({ overhang: 0.6 }), g = buildGeometry(p).G.trim, uv = scaledUV(p, "trim", g);
+  let long = 0;
+  for (let t = 0; t < g.i.length; t += 3) {
+    const ks = [g.i[t], g.i[t+1], g.i[t+2]];
+    const us = ks.map(k => uv[k*2]), vs = ks.map(k => uv[k*2+1]);
+    const du = Math.max(...us) - Math.min(...us), dv = Math.max(...vs) - Math.min(...vs);
+    if (Math.max(du, dv) > 3 * Math.min(du, dv) && Math.max(du, dv) > 0.2) { long++; assert.ok(dv >= du, "grain across a long board"); }
+  }
+  assert.ok(long > 10, "no long trim boards found");
+});
 
 /* ---------- Gutters and downpipes ---------- */
 const angle = (a, b) => Math.acos(Math.max(-1, Math.min(1, (a[0]*b[0] + a[1]*b[1] + a[2]*b[2]) / (Math.hypot(...a) * Math.hypot(...b))))) * 180 / Math.PI;
