@@ -1,0 +1,22 @@
+House to i3d is installed.
+
+Open {{ include "hx.publicUrl" . }}
+{{- if not .Values.ingress.enabled }}
+(No ingress: put the {{ include "hx.fullname" . }}-web service behind your ingress or proxy, or try it with
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "hx.fullname" . }}-web 3000:{{ .Values.service.port }}
+ and publicUrl=http://localhost:3000.)
+{{- end }}
+
+{{- if .Values.adminEmail }}
+Click "Create the admin account" and sign up with {{ .Values.adminEmail }}.
+{{- else }}
+adminEmail is not set, so nobody can create the first account. Set it with --set adminEmail=you@example.se.
+{{- end }}
+
+Database: {{ if eq .Values.database.type "sqlite" -}}
+SQLite in the PVC {{ default (printf "%s-data" (include "hx.fullname" .)) .Values.database.sqlite.persistence.existingClaim }}{{ if .Values.database.sqlite.persistence.keep }} (kept on uninstall){{ end }}.
+{{- else if .Values.database.postgres.deploy -}}
+Postgres in this release ({{ include "hx.fullname" . }}-postgres), data in the PVC data-{{ include "hx.fullname" . }}-postgres-0 (kept on uninstall).
+{{- else -}}
+your own Postgres server.
+{{- end }}

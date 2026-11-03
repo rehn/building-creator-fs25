@@ -1,0 +1,8 @@
+publicUrl: https://hus.example.se
+adminEmail: me@example.se
+database:
+  type: postgres
+api:
+  replicas: 2
+web:
+  replicas: 2

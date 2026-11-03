@@ -9,12 +9,22 @@ import (
 
 	"house-to-i3d/backend/internal/api"
 	"house-to-i3d/backend/internal/auth"
+	"house-to-i3d/backend/internal/store"
 )
 
 type Config struct {
 	Addr         string
 	DatabasePath string
+	DatabaseURL  string // Postgres; when set it is used instead of DatabasePath
 	API          api.Config
+}
+
+// Database is what to pass to store.Open: the Postgres URL if there is one, else the SQLite path.
+func (c Config) Database() string {
+	if c.DatabaseURL != "" {
+		return c.DatabaseURL
+	}
+	return c.DatabasePath
 }
 
 // Load builds the config from getenv (os.Getenv in production).
@@ -24,12 +34,17 @@ type Config struct {
 //	GOOGLE_CLIENT_ID      with GOOGLE_CLIENT_SECRET, turns on "Sign in with Google"
 //	GOOGLE_CLIENT_SECRET
 //	LISTEN_ADDR           default :8080
-//	DATABASE_PATH         default /data/house-to-i3d.db
+//	DATABASE_PATH         SQLite file, default /data/house-to-i3d.db
+//	DATABASE_URL          postgres://user:pass@host:5432/db, use Postgres instead of SQLite
 //	TRUST_PROXY           "true" when the API is only reachable through the web app
 func Load(getenv func(string) string) (Config, error) {
 	c := Config{
 		Addr:         or(getenv("LISTEN_ADDR"), ":8080"),
 		DatabasePath: or(getenv("DATABASE_PATH"), "/data/house-to-i3d.db"),
+		DatabaseURL:  strings.TrimSpace(getenv("DATABASE_URL")),
+	}
+	if c.DatabaseURL != "" && !store.IsPostgresURL(c.DatabaseURL) {
+		return c, fmt.Errorf("DATABASE_URL must be a Postgres URL, like postgres://user:password@host:5432/house")
 	}
 	raw := strings.TrimRight(strings.TrimSpace(getenv("PUBLIC_URL")), "/")
 	u, err := url.Parse(raw)

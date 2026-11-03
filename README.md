@@ -1,10 +1,11 @@
 # House to i3d
 
-Build houses for Farming Simulator 25 in the browser and export them as `.i3d` (zipped with textures) to finish in Giants Editor. Each house is saved to your account, so you can come back and change it later. Accounts are invite only.
+Build houses for Farming Simulator 25 in the browser and export them as `.i3d` (zipped with textures) to finish in Giants Editor, or as a ready-made game mod. Each house is saved to your account, so you can come back and change it later. Accounts are invite only.
 
 ```
-backend/    Go API: accounts, invites, projects (SQLite)
+backend/    Go API: accounts, invites, projects (SQLite or Postgres)
 frontend/   Next.js app: login, "My houses", the 3D editor
+charts/     Helm chart for Kubernetes, and its tests
 docker-compose.yml
 .github/workflows/ci.yml
 ```
@@ -14,8 +15,10 @@ docker-compose.yml
 The browser only talks to the Next.js app. Everything under `/api/` is forwarded to the Go API, which isn't exposed to the internet. That keeps the session cookie same-origin and simple.
 
 ```
-browser ──► web (Next.js, port 3000) ──/api/*──► api (Go, port 8080) ──► SQLite in the "data" volume
+browser ──► web (Next.js, port 3000) ──/api/*──► api (Go, port 8080) ──► SQLite in the "data" volume, or Postgres
 ```
+
+Each house is one row in the database: its name, a thumbnail, and every setting from the editor as one JSON document (windows, dormers, rooms, curtains and the game mod details included). The editor saves about a second after each change.
 
 The editor itself runs in the browser. `frontend/src/editor/model.mjs` holds the house logic (settings, geometry, i3d export) with no DOM or three.js, so it can be tested in Node. `editor.mjs` adds the controls and the 3D preview.
 
@@ -48,6 +51,69 @@ As the admin, open **Invites**, enter a friend's email and send them the link. I
 3. Put the client ID and secret in `.env` as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, then `docker compose up -d`.
 
 The Google button only shows up when both are set.
+
+## Run it on Kubernetes (Helm)
+
+The chart is published as an OCI artifact on Docker Hub with every release, next to the images. You need Helm 3.8 or newer.
+
+```sh
+helm install house-to-i3d oci://registry-1.docker.io/rehn/house-to-i3d \
+  --version 1.0.0 \
+  --namespace house-to-i3d --create-namespace \
+  --set adminEmail=you@example.se \
+  --set ingress.enabled=true \
+  --set ingress.host=hus.example.se \
+  --set ingress.tls.enabled=true \
+  --set ingress.tls.secretName=hus-tls
+```
+
+Use the release you want for `--version` (the chart version is the app version, without the `v`). To see every setting:
+
+```sh
+helm show values oci://registry-1.docker.io/rehn/house-to-i3d --version 1.0.0
+```
+
+Upgrade with the same values to a newer version:
+
+```sh
+helm upgrade house-to-i3d oci://registry-1.docker.io/rehn/house-to-i3d --version 1.1.0 --namespace house-to-i3d --reuse-values
+```
+
+Only the web app is exposed (through the ingress, or the `<release>-web` service if you bring your own proxy). `PUBLIC_URL` comes from the ingress host, or set `publicUrl` yourself. Without an ingress, try it with `kubectl port-forward svc/house-to-i3d-web 3000:3000` and `--set publicUrl=http://localhost:3000`.
+
+### Where the data lives
+
+Everything that is stored on disk is in a PersistentVolumeClaim. Pick the database with `database.type`:
+
+| `database.type` | Data | API pods |
+|---|---|---|
+| `sqlite` (default) | One file in the PVC `<release>-data` (`database.sqlite.persistence`) | 1, updated with `Recreate` so two pods never open the file at once |
+| `postgres`, `deploy: true` | A Postgres 17 StatefulSet in the release, data in the PVC `data-<release>-postgres-0` (`database.postgres.persistence`) | `api.replicas`, any number |
+| `postgres`, `deploy: false` | Your own Postgres server (`database.postgres.url` or `existingSecret`) | `api.replicas`, any number |
+
+Postgres in the release:
+
+```sh
+helm install house-to-i3d oci://registry-1.docker.io/rehn/house-to-i3d --version 1.0.0 \
+  --set adminEmail=you@example.se --set publicUrl=https://hus.example.se \
+  --set database.type=postgres
+```
+
+The password is generated on install and kept on upgrades, or set `database.postgres.password`.
+
+Your own Postgres, with the URL in a Secret you manage:
+
+```sh
+kubectl create secret generic house-db --from-literal=DATABASE_URL='postgres://house:password@db.example.se:5432/house?sslmode=require'
+helm install house-to-i3d oci://registry-1.docker.io/rehn/house-to-i3d --version 1.0.0 \
+  --set adminEmail=you@example.se --set publicUrl=https://hus.example.se \
+  --set database.type=postgres --set database.postgres.deploy=false \
+  --set database.postgres.existingSecret=house-db
+```
+
+The API creates its tables on start. The volumes are kept when you `helm uninstall`: the SQLite PVC and the Postgres PVC with the Secret holding its password (`helm.sh/resource-policy: keep`). A reinstall with the same release name picks them up again. Delete them with `kubectl delete pvc ...` when you really want everything gone.
+
+Google sign-in: `--set google.clientId=... --set google.clientSecret=...`, or `google.existingSecret` naming a Secret with `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
 
 ### Going online
 
@@ -84,6 +150,14 @@ Write the failing test first, make it pass, then tidy up.
 ```sh
 cd backend && go test ./...     # API, database, passwords, config
 cd frontend && npm test         # house model, i3d export, file names, API proxy
+bash charts/test.sh             # Helm chart: lint and render every setup (needs helm)
+```
+
+The store tests run on SQLite. To run them on Postgres too, point `TEST_DATABASE_URL` at a server (each test gets its own schema, dropped afterwards):
+
+```sh
+docker run -d --name hus-pg -e POSTGRES_PASSWORD=test -p 5432:5432 postgres:17-alpine
+cd backend && TEST_DATABASE_URL='postgres://postgres:test@localhost:5432/postgres?sslmode=disable' go test ./internal/store/
 ```
 
 No Go or Node on your machine? Run them in Docker:
@@ -96,8 +170,9 @@ docker run --rm -v "$PWD/frontend:/app" -w /app node:22-alpine sh -c "npm instal
 What the tests cover:
 
 - **backend/internal/api**: signing up (admin without invite, everyone else with one), invites that only work once and only for their email, login and logout, rate limiting, Google sign-in against a fake Google, project create/read/update/delete, version conflicts between tabs, users not seeing each other's houses, and cross-site requests being refused.
-- **backend/internal/store**: the SQLite layer, including expiry of sessions and invites.
-- **frontend/test**: settings validation, window generation, valid geometry for every roof type, closed collision for walls, roof, dormers, chimney and entrance, placement areas (leveling, clear, test, tip occlusion), i3d output, export file names and the API proxy.
+- **backend/internal/store**: the database layer on SQLite and Postgres, including expiry of sessions and invites and two saves of the same version at once.
+- **frontend/test**: settings validation, window generation, valid geometry for every roof type, closed collision for walls, roof, dormers, chimney and entrance, placement areas (leveling, clear, test, tip occlusion), i3d output, rooms and curtains behind the windows, the game mod files (checked against the game's own schemas when they were written), export file names and the API proxy.
+- **charts/test.sh**: the Helm chart with SQLite, Postgres in the release, your own Postgres, ingress and Google sign-in, and the setups it must refuse.
 
 ## Lock files
 
@@ -116,16 +191,16 @@ Or with Docker, as in the test commands above. CI and the Dockerfiles also work 
 
 | Event | Tests | Docker Hub |
 |---|---|---|
-| Pull request to `main` | Go and frontend tests, Next.js build | Images built, not pushed |
+| Pull request to `main` | Go tests (store on SQLite and Postgres), frontend tests, Next.js build, Helm chart tests | Images built, not pushed |
 | Push to `main` | Same | `house-to-i3d-api:edge`, `house-to-i3d-web:edge` |
-| Release `v1.2.3` published | Same | `1.2.3`, `1.2`, `1` and `latest` for both images |
+| Release `v1.2.3` published | Same | `1.2.3`, `1.2`, `1` and `latest` for both images, and the Helm chart `1.2.3` at `oci://registry-1.docker.io/rehn/house-to-i3d` |
 
-Images are only built after all tests pass, for `linux/amd64` and `linux/arm64`.
+Images are only built after all tests pass, for `linux/amd64` and `linux/arm64`. The chart is pushed after the images, so a published chart version always has its images.
 
 One-time setup in the GitHub repo, under Settings → Secrets and variables → Actions:
 
 - Variable `DOCKERHUB_USERNAME`: your Docker Hub username.
-- Secret `DOCKERHUB_TOKEN`: a Docker Hub access token with Read & Write access.
+- Secret `DOCKERHUB_TOKEN`: a Docker Hub access token with Read & Write access (it pushes the images and the chart).
 
 To release, publish a GitHub release with a tag like `v1.0.0`, for example with `gh release create v1.0.0 --generate-notes`.
 
@@ -137,16 +212,37 @@ To release, publish a GitHub release with a tag like `v1.0.0`, for example with 
 | `ADMIN_EMAIL` | api | | Can sign up without an invite and becomes admin |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | api | | Turn on Sign in with Google |
 | `DATABASE_PATH` | api | `/data/house-to-i3d.db` | SQLite file |
+| `DATABASE_URL` | api | | `postgres://user:password@host:5432/db`: use Postgres instead of SQLite |
 | `LISTEN_ADDR` | api | `:8080` | |
 | `TRUST_PROXY` | api | `false` | Use `X-Forwarded-For` for rate limiting. Set `true` only when the API is reachable through the web app alone, as in docker-compose |
 | `API_URL` | web | `http://api:8080` | Where the web app finds the API |
 
 ## Backups
 
-Everything is in one SQLite file in the `data` volume. To copy it out:
+With SQLite, everything is in one file in the `data` volume. To copy it out:
 
 ```sh
 docker compose cp api:/data/house-to-i3d.db ./backup.db
 ```
 
 Stop the stack first (`docker compose stop api`) for a copy that's guaranteed consistent.
+
+On Kubernetes with SQLite, the API image has no shell or `tar`, so `kubectl cp` can't read from it. Stop the API, read the file with a short-lived pod that mounts the same PVC, then start the API again (release `house-to-i3d` here):
+
+```sh
+kubectl -n house-to-i3d scale deploy/house-to-i3d-api --replicas=0
+kubectl -n house-to-i3d run backup --rm -i -q --restart=Never --image=alpine:3.22 --overrides='{
+  "spec": {
+    "volumes": [{"name": "data", "persistentVolumeClaim": {"claimName": "house-to-i3d-data"}}],
+    "containers": [{"name": "backup", "image": "alpine:3.22", "stdin": true,
+      "command": ["cat", "/data/house-to-i3d.db"],
+      "volumeMounts": [{"name": "data", "mountPath": "/data", "readOnly": true}]}]
+  }}' > backup.db
+kubectl -n house-to-i3d scale deploy/house-to-i3d-api --replicas=1
+```
+
+With Postgres, use `pg_dump`, for example against the release's server:
+
+```sh
+kubectl -n house-to-i3d exec house-to-i3d-postgres-0 -- pg_dump -U house house > backup.sql
+```
