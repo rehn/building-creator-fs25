@@ -23,7 +23,8 @@ const pickRoom = v => ROOM_TYPES.includes(v) ? v : "auto";
 const pickCurtain = v => CURTAIN_STYLES.includes(v) ? v : "default";
 const pickColor = v => typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v) ? v : "default";
 export const SCHEMA = [
-  {title:"Size", fields:[
+  // side: where the editor shows the section, "build" (left / first tab) or "finish" (right / second tab).
+  {title:"Size", side:"build", fields:[
     {k:"width", label:"Front wall length", min:4, max:30, step:0.1, unit:" m"},
     {k:"depth", label:"Side wall length", min:4, max:25, step:0.1, unit:" m"},
     {k:"floors", label:"Full floors", min:1, max:3, step:1},
@@ -31,7 +32,7 @@ export const SCHEMA = [
     {k:"kneeWall", label:"Knee wall height", min:0.2, max:1.6, step:0.05, unit:" m"},
     {k:"floorHeight", label:"Floor height", min:2.3, max:4, step:0.05, unit:" m"},
     {k:"foundation", label:"Foundation height", min:0, max:1.2, step:0.05, unit:" m"}]},
-  {title:"Roof", fields:[
+  {title:"Roof", side:"build", fields:[
     {k:"roofType", label:"Roof type", type:"select", options:[["gable","Gable"],["hip","Hip"],["flat","Flat"]]},
     {k:"ridge", label:"Ridge direction", type:"select", options:[["width","Parallel to the front"],["depth","Front to back"]]},
     {k:"roofPitch", label:"Pitch", min:5, max:60, step:1, unit:"\u00B0"},
@@ -39,37 +40,27 @@ export const SCHEMA = [
     {k:"chimney", label:"Chimney", type:"check"},
     {k:"gutters", label:"Rain gutters", type:"check"},
     {k:"downpipes", label:"Downpipes per long side", min:0, max:2, step:1}]},
-  {title:"Kupor (dormers)", custom:"dormers", fields:[]},
-  {title:"Windows", custom:"windows", hint:"Set how many windows each floor has. To change one window, choose it below or tap it in the preview.", fields:[
+  {title:"Kupor (dormers)", side:"build", custom:"dormers", fields:[]},
+  {title:"Windows", side:"build", custom:"windows", hint:"Set how many windows each floor has. To change one window, choose it below or tap it in the preview.", fields:[
     {k:"winW", label:"Width", min:0.4, max:2.5, step:0.05, unit:" m"},
     {k:"winH", label:"Height", min:0.4, max:2.2, step:0.05, unit:" m"},
     {k:"sill", label:"Sill height", min:0.2, max:1.5, step:0.05, unit:" m"}]},
-  {title:"Door", fields:[
+  {title:"Door", side:"build", fields:[
     {k:"doorWall", label:"Wall", type:"select", options:[["front","Front"],["back","Back"],["left","Left side"],["right","Right side"]]},
     {k:"doorPos", label:"Position, left to right", min:-1, max:1, step:0.05},
     {k:"doorW", label:"Width", min:0.7, max:2.5, step:0.05, unit:" m"},
     {k:"doorH", label:"Height", min:1.8, max:2.6, step:0.05, unit:" m"}]},
-  {title:"Entrance", fields:[
+  {title:"Entrance", side:"build", fields:[
     {k:"entrance", label:"Canopy", type:"select", options:[["none","None"],["shed","Shed canopy on brackets"],["gable","Gable canopy on brackets"],["porch","Porch with posts (förstukvist)"]]},
     {k:"entranceWidth", label:"Width", min:1.2, max:5, step:0.05, unit:" m"},
     {k:"entranceDepth", label:"Depth", min:0.6, max:3, step:0.05, unit:" m"}]},
-  {title:"Interior", hint:"A small furnished room behind each window, seen through the glass. To pick the room or curtains for one window, choose it under Windows (or a kupa under Kupor).", fields:[
-    {k:"interior", label:"Rooms behind the windows", type:"check"},
-    {k:"curtainStyle", label:"Curtains", type:"select", options:CURTAIN_OPTIONS}]},
-  {title:"Farmhouse", hint:"Players sleep outside the door, where the bed icon floats. With this on, the export is a farmhouse placeable with a sleep trigger, spawn point and farm map icon.", fields:[
-    {k:"sleepPoint", label:"Sleep point with bed icon", type:"check"}]},
-  {title:"Surfaces", fields:[
+  {title:"Surfaces", side:"finish", fields:[
     {k:"wallCladding", label:"Wall cladding", type:"select", options:[["lockpanel","Board and batten (lockpanel)"],["horizontal","Horizontal boards"],["plaster","Plaster"]]},
     {k:"panelSpacing", label:"Board width", min:0.12, max:0.4, step:0.005, cm:true},
     {k:"battenWidth", label:"Batten width", min:0.03, max:0.1, step:0.005, cm:true},
     {k:"roofMaterial", label:"Roof covering", type:"select", options:[["tiles","Concrete tiles"],["metal","Standing seam metal"],["plain","Plain color"]]},
     {k:"chimneyStyle", label:"Chimney", type:"select", options:[["brick","Brick"],["plain","Plain color"]]}]},
-  {title:"Game mod", hint:"Used by \u201CExport game mod\u201D: what the house costs in the shop and who made it. The project name is the name in the shop.", fields:[
-    {k:"modPrice", label:"Price", min:0, max:2000000, step:500, money:true},
-    {k:"modUpkeep", label:"Daily upkeep", min:0, max:5000, step:5, money:true},
-    {k:"modAuthor", label:"Author (empty: your name)", type:"text", max:60},
-    {k:"modDescription", label:"Description in the mod list (empty: made for you)", type:"text", max:1000, multiline:true}]},
-  {title:"Colors", colors:true, fields:[
+  {title:"Colors", side:"finish", colors:true, fields:[
     {k:"wallColor", label:"Walls", type:"color"},
     {k:"trimColor", label:"Trim", type:"color"},
     {k:"roofColor", label:"Roof", type:"color"},
@@ -77,7 +68,17 @@ export const SCHEMA = [
     {k:"foundationColor", label:"Base", type:"color"},
     {k:"chimneyColor", label:"Chimney", type:"color"},
     {k:"gutterColor", label:"Gutters", type:"color"},
-    {k:"curtainColor", label:"Curtains", type:"color"}]}
+    {k:"curtainColor", label:"Curtains", type:"color"}]},
+  {title:"Interior", side:"finish", hint:"A small furnished room behind each window, seen through the glass. To pick the room or curtains for one window, choose it under Windows (or a kupa under Kupor).", fields:[
+    {k:"interior", label:"Rooms behind the windows", type:"check"},
+    {k:"curtainStyle", label:"Curtains", type:"select", options:CURTAIN_OPTIONS}]},
+  {title:"Farmhouse", side:"finish", hint:"Players sleep outside the door, where the bed icon floats. With this on, the export is a farmhouse placeable with a sleep trigger, spawn point and farm map icon.", fields:[
+    {k:"sleepPoint", label:"Sleep point with bed icon", type:"check"}]},
+  {title:"Game mod", side:"finish", hint:"Used by \u201CExport game mod\u201D: what the house costs in the shop and who made it. The project name is the name in the shop.", fields:[
+    {k:"modPrice", label:"Price", min:0, max:2000000, step:500, money:true},
+    {k:"modUpkeep", label:"Daily upkeep", min:0, max:5000, step:5, money:true},
+    {k:"modAuthor", label:"Author (empty: your name)", type:"text", max:60},
+    {k:"modDescription", label:"Description in the mod list (empty: made for you)", type:"text", max:1000, multiline:true}]}
 ];
 export const FIELD = {};
 SCHEMA.forEach(g => g.fields.forEach(f => FIELD[f.k] = f));

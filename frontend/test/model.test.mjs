@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULTS, sanitize, buildGeometry, buildI3d, serialize, MATS, placementAreas, placeableSnippet, sleepPoint, boxMesh, WP, ROOM_TYPES, CURTAIN_STYLES, rgb, pipeMesh, gutterMesh, surfaceSpec, scaledUV, ridgeCapMesh } from "../src/editor/model.mjs";
+import { DEFAULTS, SCHEMA, sanitize, buildGeometry, buildI3d, serialize, MATS, placementAreas, placeableSnippet, sleepPoint, boxMesh, WP, ROOM_TYPES, CURTAIN_STYLES, rgb, pipeMesh, gutterMesh, surfaceSpec, scaledUV, ridgeCapMesh } from "../src/editor/model.mjs";
 
 const cross3 = (a, b) => [a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0]];
 const countOn = (p, wall, floor) => p.windows.filter(w => w.wall === wall && w.floor === floor).length;
@@ -24,6 +24,14 @@ test("sanitize: invalid selects, colors and booleans fall back to defaults", () 
   assert.equal(p.roofType, DEFAULTS.roofType);
   assert.equal(p.wallColor, DEFAULTS.wallColor);
   assert.equal(p.chimney, DEFAULTS.chimney);
+});
+
+// The editor shows "build" on the left (or the first tab) and "finish" on the right (or the second tab).
+test("schema: sections are split into building the house and finishing it", () => {
+  const side = s => SCHEMA.filter(g => g.side === s).map(g => g.title);
+  assert.ok(SCHEMA.every(g => g.side === "build" || g.side === "finish"), "every section has a side");
+  assert.deepEqual(side("build"), ["Size", "Roof", "Kupor (dormers)", "Windows", "Door", "Entrance"]);
+  assert.deepEqual(side("finish"), ["Surfaces", "Colors", "Interior", "Farmhouse", "Game mod"]);
 });
 
 test("sanitize: unknown keys are dropped", () => {
