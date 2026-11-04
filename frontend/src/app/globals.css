@@ -80,6 +80,13 @@ label.stack input { margin-top: 5px; }
 .house .actions button { padding: 4px 10px; font-size: 14px; }
 .empty { text-align: center; padding: 56px 16px; background: var(--panel); border: 1px dashed var(--line); border-radius: 10px; }
 .empty h3 { font-size: 22px; margin-bottom: 6px; }
+.presets { margin-bottom: 24px; }
+.presets-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.presets-head h3 { font-size: 20px; margin-right: auto; }
+.preset { display: flex; flex-direction: column; gap: 6px; text-align: left; padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; color: var(--ink); }
+.preset:hover:not(:disabled), .preset:focus-visible { border-color: var(--accent, currentColor); }
+.preset b { font-size: 16px; }
+.preset span { color: var(--muted); font-size: 14px; line-height: 1.4; }
 table.list { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
 table.list th, table.list td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); }
 table.list th { color: var(--muted); font-weight: 500; font-size: 14px; }
@@ -152,6 +159,8 @@ table.list th { color: var(--muted); font-weight: 500; font-size: 14px; }
 .hx-panel .selrow button { padding: 5px 10px; }
 .hx-panel .wincard { border-left: 3px solid var(--accent); padding: 2px 0 4px 10px; margin: 8px 0; }
 .hx-panel .warn { color: var(--accent); font-size: 14px; margin: 6px 0; }
+.hx-panel ul.pieces { margin: 4px 0 10px; padding-left: 20px; font-size: 14px; }
+#insideEditor .row { margin-top: 6px; }
 .hx-panel .sub { font-weight: 600; margin: 16px 0 0; }
 .hx-panel button.wide { width: 100%; margin-top: 8px; justify-content: center; }
 .hx-panel .addrow { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 4px; }

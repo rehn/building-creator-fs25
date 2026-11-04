@@ -5,6 +5,12 @@ import { useRouter } from "next/navigation";
 import { api, type ProjectSummary } from "@/lib/api";
 import { useUser } from "@/lib/useUser";
 import { TopBar } from "@/components/TopBar";
+import { PRESETS, CATEGORIES } from "@/editor/model.mjs";
+
+type Preset = { id: string; name: string; blurb: string; category: string; settings: Record<string, unknown> };
+type Category = { id: string; name: string; blurb: string };
+const presets = PRESETS as Preset[];
+const categories = CATEGORIES as Category[];
 
 const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
 function edited(iso: string) {
@@ -24,6 +30,8 @@ export default function HousesPage() {
   const [houses, setHouses] = useState<ProjectSummary[] | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // "New": null = closed, "" = choosing a category, else the category whose presets are shown.
+  const [choosing, setChoosing] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -37,10 +45,39 @@ export default function HousesPage() {
     setBusy(false);
   }
 
-  const create = () => run(async () => {
-    const p = await api.createProject("New house");
+  // A preset is the settings the new project starts with; everything stays editable.
+  const create = (preset: Preset) => run(async () => {
+    const p = await api.createProject(preset.id === "farmhouse" ? "New house" : preset.name, preset.settings);
     router.push(`/projects/${p.id}`);
   });
+  const category = categories.find(c => c.id === choosing);
+  const chooser = (
+    <section className="presets" aria-label="New">
+      <div className="presets-head">
+        <h3>{category ? category.name : "What do you want to build?"}</h3>
+        {category && <button type="button" onClick={() => setChoosing("")}>Back</button>}
+        <button type="button" onClick={() => setChoosing(null)}>Cancel</button>
+      </div>
+      <div className="grid">
+        {category
+          ? presets.filter(x => x.category === category.id).map(x => (
+            <button type="button" className="preset" key={x.id} onClick={() => create(x)} disabled={busy}>
+              <b>{x.name}</b>
+              <span>{x.blurb}</span>
+            </button>
+          ))
+          : categories.map(c => {
+            const n = presets.filter(x => x.category === c.id).length;
+            return (
+              <button type="button" className="preset" key={c.id} onClick={() => setChoosing(c.id)} disabled={busy || !n}>
+                <b>{c.name}</b>
+                <span>{n ? c.blurb : "Coming soon"}</span>
+              </button>
+            );
+          })}
+      </div>
+    </section>
+  );
   const duplicate = (h: ProjectSummary) => run(async () => {
     const p = await api.duplicateProject(h.id);
     setHouses(list => [p, ...(list ?? [])]);
@@ -66,16 +103,17 @@ export default function HousesPage() {
       <TopBar user={user} />
       <main className="page">
         <div className="page-head">
-          <h2>My houses</h2>
-          <button className="primary" type="button" onClick={create} disabled={!user || busy}>New house</button>
+          <h2>My buildings</h2>
+          <button className="primary" type="button" onClick={() => setChoosing("")} disabled={!user || busy} aria-expanded={choosing !== null}>New</button>
         </div>
         {(error || userError) && <p className="error" role="alert">{error || userError}</p>}
-        {!houses && !error && !userError && <p className="loading">Loading your houses…</p>}
-        {houses && houses.length === 0 && (
+        {choosing !== null && chooser}
+        {!houses && !error && !userError && <p className="loading">Loading your buildings…</p>}
+        {houses && houses.length === 0 && choosing === null && (
           <div className="empty">
-            <h3>No houses yet</h3>
-            <p className="hint">Start one, set its size, roof, windows and colors, and export it for Giants Editor.</p>
-            <button className="primary" type="button" onClick={create} disabled={busy}>Build your first house</button>
+            <h3>Nothing built yet</h3>
+            <p className="hint">Start from a farmhouse or a hen house, set its size, roof, windows and colors, and export it for Giants Editor or as a game mod.</p>
+            <button className="primary" type="button" onClick={() => setChoosing("")} disabled={busy}>Build your first building</button>
           </div>
         )}
         {houses && houses.length > 0 && (

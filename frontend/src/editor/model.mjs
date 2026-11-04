@@ -1,8 +1,17 @@
-// House model: settings, validation, geometry and i3d export.
+// Building model: settings, validation, geometry and i3d export. The core every building shares;
+// what differs per kind of building (farmhouse, hen house ...) lives in kinds/.
 // Pure functions with no DOM or three.js, so they run (and are tested) in Node.
+import { I3dDoc, tg, shape, boxMesh, splitByColor, mappingsFor, num, v3 } from "./i3d.mjs";
+import { KINDS, kindOf } from "./kinds/index.mjs";
+import { WALL_T, wallFrames, doorSpan, roomOf, footprint, toWorld, cleanItems, problems } from "./layout.mjs";
+export { boxMesh } from "./i3d.mjs";
+export { KINDS, KIND, kindOf, CATEGORIES } from "./kinds/index.mjs";
+export { henYard, henCap, HENS_PER_M2, MAX_HENS } from "./kinds/chicken.mjs";
 
 /* ---------- Settings ---------- */
+/** Settings every building has. A kind adds its own (kind.defaults). */
 export const DEFAULTS = {
+  kind:"house",
   width:10, depth:7, floors:2, floorHeight:2.7, foundation:0.4, halfStorey:false, kneeWall:0.9,
   roofType:"gable", ridge:"width", roofPitch:38, overhang:0.5, chimney:true,
   winFront:2, winBack:3, winLeft:1, winRight:1, winW:1.0, winH:1.25, sill:0.85,
@@ -19,14 +28,27 @@ export const CURTAIN_STYLES = CURTAIN_OPTIONS.map(o => o[0]);
 /** Room types behind the windows, in atlas order: [id, name]. Windows can pick one or "auto". */
 export const ROOM_OPTIONS = [["living","Living room"],["bedroom","Bedroom"],["kitchen","Kitchen"],["study","Office"]];
 export const ROOM_TYPES = ROOM_OPTIONS.map(o => o[0]);
+/** Wall thickness of a walk-in barn (the window and door reveals' depth), and its door leaf's. */
+const LEAF_T = 0.05;
+/**
+ * How far a walk-in barn's door opens, degrees about +y. Every wall's frame is the front wall's
+ * turned about y, so the same angle swings the leaf outwards on every wall.
+ */
+const DOOR_OPEN = -100;
+/**
+ * Settings as the building's kind uses them (a hen house has no sleep point, rooms or dormers ...),
+ * with any of the kind's own settings that are missing taken from its defaults.
+ */
+const normalize = p => { const k = kindOf(p); return k.normalize({...k.defaults, ...p}); };
 const pickRoom = v => ROOM_TYPES.includes(v) ? v : "auto";
 const pickCurtain = v => CURTAIN_STYLES.includes(v) ? v : "default";
 const pickColor = v => typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v) ? v : "default";
-export const SCHEMA = [
+/** Editor sections every building shares (kinds hide the ones they don't use, see kind.hides). */
+const SHARED_SECTIONS = [
   // side: where the editor shows the section, "build" (left / first tab) or "finish" (right / second tab).
   {title:"Size", side:"build", fields:[
-    {k:"width", label:"Front wall length", min:4, max:30, step:0.1, unit:" m"},
-    {k:"depth", label:"Side wall length", min:4, max:25, step:0.1, unit:" m"},
+    {k:"width", label:"Front wall length", min:2.5, max:30, step:0.1, unit:" m"},
+    {k:"depth", label:"Side wall length", min:2.5, max:25, step:0.1, unit:" m"},
     {k:"floors", label:"Full floors", min:1, max:3, step:1},
     {k:"halfStorey", label:"Half floor in the roof (1\u00BD-plan)", type:"check"},
     {k:"kneeWall", label:"Knee wall height", min:0.2, max:1.6, step:0.05, unit:" m"},
@@ -54,6 +76,7 @@ export const SCHEMA = [
     {k:"entrance", label:"Canopy", type:"select", options:[["none","None"],["shed","Shed canopy on brackets"],["gable","Gable canopy on brackets"],["porch","Porch with posts (förstukvist)"]]},
     {k:"entranceWidth", label:"Width", min:1.2, max:5, step:0.05, unit:" m"},
     {k:"entranceDepth", label:"Depth", min:0.6, max:3, step:0.05, unit:" m"}]},
+  {title:"Inside", side:"build", custom:"inside", hint:"The pieces inside the building. Fill it automatically to match its size, then change it as you like.", fields:[]},
   {title:"Surfaces", side:"finish", fields:[
     {k:"wallCladding", label:"Wall cladding", type:"select", options:[["lockpanel","Board and batten (lockpanel)"],["horizontal","Horizontal boards"],["plaster","Plaster"]]},
     {k:"panelSpacing", label:"Board width", min:0.12, max:0.4, step:0.005, cm:true},
@@ -79,6 +102,17 @@ export const SCHEMA = [
     {k:"modUpkeep", label:"Daily upkeep", min:0, max:5000, step:5, money:true},
     {k:"modAuthor", label:"Author (empty: your name)", type:"text", max:60},
     {k:"modDescription", label:"Description in the mod list (empty: made for you)", type:"text", max:1000, multiline:true}]}
+];
+/**
+ * All editor sections: each kind's own first, then the shared ones. kinds: the building kinds
+ * that show the section (left out when every kind does).
+ */
+export const SCHEMA = [
+  ...KINDS.flatMap(k => k.sections.map(g => ({...g, kinds: [k.id]}))),
+  ...SHARED_SECTIONS.map(g => {
+    const kinds = KINDS.filter(k => !k.hides.includes(g.title)).map(k => k.id);
+    return kinds.length === KINDS.length ? g : {...g, kinds};
+  }),
 ];
 export const FIELD = {};
 SCHEMA.forEach(g => g.fields.forEach(f => FIELD[f.k] = f));
@@ -142,16 +176,34 @@ export function clampField(f, v) {
   const c = Math.min(f.max, Math.max(f.min, n));
   return Math.round(c / f.step) * f.step;
 }
+/**
+ * Clean settings from anywhere (a save, an import, a preset): the building's kind (a farmhouse if
+ * none or unknown), every setting it has clamped to its range, and the kind's own rules applied.
+ */
 export function sanitize(obj) {
   if (!obj || typeof obj !== "object") obj = {};
-  const out = {...DEFAULTS};
-  for (const k in DEFAULTS) { const v = clampField(FIELD[k], obj[k]); if (v !== undefined) out[k] = typeof DEFAULTS[k] === "number" ? +(+v).toFixed(3) : v; }
+  const kind = kindOf(obj), defs = {...DEFAULTS, ...kind.defaults};
+  const out = {...defs, kind: kind.id};
+  for (const k in defs) {
+    if (k === "kind") continue;
+    const v = clampField(FIELD[k], obj[k]);
+    if (v !== undefined) out[k] = typeof defs[k] === "number" ? +(+v).toFixed(3) : v;
+  }
   // Saves from before curtain styles had a curtains on/off switch.
   if (obj.curtainStyle === undefined && obj.curtains === false) out.curtainStyle = "none";
   out.windows = Array.isArray(obj.windows) ? cleanWindows(obj.windows) : genAll(out, obj);
   out.dormers = Array.isArray(obj.dormers) ? cleanDormers(obj.dormers) : [];
-  return out;
+  const q = kind.normalize(out);
+  // The inside of a walk-in building: the saved pieces, or filled automatically for a new one.
+  if (kind.catalog) q.items = Array.isArray(obj.items) ? cleanItems(obj.items, kind.catalog) : kind.autoFurnish(q).items;
+  return q;
 }
+
+/**
+ * Starting points for "New", from every kind: {id, name, blurb, kind, category, settings}. A preset
+ * is the settings a new project starts with. Window counts (winFront ...) seed the window list.
+ */
+export const PRESETS = KINDS.flatMap(k => k.presets.map(x => ({...x, kind: k.id, category: k.category, settings: {kind: k.id, ...x.settings}})));
 
 /** Settings as saved to the server: drops internal fields like _hidden. */
 export function serialize(p) {
@@ -179,7 +231,9 @@ export function slugify(name) {
 /* ---------- Geometry ---------- */
 /** Point on wall w: s along it, t up from its base, d out from its face. */
 export const WP = (w,s,t,d) => [w.o[0] + w.u[0]*s + w.n[0]*d, w.o[1] + t, w.o[2] + w.u[2]*s + w.n[2]*d];
-export const MATS = ["walls","trim","roof","glass","door","foundation","chimney","gutter","interior","curtain"];
+// fittings: a walk-in barn's inside (whitewashed walls, litter, nests, perches, feeders), vertex
+// colored like the curtains and exported as one plain part per color.
+export const MATS = ["walls","trim","roof","glass","door","foundation","chimney","gutter","interior","curtain","fittings"];
 /**
  * Texture atlas for the rooms behind the windows (u, v from the bottom left, as [u0, v0, u1, v1]).
  * Four room types (living room, bedroom, kitchen, study), each with its own back wall,
@@ -280,48 +334,52 @@ export function pipeMesh(path, r, {seg = 16, bend = 0.12} = {}) {
  * tucked into the roof, so it rests on the slopes at any pitch. Smooth shading; open underneath.
  * arc: the indices of the round surface's vertices; axisY: height of its axis (for tests).
  */
-export function ridgeCapMesh(a0, a1, ridgeY, tanP, r, {seg = 24} = {}) {
-  const m = newMesh(), axisY = ridgeY + 0.01, roofAt = z => ridgeY - tanP * Math.abs(z) - 0.008;
-  const at2 = th => [r * Math.sin(th), axisY + r * Math.cos(th)];         // [z, y] on the round
-  // The round goes down each side to where it meets the roof, but no further than 105 degrees,
-  // so it never faces downwards; from there a short straight skirt carries on along its tangent.
-  const END = 105 * Math.PI / 180;
-  let end = Math.PI / 2;
-  while (at2(end)[1] > roofAt(at2(end)[0]) && end < END) end += Math.PI / 360;
-  end = Math.min(end, END);
-  const n = Math.max(seg, Math.ceil(2 * end / (7.5 * Math.PI / 180)));
-  const ths = Array.from({length: n + 1}, (_, k) => -end + 2 * end * k / n);
-  // Skirt: from the end of the round along its tangent until tucked into the roof.
-  const skirt = sg => {
-    const [z0, y0] = at2(sg * end), dz = sg * Math.cos(end), dy = -Math.sin(end);
-    let s = 0;
-    while (y0 + dy * s > roofAt(z0 + dz * s) && s < 4 * r) s += r / 50;
-    return s > 0 ? [z0 + dz * s, y0 + dy * s] : null;
-  };
-  // The profile, left to right: [z, y, normal z, normal y, v]
-  const prof = [];
-  const sL = skirt(-1), sR = skirt(1), nL = [Math.sin(-end), Math.cos(end)], nR = [Math.sin(end), Math.cos(end)];
-  if (sL) prof.push([sL[0], sL[1], nL[0], nL[1], -r * end - Math.hypot(sL[0] - at2(-end)[0], sL[1] - at2(-end)[1])]);
-  for (const th of ths) { const [z, y] = at2(th); prof.push([z, y, Math.sin(th), Math.cos(th), r * th]); }
-  if (sR) prof.push([sR[0], sR[1], nR[0], nR[1], r * end + Math.hypot(sR[0] - at2(end)[0], sR[1] - at2(end)[1])]);
-  const first = sL ? 1 : 0;   // where the round starts in prof
+export function ridgeCapMesh(a0, a1, ridgeY, tanP, w, {rise = 0.05, edge = 0.025} = {}) {
+  // Like a row of ridge tiles, seen across the ridge: a small round crown `rise` above the ridge, and
+  // from it a straight flank down each side to an edge `edge` above the roof, `w` out from the ridge,
+  // the flank meeting the crown tangentially (no kink). Then a short skirt tucks the edge into the roof.
+  // The crown is smaller on a steeper roof, so the cap stays thin over it (6 cm round on a flat roof).
+  const crown = 0.06 / (1 + tanP * tanP);
+  const m = newMesh(), roofAt = z => ridgeY - tanP * Math.abs(z) - 0.008;
+  const yc = ridgeY + rise - crown;                     // the crown's centre, below its top
+  const yE = ridgeY - tanP * w + edge, L = Math.hypot(w, yE - yc);
+  // Angle (from +z, towards +y) of the point where the right flank touches the crown.
+  const beta = Math.atan2(yE - yc, w) + Math.acos(Math.min(1, crown / L));
+  const steps = Math.max(22, Math.ceil((Math.PI - 2 * beta) / (6 * Math.PI / 180)));
+  // The profile, left to right: [z, y, normal z, normal y]
+  const prof = [], flankN = sg => [sg * Math.cos(beta), Math.sin(beta)];
+  const edgeL = [-w, yE], edgeR = [w, yE];
+  prof.push([...edgeL, ...flankN(-1)]);
+  for (let k = 0; k <= steps; k++) {
+    const th = Math.PI - beta - (Math.PI - 2 * beta) * k / steps;
+    prof.push([crown * Math.cos(th), yc + crown * Math.sin(th), Math.cos(th), Math.sin(th)]);
+  }
+  prof.push([...edgeR, ...flankN(1)]);
+  // Skirts: straight down from each edge into the roof.
+  const skirt = ([z, y, nz, ny]) => [z, Math.min(y, roofAt(z)) - 0.01, nz, ny];
+  const all = [skirt(prof[0]), ...prof, skirt(prof[prof.length - 1])];
+  // v along the profile, so the tile texture runs across the cap
+  let v = 0;
+  const vs = all.map((q, k) => (k ? (v += Math.hypot(q[0] - all[k - 1][0], q[1] - all[k - 1][1])) : 0));
+  // m.arc: the profile at the a0 end, left to right (for the tests); m.rim: the skirts' bottom edges.
   m.arc = []; m.rim = [];
-  const row = x => prof.map(([z, y, nz, ny, v], k) => {
-    const i = m.add([x, y, z], [0, ny, nz], [x, v]);
-    if (k >= first && k <= first + n) m.arc.push(i);
-    if (k === 0 || k === prof.length - 1) m.rim.push(i);
+  const row = x => all.map(([z, y, nz, ny], k) => {
+    const i = m.add([x, y, z], [0, ny, nz], [x, vs[k]]);
+    if (k === 0 || k === all.length - 1) m.rim.push(i); else if (x === a0) m.arc.push(i);
     return i;
   });
   const A = row(a0), B = row(a1);
-  for (let k = 0; k + 1 < prof.length; k++) {
-    const hint = [0, (prof[k][3] + prof[k + 1][3]) / 2, (prof[k][2] + prof[k + 1][2]) / 2];
+  for (let k = 0; k + 1 < all.length; k++) {
+    const hint = [0, (all[k][3] + all[k + 1][3]) / 2, (all[k][2] + all[k + 1][2]) / 2];
     tri(m, A[k], B[k], B[k + 1], hint); tri(m, A[k], B[k + 1], A[k + 1], hint);
   }
-  // Ends: a fan from the axis, like the end of a ridge tile.
+  // Ends: a fan from just under the ridge, like the end of a ridge tile, in one plain color (one uv
+  // for all: the tile texture would show as rings on it).
+  const axisY = ridgeY - 0.02;
   for (const [x, sg] of [[a0, -1], [a1, 1]]) {
-    const nrm = [sg, 0, 0], c = m.add([x, axisY, 0], nrm, [0.5, 0.5]);
-    const vs = prof.map(([z, y]) => m.add([x, y, z], nrm, [0, 0]));
-    for (let k = 0; k + 1 < vs.length; k++) tri(m, c, vs[k], vs[k + 1], nrm);
+    const nrm = [sg, 0, 0], c = m.add([x, axisY, 0], nrm, [0.25, 0.1]);
+    const ring = all.map(([z, y]) => m.add([x, y, z], nrm, [0.25, 0.1]));
+    for (let k = 0; k + 1 < ring.length; k++) tri(m, c, ring[k], ring[k + 1], nrm);
   }
   m.axisY = axisY;
   delete m.v; delete m.add;
@@ -374,7 +432,13 @@ export function gutterMesh(c0, c1, out, r, {seg = 12} = {}) {
  * Marks windows and dormers that don't fit with _hidden = true.
  */
 export function buildGeometry(p) {
-let G, opsByWall = {}, dims = {}, rooms = [], downpipes = [];
+p = normalize(p);
+const kind = kindOf(p);
+let G, opsByWall = {}, dims = {}, rooms = [], downpipes = [], doorLeaf = null;
+// Walk-in kinds (a hen house ...): walls with an inside face, hollow collision, a door that opens.
+const hollow = kind.walkIn;
+// Openings the kind adds to its walls, [{wall, s0, s1, t1, clear, what}] (a hen hatch ...).
+const openings = kind.openings ? kind.openings(p) : [];
 
 function poly(mat, pts, hint, uvf) {
   pts = pts.filter((q,i) => { const r = pts[(i+1) % pts.length]; return Math.hypot(...sub(q,r)) > 1e-6; });
@@ -395,7 +459,7 @@ function poly(mat, pts, hint, uvf) {
     const v = norm(along), u = norm(cross(n, v));
     uvs = pts.map(q => [dot(q, u), dot(q, v)]);
   }
-  pts.forEach((q, k) => { g.p.push(q[0], q[1], q[2]); g.n.push(n[0], n[1], n[2]); g.uv.push(uvs[k][0], uvs[k][1]); });
+  pts.forEach((q, k) => { g.p.push(q[0], q[1], q[2]); g.n.push(n[0], n[1], n[2]); g.uv.push(uvs[k][0], uvs[k][1]); if (g.c) g.c.push(...(mat === "fittings" ? fitRGB : curtainRGB)); });
   for (let k = 1; k < pts.length - 1; k++) g.i.push(base, base + k, base + k + 1);
 }
 function box(mat, P, ax, ay, az) {
@@ -426,10 +490,11 @@ function layoutWall(key, L, fh, topAt) {
   const nf = p.floors + (p.halfStorey ? 1 : 0);
   const ops = [];
   if (p.doorWall === key) {
-    const dw = Math.min(p.doorW, L - 0.6), dh = Math.min(p.doorH, fh - 0.25);
-    const c = L/2 + p.doorPos * Math.max(0, L/2 - p.doorW/2 - 0.3);
-    ops.push({s0: c - dw/2, s1: c + dw/2, t0: 0, t1: dh, kind: "door"});
+    const [s0, s1] = doorSpan(p, L), dh = Math.min(p.doorH, fh - 0.25);
+    ops.push({s0, s1, t0: 0, t1: dh, kind: "door"});
   }
+  // The kind's own openings (a hen hatch ...), before the windows so a window over one is hidden.
+  for (const h of openings) if (h.wall === key) ops.push({s0: h.s0, s1: h.s1, t0: 0, t1: h.t1, kind: "hatch"});
   for (const win of p.windows) {
     if (win.wall !== key) continue;
     win._hidden = false;
@@ -477,11 +542,11 @@ function quad(mat, pts, uvs, hint) {
   let n = norm(cross(sub(pts[1], pts[0]), sub(pts[2], pts[0])));
   if (dot(n, hint) < 0) { pts = pts.slice().reverse(); uvs = uvs.slice().reverse(); n = neg(n); }
   const g = G[mat], base = g.p.length / 3;
-  pts.forEach((q, k) => { g.p.push(...q); g.n.push(...n); g.uv.push(...uvs[k]); if (g.c) g.c.push(...curtainRGB); });
+  pts.forEach((q, k) => { g.p.push(...q); g.n.push(...n); g.uv.push(...uvs[k]); if (g.c) g.c.push(...(mat === "fittings" ? fitRGB : curtainRGB)); });
   g.i.push(base, base + 1, base + 2, base, base + 2, base + 3);
 }
 /** Color (0..1 rgb) given to the curtain vertices being built. */
-let curtainRGB = [1, 1, 1];
+let curtainRGB = [1, 1, 1], fitRGB = [1, 1, 1];
 const hexRGB = hex => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]; };
 const ROOM_D = 0.75, ROOM_SIDE = 0.45, ROOM_UP = 0.35, ROOM_DOWN = 0.95;
 /**
@@ -564,7 +629,34 @@ function buildCurtains(R) {
     pleat(w, Math.max(lo + 0.01, o.s0 - 0.1), Math.min(hi - 0.01, o.s1 + 0.1), ct - vh, ct, d0 - 0.035, 0.01);
   }
 }
-function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null} = {}) {
+/**
+ * A hen hatch (or other small opening at floor level): a trim frame, the sliding hatch held open
+ * above it between two rails, and, if the floor is raised, a ramp with cleats down to the ground.
+ * Hens use the walking area, not physics, so the wall's collision stays whole.
+ */
+function buildHatch(w, o, F, fr, out) {
+  wbox("trim", w, o.s0 - fr, o.s0, o.t0, o.t1 + fr, 0, out);
+  wbox("trim", w, o.s1, o.s1 + fr, o.t0, o.t1 + fr, 0, out);
+  wbox("trim", w, o.s0, o.s1, o.t1, o.t1 + fr, 0, out);
+  const h = o.t1 - o.t0, sA = o.s0 - 0.03, sB = o.s1 + 0.03;
+  wbox("trim", w, sA, sB, o.t1 + fr + 0.02, o.t1 + fr + 0.04 + h, out, out + 0.025);
+  for (const [a, b] of [[o.s0 - fr - 0.04, o.s0 - fr], [o.s1 + fr, o.s1 + fr + 0.04]]) wbox("trim", w, a, b, o.t0, o.t1 + fr + 0.08 + h, out, out + 0.04);
+  if (F > 0.05) {
+    const run = 0.05 + F / Math.tan(30 * Math.PI / 180), rA = o.s0 - 0.05, rB = o.s1 + 0.05;
+    // The plank: a = across, b = thickness (top face at b = 1), c = down the slope.
+    box("trim", (a, b, c) => WP(w, lerp(rA, rB, a), lerp(0, -F, c) - 0.03 + b * 0.03, lerp(0.02, run, c)), w.u, UP, w.n);
+    for (let c = 0.12; c < 0.95; c += 0.15 / run) {
+      const d = lerp(0.02, run, c), t = lerp(0, -F, c);
+      wbox("trim", w, rA, rB, t, t + 0.02, d - 0.012, d + 0.012);
+    }
+  }
+}
+/**
+ * inner: build the wall's inside face too, WALL_T behind the outside one (where the opening
+ * reveals end), facing in. inner.lift raises an eave wall's inside face into the roof slab so no
+ * gap shows under the roof. Doors become a leaf that can open (see doorLeaf).
+ */
+function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inner = null} = {}) {
   const L = w.L, xs = [0, L, L/2], ts = [0, H, H + gableRise];
   ops.forEach(o => { xs.push(o.s0, o.s1); ts.push(o.t0, o.t1); });
   const uniq = a => [...new Set(a.map(v => +v.toFixed(5)))].sort((a,b) => a - b);
@@ -580,35 +672,72 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null} = {
     }
     if (c.length >= 3) poly("walls", c.map(q => WP(w, q[0], q[1], 0)), w.n);
   }
+  if (inner) {
+    const Hi = H + inner.lift, tw = WALL_T;
+    const Xi = uniq([tw, L - tw, L/2, ...ops.flatMap(o => [o.s0, o.s1])]).filter(s => s > tw - 1e-6 && s < L - tw + 1e-6);
+    const Ti = uniq([0, Hi, H + gableRise, ...ops.flatMap(o => [o.t0, o.t1])]);
+    for (let i = 0; i < Xi.length - 1; i++) for (let j = 0; j < Ti.length - 1; j++) {
+      const cs = (Xi[i] + Xi[i+1]) / 2, ct = (Ti[j] + Ti[j+1]) / 2;
+      if (ops.some(o => cs > o.s0 && cs < o.s1 && ct > o.t0 && ct < o.t1)) continue;
+      let c = [[Xi[i], Ti[j]], [Xi[i+1], Ti[j]], [Xi[i+1], Ti[j+1]], [Xi[i], Ti[j+1]]];
+      if (Ti[j+1] > Hi + 1e-6) {
+        if (gableRise <= 0) continue;
+        const k = gableRise / (L / 2);
+        c = clipPoly(clipPoly(c, -k, 1, H), k, 1, H + 2 * gableRise);
+      }
+      paint(WHITEWASH);
+      if (c.length >= 3) poly("fittings", c.map(q => WP(w, q[0], q[1], -tw)), neg(w.n));
+    }
+  }
 
-  const r = 0.15, fr = 0.08, out = 0.04;
+  const r = 0.15, out = 0.04;
   ops.forEach(o => {
-    const isDoor = o.kind === "door";
-    if (!isDoor) poly("walls", [WP(w,o.s0,o.t0,0), WP(w,o.s1,o.t0,0), WP(w,o.s1,o.t0,-r), WP(w,o.s0,o.t0,-r)], UP);
-    poly("walls", [WP(w,o.s0,o.t1,0), WP(w,o.s1,o.t1,0), WP(w,o.s1,o.t1,-r), WP(w,o.s0,o.t1,-r)], neg(UP));
-    poly("walls", [WP(w,o.s0,o.t0,0), WP(w,o.s0,o.t1,0), WP(w,o.s0,o.t1,-r), WP(w,o.s0,o.t0,-r)], w.u);
-    poly("walls", [WP(w,o.s1,o.t0,0), WP(w,o.s1,o.t1,0), WP(w,o.s1,o.t1,-r), WP(w,o.s1,o.t0,-r)], neg(w.u));
+    const isDoor = o.kind === "door", isWin = o.kind === "window";
+    // Frame width: 8 cm, slimmer on a small window (down to 4.5 cm), so the frame doesn't swamp it.
+    const fr = isWin ? Math.min(0.08, Math.max(0.045, 0.075 * Math.min(o.s1 - o.s0, o.t1 - o.t0))) : 0.08, k = fr / 0.08;
+    // The opening's linings, through the wall's thickness: painted boards like the frame.
+    if (!isDoor) poly("trim", [WP(w,o.s0,o.t0,0), WP(w,o.s1,o.t0,0), WP(w,o.s1,o.t0,-r), WP(w,o.s0,o.t0,-r)], UP);
+    poly("trim", [WP(w,o.s0,o.t1,0), WP(w,o.s1,o.t1,0), WP(w,o.s1,o.t1,-r), WP(w,o.s0,o.t1,-r)], neg(UP));
+    poly("trim", [WP(w,o.s0,o.t0,0), WP(w,o.s0,o.t1,0), WP(w,o.s0,o.t1,-r), WP(w,o.s0,o.t0,-r)], w.u);
+    poly("trim", [WP(w,o.s1,o.t0,0), WP(w,o.s1,o.t1,0), WP(w,o.s1,o.t1,-r), WP(w,o.s1,o.t0,-r)], neg(w.u));
+    if (o.kind === "hatch") { buildHatch(w, o, F, fr, out); return; }
     // The glass sits 12 mm in front of the back of the window bars: in the same plane they flicker.
     const dg = isDoor ? -r : -r + 0.012;
-    poly(isDoor ? "door" : "glass", [WP(w,o.s0,o.t0,dg), WP(w,o.s1,o.t0,dg), WP(w,o.s1,o.t1,dg), WP(w,o.s0,o.t1,dg)], w.n);
+    const pane = [WP(w,o.s0,o.t0,dg), WP(w,o.s1,o.t0,dg), WP(w,o.s1,o.t1,dg), WP(w,o.s0,o.t1,dg)];
+    if (isDoor && inner) {
+      // A leaf with a handle on each side, hinged at s0 on its outside face, opening outwards.
+      const g = 0.01, s0 = o.s0 + g, s1 = o.s1 - g, t0 = o.t0 + g, t1 = o.t1 - g, dIn = -r, dOut = -r + LEAF_T;
+      wbox("door", w, s0, s1, t0, t1, dIn, dOut);
+      const hx = s1 - 0.12;
+      wbox("door", w, hx - 0.03, hx, o.t0 + 0.95, o.t0 + 1.08, dOut, dOut + 0.06);
+      wbox("door", w, hx - 0.03, hx, o.t0 + 0.95, o.t0 + 1.08, dIn - 0.06, dIn);
+      const ax = Math.abs(w.u[0]) > 0.5, along = s1 - s0, tall = t1 - t0;
+      doorLeaf = {hinge: WP(w, s0, o.t0, dOut), openAngle: DOOR_OPEN,
+        box: {center: WP(w, (s0 + s1) / 2, (t0 + t1) / 2, (dIn + dOut) / 2), size: ax ? [along, tall, LEAF_T] : [LEAF_T, tall, along]}};
+    } else poly(isDoor ? "door" : "glass", pane, w.n);
+    // From inside, the glass is seen from behind: give it a face that way too.
+    if (!isDoor && inner) poly("glass", pane, neg(w.n));
+    // The frame and sill start at the wall's face: inside the wall they would share planes with the
+    // linings and flicker.
     const b0 = isDoor ? o.t0 : o.t0 - fr;
-    wbox("trim", w, o.s0 - fr, o.s0, b0, o.t1 + fr, -0.02, out);
-    wbox("trim", w, o.s1, o.s1 + fr, b0, o.t1 + fr, -0.02, out);
-    wbox("trim", w, o.s0, o.s1, o.t1, o.t1 + fr, -0.02, out);
+    wbox("trim", w, o.s0 - fr, o.s0, b0, o.t1 + fr, 0, out);
+    wbox("trim", w, o.s1, o.s1 + fr, b0, o.t1 + fr, 0, out);
+    wbox("trim", w, o.s0, o.s1, o.t1, o.t1 + fr, 0, out);
     if (isDoor) {
       if (F > 0.05 && p.entrance !== "porch") {
         wbox("foundation", w, o.s0 - 0.3, o.s1 + 0.3, -F, 0, 0, 0.7);
         wbox("collision", w, o.s0 - 0.3, o.s1 + 0.3, -F, 0, 0, 0.7);
       }
       const hx = o.s1 - 0.12;
-      wbox("trim", w, hx - 0.03, hx, o.t0 + 0.95, o.t0 + 1.08, -r, -r + 0.06);
+      if (!inner) wbox("trim", w, hx - 0.03, hx, o.t0 + 0.95, o.t0 + 1.08, -r, -r + 0.06);
     } else {
-      wbox("trim", w, o.s0 - fr - 0.04, o.s1 + fr + 0.04, o.t0 - 0.07, o.t0, -0.02, 0.09);
-      const mid = (o.s0 + o.s1) / 2;
-      wbox("trim", w, mid - 0.03, mid + 0.03, o.t0, o.t1, -r, -r + 0.04);
+      wbox("trim", w, o.s0 - fr - 0.04 * k, o.s1 + fr + 0.04 * k, o.t0 - 0.07 * k, o.t0, 0, out + 0.05 * k);
+      // Glazing bars: a centre bar from 75 cm wide (a small window is one pane), a cross bar over 1 m high.
+      const bw = 0.03 * k;
+      if (o.s1 - o.s0 >= 0.75) { const mid = (o.s0 + o.s1) / 2; wbox("trim", w, mid - bw, mid + bw, o.t0, o.t1, -r, -r + 0.04); }
       if (o.t1 - o.t0 > 1.0) {
         const tm = o.t0 + (o.t1 - o.t0) * 0.62;
-        wbox("trim", w, o.s0, o.s1, tm - 0.03, tm + 0.03, -r, -r + 0.04);
+        wbox("trim", w, o.s0, o.s1, tm - bw, tm + bw, -r, -r + 0.04);
       }
     }
   });
@@ -620,11 +749,45 @@ function addMesh(mat, m) {
   const g = G[mat], base = g.p.length / 3;
   g.p.push(...m.p); g.n.push(...m.n); g.uv.push(...m.uv);
   for (const k of m.i) g.i.push(k + base);
-  if (g.c) for (let k = 0; k < m.p.length / 3; k++) g.c.push(...curtainRGB);
+  if (g.c) for (let k = 0; k < m.p.length / 3; k++) g.c.push(...(mat === "fittings" ? fitRGB : curtainRGB));
+}
+
+/* ----- Drawing helpers for walk-in insides (kinds' furnish() gets these) ----- */
+/** Inside walls of a walk-in building are whitewashed. */
+const WHITEWASH = "#E9E4D8";
+/** The color the next "fittings" faces get. */
+const paint = hex => { fitRGB = hexRGB(hex); };
+/** Vertical cylinder with closed ends, base centre c. */
+function cyl(c, r, h, seg = 12) {
+  const ring = y => Array.from({length: seg}, (_, k) => { const a = k / seg * 2 * Math.PI; return [c[0] + r * Math.cos(a), y, c[2] + r * Math.sin(a)]; });
+  const lo = ring(c[1]), hi = ring(c[1] + h);
+  for (let k = 0; k < seg; k++) {
+    const j = (k + 1) % seg;
+    poly("fittings", [lo[k], lo[j], hi[j], hi[k]], [(lo[k][0] + lo[j][0]) / 2 - c[0], 0, (lo[k][2] + lo[j][2]) / 2 - c[2]]);
+  }
+  poly("fittings", hi, UP); poly("fittings", lo, neg(UP));
+}
+/**
+ * A walk-in building's inside: the kind's floor finish, then each placed piece (p.items), drawn in
+ * its own frame (layout.mjs), with a collision box for pieces that have one. A piece outside the
+ * room (the building was made smaller) is left out until it's moved back in.
+ */
+function buildInside(kind, F, H) {
+  const room = roomOf(p, openings), catalog = kind.catalog || {}, items = p.items || [];
+  if (kind.furnish) kind.furnish({floor: color => { paint(color); abox("fittings", [room.x0, F, room.z0], [room.x1, F + 0.02, room.z1]); }});
+  const outside = new Set([...problems(items, catalog, room)].filter(([, m]) => /outside/i.test(m)).map(([id]) => id));
+  for (const it of items) {
+    const def = catalog[it.type];
+    if (!def || outside.has(it.id)) continue;
+    const box = (x0, x1, z0, z1, y0, y1) => { const a = toWorld(it, x0, z0), b = toWorld(it, x1, z1); abox("fittings", [a[0], F + y0, a[1]], [b[0], F + y1, b[1]]); };
+    const round = (x, z, y, r, h, seg) => { const q = toWorld(it, x, z); cyl([q[0], F + y, q[1]], r, h, seg); };
+    def.build({H, paint, box, cyl: round}, it);
+    if (def.collision) { const f = footprint(it, def); abox("collision", [f.x0, F, f.z0], [f.x1, F + def.height(it), f.z1]); }
+  }
 }
 /** The ridge cap along the ridge from a0 to a1 (ridge coordinates), placed with M. */
 function ridgeCap(a0, a1, ridgeY, tanP, M, ridgeX) {
-  const m = ridgeCapMesh(a0, a1, ridgeY, tanP, 0.12), q = [];
+  const m = ridgeCapMesh(a0 - 0.015, a1 + 0.015, ridgeY, tanP, 0.13), q = [];
   for (let k = 0; k < m.p.length; k += 3) q.push(...M(m.p[k], m.p[k + 1], m.p[k + 2]));
   const nn = [];
   for (let k = 0; k < m.n.length; k += 3) nn.push(...M(m.n[k], m.n[k + 1], m.n[k + 2]));
@@ -666,7 +829,8 @@ function buildEntrance(w, o, limit, F, mainEave) {
   } else {
     const cosc = Math.cos(Math.atan2(rise, hw)), d1 = cd + 0.15, ov = 0.12;
     const tE = ta - ov * rise / hw, tP = ta + rise;
-    const d0 = mainEave ? -Math.max(0, tP - (mainEave.H - 0.02)) / mainEave.tanP : 0;
+    const tuck = mainEave ? -Math.max(0, tP - (mainEave.H - 0.02)) / mainEave.tanP : 0;
+    const d0 = hollow ? Math.max(tuck, -WALL_T + 0.01) : tuck;
     const uvf = q => { const v = sd(q); return [v[1], -Math.abs(v[0] - cs) / cosc]; };
     for (const sg of [-1, 1]) {
       const se = cs + sg * (hw + ov);
@@ -712,9 +876,9 @@ function buildEntrance(w, o, limit, F, mainEave) {
 
 function build() {
   // "collision" collects simple closed solids next to the visual meshes; it is split off at the end.
-  rooms = []; downpipes = [];
+  rooms = []; downpipes = []; doorLeaf = null;
   G = {}; [...MATS, "collision"].forEach(m => G[m] = {p:[], n:[], uv:[], i:[]});
-  G.curtain.c = [];
+  G.curtain.c = []; G.fittings.c = [];
   const W = p.width, D = p.depth, F = p.foundation, fh = p.floorHeight, H = p.floors * fh + (p.halfStorey ? p.kneeWall : 0), top = F + H;
   const tanP = Math.tan(p.roofPitch * Math.PI / 180), o = p.overhang, th = 0.16;
   const ridgeX = p.roofType === "hip" ? W >= D : p.ridge === "width";
@@ -816,19 +980,16 @@ function build() {
     }
   };
 
-  const WS = {
-    front: {o:[-W/2,F, D/2], u:[1,0,0],  n:[0,0,1],  L:W},
-    back:  {o:[ W/2,F,-D/2], u:[-1,0,0], n:[0,0,-1], L:W},
-    right: {o:[ W/2,F, D/2], u:[0,0,-1], n:[1,0,0],  L:D},
-    left:  {o:[-W/2,F,-D/2], u:[0,0,1],  n:[-1,0,0], L:D}
-  };
+  const WS = wallFrames(W, D, F);
   let entr = null;
   opsByWall = {};
   for (const key in WS) {
     const gable = p.roofType === "gable" && (ridgeX ? (key === "left" || key === "right") : (key === "front" || key === "back"));
     const R = gable ? Math.max(0, rise - th) : 0, Lw = WS[key].L;
     const ops = layoutWall(key, Lw, fh, sv => H + R * Math.max(0, 1 - Math.abs(sv - Lw/2) / (Lw/2)));
-    buildWall(WS[key], ops, H, R, F, {topAt: sv => H + R * Math.max(0, 1 - Math.abs(sv - Lw/2) / (Lw/2))});
+    // Eave walls' inside faces reach into the roof slab (which sits lower further in), staying below its top.
+    const inner = hollow ? {lift: R > 0 || p.roofType === "flat" ? 0 : Math.min(WALL_T * tanP, th - 0.02)} : null;
+    buildWall(WS[key], ops, H, R, F, {topAt: sv => H + R * Math.max(0, 1 - Math.abs(sv - Lw/2) / (Lw/2)), inner});
     opsByWall[key] = {w: WS[key], ops};
     const dOp = ops.find(op => op.kind === "door");
     if (dOp) entr = {w: WS[key], o: dOp, key, gable};
@@ -837,6 +998,9 @@ function build() {
     let limit = 1e9;
     if (p.roofType === "flat") limit = H - 0.05;
     else if (!entr.gable && p.entrance === "shed") limit = H - th - Math.min(o, p.entranceDepth + 0.15) * tanP - 0.05;
+    // A walk-in building's wall is thin, so a canopy can't tuck in under the eaves (it would show
+    // inside): it stays below them instead, a little flatter if need be.
+    else if (!entr.gable && hollow) limit = H - 0.05;
     const k = entr.key;
     if (p.floors > 1 && p.windows.some(x => x.wall === k && x.floor === 1)) limit = Math.min(limit, fh + Math.min(...p.windows.filter(x => x.wall === k && x.floor === 1).map(x => x.sill)) - 0.1);
     const mainEave = !entr.gable && p.roofType !== "flat" ? {H, tanP} : null;
@@ -853,7 +1017,17 @@ function build() {
     box("trim", (a, b, c) => { const x = lerp(x0, x1, a), z = lerp(z0, z1, c); return [x, b ? roofUnder(x, z) : F, z]; }, [1,0,0], UP, [0,0,1]);
   }
   if (F > 0.01) abox("foundation", [-W/2 - 0.06, 0, -D/2 - 0.06], [W/2 + 0.06, F, D/2 + 0.06]);
-  abox("collision", [-W/2, 0, -D/2], [W/2, top, D/2]);
+  if (!hollow) abox("collision", [-W/2, 0, -D/2], [W/2, top, D/2]);
+  else {
+    // Floor, then each wall as a slab with a gap for the door (the door leaf has its own collision).
+    if (F > 0.01) abox("collision", [-W/2, 0, -D/2], [W/2, F, D/2]);
+    for (const key in WS) {
+      const w = WS[key], door = opsByWall[key].ops.find(o => o.kind === "door");
+      const slab = (s0, s1, t0, t1) => { if (s1 - s0 > 1e-6 && t1 - t0 > 1e-6) wbox("collision", w, s0, s1, t0, t1, -WALL_T, 0); };
+      if (!door) slab(0, w.L, 0, H);
+      else { slab(0, door.s0, 0, H); slab(door.s1, w.L, 0, H); slab(door.s0, door.s1, door.t1, H); }
+    }
+  }
 
   if (p.roofType === "gable") {
     const hA = Lr/2 + Math.min(o, 0.5), hB = span/2 + o;
@@ -925,16 +1099,17 @@ function build() {
     abox("chimney", [c[0]-0.36, ytop, c[2]-0.36], [c[0]+0.36, ytop + 0.1, c[2]+0.36]);
     abox("collision", [c[0]-0.3, top - 0.2, c[2]-0.3], [c[0]+0.3, ytop + 0.1, c[2]+0.3]);
   }
+  if (hollow) buildInside(kind, F, H);
   dims = {W, D, top, ridgeY, F};
 }
 build();
 const {collision, ...visual} = G;
-return {G: visual, dims, opsByWall, collision, rooms, downpipes};
+return {G: visual, dims, opsByWall, collision, rooms, downpipes, doorLeaf};
 }
 
 /* ---------- Materials ---------- */
 export function colorFor(p, m) {
-  return {walls:p.wallColor, trim:p.trimColor, roof:p.roofColor, glass:"#2E3B44", door:p.doorColor, foundation:p.foundationColor, chimney:p.chimneyColor, gutter:p.gutterColor, interior:"#B8AE9C", curtain:p.curtainColor}[m];
+  return {walls:p.wallColor, trim:p.trimColor, roof:p.roofColor, glass:"#2E3B44", door:p.doorColor, foundation:p.foundationColor, chimney:p.chimneyColor, gutter:p.gutterColor, interior:"#B8AE9C", curtain:p.curtainColor, fittings:"#E9E4D8"}[m];
 }
 export function surfaceSpec(p, m) {
   const kind = m === "walls" ? p.wallCladding
@@ -961,10 +1136,11 @@ export function scaledUV(p, m, g) {
  *   level: rectangle on the ground that is leveled (footprint + LEVEL_MARGIN)
  *   clear: rectangle where grass and fields are removed (the footprint)
  *   test:  box around the whole house, checked for overlap when placing
- * The footprint is everything that touches the ground: walls, foundation, porch, steps.
+ * The footprint is everything that touches the ground: walls, foundation, porch, steps, plus the
+ * extra ground rectangles {x0, x1, z0, z1} (a chicken barn's feed, pallet and loading places).
  */
 const LEVEL_MARGIN = 0.5;
-export function placementAreas(geo) {
+export function placementAreas(geo, extra = []) {
   const all = [], ground = [];
   for (const m of MATS) {
     const g = geo.G[m];
@@ -974,6 +1150,7 @@ export function placementAreas(geo) {
       if (v[1] < 0.01) ground.push(v);
     }
   }
+  for (const r of extra) for (const x of [r.x0, r.x1]) for (const z of [r.z0, r.z1]) { ground.push([x, 0, z]); all.push([x, 0, z]); }
   const lo = (pts, k) => Math.min(...pts.map(v => v[k])), hi = (pts, k) => Math.max(...pts.map(v => v[k]));
   const clear = {x0: lo(ground, 0), x1: hi(ground, 0), z0: lo(ground, 2), z1: hi(ground, 2)};
   const m = LEVEL_MARGIN;
@@ -1016,44 +1193,122 @@ export function sleepPoint(geo) {
   return {trigger, marker, spawn: {pos: sp, rot: [0, toward(sp, target)[1], 0]}, camera: {pos: cam, rot: toward(cam, target)}};
 }
 
-/**
- * Blocks to paste into the placeable XML. Node paths match the scene that buildI3d writes:
- * house > clearAreas(0), levelAreas(1), testAreas(2), tipOcclusionUpdateAreas(3), visuals(4), collisions(5),
- * the same layout as the base game's garden sheds, plus farmhouseFeatures(6) with the sleep point.
- */
-export function placeableSnippet(p = DEFAULTS) {
-  return `<!-- Paste these into your placeable XML (inside <placeable>). Generated by House to i3d. -->
-${p.sleepPoint ? `
-    <!-- Sleep point: use <placeable type="farmhouse" ...> so the player can sleep here, as in the base game's farmhouses. -->` : ""}${placeableBlocks(p)}`;
+/* ---------- Export ---------- */
+/** Whether the windows are see-through: with rooms behind them, or into a walk-in building. */
+export const seeThroughGlass = p => !!p.interior || kindOf(p).walkIn;
+/** Opacity of the window glass when it is see-through. */
+export const GLASS_ALPHA = 0.22;
+const NO_SHADOW = ["glass", "interior", "curtain"];
+export function rgb(hex) { const n = parseInt(hex.slice(1), 16); return [(n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255].map(v => num(v)).join(" ") + " 1"; }
+
+/** The material for one visual part (m: its material kind, g: its mesh). */
+function materialFor(doc, p, m, name, g, withTex) {
+  if (g.color) return doc.material(`${name}_mat`, {diffuseColor: `${v3(g.color)} 1`});
+  if (withTex && surfaceSpec(p, m)) return doc.material(`${m}_mat`, {}, [["Texture", `textures/${m}_diffuse.png`], ["Normalmap", `textures/${m}_normal.png`]]);
+  // See-through glass and the room atlas: base-game style alphaBlending on a texture.
+  const glassy = m === "glass" && seeThroughGlass(p);
+  if (withTex && (glassy || m === "interior")) return doc.material(`${m}_mat`, {alphaBlending: glassy || undefined}, [["Texture", `textures/${m}_diffuse.png`]]);
+  if (glassy) return doc.material(`${m}_mat`, {diffuseColor: rgb(colorFor(p, m)).replace(/ 1$/, " " + GLASS_ALPHA), alphaBlending: true});
+  return doc.material(`${m}_mat`, {diffuseColor: rgb(colorFor(p, m))});
 }
-function placeableBlocks(p) {
-  const sleep = p.sleepPoint ? `
-    <hotspots>
-        <hotspot type="FARM" linkNode="0>" teleportNode="spawnPoint"/>
-    </hotspots>
 
-    <triggerMarkers>
-        <triggerMarker node="sleepTriggerMarker" filename="$data/shared/assets/marker/markerIconSleep.i3d"/>
-    </triggerMarkers>
+/** Where a walk-in building's door prompt shows: a box across the doorway, both sides. */
+function doorTrigger(geo, p) {
+  const {w, ops} = geo.opsByWall[p.doorWall], o = ops.find(q => q.kind === "door"), s = (o.s0 + o.s1) / 2;
+  const ax = Math.abs(w.u[0]) > 0.5, along = o.s1 - o.s0 + 0.6;
+  return {center: [w.o[0] + w.u[0] * s, w.o[1] + 1.1, w.o[2] + w.u[2] * s], size: ax ? [along, 2.2, 2.4] : [2.4, 2.2, along]};
+}
 
-    <farmhouse spawnNode="spawnPoint">
-        <sleeping triggerNode="sleepingTrigger" cameraNode="sleepCamera"/>
-    </farmhouse>
+/**
+ * Everything the export writes, built once: the i3d document and scene tree, and the placeable XML
+ * blocks that name its nodes. The i3dMappings are looked up in the scene by name, so they always match.
+ * Scene: house > clear/level/test/tipOcclusion areas, visuals, collisions (like the base game's
+ * garden sheds), then a walk-in building's door, the kind's own nodes and the indoor area.
+ */
+function exportParts(p, {withTex = false} = {}) {
+  p = normalize(p);
+  const kind = kindOf(p), geo = buildGeometry(p), {G} = geo, doc = new I3dDoc();
+  // One part per material, except curtains and fittings: one per color (i3d materials have one color).
+  const parts = [];
+  for (const m of MATS) {
+    if (!G[m].i.length) continue;
+    if (m === "curtain" || m === "fittings") splitByColor(G[m]).forEach((g, j) => parts.push({name: j ? `${m}${j + 1}` : m, m, g}));
+    else parts.push({name: m, m, g: G[m]});
+  }
+  // A walk-in building's door leaf is its own node at its hinge, so its mesh is relative to the hinge.
+  const leaf = kind.walkIn && geo.doorLeaf;
+  const visuals = [];
+  let door = null;
+  for (const {name, m, g} of parts) {
+    const mat = materialFor(doc, p, m, name, g, withTex), uv = scaledUV(p, m, g);
+    if (leaf && m === "door") { door = {shape: doc.shape(name, {...g, p: g.p.map((v, i) => v - leaf.hinge[i % 3])}, {uv}), mat}; continue; }
+    visuals.push(shape(name, {shapeId: doc.shape(name, g, {uv}), castsShadows: !(NO_SHADOW.includes(m) && (m !== "glass" || seeThroughGlass(p))), receiveShadows: true, materialIds: mat}));
+  }
+  const cm = doc.material("collision_mat", {diffuseColor: "1 0 1 1"});
+  const collision = shape("collision", {shapeId: doc.shape("collision", geo.collision, {cpu: true}), static: true, collisionFilterGroup: "0x3e",
+    collisionFilterMask: "0xfffffbff", nonRenderable: true, castsShadows: false, receiveShadows: false, materialIds: cm});
 
-    <!-- Inside the walls: no rain, and the farmhouse knows where indoors is. -->
+  // What kinds get to build their nodes with.
+  const box = (name, b, attrs) => shape(name, {translation: b.center, shapeId: doc.shape(name, boxMesh(b.size), {cpu: true}), ...attrs,
+    nonRenderable: true, castsShadows: false, receiveShadows: false, materialIds: cm});
+  const trigger = (group, mask) => ({static: true, trigger: true, collisionFilterGroup: group, collisionFilterMask: mask});
+  const own = kind.scene ? kind.scene({p, geo, doc, box, trigger, sleepPoint}) : {nodes: [], xml: "", areas: []};
+
+  let doorNodes = [], doorXml = "";
+  if (door) {
+    doorNodes = [tg("doors", [0, 0, 0], [
+      // Turned about its hinge by the animatedObject; its collision moves with it.
+      shape("door1", {translation: leaf.hinge, shapeId: door.shape, castsShadows: true, receiveShadows: true, materialIds: door.mat}, [
+        shape("door1Collision", {translation: leaf.box.center.map((v, i) => v - leaf.hinge[i]), shapeId: doc.shape("door1CollisionBox", boxMesh(leaf.box.size), {cpu: true}),
+          kinematic: true, collisionFilterGroup: "0x1034", collisionFilterMask: "0xfffffbff", nonRenderable: true, castsShadows: false, receiveShadows: false, materialIds: cm})]),
+      box("door1Trigger", doorTrigger(geo, p), trigger("0x20000000", "0x110000")),
+    ])];
+    doorXml = `
+    <!-- The door: walk up to it and use the open/close prompt, as on the base game's barns. -->
+    <animatedObjects>
+        <animatedObject saveId="door1">
+            <animation duration="1.5">
+                <part node="door1">
+                    <keyFrame time="0" rotation="0 0 0"/>
+                    <keyFrame time="1" rotation="0 ${leaf.openAngle} 0"/>
+                </part>
+            </animation>
+            <controls triggerNode="door1Trigger" posAction="ACTIVATE_HANDTOOL" posText="action_openDoor" negText="action_closeDoor"/>
+            <sounds>
+                <moving linkNode="door1" template="woodDoorSqueaksSmall"/>
+                <posEnd linkNode="door1" template="woodDoorOpen"/>
+                <negEnd linkNode="door1" template="woodDoorCloseRandom"/>
+            </sounds>
+        </animatedObject>
+    </animatedObjects>
+`;
+  }
+
+  // Rectangle on the ground as start + width (along z) + height (along x), like the base game.
+  const rect = (k, r) => tg(`${k}Areas`, [0, 0, 0], [tg(`${k}AreaStart01`, [r.x0, 0, r.z0], [
+    tg(`${k}AreaWidth01`, [0, 0, r.z1 - r.z0]), tg(`${k}AreaHeight01`, [r.x1 - r.x0, 0, 0])])]);
+  // Box or rectangle from start to end, with end a child of start.
+  const corner = (group, k, min, max) => tg(group, [0, 0, 0], [tg(`${k}Start01`, min, [tg(`${k}End01`, max.map((v, i) => v - min[i]))])]);
+  const A = placementAreas(geo, own.areas), t = A.test, {W, D} = geo.dims;
+  const indoor = kind.walkIn || p.sleepPoint;
+  const root = tg("house", [0, 0, 0], [
+    rect("clear", A.clear),
+    rect("level", A.level),
+    corner("testAreas", "testArea", t.min, t.max),
+    corner("tipOcclusionUpdateAreas", "tipOcclusionUpdateArea", [t.min[0], 0, t.min[2]], [t.max[0], 0, t.max[2]]),
+    tg("visuals", [0, 0, 0], visuals),
+    tg("collisions", [0, 0, 0], [collision]),
+    ...doorNodes,
+    ...own.nodes,
+    ...(indoor ? [rect("indoor", {x0: -W / 2, x1: W / 2, z0: -D / 2, z1: D / 2})] : []),
+  ]);
+
+  const blocks = `${own.xml}${doorXml}${indoor ? `
+    <!-- Inside the walls: no rain, and the game knows where indoors is. -->
     <indoorAreas>
         <indoorArea startNode="indoorAreaStart01" widthNode="indoorAreaWidth01" heightNode="indoorAreaHeight01"/>
     </indoorAreas>
-` : "";
-  const sleepMaps = p.sleepPoint ? `
-        <i3dMapping id="sleepingTrigger" node="0>6|0"/>
-        <i3dMapping id="sleepTriggerMarker" node="0>6|1"/>
-        <i3dMapping id="spawnPoint" node="0>6|2"/>
-        <i3dMapping id="sleepCamera" node="0>6|3"/>
-        <i3dMapping id="indoorAreaStart01" node="0>7|0"/>
-        <i3dMapping id="indoorAreaWidth01" node="0>7|0|0"/>
-        <i3dMapping id="indoorAreaHeight01" node="0>7|0|1"/>` : "";
-  return `${sleep}
+` : ""}
     <placement useRandomYRotation="false" useManualYRotation="true">
         <testAreas>
             <testArea startNode="testAreaStart01" endNode="testAreaEnd01"/>
@@ -1080,20 +1335,26 @@ function placeableBlocks(p) {
             <updateArea startNode="tipOcclusionUpdateAreaStart01" endNode="tipOcclusionUpdateAreaEnd01"/>
         </updateAreas>
     </ai>
-
-    <i3dMappings>
-        <i3dMapping id="clearAreaStart01" node="0>0|0"/>
-        <i3dMapping id="clearAreaWidth01" node="0>0|0|0"/>
-        <i3dMapping id="clearAreaHeight01" node="0>0|0|1"/>
-        <i3dMapping id="levelAreaStart01" node="0>1|0"/>
-        <i3dMapping id="levelAreaWidth01" node="0>1|0|0"/>
-        <i3dMapping id="levelAreaHeight01" node="0>1|0|1"/>
-        <i3dMapping id="testAreaStart01" node="0>2|0"/>
-        <i3dMapping id="testAreaEnd01" node="0>2|0|0"/>
-        <i3dMapping id="tipOcclusionUpdateAreaStart01" node="0>3|0"/>
-        <i3dMapping id="tipOcclusionUpdateAreaEnd01" node="0>3|0|0"/>${sleepMaps}
-    </i3dMappings>
 `;
+  const maps = mappingsFor(root, blocks).map(([id, path]) => `        <i3dMapping id="${id}" node="${path}"/>`);
+  return {p, kind, doc, root, blocks: `${blocks}
+    <i3dMappings>
+${maps.join("\n")}
+    </i3dMappings>
+`};
+}
+
+export function buildI3d(p, opts) {
+  const {doc, root} = exportParts(p, opts);
+  return doc.write(root);
+}
+
+/** Blocks to paste into a placeable XML, with i3dMappings that match the i3d buildI3d writes. */
+export function placeableSnippet(p = DEFAULTS) {
+  const {kind, blocks, p: q} = exportParts(p), note = kind.placeable(q).note;
+  return `<!-- Paste these into your placeable XML (inside <placeable>). Generated by House to i3d. -->
+${note ? `
+    <!-- ${note} -->` : ""}${blocks}`;
 }
 
 /* ---------- Game mod ---------- */
@@ -1107,29 +1368,29 @@ const shopName = name => String(name || "").trim() || "House";
 
 /** The placeable (store item) XML for the mod: shop data and the same blocks as placeableSnippet. */
 export function placeableXml(p, name) {
-  const farm = !!p.sleepPoint;
+  const {kind, blocks, p: q} = exportParts(p), {type, fn, shop} = kind.placeable(q);
   return `<?xml version="1.0" encoding="utf-8" standalone="no" ?>
-<placeable type="${farm ? "farmhouse" : "simplePlaceable"}">
+<placeable type="${type}">
     <!-- Generated by House to i3d. -->
     <storeData>
         <name>${esc(shopName(name))}</name>
         <functions>
-            <function>${farm ? "$l10n_function_farmHouse" : "$l10n_function_decoration"}</function>
+            <function>${fn}</function>
         </functions>
         <image>${MOD_FILES.store}</image>
         <canBeSold>true</canBeSold>
         <showInStore>true</showInStore>
-        <price>${Math.round(p.modPrice)}</price>
+        <price>${Math.round(q.modPrice)}</price>
         <lifetime>1000</lifetime>
-        <dailyUpkeep>${Math.round(p.modUpkeep)}</dailyUpkeep>
+        <dailyUpkeep>${Math.round(q.modUpkeep)}</dailyUpkeep>
         <rotation>0</rotation>
         <brand>NONE</brand>
         <species>PLACEABLE</species>
-        <category>farmhouses</category>
+        <category>${shop.category}</category>
         <brush>
-            <type>placeable</type>
-            <category>buildings</category>
-            <tab>farmhouses</tab>
+            <type>${shop.type}</type>
+            <category>${shop.brush}</category>
+            <tab>${shop.tab}</tab>
         </brush>
     </storeData>
 
@@ -1137,7 +1398,7 @@ export function placeableXml(p, name) {
         <filename>${MOD_FILES.i3d}</filename>
         <canBeRenamed>true</canBeRenamed>
     </base>
-${placeableBlocks(p)}</placeable>
+${blocks}</placeable>
 `;
 }
 
@@ -1147,9 +1408,9 @@ export function authorName(user) {
   return String(user.name || "").trim() || String(user.email || "").split("@")[0].trim();
 }
 
-/** Description used when the house has none of its own. */
+/** Description used when the building has none of its own. */
 export function defaultModDescription(p) {
-  return `A ${(+p.width).toFixed(1)} x ${(+p.depth).toFixed(1)} m house made with House to i3d.${p.sleepPoint ? " Sleep here to skip the night." : ""}`;
+  return kindOf(p).description(normalize(p));
 }
 
 /** modDesc.xml for the mod. author: used when the house has no author of its own (the logged-in user). */
@@ -1171,165 +1432,5 @@ export function modDescXml(p, name, {author = ""} = {}) {
         <storeItem xmlFilename="${MOD_FILES.xml}"/>
     </storeItems>
 </modDesc>
-`;
-}
-
-/* ---------- i3d export ---------- */
-const num = v => { const r = Math.round(v * 10000) / 10000; return (Object.is(r, -0) ? 0 : r).toString(); };
-export function rgb(hex) { const n = parseInt(hex.slice(1), 16); return [(n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255].map(v => num(v)).join(" ") + " 1"; }
-/** Opacity of the window glass when there are rooms behind it. */
-export const GLASS_ALPHA = 0.22;
-const NO_SHADOW = ["glass", "interior", "curtain"];
-/**
- * "CPU Mesh" flag, as Giants Editor writes it. The game keeps these meshes in memory so it can
- * rebuild their physics: placing a placeable turns its physics off and on again, and without
- * the flag our (inline, not pre-cooked) collision and trigger meshes would come back empty.
- */
-const CPU_MESH = 256;
-function shapeXml(name, id, g, uv, {cpu = false} = {}) {
-  uv = uv || g.uv;
-  const nv = g.p.length / 3, nt = g.i.length / 3;
-  const v = [], t = [];
-  for (let i = 0; i < nv; i++) v.push(`        <v p="${num(g.p[i*3])} ${num(g.p[i*3+1])} ${num(g.p[i*3+2])}" n="${num(g.n[i*3])} ${num(g.n[i*3+1])} ${num(g.n[i*3+2])}" t0="${num(uv[i*2])} ${num(uv[i*2+1])}"/>`);
-  for (let i = 0; i < nt; i++) t.push(`        <t vi="${g.i[i*3]} ${g.i[i*3+1]} ${g.i[i*3+2]}"/>`);
-  return `    <IndexedTriangleSet name="${name}" shapeId="${id}"${cpu ? ` meshUsage="${CPU_MESH}"` : ""}>
-      <Vertices count="${nv}" normal="true" uv0="true">
-${v.join("\n")}
-      </Vertices>
-      <Triangles count="${nt}">
-${t.join("\n")}
-      </Triangles>
-      <Subsets count="1">
-        <Subset firstVertex="0" numVertices="${nv}" firstIndex="0" numIndices="${g.i.length}"/>
-      </Subsets>
-    </IndexedTriangleSet>`;
-}
-/** Closed box mesh of the given size, centred on the origin, faces turned outwards. */
-export function boxMesh([sx, sy, sz]) {
-  const g = {p:[], n:[], uv:[], i:[]};
-  for (let ax = 0; ax < 3; ax++) for (const s of [-1, 1]) {
-    const n = [0, 0, 0]; n[ax] = s;
-    const a = (ax + 1) % 3, b = (ax + 2) % 3, base = g.p.length / 3, h = [sx/2, sy/2, sz/2];
-    for (const [ua, ub] of [[-1,-1], [1,-1], [1,1], [-1,1]]) {
-      const q = [0, 0, 0]; q[ax] = s * h[ax]; q[a] = ua * h[a]; q[b] = ub * h[b];
-      g.p.push(...q); g.n.push(...n); g.uv.push((ua + 1) / 2, (ub + 1) / 2);
-    }
-    // (a, b) winding is counter-clockwise seen from +ax; flip it for the -ax face.
-    g.i.push(...(s > 0 ? [0, 1, 2, 0, 2, 3] : [0, 2, 1, 0, 3, 2]).map(k => base + k));
-  }
-  return g;
-}
-/** Splits a mesh with vertex colors (g.c) into one mesh per color, each with that color. */
-function splitByColor(g) {
-  const groups = new Map();
-  for (let t = 0; t < g.i.length; t += 3) {
-    const v = g.i[t], color = [g.c[v*3], g.c[v*3+1], g.c[v*3+2]], key = color.map(num).join(" ");
-    if (!groups.has(key)) groups.set(key, {p:[], n:[], uv:[], i:[], color, map: new Map()});
-    const out = groups.get(key);
-    for (const u of [g.i[t], g.i[t+1], g.i[t+2]]) {
-      if (!out.map.has(u)) {
-        out.map.set(u, out.p.length / 3);
-        out.p.push(g.p[u*3], g.p[u*3+1], g.p[u*3+2]); out.n.push(g.n[u*3], g.n[u*3+1], g.n[u*3+2]); out.uv.push(g.uv[u*2], g.uv[u*2+1]);
-      }
-      out.i.push(out.map.get(u));
-    }
-  }
-  return [...groups.values()].map(({map, ...m}) => m);
-}
-export function buildI3d(p, {withTex = false} = {}) {
-  const geo = buildGeometry(p), {G, collision: col} = geo, A = placementAreas(geo);
-  // One part per material, except curtains: one part per curtain color (i3d materials have one color).
-  const parts = [];
-  for (const m of MATS) {
-    if (!G[m].i.length) continue;
-    if (m === "curtain") splitByColor(G[m]).forEach((g, j) => parts.push({name: j ? `curtain${j + 1}` : "curtain", m, g}));
-    else parts.push({name: m, m, g: G[m]});
-  }
-  const used = parts;
-  const files = []; let fid = 1;
-  const mats = parts.map(({name, m, g}, k) => {
-    if (g.color) return `    <Material name="${name}_mat" materialId="${k+1}" diffuseColor="${g.color.map(num).join(" ")} 1"/>`;
-    if (withTex && surfaceSpec(p, m)) {
-      const d = fid++, n = fid++;
-      files.push(`    <File fileId="${d}" filename="textures/${m}_diffuse.png"/>`, `    <File fileId="${n}" filename="textures/${m}_normal.png"/>`);
-      return `    <Material name="${m}_mat" materialId="${k+1}">\n      <Texture fileId="${d}"/>\n      <Normalmap fileId="${n}"/>\n    </Material>`;
-    }
-    // See-through glass (with rooms behind it) and the room atlas: base-game style alphaBlending on a texture.
-    const glassy = m === "glass" && p.interior;
-    if (withTex && (glassy || m === "interior")) {
-      const d = fid++;
-      files.push(`    <File fileId="${d}" filename="textures/${m}_diffuse.png"/>`);
-      return `    <Material name="${m}_mat" materialId="${k+1}"${glassy ? ' alphaBlending="true"' : ""}>\n      <Texture fileId="${d}"/>\n    </Material>`;
-    }
-    if (glassy) return `    <Material name="${m}_mat" materialId="${k+1}" diffuseColor="${rgb(colorFor(p, m)).replace(/ 1$/, " " + GLASS_ALPHA)}" alphaBlending="true"/>`;
-    return `    <Material name="${m}_mat" materialId="${k+1}" diffuseColor="${rgb(colorFor(p, m))}"/>`;
-  });
-  const shapes = parts.map(({name, m, g}, k) => shapeXml(name, k + 1, g, scaledUV(p, m, g)));
-  const cid = used.length + 1;
-  shapes.push(shapeXml("collision", cid, col, null, {cpu: true}));
-  const sleep = p.sleepPoint ? sleepPoint(geo) : null, tid = cid + 1;
-  if (sleep) shapes.push(shapeXml("sleepingTrigger", tid, boxMesh(sleep.trigger.size), null, {cpu: true}));
-  let nid = 2;
-  // Empty transform group; kids() builds its children after this node got its id, so ids run top-down.
-  const tg = (name, pos, depth, kids) => {
-    const ind = "  ".repeat(depth), head = `${ind}<TransformGroup name="${name}" translation="${pos.map(num).join(" ")}" nodeId="${nid++}"`;
-    return kids ? `${head}>\n${kids().join("\n")}\n${ind}</TransformGroup>` : head + "/>";
-  };
-  // Rectangle on the ground as start + width (along z) + height (along x), like the base game.
-  const rect = (kind, r) => tg(`${kind}Areas`, [0, 0, 0], 3, () => [tg(`${kind}AreaStart01`, [r.x0, 0, r.z0], 4, () => [
-    tg(`${kind}AreaWidth01`, [0, 0, r.z1 - r.z0], 5),
-    tg(`${kind}AreaHeight01`, [r.x1 - r.x0, 0, 0], 5)])]);
-  // Box or rectangle from start to end, with end a child of start.
-  const corner = (group, kind, min, max) => tg(group, [0, 0, 0], 3, () => [tg(`${kind}Start01`, min, 4, () => [
-    tg(`${kind}End01`, max.map((v, i) => v - min[i]), 5)])]);
-  const t = A.test;
-  const areas = [
-    rect("clear", A.clear),
-    rect("level", A.level),
-    corner("testAreas", "testArea", t.min, t.max),
-    corner("tipOcclusionUpdateAreas", "tipOcclusionUpdateArea", [t.min[0], 0, t.min[2]], [t.max[0], 0, t.max[2]]),
-  ];
-  const visualsId = nid++;
-  const nodes = parts.map(({name, m}, k) => `        <Shape name="${name}" shapeId="${k+1}" nodeId="${nid++}" castsShadows="${NO_SHADOW.includes(m) && (m !== "glass" || p.interior) ? "false" : "true"}" receiveShadows="true" materialIds="${k+1}"/>`);
-  const collisionsId = nid++, collisionId = nid++;
-  const v3 = a => a.map(num).join(" ");
-  let features = "";
-  if (sleep) {
-    const fid = nid++, trId = nid++, mkId = nid++, spId = nid++, caId = nid++;
-    features = `
-      <TransformGroup name="farmhouseFeatures" nodeId="${fid}">
-        <Shape name="sleepingTrigger" translation="${v3(sleep.trigger.center)}" shapeId="${tid}" nodeId="${trId}" static="true" trigger="true" collisionFilterGroup="0x20000000" collisionFilterMask="0x100000" nonRenderable="true" castsShadows="false" receiveShadows="false" materialIds="${used.length + 1}"/>
-        <TransformGroup name="sleepTriggerMarker" translation="${v3(sleep.marker)}" nodeId="${mkId}"/>
-        <TransformGroup name="spawnPoint" translation="${v3(sleep.spawn.pos)}" rotation="${v3(sleep.spawn.rot)}" nodeId="${spId}"/>
-        <Camera name="sleepCamera" translation="${v3(sleep.camera.pos)}" rotation="${v3(sleep.camera.rot)}" fov="54.4322" nearClip="0.1" farClip="560" nodeId="${caId}"/>
-      </TransformGroup>
-${rect("indoor", {x0: -geo.dims.W / 2, x1: geo.dims.W / 2, z0: -geo.dims.D / 2, z1: geo.dims.D / 2})}`;
-  }
-  return `<?xml version="1.0" encoding="iso-8859-1"?>
-<i3D name="house" version="1.6" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://i3d.giants.ch/schema/i3d-1.6.xsd">
-  <Asset>
-    <Export program="House to i3d" version="0.1"/>
-  </Asset>
-  ${files.length ? "<Files>\n" + files.join("\n") + "\n  </Files>" : "<Files/>"}
-  <Materials>
-${mats.join("\n")}
-    <Material name="collision_mat" materialId="${used.length + 1}" diffuseColor="1 0 1 1"/>
-  </Materials>
-  <Shapes>
-${shapes.join("\n")}
-  </Shapes>
-  <Dynamics/>
-  <Scene>
-    <TransformGroup name="house" nodeId="1">
-${areas.join("\n")}
-      <TransformGroup name="visuals" nodeId="${visualsId}">
-${nodes.join("\n")}
-      </TransformGroup>
-      <TransformGroup name="collisions" nodeId="${collisionsId}">
-        <Shape name="collision" shapeId="${cid}" nodeId="${collisionId}" static="true" collisionFilterGroup="0x3e" collisionFilterMask="0xfffffbff" nonRenderable="true" castsShadows="false" receiveShadows="false" materialIds="${used.length + 1}"/>
-      </TransformGroup>${features}
-    </TransformGroup>
-  </Scene>
-</i3D>
 `;
 }

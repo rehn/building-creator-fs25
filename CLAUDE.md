@@ -10,7 +10,15 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   internal/api (handlers), internal/config (env vars), cmd/server.
 - frontend/ Next.js 16 (App Router, TypeScript). /api/* is proxied to the Go API
   by src/app/api/[...path]/route.ts.
-  src/editor/model.mjs = pure house logic (settings, geometry, i3d export, game-mod XML), no DOM.
+  src/editor/model.mjs = the core every building shares (settings, geometry, export, game-mod XML), no DOM.
+  src/editor/kinds/ = one module per kind of building (house.mjs, chicken.mjs), registered in
+  kinds/index.mjs, which documents the interface; test/kinds.test.mjs checks every kind has it.
+  Kinds import only i3d.mjs, never model.mjs (no import cycles); the core passes them helpers.
+  src/editor/i3d.mjs = i3d writer: scene tree (tg/shape), I3dDoc; i3dMappings are looked up by
+  node name (mappingsFor), never numbered by hand.
+  src/editor/layout.mjs = a walk-in building's inside: roomOf, wall frames, doorSpan, placed pieces
+  (p.items: {id, type, x, z, rot, ...params} in building coordinates), snapItem, problems, cleanItems.
+  A walk-in kind has a catalog of pieces and autoFurnish(p); buildGeometry draws p.items.
   src/editor/editor.mjs = controls + three.js r128 preview, mounted by Editor.tsx.
   src/editor/interior.mjs = paints the room atlas (layout: ATLAS in model.mjs) and glass texture.
 - charts/house-to-i3d = Helm chart (SQLite on a PVC, or Postgres in-release/external);
@@ -27,7 +35,21 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Frontend tests: cd frontend && npm test (node --test, no browser needed)
 
 ## Status
-- Go tests (45) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (103) pass.
+- Go tests (45) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (171) pass.
+- Hen house: pastureWall (fence + a 40 x 50 cm hen hatch, kind.openings) is never the doorWall;
+  feed pad and egg pallets go on the walls without the door. No gate in the fence (user's choice).
+  Canopies on walk-in buildings stay below the eaves (else they showed inside).
+- Kinds: settings.kind "house" | "chicken", picked in "New" (category, then preset) and fixed after.
+  Chicken barns export as chickenHusbandryPasture (modelled on data/placeables/rudolfHormann/
+  chickenBarnBig, 360 hens). Walk-in kinds (kind.walkIn): inside wall faces, hollow collision, a door
+  leaf exported as node door1 at its hinge with an animatedObject, see-through windows, and an inside
+  from kind.furnish(). Confirmed in-game: hens show, door opens, walk-in collision.
+  Not yet confirmed: feeding, fence joining the corners, warning stripes, see-through windows, coop interior.
+- Agreed plan with the user (old saves may break; aim: a good, user-friendly app):
+  1. done: core + kind modules. 2. done: interior as a list of placed pieces (catalog per kind,
+  snapping rules, "Fill automatically"; editor has an Inside section with fill/clear). 3. Interior mode in the editor with two
+  views (flat plan with grid, and 3D with roof faded), drag, rotate, snap, undo. 4. More pieces,
+  then sheep, cows, sheds and a vehicle workshop ("fordonsverkstad") as new kinds.
 - npm run build succeeds.
 - go.sum and package-lock.json are committed.
 

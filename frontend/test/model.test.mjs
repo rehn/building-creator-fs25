@@ -15,7 +15,7 @@ test("sanitize: empty input gives the defaults plus generated windows", () => {
 test("sanitize: numbers are clamped to their range and snapped to the step", () => {
   const p = sanitize({ width: 999, depth: -5, roofPitch: 37.4 });
   assert.equal(p.width, 30);
-  assert.equal(p.depth, 4);
+  assert.equal(p.depth, 2.5);
   assert.equal(p.roofPitch, 37);
 });
 
@@ -30,7 +30,7 @@ test("sanitize: invalid selects, colors and booleans fall back to defaults", () 
 test("schema: sections are split into building the house and finishing it", () => {
   const side = s => SCHEMA.filter(g => g.side === s).map(g => g.title);
   assert.ok(SCHEMA.every(g => g.side === "build" || g.side === "finish"), "every section has a side");
-  assert.deepEqual(side("build"), ["Size", "Roof", "Kupor (dormers)", "Windows", "Door", "Entrance"]);
+  assert.deepEqual(side("build"), ["Chickens", "Size", "Roof", "Kupor (dormers)", "Windows", "Door", "Entrance", "Inside"]);
   assert.deepEqual(side("finish"), ["Surfaces", "Colors", "Interior", "Farmhouse", "Game mod"]);
 });
 
@@ -184,25 +184,101 @@ for (const roofType of ["gable", "hip"]) {
   });
 }
 
+/* ---------- Window trim ---------- */
+// One window on the front wall; returns its opening and helpers in the wall's (s, t, d) frame.
+function oneWindow(w, h) {
+  const p = sanitize({ windows: [{ wall: "front", floor: 0, pos: 0.3, w, h, sill: 1 }], doorWall: "back", entrance: "none", interior: false });
+  const geo = buildGeometry(p), { w: wall, ops } = geo.opsByWall.front, o = ops.find(x => x.kind === "window");
+  const local = (g, k) => { const x = g.p[k*3] - wall.o[0], z = g.p[k*3+2] - wall.o[2];
+    return { s: x * wall.u[0] + z * wall.u[2], t: g.p[k*3+1] - wall.o[1], d: x * wall.n[0] + z * wall.n[2] }; };
+  const pts = m => Array.from({ length: geo.G[m].p.length / 3 }, (_, k) => local(geo.G[m], k));
+  return { geo, o, pts };
+}
+const near = (q, o, m = 0.2) => q.s > o.s0 - m && q.s < o.s1 + m && q.t > o.t0 - m && q.t < o.t1 + m;
+
+test("window: the opening is lined with painted trim, not the wall's boards", () => {
+  const { o, pts } = oneWindow(1, 1.2), r = 0.15;
+  // the lining's inner corners (at the back of the wall) are trim; there is no wall cladding there
+  const back = (q, m) => Math.abs(q.d + r) < 1e-6 && q.s > o.s0 - 1e-6 && q.s < o.s1 + 1e-6 && (Math.abs(q.t - o.t0) < 1e-6 || Math.abs(q.t - o.t1) < 1e-6);
+  assert.ok(pts("trim").some(q => back(q)), "no trim lining");
+  assert.ok(!pts("walls").some(q => back(q)), "wall cladding in the opening");
+});
+
+test("window: sill and frame sit on the wall, not overlapping the lining (no flicker)", () => {
+  for (const [w, h] of [[0.6, 0.5], [1.2, 1.25]]) {
+    const { o, pts } = oneWindow(w, h), r = 0.15;
+    // every trim vertex near the window is on the wall face or in front of it, or at the back of the
+    // lining; none inside the wall where it would share a plane with the lining
+    for (const q of pts("trim").filter(q => near(q, o))) {
+      const inWall = q.d < -1e-6 && q.d > -r + 1e-6;
+      // glazing bars across the opening (their ends meet the lining back to back, which can't flicker)
+      const bar = q.s > o.s0 - 1e-6 && q.s < o.s1 + 1e-6 && q.t > o.t0 - 1e-6 && q.t < o.t1 + 1e-6;
+      assert.ok(!inWall || bar, `${w} x ${h}: trim inside the wall at s ${q.s.toFixed(3)}, t ${q.t.toFixed(3)}, d ${q.d.toFixed(3)}`);
+    }
+  }
+});
+
+test("window: a small window has a slimmer frame and no centre bar", () => {
+  const frame = (w, h) => { const { o, pts } = oneWindow(w, h);
+    // the left side piece's top corners (above the opening, left of it, in front of the wall)
+    const side = pts("trim").filter(q => q.d > 1e-6 && q.t > o.t1 - 1e-6 && q.t < o.t1 + 0.2 && q.s < o.s0 - 1e-6 && q.s > o.s0 - 0.2);
+    // glazing bars: trim inside the wall's thickness across the middle of the opening
+    const bar = pts("trim").filter(q => q.s > o.s0 + 0.1 && q.s < o.s1 - 0.1 && q.d < -1e-6 && q.d > -0.15 + 1e-6);
+    return { width: o.s0 - Math.min(...side.map(q => q.s)), bars: bar.length }; };
+  const small = frame(0.6, 0.5), big = frame(1.2, 1.25);
+  assert.ok(small.width <= 0.05 + 1e-6, `small frame ${small.width.toFixed(3)} m wide`);
+  assert.ok(big.width >= 0.07, `big frame ${big.width.toFixed(3)} m wide`);
+  assert.equal(small.bars, 0, "a small window gets one pane");
+  assert.ok(big.bars > 0, "a big window keeps its centre bar");
+});
+
 /* ---------- Ridge cap ---------- */
 // Local coordinates: x along the ridge, y up, z across; the roof's top surface is y = ridgeY - tanP * |z|.
+// Like ridge tiles: a cap that hugs the two slopes, thin at its edges, with a soft rounded crown a
+// few cm above the ridge. Not a roll standing on top of the ridge.
 for (const pitch of [10, 38, 60]) {
-  test(`ridgeCapMesh: a half-round cap resting on the slopes (${pitch} degrees)`, () => {
-    const ridgeY = 7, tanP = Math.tan(pitch * Math.PI / 180), r = 0.12;
-    const m = ridgeCapMesh(-4, 4, ridgeY, tanP, r);
+  test(`ridgeCapMesh: a low cap hugging the slopes, rounded on top (${pitch} degrees)`, () => {
+    const ridgeY = 7, tanP = Math.tan(pitch * Math.PI / 180), w = 0.13;
+    const m = ridgeCapMesh(-4, 4, ridgeY, tanP, w);
     assertMeshValid(m, "ridge cap");
     const arc = m.arc, roofAt = z => ridgeY - tanP * Math.abs(z);
-    assert.ok(arc.length >= 2 * 12, "arc too coarse");
+    assert.ok(arc.length >= 2 * 12, "profile too coarse");
+    const zs = arc.map(i => m.p[i*3+2]);
+    assert.ok(Math.max(...zs) - Math.min(...zs) >= 2 * w - 1e-6, "narrower than asked");
+    let prev = null;
     for (const i of arc) {
-      const y = m.p[i*3+1] - m.axisY, z = m.p[i*3+2], n = [m.n[i*3], m.n[i*3+1], m.n[i*3+2]];
-      assert.ok(Math.abs(Math.hypot(y, z) - r) < 1e-6, "arc vertex off the half round");
-      assert.ok(Math.abs(n[0]) < 1e-9 && Math.abs(n[1] * z - n[2] * y) < 1e-6 && n[1] * y + n[2] * z > 0, "arc normal not radial (flat shading)");
+      const z = m.p[i*3+2], y = m.p[i*3+1], n = [m.n[i*3], m.n[i*3+1], m.n[i*3+2]];
+      assert.ok(y > roofAt(z), "below the roof");
+      assert.ok(y - roofAt(z) <= 0.07 + 1e-9, `${(y - roofAt(z)).toFixed(3)} m above the roof: stands up like a roll`);
+      assert.ok(Math.abs(Math.hypot(...n) - 1) < 1e-6 && Math.abs(n[0]) < 1e-9, "normal not unit, across the ridge");
+      assert.ok(n[1] > 0.3, "faces down or sideways (an undercut)");
+      // smooth: the normal turns only a little from one point to the next
+      if (prev) assert.ok(n[1] * prev[1] + n[2] * prev[2] > Math.cos(12 * Math.PI / 180), "kink in the profile");
+      prev = n;
     }
-    // round on top, and its edges tucked into the roof (no gap you can see through)
-    assert.ok(Math.max(...arc.map(i => m.p[i*3+1])) >= ridgeY + 0.5 * r, "cap does not stand above the ridge");
+    // thin at the edges, rounded crown on top
+    const top = Math.max(...arc.map(i => m.p[i*3+1]));
+    assert.ok(top - ridgeY >= 0.04 && top - ridgeY <= 0.08, `crown ${(top - ridgeY).toFixed(3)} m above the ridge`);
+    for (const i of [arc[0], arc[arc.length - 1]]) assert.ok(m.p[i*3+1] - roofAt(m.p[i*3+2]) <= 0.04, "thick at the edge");
+    // edges tucked into the roof (no gap you can see through)
     assert.ok(m.rim.length >= 4, "no rim");
     for (const i of m.rim) assert.ok(m.p[i*3+1] <= roofAt(m.p[i*3+2]) - 0.005, "cap edge floats above the roof");
     for (const side of [-1, 1]) assert.ok(m.rim.some(i => Math.sign(m.p[i*3+2]) === side), "rim missing on one side");
+  });
+}
+
+for (const roofType of ["gable", "hip"]) for (const pitch of [15, 35, 50]) {
+  test(`geometry: the ridge cap is low (${roofType}, ${pitch} degrees)`, () => {
+    const p = sanitize({ roofType, roofPitch: pitch, width: 8, depth: 6, chimney: false });
+    const { G, dims } = buildGeometry(p), g = G.roof, ridge = dims.ridgeY;
+    let top = -Infinity;
+    for (let i = 0; i < g.p.length / 3; i++) top = Math.max(top, g.p[i*3+1]);
+    assert.ok(top - ridge <= 0.08 + 1e-9, `cap stands ${(top - ridge).toFixed(3)} m above the ridge`);
+    assert.ok(top - ridge >= 0.04, "cap too flat to see");
+    const m = ridgeCapMesh(-2, 2, 5, Math.tan(pitch * Math.PI / 180), 0.13);
+    // its ends are one plain color: every end vertex has the same uv (no tile stripes in rings)
+    const ends = []; for (let i = 0; i < m.n.length / 3; i++) if (Math.abs(m.n[i*3]) > 0.99) ends.push(m.uv[i*2] + "," + m.uv[i*2+1]);
+    assert.ok(ends.length > 0 && new Set(ends).size === 1, "end caps are textured");
   });
 }
 

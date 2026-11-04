@@ -6,7 +6,8 @@ import {
   SCHEMA, FIELD, WALLS, WALL_NAMES, DTYPES, DORM_DEF, MATS,
   genRow, sanitize, serialize, slugify, buildGeometry, buildI3d, placeableSnippet, sleepPoint, surfaceSpec, scaledUV, colorFor, WP
 } from "./model.mjs";
-import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription } from "./model.mjs";
+import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, henYard, henCap, seeThroughGlass, kindOf } from "./model.mjs";
+import { roomOf, problems } from "./layout.mjs";
 import { paintInterior, paintGlass } from "./interior.mjs";
 export { slugify };
 
@@ -80,13 +81,18 @@ setTab(remember.get("hx-tab") === "finish" ? "finish" : "build");
 const inputs = {};
 function fmt(f, v) {
   if (f.k === "doorPos") return v < -0.05 ? "Left" : v > 0.05 ? "Right" : "Center";
+  if (f.k === "hens") { const cap = henCap(p); return v > cap ? `${cap} (barn full)` : `${v} (room for ${cap})`; }
   if (f.cm) return (Math.round(v * 1000) / 10) + " cm";
   if (f.money) return Math.round(v).toLocaleString("en-US");
   const dec = f.step >= 1 ? 0 : f.step >= 0.1 ? 1 : 2;
   return (+v).toFixed(dec) + (f.unit || "");
 }
+// Sections shown only for some building kinds (g.kinds): hidden for the others.
+const kindSections = [];
+function syncKind() { for (const {g, d} of kindSections) d.hidden = !g.kinds.includes(p.kind); }
 SCHEMA.forEach(g => {
   const d = document.createElement("details");
+  if (g.kinds) kindSections.push({g, d});
   // First time: only the first section of each side is open. After that, as the user left them.
   d.open = g.title in openState ? !!openState[g.title] : !sideSeen[g.side];
   sideSeen[g.side] = true;
@@ -124,11 +130,16 @@ SCHEMA.forEach(g => {
       // Mod details don't change the house, so skip the rebuild.
       if (f.k.startsWith("mod")) { syncOutputs(); persist(); return; }
       if (f.k === "halfStorey" && v) p.windows = p.windows.filter(w => !(w.floor >= p.floors && !gableWall(w.wall)));
-      syncOutputs(); persist(); rebuild(false);
+      // Keep the kind's rules (a hen house's pasture never on the door's wall, no more hens than
+      // fit ...) and show any setting they changed, so the preview, controls and export agree.
+      const ruled = applyKindRules();
+      if (ruled) syncControls(); else syncOutputs();
+      persist(); rebuild(false);
       if (["floors", "halfStorey", "roofType", "ridge", "interior", "curtainStyle", "curtainColor"].includes(f.k)) { renderWinUI(); renderDormUI(); }
     });
   });
   if (g.custom === "dormers") { const ed = document.createElement("div"); ed.id = "dormEditor"; d.appendChild(ed); }
+  if (g.custom === "inside") { const ed = document.createElement("div"); ed.id = "insideEditor"; d.appendChild(ed); }
   if (g.custom === "windows") {
     const ed = document.createElement("div"); ed.id = "winEditor"; d.appendChild(ed);
     const sub = document.createElement("p"); sub.className = "sub"; sub.textContent = "Size for new windows"; d.appendChild(sub);
@@ -147,6 +158,7 @@ function syncControls() {
     if (f.type === "check") el.checked = !!p[k]; else el.value = p[k];
   }
   syncOutputs();
+  syncKind();
   renderWinUI();
   renderDormUI();
 }
@@ -185,7 +197,7 @@ function vnoise(x, y, px, py, s) {
 
 function genBase(s) {
   const N = TEX, H = new Float32Array(N*N), S = new Float32Array(N*N), Mk = s.kind === "brick" ? new Uint8Array(N*N) : null;
-  const strength = {lockpanel:10, horizontal:40, plaster:1.5, felt:1.2, tiles:60, metal:4.5, brick:3, paintedwood:2.5}[s.kind];
+  const strength = {lockpanel:10, horizontal:40, plaster:1.5, felt:1.2, tiles:60, metal:4.5, brick:3, paintedwood:0.6}[s.kind];
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
     let h = 0, sh = 1;
     if (s.kind === "lockpanel") {
@@ -224,11 +236,12 @@ function genBase(s) {
         sh = 0.85 + hash(col, row, 29) * 0.25 + (vnoise(x/4, y/4, N/4, N/4, 31) - 0.5) * 0.12;
       }
     } else if (s.kind === "paintedwood") {
-      // Paint over wood: fine grain lines along y, a few soft growth rings, no board seams.
-      const fine = vnoise(x/4, y/128, N/4, N/128, 41), wide = vnoise(x/16, y/256, N/16, N/256, 43);
-      const ring = 0.5 + 0.5 * Math.sin((x / 22 + wide * 6) * Math.PI);
-      h = fine * 0.55 + ring * 0.3 + wide * 0.15;
-      sh = 0.965 + (fine - 0.5) * 0.05 + (ring - 0.5) * 0.025 + (wide - 0.5) * 0.04;
+      // Planed boards under paint: the paint fills the grain, so only long, faint streaks along y
+      // show, mostly in the light; no growth rings, no board seams, almost even color.
+      // (noise scales divide the texture size, so it tiles without a seam)
+      const grain = vnoise(x/8, y/256, N/8, N/256, 41), wide = vnoise(x/32, y/512, N/32, N/512, 43);
+      h = grain * 0.6 + wide * 0.4;
+      sh = 0.99 + (grain - 0.5) * 0.012 + (wide - 0.5) * 0.02;
     } else if (s.kind === "metal") {
       const Px = N / 4, lx = x % Px, d = Math.min(lx, Px - lx);
       h = d < 4 ? 1 : d < 7 ? (7 - d) / 3 : 0;
@@ -272,7 +285,7 @@ const stage = $("stage");
 const readout = $("readout");
 let interiorTex = null, interiorCv = null, groundObj = null, gridObj = null;
 const interiorCanvas = () => interiorCv || (interiorCv = paintInterior(document));
-let renderer, scene, camera, groundMat, selMesh = null, sleepObj = null, meshes = {}, matObjs = {}, needs = true;
+let renderer, scene, camera, groundMat, selMesh = null, sleepObj = null, yardObj = null, meshes = {}, matObjs = {}, needs = true;
 
 function initThree() {
   renderer = new THREE.WebGLRenderer({canvas, antialias:true});
@@ -302,7 +315,7 @@ function initThree() {
   MATS.forEach(m => {
     // The rooms are unlit and a little dark, so they read as indoors behind the glass.
     matObjs[m] = m === "interior" ? new THREE.MeshBasicMaterial({map: interiorTex, color: 0xc8c8c8})
-      : new THREE.MeshStandardMaterial(m === "glass" ? {roughness:0.12, metalness:0.4} : m === "gutter" ? {roughness:0.45, metalness:0.35} : m === "curtain" ? {roughness:0.95, metalness:0, vertexColors:true} : {roughness:0.85, metalness:0});
+      : new THREE.MeshStandardMaterial(m === "glass" ? {roughness:0.12, metalness:0.4} : m === "gutter" ? {roughness:0.45, metalness:0.35} : m === "curtain" || m === "fittings" ? {roughness:0.95, metalness:0, vertexColors:true} : {roughness:0.85, metalness:0});
     const mesh = new THREE.Mesh(new THREE.BufferGeometry(), matObjs[m]);
     mesh.castShadow = !["glass", "interior", "curtain"].includes(m); mesh.receiveShadow = m !== "interior";
     meshes[m] = mesh; scene.add(mesh);
@@ -310,6 +323,7 @@ function initThree() {
   selMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({transparent:true, opacity:0.45, depthWrite:false, side:THREE.DoubleSide}));
   selMesh.visible = false; scene.add(selMesh);
   sleepObj = makeSleepMarker(); scene.add(sleepObj.group);
+  yardObj = makeYardMarker(); scene.add(yardObj.group);
   applyTheme();
   const mq = window.matchMedia("(prefers-color-scheme: dark)");
   mq.addEventListener("change", applyTheme);
@@ -514,6 +528,29 @@ function dormLabel(d) {
   const same = p.dormers.filter(x => x.side === d.side).sort((a, b) => a.pos - b.pos);
   return `${TYPE_NAMES[d.type]}, ${sideName(d.side).toLowerCase()} slope` + (same.length > 1 ? `, ${same.indexOf(d) + 1}` : "") + (d._hidden ? " (doesn\u2019t fit)" : "");
 }
+/** Applies the kind's rules to the simple settings; true if that changed any. */
+function applyKindRules() {
+  const q = kindOf(p).normalize(p);
+  let changed = false;
+  for (const k in q) if (typeof q[k] !== "object" && q[k] !== p[k]) { p[k] = q[k]; changed = true; }
+  return changed;
+}
+/** The Inside section of a walk-in building: what's placed, what's wrong, fill or clear. */
+function renderInsideUI() {
+  const ed = $("insideEditor"), kind = kindOf(p);
+  if (!ed || !kind.catalog) return;
+  const items = p.items || [], pr = problems(items, kind.catalog, roomOf(p, kind.openings ? kind.openings(p) : []));
+  const counts = new Map();
+  for (const it of items) counts.set(it.type, (counts.get(it.type) || 0) + 1);
+  const list = [...counts].map(([type, n]) => `<li>${kind.catalog[type].name}${n > 1 ? ` × ${n}` : ""}</li>`).join("");
+  const out = [...pr.values()].filter(m => /outside/i.test(m)).length, other = pr.size - out;
+  ed.innerHTML = (items.length ? `<ul class="pieces">${list}</ul>` : `<p class="hint">Nothing inside yet.</p>`)
+    + (out ? `<p class="warn">${out} piece${out > 1 ? "s stick" : " sticks"} out through a wall and ${out > 1 ? "are" : "is"} left out. Make the building bigger or fill it again.</p>` : "")
+    + (other ? `<p class="warn">${other} piece${other > 1 ? "s overlap or block" : " overlaps or blocks"} the door.</p>` : "")
+    + `<div class="row"><button type="button" id="insideFill">Fill automatically</button><button type="button" id="insideClear" ${items.length ? "" : "disabled"}>Remove all</button></div>`;
+  $("insideFill").onclick = () => { p.items = kind.autoFurnish(p).items; persist(); rebuild(false); toast("Filled to match the building"); };
+  $("insideClear").onclick = () => { p.items = []; persist(); rebuild(false); };
+}
 function renderDormUI() {
   const ed = $("dormEditor");
   if (!ed) return;
@@ -635,6 +672,120 @@ function updateSleepMarker(geo) {
   sleepObj.icon.position.set(sp.marker[0], sp.marker[1] + 1.3, sp.marker[2]);
 }
 
+/**
+ * Preview of a chicken barn's yard: the starting fence as a see-through net, and faint boxes for
+ * the feed (orange), egg pallet (yellow) and animal trailer (green) places.
+ */
+function makeYardMarker() {
+  const group = new THREE.Group();
+  // The fence: a see-through green net, dark posts, and dark wires along its top and bottom.
+  const netMat = new THREE.MeshBasicMaterial({color:0x5f7a4a, transparent:true, opacity:0.4, side:THREE.DoubleSide, depthWrite:false});
+  const net = new THREE.Mesh(new THREE.BufferGeometry(), netMat);
+  const postMat = new THREE.MeshLambertMaterial({color:0x3b3f37, side:THREE.DoubleSide});
+  const posts = new THREE.Mesh(new THREE.BufferGeometry(), postMat);
+  posts.castShadow = true;
+  const wireMat = new THREE.LineBasicMaterial({color:0x2f3a2a});
+  const wires = new THREE.LineSegments(new THREE.BufferGeometry(), wireMat);
+  group.add(posts, wires);
+  const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+  const boxes = {};
+  for (const [k, color] of [["food", 0xe08a2c], ["pallet", 0xe0c22c], ["loading", 0x4caf50]]) {
+    boxes[k] = new THREE.Mesh(boxGeo, new THREE.MeshBasicMaterial({color, transparent:true, opacity:0.18, depthWrite:false}));
+    group.add(boxes[k]);
+  }
+  group.add(net);
+  // A floating icon over the middle of each place, like the bed icon of a sleep point.
+  const icons = {};
+  for (const [k, bg, glyph] of [["food", "#d07a1f", drawFeed], ["pallet", "#c9a514", drawPallet], ["loading", "#3f9a43", drawHen]]) {
+    const c = document.createElement("canvas"); c.width = c.height = 128;
+    const x = c.getContext("2d");
+    x.fillStyle = bg; x.beginPath(); x.arc(64, 64, 60, 0, Math.PI * 2); x.fill();
+    x.fillStyle = x.strokeStyle = "#fff"; x.lineWidth = 6; x.lineCap = x.lineJoin = "round";
+    glyph(x);
+    const tex = new THREE.CanvasTexture(c);
+    icons[k] = new THREE.Sprite(new THREE.SpriteMaterial({map: tex, transparent: true, depthWrite: false}));
+    icons[k].scale.set(0.9, 0.9, 1); icons[k].renderOrder = 10;
+    group.add(icons[k]);
+  }
+  const dispose = () => {
+    for (const m of [net, posts, wires]) { m.geometry.dispose(); m.material.dispose(); }
+    boxGeo.dispose(); Object.values(boxes).forEach(b => b.material.dispose());
+    Object.values(icons).forEach(s => { s.material.map.dispose(); s.material.dispose(); });
+  };
+  return {group, net, posts, wires, boxes, icons, dispose};
+}
+/* Icon glyphs, drawn in white on a 128 px circle. */
+function drawFeed(x) {
+  // An ear of grain: a stalk with kernels either side, and two leaves.
+  x.beginPath(); x.moveTo(64, 108); x.lineTo(64, 26); x.stroke();
+  for (let i = 0; i < 4; i++) for (const s of [-1, 1]) {
+    x.beginPath(); x.ellipse(64 + s * 11, 36 + i * 14, 7, 11, s * 0.5, 0, Math.PI * 2); x.fill();
+  }
+  x.beginPath(); x.ellipse(64, 24, 6, 10, 0, 0, Math.PI * 2); x.fill();
+  x.beginPath(); x.moveTo(64, 96); x.quadraticCurveTo(44, 86, 38, 72); x.moveTo(64, 96); x.quadraticCurveTo(84, 86, 90, 72); x.stroke();
+}
+function drawPallet(x) {
+  // An egg standing on a pallet.
+  x.beginPath(); x.ellipse(64, 52, 20, 26, 0, 0, Math.PI * 2); x.fill();
+  x.fillRect(28, 82, 72, 8);
+  for (const px of [28, 59, 90]) x.fillRect(px, 90, 10, 10);
+  x.fillRect(28, 100, 72, 6);
+}
+function drawHen(x) {
+  // A hen in profile: body, head with comb and beak, tail, legs.
+  x.beginPath(); x.ellipse(60, 70, 30, 22, 0, 0, Math.PI * 2); x.fill();
+  x.beginPath(); x.arc(84, 42, 13, 0, Math.PI * 2); x.fill();
+  x.beginPath(); x.moveTo(76, 56); x.lineTo(92, 50); x.lineTo(88, 66); x.closePath(); x.fill();
+  x.beginPath(); x.moveTo(96, 40); x.lineTo(108, 45); x.lineTo(96, 48); x.closePath(); x.fill();   // beak
+  x.beginPath(); x.arc(80, 28, 5, 0, Math.PI * 2); x.arc(88, 28, 5, 0, Math.PI * 2); x.fill();     // comb
+  x.beginPath(); x.moveTo(34, 64); x.lineTo(20, 38); x.lineTo(40, 52); x.closePath(); x.fill();    // tail
+  x.beginPath(); x.moveTo(54, 90); x.lineTo(54, 106); x.moveTo(68, 90); x.lineTo(68, 106); x.stroke();
+}
+/** Boxes (6 cm square, h high) standing at the given ground points, as one mesh with normals. */
+function postsGeometry(points, h) {
+  const pos = [], nrm = [], s = 0.03;
+  const quad = (a, b, c, d, n) => { for (const q of [a, b, c, a, c, d]) { pos.push(...q); nrm.push(...n); } };
+  for (const [x, , z] of points) {
+    const P = (i, j, k) => [x + (i ? s : -s), k ? h : 0, z + (j ? s : -s)];
+    quad(P(0,0,0), P(0,0,1), P(1,0,1), P(1,0,0), [0, 0, -1]);
+    quad(P(1,1,0), P(1,1,1), P(0,1,1), P(0,1,0), [0, 0, 1]);
+    quad(P(0,1,0), P(0,1,1), P(0,0,1), P(0,0,0), [-1, 0, 0]);
+    quad(P(1,0,0), P(1,0,1), P(1,1,1), P(1,1,0), [1, 0, 0]);
+    quad(P(0,0,1), P(0,1,1), P(1,1,1), P(1,0,1), [0, 1, 0]);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("normal", new THREE.Float32BufferAttribute(nrm, 3));
+  return g;
+}
+function updateYardMarker(geo) {
+  if (!yardObj) return;
+  yardObj.group.visible = p.kind === "chicken";
+  if (!yardObj.group.visible) return;
+  const y = henYard(geo, p), h = 1.1, pos = [], wire = [], postAt = [];
+  for (let i = 0; i + 1 < y.fence.length; i++) {
+    const a = y.fence[i], b = y.fence[i + 1];
+    pos.push(a[0], 0, a[2], b[0], 0, b[2], b[0], h, b[2], a[0], 0, a[2], b[0], h, b[2], a[0], h, a[2]);
+    for (const t of [0.05, h]) wire.push(a[0], t, a[2], b[0], t, b[2]);
+    // a post at each corner and at most 2 m apart in between
+    const n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[2] - a[2]) / 2));
+    for (let k = 0; k < n; k++) postAt.push([a[0] + (b[0] - a[0]) * k / n, 0, a[2] + (b[2] - a[2]) * k / n]);
+  }
+  postAt.push(y.fence[y.fence.length - 1]);
+  const set = (mesh, g) => { mesh.geometry.dispose(); mesh.geometry = g; };
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  set(yardObj.net, g);
+  const wg = new THREE.BufferGeometry();
+  wg.setAttribute("position", new THREE.Float32BufferAttribute(wire, 3));
+  set(yardObj.wires, wg);
+  set(yardObj.posts, postsGeometry(postAt, h + 0.1));
+  for (const [k, b] of [["food", y.food], ["pallet", y.pallet.trigger], ["loading", y.loading]]) {
+    yardObj.boxes[k].position.set(...b.center); yardObj.boxes[k].scale.set(...b.size);
+    // the icon floats over the middle of the place, above head height
+    yardObj.icons[k].position.set(b.center[0], Math.max(b.size[1], 1.6) + 0.6, b.center[2]);
+  }
+}
 function rebuild(fit) {
   const geo = buildGeometry(p);
   ({G, dims, opsByWall} = geo);
@@ -650,7 +801,7 @@ function rebuild(fit) {
       meshes[m].geometry.dispose(); meshes[m].geometry = geo;
       if (m === "interior") return;
       if (m === "glass") {
-        const mat = matObjs.glass, see = !!p.interior;
+        const mat = matObjs.glass, see = seeThroughGlass(p);
         if (mat.transparent !== see) { mat.transparent = see; mat.opacity = see ? GLASS_ALPHA : 1; mat.depthWrite = !see; mat.needsUpdate = true; }
         meshes.glass.renderOrder = see ? 2 : 0;
       }
@@ -658,7 +809,7 @@ function rebuild(fit) {
         const mat = matObjs[m];
         if (mat.map) { mat.map.dispose(); mat.map = null; mat.userData = {}; }
         if (mat.normalMap) { mat.normalMap.dispose(); mat.normalMap = null; }
-        mat.color.set(m === "curtain" ? "#ffffff" : colorFor(p, m)); mat.needsUpdate = true;
+        mat.color.set(m === "curtain" || m === "fittings" ? "#ffffff" : colorFor(p, m)); mat.needsUpdate = true;
       }
     });
     scheduleSurfaces();
@@ -667,8 +818,9 @@ function rebuild(fit) {
     updateCam();
     updateHighlight();
     updateSleepMarker(geo);
+    updateYardMarker(geo);
   }
-  refreshWin(); refreshDorm();
+  refreshWin(); refreshDorm(); renderInsideUI();
   MATS.forEach(m => tris += G[m].i.length / 3);
   readout.innerHTML = `<span><b>${dims.W.toFixed(1)} \u00D7 ${dims.D.toFixed(1)} m</b> footprint</span><span><b>${dims.ridgeY.toFixed(1)} m</b> to the top</span><span><b>${tris.toLocaleString()}</b> triangles</span>`;
 }
@@ -709,10 +861,8 @@ async function addTextures(dir) {
     dir.file(`textures/${m}_diffuse.png`, await canvasBlob(st.diffuse));
     dir.file(`textures/${m}_normal.png`, await canvasBlob(st.base.normal));
   }
-  if (p.interior) {
-    dir.file("textures/interior_diffuse.png", await canvasBlob(interiorCanvas()));
-    dir.file("textures/glass_diffuse.png", await canvasBlob(paintGlass(document)));
-  }
+  if (p.interior) dir.file("textures/interior_diffuse.png", await canvasBlob(interiorCanvas()));
+  if (seeThroughGlass(p)) dir.file("textures/glass_diffuse.png", await canvasBlob(paintGlass(document)));
 }
 /** Square picture of the house from the front corner on a transparent background, for the shop. */
 function renderStoreImage(size) {
@@ -727,7 +877,7 @@ function renderStoreImage(size) {
     const radius = 0.5 * Math.hypot(dims.W + 2, dims.D + 2, dims.ridgeY);
     cam.position.copy(target).addScaledVector(new THREE.Vector3(0.8, 0.5, 1).normalize(), radius / Math.sin(15 * Math.PI / 180));
     cam.lookAt(target);
-    const hide = [groundObj, gridObj, selMesh, sleepObj && sleepObj.group].filter(Boolean), was = hide.map(o => o.visible);
+    const hide = [groundObj, gridObj, selMesh, sleepObj && sleepObj.group, yardObj && yardObj.group].filter(Boolean), was = hide.map(o => o.visible);
     const bg = scene.background, fog = scene.fog;
     hide.forEach(o => o.visible = false); scene.background = null; scene.fog = null;
     r2.render(scene, cam);
@@ -775,14 +925,14 @@ function setSettings(obj) { p = sanitize(obj); selId = null; dSel = null; syncCo
 /** A small JPEG of the current view, for the project list. */
 function snapshot() {
   if (!renderer) return null;
-  const wasVisible = selMesh.visible, sleepVisible = sleepObj.group.visible;
-  selMesh.visible = false; sleepObj.group.visible = false;
+  const wasVisible = selMesh.visible, sleepVisible = sleepObj.group.visible, yardVisible = yardObj.group.visible;
+  selMesh.visible = false; sleepObj.group.visible = false; yardObj.group.visible = false;
   renderer.render(scene, camera);
   const src = renderer.domElement, W = 480, H = 300;
   const c = document.createElement("canvas"); c.width = W; c.height = H;
   const k = Math.max(W / src.width, H / src.height), sw = W / k, sh = H / k;
   c.getContext("2d").drawImage(src, (src.width - sw) / 2, (src.height - sh) / 2, sw, sh, 0, 0, W, H);
-  selMesh.visible = wasVisible; sleepObj.group.visible = sleepVisible; needs = true;
+  selMesh.visible = wasVisible; sleepObj.group.visible = sleepVisible; yardObj.group.visible = yardVisible; needs = true;
   return c.toDataURL("image/jpeg", 0.8);
 }
 
@@ -792,6 +942,7 @@ function destroy() {
   cleanups.forEach(f => f());
   for (const m of MATS) { if (meshes[m]) meshes[m].geometry.dispose(); const mat = matObjs[m]; if (mat) { if (mat.map) mat.map.dispose(); if (mat.normalMap) mat.normalMap.dispose(); mat.dispose(); } }
   if (sleepObj) sleepObj.dispose();
+  if (yardObj) yardObj.dispose();
   if (interiorTex) interiorTex.dispose();
   if (renderer) renderer.dispose();
   root.innerHTML = "";
