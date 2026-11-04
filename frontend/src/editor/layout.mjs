@@ -178,3 +178,58 @@ export class History {
   redo() { if (this.canRedo) { this.past.push(this.now); this.now = this.future.pop(); } return clone(this.now); }
 }
 const clone = v => JSON.parse(JSON.stringify(v));
+
+/* ---------- Filling a room automatically ---------- */
+/**
+ * Helpers a kind's autoFurnish uses to place pieces in free space: the room's keep-outs and every
+ * piece already placed are kept clear. Returns {items, add, freeAlong, longest, onWall, onFloor,
+ * freeLine}; items is the list being built (ids 1, 2, 3 ...).
+ *   freeAlong(wall, deep)  free stretches {wl, a, b, len} along a wall for a piece `deep` into the room
+ *   longest(walls, deep)   the longest of those over several walls
+ *   onWall(stretch, type, params)   a wall piece centred on a stretch, back to the wall
+ *   onFloor(type, rot, params)      a floor piece at the free grid spot nearest the room's middle
+ *   freeLine(c, alongX, width)      the longest free stretch [u, v] of a line across the room at c
+ */
+export function furnisher(room, catalog) {
+  const items = [], taken = [];
+  const add = (type, x, z, rot, params = {}) => {
+    const it = {id: items.length + 1, type, x, z, rot, ...params};
+    items.push(it); taken.push(footprint(it, catalog[type]));
+    return it;
+  };
+  const blocked = (pad = 0) => [...room.keepOut.map(k => k.rect), ...taken].map(r => ({x0: r.x0 - pad, x1: r.x1 + pad, z0: r.z0 - pad, z1: r.z1 + pad}));
+  const horiz = wl => wl.z0 === wl.z1;
+  const cut = (free, a, b) => free.flatMap(([u, v]) => [[u, Math.min(v, a)], [Math.max(u, b), v]]).filter(([u, v]) => v - u > 1e-6);
+  const freeAlong = (wl, deep) => {
+    const [lo, hi] = horiz(wl) ? [room.x0, room.x1] : [room.z0, room.z1];
+    const c0 = horiz(wl) ? wl.z0 : wl.x0, c1 = c0 + (horiz(wl) ? wl.into[1] : wl.into[0]) * deep;
+    const strip = horiz(wl) ? {x0: lo, x1: hi, z0: Math.min(c0, c1), z1: Math.max(c0, c1)} : {x0: Math.min(c0, c1), x1: Math.max(c0, c1), z0: lo, z1: hi};
+    let free = [[lo, hi]];
+    for (const r of blocked(0.1)) if (overlap(r, strip)) free = cut(free, ...(horiz(wl) ? [r.x0, r.x1] : [r.z0, r.z1]));
+    return free.map(([a, b]) => ({wl, a, b, len: b - a}));
+  };
+  const longest = (walls, deep) => walls.flatMap(wl => freeAlong(wl, deep)).sort((x, y) => y.len - x.len)[0];
+  const onWall = (s, type, params) => {
+    const [, d] = catalog[type].size(params), mid = (s.a + s.b) / 2;
+    return horiz(s.wl) ? add(type, mid, s.wl.z0 + s.wl.into[1] * d / 2, s.wl.rot, params)
+      : add(type, s.wl.x0 + s.wl.into[0] * d / 2, mid, s.wl.rot, params);
+  };
+  const cx = (room.x0 + room.x1) / 2, cz = (room.z0 + room.z1) / 2, spots = [];
+  for (let x = room.x0; x <= room.x1 + 1e-9; x += GRID) for (let z = room.z0; z <= room.z1 + 1e-9; z += GRID) spots.push([x, z]);
+  spots.sort((a, b) => Math.hypot(a[0] - cx, a[1] - cz) - Math.hypot(b[0] - cx, b[1] - cz));
+  const onFloor = (type, rot = 0, params = {}) => {
+    for (const pad of [0.3, 0.1, 0]) for (const [x, z] of spots) {
+      const f = footprint({x, z, rot, ...params}, catalog[type]);
+      if (f.x0 < room.x0 || f.x1 > room.x1 || f.z0 < room.z0 || f.z1 > room.z1) continue;
+      if (!blocked(pad).some(r => overlap(r, f))) return add(type, x, z, rot, params);
+    }
+    return null;
+  };
+  const freeLine = (c, alongX, width = 0.3) => {
+    const line = alongX ? {x0: room.x0, x1: room.x1, z0: c - width / 2, z1: c + width / 2} : {x0: c - width / 2, x1: c + width / 2, z0: room.z0, z1: room.z1};
+    let free = [[alongX ? room.x0 : room.z0, alongX ? room.x1 : room.z1]];
+    for (const r of blocked(0.2)) if (overlap(r, line)) free = cut(free, ...(alongX ? [r.x0, r.x1] : [r.z0, r.z1]));
+    return free.sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]))[0] || null;
+  };
+  return {items, add, freeAlong, longest, onWall, onFloor, freeLine};
+}

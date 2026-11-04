@@ -35,7 +35,14 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Frontend tests: cd frontend && npm test (node --test, no browser needed)
 
 ## Status
-- Go tests (45) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (175) pass.
+- Go tests (45) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (186) pass.
+- Cow barn (kinds/cow.mjs): cowHusbandryPasture (no milk, like cowBarnSmall), automatic water, feed
+  and water troughs outside on the pasture wall (kind.outside), a plain walk-through doorway for the
+  cows (openings with plain: true; tall openings get a collision gap), feed pad + bale trigger
+  outside the fence. Presets: ladugard, fahus, losdriftsstall. Not yet tested in-game.
+  Next for cows: a dairy (cowHusbandryBarnMilk with the game's milking robots), straw and manure.
+- Shared: kinds/pasture.mjs (yardFrame: fence, feed/other side), layout.mjs furnisher (autoFurnish
+  helpers), fieldsFor(kind) (kinds can share a key with different ranges), roof ventilators.
 - Hen house: pastureWall (fence + a 40 x 50 cm hen hatch, kind.openings) is never the doorWall;
   feed pad and egg pallets go on the walls without the door. No gate in the fence (user's choice).
   Canopies on walk-in buildings stay below the eaves (else they showed inside).
@@ -50,9 +57,9 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   snapping rules, "Fill automatically"; editor has an Inside section with fill/clear). 3. done:
   "Arrange the inside" (editor.mjs, ins state): Plan (orthographic, cut at 1.3 m) / 3D (cut under
   the eaves) via renderer.clippingPlanes, palette, drag with snap, turn, remove, undo/redo
-  (layout.mjs History, itemAt, placeNew, rotateItem). Checked end to end with headless Chromium. 3. (was) Interior mode in the editor with two
-  views (flat plan with grid, and 3D with roof faded), drag, rotate, snap, undo. 4. More pieces,
-  then sheep, cows, sheds and a vehicle workshop ("fordonsverkstad") as new kinds.
+  (layout.mjs History, itemAt, placeNew, rotateItem). Checked end to end with headless Chromium.
+  4. started: cows (above). Then sheep, sheds and a vehicle workshop ("fordonsverkstad") as new kinds.
+  The user wants Swedish building designs.
 - npm run build succeeds.
 - go.sum and package-lock.json are committed.
 

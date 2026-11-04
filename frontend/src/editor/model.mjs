@@ -19,7 +19,7 @@ export const DEFAULTS = {
   wallCladding:"lockpanel", panelSpacing:0.2, battenWidth:0.06, roofMaterial:"tiles", chimneyStyle:"brick", chimneyColor:"#8A3B2C",
   entrance:"porch", entranceWidth:2.2, entranceDepth:1.6, gutters:true, downpipes:2, gutterColor:"#3B3F42",
   wallColor:"#8E2A1E", trimColor:"#F2EFE8", roofColor:"#2B2D2F", doorColor:"#3E5A4A", foundationColor:"#6E6E6A",
-  sleepPoint:true, interior:true, curtainStyle:"sides", curtainColor:"#EFE9DC",
+  sleepPoint:true, interior:true, curtainStyle:"sides", curtainColor:"#EFE9DC", ventilators:0,
   modPrice:75000, modUpkeep:75, modAuthor:"", modDescription:""
 };
 /** Curtain layouts: [id, name]. Windows can pick one or follow the house's choice ("default"). */
@@ -61,7 +61,8 @@ const SHARED_SECTIONS = [
     {k:"overhang", label:"Overhang", min:0, max:1.2, step:0.05, unit:" m"},
     {k:"chimney", label:"Chimney", type:"check"},
     {k:"gutters", label:"Rain gutters", type:"check"},
-    {k:"downpipes", label:"Downpipes per long side", min:0, max:2, step:1}]},
+    {k:"downpipes", label:"Downpipes per long side", min:0, max:2, step:1},
+    {k:"ventilators", label:"Roof ventilators (lanterns on the ridge)", min:0, max:4, step:1}]},
   {title:"Kupor (dormers)", side:"build", custom:"dormers", fields:[]},
   {title:"Windows", side:"build", custom:"windows", hint:"Set how many windows each floor has. To change one window, choose it below or tap it in the preview.", fields:[
     {k:"winW", label:"Width", min:0.4, max:2.5, step:0.05, unit:" m"},
@@ -114,8 +115,20 @@ export const SCHEMA = [
     return kinds.length === KINDS.length ? g : {...g, kinds};
   }),
 ];
+/**
+ * A kind's settings fields by key: the shared ones and its own. Kinds can each have a field with the
+ * same key and their own range (a hen house's and a cow barn's fenceDepth), so look fields up by kind.
+ */
+const SHARED_FIELD = {};
+SHARED_SECTIONS.forEach(g => g.fields.forEach(f => SHARED_FIELD[f.k] = f));
+export function fieldsFor(kind) {
+  const m = {...SHARED_FIELD};
+  kind.sections.forEach(g => g.fields.forEach(f => m[f.k] = f));
+  return m;
+}
+/** Every field key there is (any kind's); for checking whether a key is a setting at all. */
 export const FIELD = {};
-SCHEMA.forEach(g => g.fields.forEach(f => FIELD[f.k] = f));
+SCHEMA.forEach(g => g.fields.forEach(f => FIELD[f.k] = FIELD[f.k] || f));
 export const WALLS = ["front", "back", "left", "right"];
 export const WALL_NAMES = {front:"Front", back:"Back", left:"Left side", right:"Right side"};
 export const clampN = (v, lo, hi, d) => { v = +v; return isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d; };
@@ -182,11 +195,11 @@ export function clampField(f, v) {
  */
 export function sanitize(obj) {
   if (!obj || typeof obj !== "object") obj = {};
-  const kind = kindOf(obj), defs = {...DEFAULTS, ...kind.defaults};
+  const kind = kindOf(obj), defs = {...DEFAULTS, ...kind.defaults}, fields = fieldsFor(kind);
   const out = {...defs, kind: kind.id};
   for (const k in defs) {
     if (k === "kind") continue;
-    const v = clampField(FIELD[k], obj[k]);
+    const v = clampField(fields[k], obj[k]);
     if (v !== undefined) out[k] = typeof defs[k] === "number" ? +(+v).toFixed(3) : v;
   }
   // Saves from before curtain styles had a curtains on/off switch.
@@ -494,7 +507,7 @@ function layoutWall(key, L, fh, topAt) {
     ops.push({s0, s1, t0: 0, t1: dh, kind: "door"});
   }
   // The kind's own openings (a hen hatch ...), before the windows so a window over one is hidden.
-  for (const h of openings) if (h.wall === key) ops.push({s0: h.s0, s1: h.s1, t0: 0, t1: h.t1, kind: "hatch"});
+  for (const h of openings) if (h.wall === key) ops.push({s0: h.s0, s1: h.s1, t0: 0, t1: h.t1, kind: "hatch", plain: !!h.plain});
   for (const win of p.windows) {
     if (win.wall !== key) continue;
     win._hidden = false;
@@ -638,6 +651,8 @@ function buildHatch(w, o, F, fr, out) {
   wbox("trim", w, o.s0 - fr, o.s0, o.t0, o.t1 + fr, 0, out);
   wbox("trim", w, o.s1, o.s1 + fr, o.t0, o.t1 + fr, 0, out);
   wbox("trim", w, o.s0, o.s1, o.t1, o.t1 + fr, 0, out);
+  // A plain opening (a cow barn's doorway to the pasture) is just the framed hole.
+  if (o.plain) return;
   const h = o.t1 - o.t0, sA = o.s0 - 0.03, sB = o.s1 + 0.03;
   wbox("trim", w, sA, sB, o.t1 + fr + 0.02, o.t1 + fr + 0.04 + h, out, out + 0.025);
   for (const [a, b] of [[o.s0 - fr - 0.04, o.s0 - fr], [o.s1 + fr, o.s1 + fr + 0.04]]) wbox("trim", w, a, b, o.t0, o.t1 + fr + 0.08 + h, out, out + 0.04);
@@ -766,6 +781,37 @@ function cyl(c, r, h, seg = 12) {
     poly("fittings", [lo[k], lo[j], hi[j], hi[k]], [(lo[k][0] + lo[j][0]) / 2 - c[0], 0, (lo[k][2] + lo[j][2]) / 2 - c[2]]);
   }
   poly("fittings", hi, UP); poly("fittings", lo, neg(UP));
+}
+/**
+ * Roof ventilators (a Swedish barn's lanterns): p.ventilators boarded boxes spaced along the ridge,
+ * louvred on their long sides, each with its own little gable roof. In ridge coordinates through M:
+ * a along the ridge, b across it. half: half the ridge's length.
+ */
+function buildVentilators(Lr, ridgeY, tanP, M, half) {
+  const n = p.ventilators, reach = Math.max(0, half - 0.8), hw = 0.35;
+  const y0 = ridgeY - tanP * hw - 0.05, y1 = ridgeY + 0.75, rise = 0.3, ro = 0.5;
+  const mbox = (mat, a0, a1, yA, yB, b0, b1) => box(mat, (i, j, k) => M(lerp(a0, a1, i), lerp(yA, yB, j), lerp(b0, b1, k)), M(1, 0, 0), UP, M(0, 0, 1));
+  for (let k = 0; k < n; k++) {
+    const a = n === 1 ? 0 : -reach + 2 * reach * k / (n - 1);
+    mbox("walls", a - hw, a + hw, y0, y1, -hw, hw);
+    abox("collision", M(a - hw, y0, -hw), M(a + hw, y1 + rise, hw));
+    // louvres on the long sides, corner boards
+    for (const s of [-1, 1]) for (let j = 0; j < 4; j++) {
+      const y = y1 - 0.15 - j * 0.12;
+      mbox("trim", a - hw + 0.06, a + hw - 0.06, y - 0.03, y, s * hw, s * (hw + 0.05));
+    }
+    for (const sa of [-1, 1]) for (const sb of [-1, 1]) mbox("trim", a + sa * hw - (sa > 0 ? 0.05 : 0), a + sa * hw + (sa < 0 ? 0.05 : 0), y0, y1, sb * hw - (sb > 0 ? 0.05 : 0), sb * hw + (sb < 0 ? 0.05 : 0));
+    // the little roof: two slopes from the eaves at b = +-ro up to a ridge over the middle
+    for (const s of [-1, 1]) {
+      const q = [M(a - hw - 0.1, y1, s * ro), M(a + hw + 0.1, y1, s * ro), M(a + hw + 0.1, y1 + rise, 0), M(a - hw - 0.1, y1 + rise, 0)];
+      poly("roof", q, M(0, 1, s * rise / ro));
+      poly("trim", q.map(v => [v[0], v[1] - 0.03, v[2]]), M(0, -1, -s * rise / ro));
+    }
+    for (const sa of [-1, 1]) {
+      const yb = y1 + rise * (1 - hw / ro);
+      poly("walls", [M(a + sa * hw, y1, -hw), M(a + sa * hw, y1, hw), M(a + sa * hw, yb, hw), M(a + sa * hw, y1 + rise, 0), M(a + sa * hw, yb, -hw)], M(sa, 0, 0));
+    }
+  }
 }
 /**
  * A walk-in building's inside: the kind's floor finish, then each placed piece (p.items), drawn in
@@ -1019,13 +1065,15 @@ function build() {
   if (F > 0.01) abox("foundation", [-W/2 - 0.06, 0, -D/2 - 0.06], [W/2 + 0.06, F, D/2 + 0.06]);
   if (!hollow) abox("collision", [-W/2, 0, -D/2], [W/2, top, D/2]);
   else {
-    // Floor, then each wall as a slab with a gap for the door (the door leaf has its own collision).
+    // Floor, then each wall as slabs with a gap for the door (the door leaf has its own collision)
+    // and for any other opening tall enough to walk through (a cow barn's doorway to the pasture).
     if (F > 0.01) abox("collision", [-W/2, 0, -D/2], [W/2, F, D/2]);
     for (const key in WS) {
-      const w = WS[key], door = opsByWall[key].ops.find(o => o.kind === "door");
+      const w = WS[key], gaps = opsByWall[key].ops.filter(o => o.kind === "door" || (o.kind === "hatch" && o.t1 >= 1.8)).sort((a, b) => a.s0 - b.s0);
       const slab = (s0, s1, t0, t1) => { if (s1 - s0 > 1e-6 && t1 - t0 > 1e-6) wbox("collision", w, s0, s1, t0, t1, -WALL_T, 0); };
-      if (!door) slab(0, w.L, 0, H);
-      else { slab(0, door.s0, 0, H); slab(door.s1, w.L, 0, H); slab(door.s0, door.s1, door.t1, H); }
+      let s = 0;
+      for (const g of gaps) { slab(s, g.s0, 0, H); slab(g.s0, g.s1, g.t1, H); s = g.s1; }
+      slab(s, w.L, 0, H);
     }
   }
 
@@ -1100,6 +1148,9 @@ function build() {
     abox("collision", [c[0]-0.3, top - 0.2, c[2]-0.3], [c[0]+0.3, ytop + 0.1, c[2]+0.3]);
   }
   if (hollow) buildInside(kind, F, H);
+  // Things the kind puts outside its walls (a cow barn's troughs), drawn in "fittings" and "collision".
+  if (kind.outside) kind.outside({p, geo: {opsByWall, dims: {W, D}}, abox, cyl, paint});
+  if (p.ventilators > 0 && p.roofType !== "flat") buildVentilators(Lr, ridgeY, tanP, M, p.roofType === "hip" ? Math.max(0, Lr/2 - span/2) : Lr/2);
   dims = {W, D, top, ridgeY, F};
 }
 build();
@@ -1375,7 +1426,7 @@ export function placeableXml(p, name) {
     <storeData>
         <name>${esc(shopName(name))}</name>
         <functions>
-            <function>${fn}</function>
+${[].concat(fn).map(f => `            <function>${f}</function>`).join("\n")}
         </functions>
         <image>${MOD_FILES.store}</image>
         <canBeSold>true</canBeSold>

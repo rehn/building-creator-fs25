@@ -12,8 +12,9 @@
 // Kinds import only the i3d writer, never the core, so there are no import cycles.
 import house from "./house.mjs";
 import chicken from "./chicken.mjs";
+import cow from "./cow.mjs";
 
-export const KINDS = [house, chicken];
+export const KINDS = [house, chicken, cow];
 export const KIND = Object.fromEntries(KINDS.map(k => [k.id, k]));
 /** The kind of a project's settings; saves without one are farmhouses. */
 export const kindOf = p => KIND[p && p.kind] || house;

@@ -2,7 +2,8 @@
 // chicken barns (data/placeables/rudolfHormann/chickenBarnBig is the 360-hen one).
 // Imports only the i3d writer; the core hands in what it needs (see kinds/index.mjs).
 import { tg, shape } from "../i3d.mjs";
-import { roomOf, footprint } from "../layout.mjs";
+import { roomOf, furnisher } from "../layout.mjs";
+import { OPPOSITE, wallLength, yardFrame } from "./pasture.mjs";
 
 /** Floor space per hen, as in the base game's 360-hen barn (about 2.2 per m², rounded up). */
 export const HENS_PER_M2 = 2.5;
@@ -12,7 +13,6 @@ const FEED_PER_HEN = 25;
 export const henCap = p => Math.max(1, Math.min(MAX_HENS, Math.floor(HENS_PER_M2 * p.width * p.depth + 1e-9)));
 const hensOf = p => Math.min(Math.round(p.hens), henCap(p));
 
-const OPPOSITE = {front: "back", back: "front", left: "right", right: "left"};
 /** Smallest starting pasture, like the base game's smallest (about 12 m along the barn, 6 m deep). */
 const MIN_PASTURE_WIDTH = 12;
 
@@ -30,36 +30,14 @@ const MIN_PASTURE_WIDTH = 12;
  * door's: the wall opposite the pasture for feed if it's free, else a side wall.
  */
 export function henYard(geo, p) {
-  const walls = geo.opsByWall, past = walls[p.pastureWall].w, opp = OPPOSITE[p.pastureWall];
-  const sides = Object.keys(walls).filter(k => k !== p.pastureWall && k !== opp);
-  const [foodSide, palletSide] = [opp, ...sides].filter(k => k !== p.doorWall);
-  const at = (w, s, d, y = 0) => [w.o[0] + w.u[0]*s + w.n[0]*d, y, w.o[2] + w.u[2]*s + w.n[2]*d];
-  // World-axis box in front of wall w: centred at s along it and d out, `along` wide, `out` deep.
-  const boxAt = (w, s, d, along, out, h) => {
-    const c = at(w, s, d, h / 2), ax = Math.abs(w.u[0]) > 0.5;
-    return {center: c, size: ax ? [along, h, out] : [out, h, along]};
-  };
-  const rectOf = b => ({x0: b.center[0] - b.size[0]/2, x1: b.center[0] + b.size[0]/2, z0: b.center[2] - b.size[2]/2, z1: b.center[2] + b.size[2]/2});
-  // The game can't make a walking area for a tiny pasture (a 6 x 4.4 m one failed), so the fence is
-  // at least MIN_PASTURE_WIDTH along the pasture wall, reaching past the barn's ends if the wall is shorter.
-  const fd = p.fenceDepth, L = past.L, post = 0.15, half = Math.max(L, MIN_PASTURE_WIDTH) / 2;
-  // Starts and ends at the barn's corners. A pasture wider than the wall runs back along the wall
-  // line to the corners, as in the base game's cow barn, so it joins the barn.
-  const fence = L < MIN_PASTURE_WIDTH - 1e-9
-    ? [at(past, L, post), at(past, L/2 + half, post), at(past, L/2 + half, fd), at(past, L/2 - half, fd), at(past, L/2 - half, post), at(past, 0, post)]
-    : [at(past, L, post), at(past, L, fd), at(past, 0, fd), at(past, 0, post)];
-  // Along a wall, the stretch at least 1 m behind the pasture wall: the fence runs along that line.
-  const clear = w => {
-    const ahead = s => { const q = at(w, s, 0); return (q[0] - past.o[0]) * past.n[0] + (q[2] - past.o[2]) * past.n[2]; };
-    const a0 = ahead(0), a1 = ahead(w.L);
-    return Math.abs(a0 - a1) < 1e-6 ? [0, w.L] : Math.abs(a0) < Math.abs(a1) ? [1, w.L] : [0, w.L - 1];
-  };
+  // The game can't make a walking area for a tiny pasture (a 6 x 4.4 m one failed): at least 12 m wide.
+  const {fence, feed: fw, other: pw, at, boxAt, rectOf, clear} = yardFrame(geo, p, MIN_PASTURE_WIDTH);
   // Feed pad: low on the ground, so a tipping trailer's or auger's raycast starts above it. The
   // trailer spot is further out on the same side.
-  const fw = walls[foodSide].w, [fa, fb] = clear(fw), fc = (fa + fb) / 2;
+  const [fa, fb] = clear(fw), fc = (fa + fb) / 2;
   const food = boxAt(fw, fc, 1.75, Math.max(2.5, Math.min(4, fb - fa)), 3, 0.3);
   const loading = boxAt(fw, fc, 5.5, Math.min(4, fb - fa), 4, 3);
-  const pw = walls[palletSide].w, [pa, pb] = clear(pw), pc = (pa + pb) / 2;
+  const [pa, pb] = clear(pw), pc = (pa + pb) / 2;
   const len = Math.min(4.8, Math.max(1.2, pb - pa - 1));
   const lines = [2, 3.6].map(d => [at(pw, pc - len / 2, d), at(pw, pc + len / 2, d)]);
   const palletTrigger = boxAt(pw, pc, 2.8, Math.min(len + 1, pb - pa), 3.2, 2.5);
@@ -200,87 +178,40 @@ const step = (v, s) => +(Math.floor(v / s + 1e-9) * s).toFixed(3);
 function autoFurnish(p) {
   const room = roomOf(p, openings(p)), n = hensOf(p);
   const style = n <= 40 ? "backyard" : n <= 150 ? "floor" : "commercial";
-  const items = [], taken = [];
-  const add = (type, x, z, rot, params = {}) => {
-    const it = {id: items.length + 1, type, x, z, rot, ...params};
-    items.push(it); taken.push(footprint(it, CATALOG[type]));
-    return it;
-  };
-  const blocked = (pad = 0) => [...room.keepOut.map(k => k.rect), ...taken].map(r => ({x0: r.x0 - pad, x1: r.x1 + pad, z0: r.z0 - pad, z1: r.z1 + pad}));
-  const hits = (a, b) => a.x0 < b.x1 - 1e-6 && b.x0 < a.x1 - 1e-6 && a.z0 < b.z1 - 1e-6 && b.z0 < a.z1 - 1e-6;
-  const horiz = wl => wl.z0 === wl.z1;
-  // The free stretches [a, b] along a wall, for a piece reaching `deep` into the room from it.
-  const freeAlong = (wl, deep) => {
-    const [lo, hi] = horiz(wl) ? [room.x0, room.x1] : [room.z0, room.z1];
-    const c0 = horiz(wl) ? wl.z0 : wl.x0, c1 = c0 + (horiz(wl) ? wl.into[1] : wl.into[0]) * deep;
-    const strip = horiz(wl) ? {x0: lo, x1: hi, z0: Math.min(c0, c1), z1: Math.max(c0, c1)} : {x0: Math.min(c0, c1), x1: Math.max(c0, c1), z0: lo, z1: hi};
-    let free = [[lo, hi]];
-    for (const r of blocked(0.1)) if (hits(r, strip)) {
-      const [a, b] = horiz(wl) ? [r.x0, r.x1] : [r.z0, r.z1];
-      free = free.flatMap(([u, v]) => [[u, Math.min(v, a)], [Math.max(u, b), v]]).filter(([u, v]) => v - u > 1e-6);
-    }
-    return free.map(([a, b]) => ({wl, a, b, len: b - a}));
-  };
-  const longest = (walls, deep) => walls.flatMap(wl => freeAlong(wl, deep)).sort((x, y) => y.len - x.len)[0];
-  // A wall piece centred on a free stretch, its back against the wall, facing the room.
-  const onWall = (s, type, params) => {
-    const [, d] = CATALOG[type].size(params), mid = (s.a + s.b) / 2;
-    return horiz(s.wl) ? add(type, mid, s.wl.z0 + s.wl.into[1] * d / 2, s.wl.rot, params)
-      : add(type, s.wl.x0 + s.wl.into[0] * d / 2, mid, s.wl.rot, params);
-  };
+  const f = furnisher(room, CATALOG), {items} = f;
   const byName = Object.fromEntries(room.walls.map(wl => [wl.name, wl]));
   const opposite = byName[OPPOSITE[p.pastureWall]];
 
   // Nest boxes: about one per 5 hens, on the wall opposite the pasture if it has room, else the longest free stretch.
   const want = Math.ceil(n / 5);
-  let ns = longest([opposite], nestDepth);
-  if (!ns || ns.len < Math.min(want, 4) * 0.35 + 0.1) ns = longest(room.walls, nestDepth);
+  let ns = f.longest([opposite], nestDepth);
+  if (!ns || ns.len < Math.min(want, 4) * 0.35 + 0.1) ns = f.longest(room.walls, nestDepth);
   if (ns && ns.len >= 0.45) {
     const perRow = Math.max(1, Math.floor((ns.len - 0.1) / 0.35));
     const tiers = Math.min({backyard: 2, floor: 2, commercial: 3}[style], Math.ceil(want / perRow));
-    onWall(ns, "nests", {count: Math.max(1, Math.min(perRow, Math.floor(want / tiers))), tiers});
+    f.onWall(ns, "nests", {count: Math.max(1, Math.min(perRow, Math.floor(want / tiers))), tiers});
   }
 
   // Perch ladders: 20 cm per hen, on the longest free stretches of wall.
   const most = {backyard: 2, floor: 3, commercial: 4}[style];
   let perch = 0;
   for (let k = 0; k < most && perch < n * 0.2; k++) {
-    const s4 = longest(room.walls, perchReach(4));
+    const s4 = f.longest(room.walls, perchReach(4));
     if (!s4 || s4.len < 0.7) break;
     const tiers = Math.max(2, Math.min(4, Math.ceil((n * 0.2 - perch) / (s4.len - 0.1))));
-    const s = longest(room.walls, perchReach(tiers)), length = Math.min(12, step(s.len - 0.1, 0.1));
+    const s = f.longest(room.walls, perchReach(tiers)), length = Math.min(12, step(s.len - 0.1, 0.1));
     if (length < 0.6) break;
-    onWall(s, "perch", {length, tiers});
+    f.onWall(s, "perch", {length, tiers});
     perch += length * tiers;
   }
-
-  // A floor piece at the first free spot on the grid, nearest the middle of the room.
-  const spots = [];
-  for (let x = room.x0; x <= room.x1; x += 0.25) for (let z = room.z0; z <= room.z1; z += 0.25) spots.push([x, z]);
-  spots.sort((a, b) => Math.hypot(a[0], a[1]) - Math.hypot(b[0], b[1]));
-  const onFloor = (type, rot = 0, params = {}) => {
-    for (const pad of [0.3, 0.1, 0]) for (const [x, z] of spots) {
-      const f = footprint({x, z, rot, ...params}, CATALOG[type]);
-      if (f.x0 < room.x0 || f.x1 > room.x1 || f.z0 < room.z0 || f.z1 > room.z1) continue;
-      if (!blocked(pad).some(r => hits(r, f))) return add(type, x, z, rot, params);
-    }
-    return null;
-  };
 
   if (style === "commercial") {
     // Feeder troughs and nipple drinker lines down the length of the barn.
     const alongX = room.x1 - room.x0 >= room.z1 - room.z0, rot = alongX ? 0 : 90;
     const [lo, hi] = alongX ? [room.z0, room.z1] : [room.x0, room.x1];
-    for (const [type, f] of [["trough", 0.3], ["trough", 0.7], ["nipples", 0.43], ["nipples", 0.57]]) {
-      const c = lo + (hi - lo) * f;
-      const line = alongX ? {x0: room.x0, x1: room.x1, z0: c - 0.15, z1: c + 0.15} : {x0: c - 0.15, x1: c + 0.15, z0: room.z0, z1: room.z1};
-      let free = [[alongX ? room.x0 : room.z0, alongX ? room.x1 : room.z1]];
-      for (const r of blocked(0.2)) if (hits(r, line)) {
-        const [a, b] = alongX ? [r.x0, r.x1] : [r.z0, r.z1];
-        free = free.flatMap(([u, v]) => [[u, Math.min(v, a)], [Math.max(u, b), v]]).filter(([u, v]) => v - u > 1e-6);
-      }
-      const [u, v] = free.sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]))[0] || [0, 0], length = Math.min(30, step(v - u - 0.2, 0.1));
-      if (length >= 1) add(type, alongX ? (u + v) / 2 : c, alongX ? c : (u + v) / 2, rot, {length});
+    for (const [type, fr] of [["trough", 0.3], ["trough", 0.7], ["nipples", 0.43], ["nipples", 0.57]]) {
+      const c = lo + (hi - lo) * fr, line = f.freeLine(c, alongX), length = line ? Math.min(30, step(line[1] - line[0] - 0.2, 0.1)) : 0;
+      if (length >= 1) f.add(type, alongX ? (line[0] + line[1]) / 2 : c, alongX ? c : (line[0] + line[1]) / 2, rot, {length});
     }
   }
   // Tube feeders (one per 25 hens) and bell drinkers (one per 40), unless troughs and lines were
@@ -289,7 +220,7 @@ function autoFurnish(p) {
   const feeders = has("trough") ? 0 : Math.max(1, Math.ceil(n / 25)), drinkers = has("nipples") ? 0 : Math.max(1, Math.ceil(n / 40));
   const order = [...(feeders ? ["feeder"] : []), ...(drinkers ? ["drinker"] : []),
     ...Array(Math.max(0, feeders - 1)).fill("feeder"), ...Array(Math.max(0, drinkers - 1)).fill("drinker")];
-  for (const type of order) onFloor(type);
+  for (const type of order) f.onFloor(type);
   return {style, items};
 }
 

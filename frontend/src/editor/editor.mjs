@@ -3,10 +3,11 @@
 import * as THREE from "three";
 import JSZip from "jszip";
 import {
-  SCHEMA, FIELD, WALLS, WALL_NAMES, DTYPES, DORM_DEF, MATS,
+  SCHEMA, fieldsFor, WALLS, WALL_NAMES, DTYPES, DORM_DEF, MATS,
   genRow, sanitize, serialize, slugify, buildGeometry, buildI3d, placeableSnippet, sleepPoint, surfaceSpec, scaledUV, colorFor, WP
 } from "./model.mjs";
 import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, henYard, henCap, seeThroughGlass, kindOf } from "./model.mjs";
+import { cowYard } from "./kinds/cow.mjs";
 import { roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, History } from "./layout.mjs";
 import { paintInterior, paintGlass } from "./interior.mjs";
 export { slugify };
@@ -95,10 +96,13 @@ function fmt(f, v) {
   const dec = f.step >= 1 ? 0 : f.step >= 0.1 ? 1 : 2;
   return (+v).toFixed(dec) + (f.unit || "");
 }
-// Sections shown only for some building kinds (g.kinds): hidden for the others.
+// Only the sections for this project's kind are built (a project's kind never changes), and its
+// fields are looked up by kind: kinds can have fields with the same key and different ranges.
+const FLD = fieldsFor(kindOf(p));
 const kindSections = [];
 function syncKind() { for (const {g, d} of kindSections) d.hidden = !g.kinds.includes(p.kind); }
 SCHEMA.forEach(g => {
+  if (g.kinds && !g.kinds.includes(p.kind)) return;
   const d = document.createElement("details");
   if (g.kinds) kindSections.push({g, d});
   // First time: only the first section of each side is open. After that, as the user left them.
@@ -162,7 +166,7 @@ SCHEMA.forEach(g => {
 });
 function syncControls() {
   for (const k in inputs) {
-    const f = FIELD[k], el = inputs[k];
+    const f = FLD[k], el = inputs[k];
     if (f.type === "check") el.checked = !!p[k]; else el.value = p[k];
   }
   syncOutputs();
@@ -172,20 +176,23 @@ function syncControls() {
 }
 function syncOutputs() {
   for (const k in inputs) {
-    const f = FIELD[k];
+    const f = FLD[k];
     const o = $("f-" + k + "-o");
     if (o) o.textContent = fmt(f, p[k]);
   }
-  inputs.ridge.disabled = p.roofType !== "gable";
-  inputs.panelSpacing.disabled = p.wallCladding === "plaster";
-  inputs.battenWidth.disabled = p.wallCladding !== "lockpanel";
-  inputs.roofMaterial.disabled = p.roofType === "flat";
-  inputs.chimneyStyle.disabled = !p.chimney;
-  inputs.kneeWall.disabled = !p.halfStorey;
-  inputs.gutters.disabled = p.roofType === "flat";
-  inputs.downpipes.disabled = !p.gutters || p.roofType === "flat";
-  inputs.entranceWidth.disabled = inputs.entranceDepth.disabled = p.entrance === "none";
-  inputs.curtainStyle.disabled = inputs.curtainColor.disabled = !p.interior;
+  // Controls that don't apply right now are greyed out (a kind may not have some of them at all).
+  const off = (k, v) => { if (inputs[k]) inputs[k].disabled = v; };
+  off("ridge", p.roofType !== "gable");
+  off("panelSpacing", p.wallCladding === "plaster");
+  off("battenWidth", p.wallCladding !== "lockpanel");
+  off("roofMaterial", p.roofType === "flat");
+  off("chimneyStyle", !p.chimney);
+  off("kneeWall", !p.halfStorey);
+  off("gutters", p.roofType === "flat");
+  off("downpipes", !p.gutters || p.roofType === "flat");
+  off("ventilators", p.roofType === "flat");
+  off("entranceWidth", p.entrance === "none"); off("entranceDepth", p.entrance === "none");
+  off("curtainStyle", !p.interior); off("curtainColor", !p.interior);
   inputs.modDescription.placeholder = defaultModDescription(p);
 }
 
@@ -936,12 +943,12 @@ function makeYardMarker() {
   group.add(net);
   // A floating icon over the middle of each place, like the bed icon of a sleep point.
   const icons = {};
-  for (const [k, bg, glyph] of [["food", "#d07a1f", drawFeed], ["pallet", "#c9a514", drawPallet], ["loading", "#3f9a43", drawHen]]) {
+  for (const [k, bg, glyph] of [["food", "#d07a1f", drawFeed], ["pallet", "#c9a514", drawPallet], ["loading", "#3f9a43", drawHen], ["loadingCow", "#3f9a43", drawCow]]) {
     const c = document.createElement("canvas"); c.width = c.height = 128;
     const x = c.getContext("2d");
     x.fillStyle = bg; x.beginPath(); x.arc(64, 64, 60, 0, Math.PI * 2); x.fill();
     x.fillStyle = x.strokeStyle = "#fff"; x.lineWidth = 6; x.lineCap = x.lineJoin = "round";
-    glyph(x);
+    glyph(x, bg);
     const tex = new THREE.CanvasTexture(c);
     icons[k] = new THREE.Sprite(new THREE.SpriteMaterial({map: tex, transparent: true, depthWrite: false}));
     icons[k].scale.set(0.9, 0.9, 1); icons[k].renderOrder = 10;
@@ -970,6 +977,15 @@ function drawPallet(x) {
   x.fillRect(28, 82, 72, 8);
   for (const px of [28, 59, 90]) x.fillRect(px, 90, 10, 10);
   x.fillRect(28, 100, 72, 6);
+}
+function drawCow(x, bg) {
+  // A cow's head from the front: ears, horns, head, a pale muzzle with nostrils, eyes.
+  x.beginPath(); x.ellipse(36, 50, 14, 8, -0.4, 0, Math.PI * 2); x.ellipse(92, 50, 14, 8, 0.4, 0, Math.PI * 2); x.fill();
+  x.beginPath(); x.moveTo(50, 40); x.quadraticCurveTo(44, 24, 52, 18); x.moveTo(78, 40); x.quadraticCurveTo(84, 24, 76, 18); x.stroke();
+  x.beginPath(); x.ellipse(64, 62, 22, 28, 0, 0, Math.PI * 2); x.fill();
+  x.beginPath(); x.ellipse(64, 90, 20, 13, 0, 0, Math.PI * 2); x.fill();
+  x.fillStyle = bg;
+  for (const [cx, cy, r] of [[55, 56, 4], [73, 56, 4], [57, 91, 3.5], [71, 91, 3.5]]) { x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill(); }
 }
 function drawHen(x) {
   // A hen in profile: body, head with comb and beak, tail, legs.
@@ -1000,9 +1016,12 @@ function postsGeometry(points, h) {
 }
 function updateYardMarker(geo) {
   if (!yardObj) return;
-  yardObj.group.visible = p.kind === "chicken";
+  yardObj.group.visible = p.kind === "chicken" || p.kind === "cow";
   if (!yardObj.group.visible) return;
-  const y = henYard(geo, p), h = 1.1, pos = [], wire = [], postAt = [];
+  // The places to show: feed and the trailer spot for any animal; egg pallets for hens only.
+  const hy = p.kind === "chicken" ? henYard(geo, p) : null, cy = p.kind === "cow" ? cowYard(geo, p) : null;
+  const y = {fence: (hy || cy).fence, food: (hy || cy).food, loading: (hy || cy).loading, pallet: hy ? hy.pallet.trigger : null};
+  const h = 1.1, pos = [], wire = [], postAt = [];
   for (let i = 0; i + 1 < y.fence.length; i++) {
     const a = y.fence[i], b = y.fence[i + 1];
     pos.push(a[0], 0, a[2], b[0], 0, b[2], b[0], h, b[2], a[0], 0, a[2], b[0], h, b[2], a[0], h, a[2]);
@@ -1020,10 +1039,17 @@ function updateYardMarker(geo) {
   wg.setAttribute("position", new THREE.Float32BufferAttribute(wire, 3));
   set(yardObj.wires, wg);
   set(yardObj.posts, postsGeometry(postAt, h + 0.1));
-  for (const [k, b] of [["food", y.food], ["pallet", y.pallet.trigger], ["loading", y.loading]]) {
+  yardObj.icons.loading.visible = yardObj.icons.loadingCow.visible = false;
+  const animal = p.kind === "cow" ? "loadingCow" : "loading";
+  yardObj.icons[animal].visible = true;
+  yardObj.icons[animal].position.set(y.loading.center[0], Math.max(y.loading.size[1], 1.6) + 0.6, y.loading.center[2]);
+  for (const [k, b] of [["food", y.food], ["pallet", y.pallet], ["loading", y.loading]]) {
+    yardObj.boxes[k].visible = !!b;
+    if (k !== "loading") yardObj.icons[k].visible = !!b;
+    if (!b) continue;
     yardObj.boxes[k].position.set(...b.center); yardObj.boxes[k].scale.set(...b.size);
     // the icon floats over the middle of the place, above head height
-    yardObj.icons[k].position.set(b.center[0], Math.max(b.size[1], 1.6) + 0.6, b.center[2]);
+    if (k !== "loading") yardObj.icons[k].position.set(b.center[0], Math.max(b.size[1], 1.6) + 0.6, b.center[2]);
   }
 }
 function rebuild(fit) {
@@ -1163,7 +1189,8 @@ async function importSettings(file) {
   try { setSettings(JSON.parse(await file.text())); persist(); toast("Settings loaded"); return true; }
   catch (e) { toast("That file isn\u2019t a settings file from this app."); return false; }
 }
-function setSettings(obj) { p = sanitize(obj); selId = null; dSel = null; syncControls(); rebuild(true); }
+// Imported settings keep this project's kind: the editor is built for it.
+function setSettings(obj) { p = sanitize({...obj, kind: p.kind}); selId = null; dSel = null; syncControls(); rebuild(true); }
 
 /** A small JPEG of the current view, for the project list. */
 function snapshot() {
