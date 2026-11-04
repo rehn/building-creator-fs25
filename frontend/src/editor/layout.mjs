@@ -77,7 +77,7 @@ export function footprint(item, def) {
   return {x0: item.x - hx, x1: item.x + hx, z0: item.z - hz, z1: item.z + hz};
 }
 
-const snap = v => Math.round(v / GRID) * GRID;
+const snap = v => Math.round(v / GRID) * GRID + 0; // (+ 0 turns -0 into 0)
 const clamp = (v, lo, hi) => lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v));
 /**
  * Where an item ends up when dropped: a wall item against the nearest inside wall, facing the room,
@@ -131,3 +131,50 @@ export function cleanItems(arr, catalog) {
     return out;
   });
 }
+
+/* ---------- Editing ---------- */
+const inside = (f, x, z) => x >= f.x0 && x <= f.x1 && z >= f.z0 && z <= f.z1;
+/** The id of the piece under (x, z), the last one if several overlap, or null. */
+export function itemAt(items, catalog, x, z) {
+  for (let k = items.length - 1; k >= 0; k--) if (inside(footprint(items[k], catalog[items[k].type]), x, z)) return items[k].id;
+  return null;
+}
+
+/**
+ * A new piece of `type`, with its default settings and the next id, at the free spot nearest the
+ * middle of the room: snapped, inside, clear of the keep-outs and the other pieces. If nothing is
+ * free it goes in the middle (and shows a problem until moved).
+ */
+export function placeNew(type, items, catalog, room) {
+  const def = catalog[type], id = items.reduce((m, it) => Math.max(m, it.id), 0) + 1;
+  const base = {id, type, x: 0, z: 0, rot: 0, ...def.defaults};
+  const cx = (room.x0 + room.x1) / 2, cz = (room.z0 + room.z1) / 2, spots = [];
+  for (let x = room.x0; x <= room.x1 + 1e-9; x += GRID) for (let z = room.z0; z <= room.z1 + 1e-9; z += GRID) spots.push([x, z]);
+  spots.sort((a, b) => Math.hypot(a[0] - cx, a[1] - cz) - Math.hypot(b[0] - cx, b[1] - cz));
+  for (const [x, z] of spots) {
+    const it = snapItem({...base, x, z}, def, room);
+    if (!problems([...items, it], catalog, room).has(id)) return it;
+  }
+  return snapItem({...base, x: cx, z: cz}, def, room);
+}
+
+/** A floor piece turned a quarter (and kept inside); a wall piece always faces the room, so stays as is. */
+export function rotateItem(item, def, room) {
+  if (def.mount === "wall") return item;
+  return snapItem({...item, rot: (item.rot + 90) % 360}, def, room);
+}
+
+/** Undo and redo over copies of a state (the pieces list). */
+export class History {
+  constructor(state, limit = 100) { this.past = []; this.future = []; this.now = clone(state); this.limit = limit; }
+  get canUndo() { return this.past.length > 0; }
+  get canRedo() { return this.future.length > 0; }
+  /** A new state after an edit; it drops anything that could be redone. */
+  push(state) {
+    this.past.push(this.now); if (this.past.length > this.limit) this.past.shift();
+    this.now = clone(state); this.future = [];
+  }
+  undo() { if (this.canUndo) { this.future.push(this.now); this.now = this.past.pop(); } return clone(this.now); }
+  redo() { if (this.canRedo) { this.past.push(this.now); this.now = this.future.pop(); } return clone(this.now); }
+}
+const clone = v => JSON.parse(JSON.stringify(v));

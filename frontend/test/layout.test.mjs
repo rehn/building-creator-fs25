@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { roomOf, footprint, toWorld, snapItem, problems, cleanItems, WALL_T } from "../src/editor/layout.mjs";
+import { roomOf, footprint, toWorld, snapItem, problems, cleanItems, WALL_T, itemAt, placeNew, rotateItem, History } from "../src/editor/layout.mjs";
 
 // A made-up catalog: a shelf that hangs on a wall and a crate that stands on the floor.
 const CATALOG = {
@@ -87,4 +87,56 @@ test("cleanItems: unknown types dropped, settings clamped, quarter turns, ids re
   assert.deepEqual(out[0], { id: 1, type: "shelf", x: 1.234, z: -1, rot: 90, length: 4 });
   assert.deepEqual(out[1], { id: 2, type: "crate", x: 0, z: 0, rot: 270 });
   assert.equal(cleanItems(Array(500).fill({ type: "crate", x: 0, z: 0 }), CATALOG).length, 200, "at most 200");
+});
+
+/* ---------- Editing (the interior editor's moves) ---------- */
+test("itemAt: the piece under a point, the last drawn on top", () => {
+  const items = [
+    { id: 1, type: "crate", x: 0, z: 0, rot: 0 },
+    { id: 2, type: "crate", x: 0.5, z: 0, rot: 0 },
+  ];
+  assert.equal(itemAt(items, CATALOG, -0.3, 0), 1);
+  assert.equal(itemAt(items, CATALOG, 0.2, 0), 2, "overlap: the later one");
+  assert.equal(itemAt(items, CATALOG, 2, 2), null);
+});
+
+test("placeNew: a new piece lands snapped, inside, clear of the door and the other pieces", () => {
+  const room = roomOf(P);
+  let items = [];
+  for (let k = 0; k < 6; k++) {
+    const it = placeNew("crate", items, CATALOG, room);
+    assert.equal(it.id, k + 1);
+    items = [...items, it];
+    assert.equal(problems(items, CATALOG, room).size, 0, `piece ${k + 1}`);
+    assert.equal(it.x, Math.round(it.x / 0.25) * 0.25, "on the grid");
+  }
+  const shelf = placeNew("shelf", items, CATALOG, room);
+  assert.equal(shelf.length, 2, "with its default settings");
+  const on = (v, ws) => ws.some(w => Math.abs(v - w) < 1e-9);
+  assert.ok(on(shelf.x, [room.x0 + 0.2, room.x1 - 0.2]) || on(shelf.z, [room.z0 + 0.2, room.z1 - 0.2]), "against a wall");
+});
+
+test("rotateItem: floor pieces turn a quarter and stay inside; wall pieces keep facing the room", () => {
+  const room = roomOf(P);
+  const c = rotateItem({ id: 1, type: "crate", x: room.x1 - 0.4, z: 0, rot: 0 }, CATALOG.crate, room);
+  assert.equal(c.rot, 90);
+  assert.ok(footprint(c, CATALOG.crate).x1 <= room.x1 + 1e-9);
+  assert.equal(rotateItem({ ...c, rot: 270 }, CATALOG.crate, room).rot, 0);
+  const s = { id: 2, type: "shelf", x: 0, z: room.z0 + 0.2, rot: 0, length: 2 };
+  assert.deepEqual(rotateItem(s, CATALOG.shelf, room), s);
+});
+
+test("History: undo and redo through edits; a new edit drops the redo", () => {
+  const h = new History([]);
+  h.push([1]); h.push([1, 2]);
+  assert.deepEqual(h.undo(), [1]);
+  assert.deepEqual(h.undo(), []);
+  assert.equal(h.canUndo, false);
+  assert.deepEqual(h.redo(), [1]);
+  h.push([9]);
+  assert.equal(h.canRedo, false);
+  assert.deepEqual(h.undo(), [1]);
+  // edits are copies: changing what was pushed doesn't change history
+  const a = [{ x: 1 }]; h.push(a); a[0].x = 5; h.push([]);
+  assert.deepEqual(h.undo(), [{ x: 1 }]);
 });

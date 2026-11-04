@@ -7,7 +7,7 @@ import {
   genRow, sanitize, serialize, slugify, buildGeometry, buildI3d, placeableSnippet, sleepPoint, surfaceSpec, scaledUV, colorFor, WP
 } from "./model.mjs";
 import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, henYard, henCap, seeThroughGlass, kindOf } from "./model.mjs";
-import { roomOf, problems } from "./layout.mjs";
+import { roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, History } from "./layout.mjs";
 import { paintInterior, paintGlass } from "./interior.mjs";
 export { slugify };
 
@@ -23,7 +23,15 @@ const MARKUP = `<div class="hx-editor" data-tab="build">
   <section class="hx-stage" id="stage" aria-label="3D preview">
     <canvas id="view"></canvas>
     <div class="readout" id="readout"></div>
-    <div class="orbit-hint">Drag to orbit, scroll to zoom</div>
+    <div class="orbit-hint" id="orbitHint">Drag to orbit, scroll to zoom</div>
+    <div class="hx-inside-bar" id="insideBar" hidden>
+      <div class="seg" role="group" aria-label="View">
+        <button type="button" id="viewPlan" aria-pressed="true">Plan</button><button type="button" id="view3d" aria-pressed="false">3D</button>
+      </div>
+      <button type="button" id="insideUndo" title="Undo (Ctrl+Z)">Undo</button>
+      <button type="button" id="insideRedo" title="Redo (Ctrl+Y)">Redo</button>
+      <button type="button" id="insideDone" class="primary">Done</button>
+    </div>
   </section>
   <aside class="hx-panel hx-finish" id="panel-finish" role="tabpanel" aria-labelledby="tab-finish"><h2 class="hx-side">Finish and export</h2><div id="controls-finish"></div></aside>
   <div id="toast" class="hx-toast" role="status" aria-live="polite"></div>
@@ -285,7 +293,7 @@ const stage = $("stage");
 const readout = $("readout");
 let interiorTex = null, interiorCv = null, groundObj = null, gridObj = null;
 const interiorCanvas = () => interiorCv || (interiorCv = paintInterior(document));
-let renderer, scene, camera, groundMat, selMesh = null, sleepObj = null, yardObj = null, meshes = {}, matObjs = {}, needs = true;
+let renderer, scene, camera, groundMat, selMesh = null, sleepObj = null, yardObj = null, meshes = {}, matObjs = {}, needs = true, sunLight = null;
 
 function initThree() {
   renderer = new THREE.WebGLRenderer({canvas, antialias:true});
@@ -295,7 +303,7 @@ function initThree() {
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(38, 1, 0.1, 600);
   scene.add(new THREE.HemisphereLight(0xffffff, 0x7d8a72, 0.7));
-  const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+  const sun = sunLight = new THREE.DirectionalLight(0xffffff, 0.8);
   sun.position.set(14, 22, 10);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
@@ -324,6 +332,12 @@ function initThree() {
   selMesh.visible = false; scene.add(selMesh);
   sleepObj = makeSleepMarker(); scene.add(sleepObj.group);
   yardObj = makeYardMarker(); scene.add(yardObj.group);
+  ortho = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 200);
+  makeInsideOverlay();
+  $("viewPlan").onclick = () => setInsideView("plan");
+  $("view3d").onclick = () => setInsideView("3d");
+  $("insideUndo").onclick = undoInside; $("insideRedo").onclick = redoInside; $("insideDone").onclick = leaveInside;
+  cleanups.push(() => window.removeEventListener("keydown", insideKey));
   applyTheme();
   const mq = window.matchMedia("(prefers-color-scheme: dark)");
   mq.addEventListener("change", applyTheme);
@@ -351,9 +365,10 @@ function resize() {
   if (!r.width || !r.height) return;
   renderer.setSize(r.width, r.height, false);
   camera.aspect = r.width / r.height; camera.updateProjectionMatrix();
+  if (ins.on && ins.view === "plan") fitOrtho();
   needs = true;
 }
-function loop() { if (destroyed) return; if (needs) { renderer.render(scene, camera); needs = false; } raf = requestAnimationFrame(loop); }
+function loop() { if (destroyed) return; if (needs) { renderer.render(scene, activeCam()); needs = false; } raf = requestAnimationFrame(loop); }
 
 const view = {theta:0.75, phi:1.15, r:26, target:[0,3,0]};
 function updateCam() {
@@ -364,11 +379,55 @@ function updateCam() {
 }
 function setupOrbit() {
   const ptrs = new Map(); let pinch = 0, downAt = null;
-  canvas.addEventListener("pointerdown", e => { canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); downAt = ptrs.size === 1 ? [e.clientX, e.clientY] : null; });
-  canvas.addEventListener("pointerup", e => { if (downAt && ptrs.size === 1 && Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) < 5) pick(e); downAt = null; });
+  const zoomPlan = k => { ortho.zoom = Math.min(8, Math.max(0.3, ortho.zoom * k)); ortho.updateProjectionMatrix(); needs = true; };
+  canvas.addEventListener("pointerdown", e => {
+    canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); downAt = ptrs.size === 1 ? [e.clientX, e.clientY] : null;
+    // Arranging the inside: pressing on a piece picks it up.
+    if (ins.on && ptrs.size === 1) {
+      const q = floorPoint(e), id = q && itemAt(p.items || [], catalogNow(), q[0], q[1]);
+      if (id) {
+        const it = p.items.find(x => x.id === id);
+        ins.sel = id; ins.drag = {id, off: [q[0] - it.x, q[1] - it.z], moved: false, cand: it};
+        renderInsideUI(); updateInsideOverlay();
+      }
+    }
+  });
+  canvas.addEventListener("pointerup", e => {
+    const click = downAt && ptrs.size === 1 && Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) < 5;
+    if (ins.drag) {
+      const d = ins.drag; ins.drag = null;
+      if (d.moved && (d.cand.x !== p.items.find(x => x.id === d.id).x || d.cand.z !== p.items.find(x => x.id === d.id).z)) commitItems(p.items.map(x => x.id === d.id ? d.cand : x));
+      else updateInsideOverlay();
+    } else if (click) {
+      if (ins.on) { ins.sel = null; renderInsideUI(); updateInsideOverlay(); } else pick(e);
+    }
+    downAt = null;
+  });
   canvas.addEventListener("pointermove", e => {
     if (!ptrs.has(e.pointerId)) return;
     const prev = ptrs.get(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+    if (ins.drag && ptrs.size === 1) {
+      // Where the piece would land: snapped as it moves.
+      const q = floorPoint(e);
+      if (q) {
+        const it = p.items.find(x => x.id === ins.drag.id);
+        ins.drag.cand = snapItem({...it, x: q[0] - ins.drag.off[0], z: q[1] - ins.drag.off[1]}, catalogNow()[it.type], roomNow());
+        ins.drag.moved = true; updateInsideOverlay();
+      }
+      return;
+    }
+    if (ins.on && ins.view === "plan") {
+      if (ptrs.size === 1) {
+        // Pan: move the view with the pointer.
+        const b = canvas.getBoundingClientRect(), k = (ortho.right - ortho.left) / ortho.zoom / b.width;
+        ins.pan[0] -= (e.clientX - prev[0]) * k; ins.pan[1] -= (e.clientY - prev[1]) * k; fitOrtho();
+      } else if (ptrs.size === 2) {
+        const [a, b] = [...ptrs.values()], d = Math.hypot(a[0]-b[0], a[1]-b[1]);
+        if (pinch) zoomPlan(d / pinch);
+        pinch = d;
+      }
+      return;
+    }
     if (ptrs.size === 1) {
       view.theta -= (e.clientX - prev[0]) * 0.008;
       view.phi = Math.min(1.5, Math.max(0.2, view.phi - (e.clientY - prev[1]) * 0.006));
@@ -382,7 +441,11 @@ function setupOrbit() {
   });
   const end = e => { ptrs.delete(e.pointerId); pinch = 0; };
   canvas.addEventListener("pointerup", end); canvas.addEventListener("pointercancel", end);
-  canvas.addEventListener("wheel", e => { e.preventDefault(); view.r = Math.min(120, Math.max(5, view.r * Math.exp(e.deltaY * 0.001))); updateCam(); }, {passive:false});
+  canvas.addEventListener("wheel", e => {
+    e.preventDefault();
+    if (ins.on && ins.view === "plan") { zoomPlan(Math.exp(-e.deltaY * 0.001)); return; }
+    view.r = Math.min(120, Math.max(3, view.r * Math.exp(e.deltaY * 0.001))); updateCam();
+  }, {passive:false});
 }
 
 let surfTimer;
@@ -535,21 +598,198 @@ function applyKindRules() {
   for (const k in q) if (typeof q[k] !== "object" && q[k] !== p[k]) { p[k] = q[k]; changed = true; }
   return changed;
 }
-/** The Inside section of a walk-in building: what's placed, what's wrong, fill or clear. */
+/* ---------- Arranging the inside ---------- */
+// Interior mode: the building cut off at the top of its walls (a clipping plane), seen from straight
+// above (Plan, an orthographic camera) or in 3D. Pieces are picked and dragged on the floor; the
+// rules (snapping, problems, history) are in layout.mjs.
+const ins = {on: false, view: "plan", sel: null, drag: null, hist: null, keep: false, pan: [0, 0]};
+let ortho = null, ghost = null, marks = null, planLines = null;
+const clipPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0);
+const activeCam = () => ins.on && ins.view === "plan" ? ortho : camera;
+const roomNow = () => { const k = kindOf(p); return roomOf(p, k.openings ? k.openings(p) : []); };
+const catalogNow = () => kindOf(p).catalog || {};
+const selected = () => (p.items || []).find(it => it.id === ins.sel) || null;
+
+function enterInside() {
+  if (!renderer || !kindOf(p).catalog) return;
+  ins.on = true; ins.sel = null; ins.drag = null; ins.pan = [0, 0];
+  ins.hist = new History(p.items || []);
+  ins.saved = {...view, target: [...view.target]};
+  sleepObj.group.visible = false; yardObj.group.visible = false;
+  // The shadow pass isn't clipped, so the roof would still shade the floor: no shadows while arranging.
+  sunLight.castShadow = false;
+  $("insideBar").hidden = false; $("orbitHint").textContent = "Drag a piece to move it · R turns · Delete removes";
+  window.addEventListener("keydown", insideKey);
+  setInsideView(ins.view);
+  renderInsideUI();
+}
+function leaveInside() {
+  if (!ins.on) return;
+  ins.on = false; ins.drag = null; ins.sel = null;
+  window.removeEventListener("keydown", insideKey);
+  renderer.clippingPlanes = [];
+  sunLight.castShadow = true;
+  $("insideBar").hidden = true; $("orbitHint").textContent = "Drag to orbit, scroll to zoom";
+  Object.assign(view, ins.saved);
+  rebuild(false);
+}
+function setInsideView(v) {
+  ins.view = v;
+  $("viewPlan").setAttribute("aria-pressed", String(v === "plan")); $("view3d").setAttribute("aria-pressed", String(v === "3d"));
+  const r = roomNow();
+  // Plan: cut through the walls at window height, like a drawing. 3D: just under the eaves (which
+  // hang lower than the wall tops by the overhang's drop), so no roof is left over the walls.
+  const eaves = r.H - (p.roofType === "flat" ? 0 : p.overhang * Math.tan(p.roofPitch * Math.PI / 180));
+  clipPlane.constant = r.F + (v === "plan" ? 1.3 : Math.max(1.4, eaves - 0.12));
+  renderer.clippingPlanes = [clipPlane];
+  if (v === "3d") {
+    view.target = [(r.x0 + r.x1) / 2, r.F + 0.4, (r.z0 + r.z1) / 2];
+    view.r = Math.max(r.x1 - r.x0, r.z1 - r.z0) * 1.4 + 3; view.phi = Math.min(view.phi, 0.95);
+    updateCam();
+  } else fitOrtho();
+  updateInsideOverlay();
+}
+/** The plan camera: straight down on the room (front of the building at the bottom), with pan and zoom. */
+function fitOrtho() {
+  const r = roomNow(), s = stage.getBoundingClientRect(), aspect = (s.width || 1) / (s.height || 1);
+  const cx = (r.x0 + r.x1) / 2 + ins.pan[0], cz = (r.z0 + r.z1) / 2 + ins.pan[1];
+  // room plus a metre round it, and room for the bar at the top
+  let hw = (r.x1 - r.x0) / 2 + 1, hh = (r.z1 - r.z0) / 2 + 1.6;
+  if (hw / hh > aspect) hh = hw / aspect; else hw = hh * aspect;
+  Object.assign(ortho, {left: -hw, right: hw, top: hh, bottom: -hh});
+  ortho.position.set(cx, 60, cz); ortho.up.set(0, 0, -1); ortho.lookAt(cx, 0, cz);
+  ortho.updateProjectionMatrix(); needs = true;
+}
+/** Where the pointer meets the floor: [x, z], or null. */
+function floorPoint(e) {
+  const b = canvas.getBoundingClientRect(), v = new THREE.Vector2(((e.clientX - b.left) / b.width) * 2 - 1, -((e.clientY - b.top) / b.height) * 2 + 1);
+  const rc = new THREE.Raycaster(); rc.setFromCamera(v, activeCam());
+  const hit = rc.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -roomNow().F), new THREE.Vector3());
+  return hit ? [hit.x, hit.z] : null;
+}
+/** An edit: the new pieces, remembered for undo, saved and built. */
+function commitItems(items, sel = ins.sel) {
+  p.items = items; ins.sel = sel; ins.hist.push(items); persist(); rebuild(false);
+}
+function undoInside() { if (ins.hist && ins.hist.canUndo) { p.items = ins.hist.undo(); if (!selected()) ins.sel = null; persist(); rebuild(false); } }
+function redoInside() { if (ins.hist && ins.hist.canRedo) { p.items = ins.hist.redo(); if (!selected()) ins.sel = null; persist(); rebuild(false); } }
+function addPiece(type) {
+  const it = placeNew(type, p.items || [], catalogNow(), roomNow());
+  commitItems([...(p.items || []), it], it.id);
+}
+function turnSelected() {
+  const it = selected(); if (!it) return;
+  const t = rotateItem(it, catalogNow()[it.type], roomNow());
+  if (t !== it) commitItems(p.items.map(x => x.id === it.id ? t : x));
+}
+function removeSelected() {
+  if (!selected()) return;
+  commitItems(p.items.filter(x => x.id !== ins.sel), null);
+}
+function insideKey(e) {
+  if (!ins.on || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement && document.activeElement.tagName)) return;
+  const k = e.key.toLowerCase(), mod = e.ctrlKey || e.metaKey;
+  if (mod && k === "z" && !e.shiftKey) undoInside();
+  else if (mod && (k === "y" || (k === "z" && e.shiftKey))) redoInside();
+  else if (k === "r" && !mod) turnSelected();
+  else if (k === "delete" || k === "backspace") removeSelected();
+  else if (k === "escape") { if (ins.sel) { ins.sel = null; renderInsideUI(); updateInsideOverlay(); } else leaveInside(); }
+  else return;
+  e.preventDefault();
+}
+/** Overlays: the room's outline and keep-outs, a box on each piece with a problem, and the selected (or dragged) piece. */
+function makeInsideOverlay() {
+  ghost = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({transparent: true, opacity: 0.35, depthWrite: false}));
+  ghost.renderOrder = 5; ghost.visible = false;
+  marks = new THREE.Group();
+  planLines = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({color: 0x2f3a2a}));
+  planLines.visible = false;
+  scene.add(ghost, marks, planLines);
+}
+const boxOn = (mesh, f, F, h) => { mesh.position.set((f.x0 + f.x1) / 2, F + h / 2, (f.z0 + f.z1) / 2); mesh.scale.set(Math.max(0.02, f.x1 - f.x0), h, Math.max(0.02, f.z1 - f.z0)); };
+function updateInsideOverlay() {
+  if (!ghost) return;
+  for (const c of [...marks.children]) { marks.remove(c); c.geometry.dispose(); c.material.dispose(); }
+  ghost.visible = planLines.visible = ins.on;
+  updateInsideBar();
+  if (!ins.on) { needs = true; return; }
+  const room = roomNow(), cat = catalogNow(), items = p.items || [];
+  // the room's outline and keep-outs, just above the floor
+  const ln = [], y = room.F + 0.03, rect = r => [r.x0, r.z0, r.x1, r.z0, r.x1, r.z0, r.x1, r.z1, r.x1, r.z1, r.x0, r.z1, r.x0, r.z1, r.x0, r.z0];
+  for (const r of [room, ...room.keepOut.map(k => k.rect)]) { const q = rect(r); for (let i = 0; i < q.length; i += 2) ln.push(q[i], y, q[i + 1]); }
+  planLines.geometry.dispose(); planLines.geometry = new THREE.BufferGeometry();
+  planLines.geometry.setAttribute("position", new THREE.Float32BufferAttribute(ln, 3));
+  // problems, except on the piece being dragged
+  const pr = problems(items, cat, room);
+  for (const it of items) if (pr.has(it.id) && !(ins.drag && ins.drag.id === it.id)) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({color: 0xd03a2a, transparent: true, opacity: 0.3, depthWrite: false}));
+    boxOn(m, footprint(it, cat[it.type]), room.F, cat[it.type].height(it) + 0.05); marks.add(m);
+  }
+  // the selected piece, or where the dragged one would land: green if fine, red if not
+  const it = ins.drag ? ins.drag.cand : selected();
+  ghost.visible = !!it;
+  if (it) {
+    const def = cat[it.type], others = items.filter(x => x.id !== it.id), bad = problems([...others, it], cat, room).has(it.id);
+    boxOn(ghost, footprint(it, def), room.F, def.height(it) + 0.08);
+    ghost.material.color.set(bad ? 0xd03a2a : ins.drag ? 0x3f9a43 : 0x2f6fd0);
+  }
+  needs = true;
+}
+function updateInsideBar() {
+  if (!$("insideUndo")) return;
+  $("insideUndo").disabled = !(ins.hist && ins.hist.canUndo);
+  $("insideRedo").disabled = !(ins.hist && ins.hist.canRedo);
+}
+
+/** The Inside section of a walk-in building: a summary and buttons, or (arranging) the palette and the selected piece. */
 function renderInsideUI() {
   const ed = $("insideEditor"), kind = kindOf(p);
-  if (!ed || !kind.catalog) return;
-  const items = p.items || [], pr = problems(items, kind.catalog, roomOf(p, kind.openings ? kind.openings(p) : []));
-  const counts = new Map();
-  for (const it of items) counts.set(it.type, (counts.get(it.type) || 0) + 1);
-  const list = [...counts].map(([type, n]) => `<li>${kind.catalog[type].name}${n > 1 ? ` × ${n}` : ""}</li>`).join("");
-  const out = [...pr.values()].filter(m => /outside/i.test(m)).length, other = pr.size - out;
-  ed.innerHTML = (items.length ? `<ul class="pieces">${list}</ul>` : `<p class="hint">Nothing inside yet.</p>`)
-    + (out ? `<p class="warn">${out} piece${out > 1 ? "s stick" : " sticks"} out through a wall and ${out > 1 ? "are" : "is"} left out. Make the building bigger or fill it again.</p>` : "")
-    + (other ? `<p class="warn">${other} piece${other > 1 ? "s overlap or block" : " overlaps or blocks"} the door.</p>` : "")
-    + `<div class="row"><button type="button" id="insideFill">Fill automatically</button><button type="button" id="insideClear" ${items.length ? "" : "disabled"}>Remove all</button></div>`;
-  $("insideFill").onclick = () => { p.items = kind.autoFurnish(p).items; persist(); rebuild(false); toast("Filled to match the building"); };
-  $("insideClear").onclick = () => { p.items = []; persist(); rebuild(false); };
+  if (!ed || !kind.catalog || ins.keep) return;
+  const cat = kind.catalog, items = p.items || [], pr = problems(items, cat, roomNow());
+  const fillRow = `<div class="row"><button type="button" id="insideFill">Fill automatically</button><button type="button" id="insideClear" ${items.length ? "" : "disabled"}>Remove all</button></div>`;
+  if (!ins.on) {
+    const counts = new Map();
+    for (const it of items) counts.set(it.type, (counts.get(it.type) || 0) + 1);
+    const list = [...counts].map(([type, n]) => `<li>${cat[type].name}${n > 1 ? ` × ${n}` : ""}</li>`).join("");
+    const out = [...pr.values()].filter(m => /outside/i.test(m)).length, other = pr.size - out;
+    ed.innerHTML = (items.length ? `<ul class="pieces">${list}</ul>` : `<p class="hint">Nothing inside yet.</p>`)
+      + (out ? `<p class="warn">${out} piece${out > 1 ? "s stick" : " sticks"} out through a wall and ${out > 1 ? "are" : "is"} left out. Make the building bigger, move ${out > 1 ? "them" : "it"} or fill it again.</p>` : "")
+      + (other ? `<p class="warn">${other} piece${other > 1 ? "s overlap or block" : " overlaps or blocks"} something.</p>` : "")
+      + `<div class="row"><button type="button" class="primary" id="insideArrange" ${renderer ? "" : "disabled"}>Arrange the inside</button></div>` + fillRow;
+    $("insideArrange").onclick = () => { setTab("build"); enterInside(); };
+  } else {
+    const it = selected(), def = it && cat[it.type];
+    const fmtP = (f, v) => (+v).toFixed(f.step >= 1 ? 0 : 1) + (f.unit || "");
+    ed.innerHTML = `<p class="hint">Click a piece to add it, then drag it into place. Wall pieces go against the nearest wall.</p>`
+      + `<div class="palette">${Object.entries(cat).map(([type, d]) => `<button type="button" data-add="${type}">+ ${d.name}</button>`).join("")}</div>`
+      + (it ? `<div class="piece"><h4>${def.name}</h4>${pr.has(it.id) ? `<p class="warn">${pr.get(it.id)}.</p>` : ""}`
+          + def.params.map(f => `<div class="field"><div class="fl"><label for="pc-${f.k}">${f.label}</label><output id="pc-${f.k}-o">${fmtP(f, it[f.k])}</output></div><input type="range" id="pc-${f.k}" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}" value="${it[f.k]}"></div>`).join("")
+          + `<div class="row"><button type="button" id="pcTurn" ${def.mount === "wall" ? "disabled title=\"Wall pieces always face the room\"" : ""}>Turn</button><button type="button" id="pcRemove" class="danger">Remove</button></div></div>`
+        : `<p class="hint">Click a piece in the building to change or move it.</p>`)
+      + (pr.size ? `<p class="warn">${pr.size} piece${pr.size > 1 ? "s have" : " has"} a problem (red).</p>` : "")
+      + fillRow;
+    ed.querySelectorAll("[data-add]").forEach(b => b.onclick = () => addPiece(b.dataset.add));
+    if (it) {
+      $("pcTurn").onclick = turnSelected; $("pcRemove").onclick = removeSelected;
+      ed.querySelectorAll("input[data-k]").forEach(inp => {
+        const f = def.params.find(x => x.k === inp.dataset.k);
+        // While sliding, rebuild without redrawing this panel; remember the edit when the slider is let go.
+        inp.oninput = () => {
+          const cur = selected(), next = snapItem({...cur, [f.k]: +inp.value}, def, roomNow());
+          p.items = p.items.map(x => x.id === cur.id ? next : x);
+          $(`pc-${f.k}-o`).textContent = fmtP(f, inp.value);
+          ins.keep = true; rebuild(false); ins.keep = false;
+        };
+        inp.onchange = () => { ins.hist.push(p.items); persist(); rebuild(false); };
+      });
+    }
+  }
+  $("insideFill").onclick = () => {
+    const items = kind.autoFurnish(p).items;
+    if (ins.on) commitItems(items, null); else { p.items = items; persist(); rebuild(false); }
+    toast("Filled to match the building");
+  };
+  $("insideClear").onclick = () => { if (ins.on) commitItems([], null); else { p.items = []; persist(); rebuild(false); } };
 }
 function renderDormUI() {
   const ed = $("dormEditor");
@@ -813,12 +1053,15 @@ function rebuild(fit) {
       }
     });
     scheduleSurfaces();
-    view.target = [0, dims.ridgeY * 0.45, 0];
-    if (fit) view.r = Math.max(dims.W, dims.D, dims.ridgeY) * 2.3 + 6;
-    updateCam();
-    updateHighlight();
-    updateSleepMarker(geo);
-    updateYardMarker(geo);
+    if (!ins.on) {
+      view.target = [0, dims.ridgeY * 0.45, 0];
+      if (fit) view.r = Math.max(dims.W, dims.D, dims.ridgeY) * 2.3 + 6;
+      updateCam();
+      updateHighlight();
+      updateSleepMarker(geo);
+      updateYardMarker(geo);
+    }
+    updateInsideOverlay();
   }
   refreshWin(); refreshDorm(); renderInsideUI();
   MATS.forEach(m => tris += G[m].i.length / 3);
@@ -925,9 +1168,13 @@ function setSettings(obj) { p = sanitize(obj); selId = null; dSel = null; syncCo
 /** A small JPEG of the current view, for the project list. */
 function snapshot() {
   if (!renderer) return null;
+  // The project list's picture is always the whole building, even while arranging the inside.
   const wasVisible = selMesh.visible, sleepVisible = sleepObj.group.visible, yardVisible = yardObj.group.visible;
+  const over = [ghost, marks, planLines].map(o => o.visible), clip = renderer.clippingPlanes;
   selMesh.visible = false; sleepObj.group.visible = false; yardObj.group.visible = false;
+  [ghost, marks, planLines].forEach(o => o.visible = false); renderer.clippingPlanes = [];
   renderer.render(scene, camera);
+  [ghost, marks, planLines].forEach((o, i) => o.visible = over[i]); renderer.clippingPlanes = clip;
   const src = renderer.domElement, W = 480, H = 300;
   const c = document.createElement("canvas"); c.width = W; c.height = H;
   const k = Math.max(W / src.width, H / src.height), sw = W / k, sh = H / k;
