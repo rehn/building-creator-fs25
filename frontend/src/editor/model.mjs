@@ -110,8 +110,7 @@ const SHARED_SECTIONS = [
     {k:"chimneyColor", label:"Chimney", type:"color"},
     {k:"gutterColor", label:"Gutters", type:"color"},
     {k:"curtainColor", label:"Curtains", type:"color"}]},
-  {title:"Interior", side:"finish", hint:"A small furnished room behind each window, seen through the glass. To pick the room or curtains for one window, choose it under Windows (or a kupa under Kupor).", fields:[
-    {k:"interior", label:"Rooms behind the windows", type:"check"},
+  {title:"Interior", side:"finish", hint:"The floors above the ground floor are closed: a small furnished room is seen through each of their windows. To pick the room or curtains for one window, choose it under Windows (or a kupa under Kupor). The ground floor's inside is under Inside.", fields:[
     {k:"curtainStyle", label:"Curtains", type:"select", options:CURTAIN_OPTIONS}]},
   {title:"Game objects", side:"finish", custom:"objects", hint:"What the game needs around the building: where you sleep, tip feed, drop bales, load animals, collect eggs, and the pasture's fence. Add and remove them here, and drag them into place in the plan view.", fields:[]},
   {title:"Game mod", side:"finish", hint:"Used by \u201CExport game mod\u201D: what the house costs in the shop and who made it. The project name is the name in the shop.", fields:[
@@ -216,7 +215,7 @@ function cleanWindows(arr, legacy = {}) {
     return {
       id: i + 1, wall: w.wall, floor: Math.round(clampN(w.floor, 0, 2, 0)), pos: clampN(w.pos, 0, 1, 0.5),
       w: clampN(w.w, 0.3, 3, 1), h: clampN(w.h, 0.3, door ? 2.6 : 2.4, 1.25), sill: clampN(w.sill, 0, 2, 0.85),
-      ...k, ...porch,
+      ...k, ...porch, ...(door ? {opens: w.opens !== false} : {}),
       room: pickRoom(w.room), curtain: pickCurtain(w.curtain), curtainColor: pickColor(w.curtainColor)
     };
   });
@@ -231,7 +230,7 @@ function legacyDoor(obj, P, kind) {
   const w = clampN(obj.doorW, 0.7, 2.5, 1), h = clampN(obj.doorH, 1.8, 2.6, 2.1);
   const c = L/2 + clampN(obj.doorPos, -1, 1, 0) * Math.max(0, L/2 - w/2 - 0.3);
   return {wall, floor: 0, pos: c / L, w, h, sill: 0, type: "door", style: "default",
-    ...cleanPorch(obj.entrance === undefined ? (kind.walkIn ? "none" : "porch") : obj.entrance, obj.entranceWidth, obj.entranceDepth)};
+    ...cleanPorch(obj.entrance === undefined ? (kind.entrance || "none") : obj.entrance, obj.entranceWidth, obj.entranceDepth)};
 }
 export const DTYPES = ["frontespis", "gable", "shed"];
 export const DORM_DEF = {
@@ -672,7 +671,7 @@ function layoutWall(key, L, fh, topAt, cover = null) {
     // a door made from a window stands on the floor, no taller than the floor allows
     const t0 = door ? 0 : win.floor * fh + win.sill;
     const t1 = door ? Math.min(win.h, fh - 0.25) : win.floor < p.floors ? Math.min(t0 + win.h, (win.floor + 1) * fh - 0.25) : t0 + win.h;
-    const op = {s0, s1, t0, t1, kind: door ? "door" : "window", id: win.id, style: styleOf(p, win)};
+    const op = {s0, s1, t0, t1, kind: door ? "door" : "window", id: win.id, style: styleOf(p, win), ...(door ? {opens: win.opens !== false} : {})};
     if (door) op.porch = {type: win.porch || "none", w: win.porchW || PORCH_W[2], d: win.porchD || PORCH_D[2]};
     const g = 0.18;
     if (t1 - t0 < 0.3 || s1 - s0 < 0.3 || ops.some(q => q.s0 < op.s1 + g && op.s0 < q.s1 + g && q.t0 < op.t1 + g && op.t0 < q.t1 + g)
@@ -867,15 +866,18 @@ function buildDoor(w, o, kit, inner, r, out, key) {
     const before = vcount(), right = k === 1;
     drawLeaf(kit, o.style, {s0, s1, t0, t1, dIn, dOut, right});
     if (slide) for (const u of [0.15, s1 - s0 - 0.2]) kit.box("iron", s0 + u, s0 + u + 0.05, t1, t1 + 0.06, dIn + 0.015, dOut - 0.015);   // hangers up to the rail
-    if (!inner) return;
+    // (a door that doesn't open is drawn the same, but stays put: no leaves for the game to move)
+    if (!inner || !o.opens) return;
     const ax = Math.abs(w.u[0]) > 0.5, along = s1 - s0, tall = t1 - t0, thick = dOut - dIn;
     const box = {center: WP(w, (s0 + s1) / 2, (t0 + t1) / 2, (dIn + dOut) / 2), size: ax ? [along, tall, thick] : [thick, tall, along]};
     if (slide) {
       const v = (right ? 1 : -1) * travel;
       leaves.push({hinge: WP(w, s0, o.t0, dIn), motion: {translation: [w.u[0] * v, 0, w.u[2] * v]}, parts: rangesSince(before), box});
-    } else leaves.push({hinge: WP(w, right ? s1 : s0, o.t0, dOut), motion: {rotation: right ? -DOOR_OPEN : DOOR_OPEN}, parts: rangesSince(before), box});
+    // a barn's doors swing out; a house's (kind.doorsIn) in, hinged on the inside of the leaf
+    } else if (kind.doorsIn) leaves.push({hinge: WP(w, right ? s1 : s0, o.t0, dIn), motion: {rotation: right ? DOOR_OPEN : -DOOR_OPEN}, parts: rangesSince(before), box});
+    else leaves.push({hinge: WP(w, right ? s1 : s0, o.t0, dOut), motion: {rotation: right ? -DOOR_OPEN : DOOR_OPEN}, parts: rangesSince(before), box});
   });
-  if (inner) doors.push({wall: key, op: o, slide, leaves});
+  if (inner && o.opens) doors.push({wall: key, op: o, slide, leaves});
 }
 /**
  * inner: build the wall's inside face too, WALL_T behind the outside one (where the opening
@@ -912,28 +914,32 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
     for (const [a, b] of [...cuts, [L - 0.09, L]]) { if (Math.min(a, L - 0.09) - s > 0.05) wbox("trim", w, s, Math.min(a, L - 0.09), split, split + bh, 0, 0.03); s = Math.max(s, b); }
   }
   if (inner) {
-    const Hi = H + inner.lift, tw = WALL_T;
+    // the kind's finish (a barn's by default); under a ceiling (kind.ceiling) only up to it, the floors above closed
+    const fin = kind.insideWalls || BARN_WALLS, ceil = kind.ceiling ? p.floorHeight : Infinity;
+    const Hi = Math.min(H + inner.lift, ceil), tw = WALL_T, lowT = fin.low ? fin.low[2] : 0;
     const Xi = uniq([tw, L - tw, L/2, ...ops.flatMap(o => [o.s0, o.s1])]).filter(s => s > tw - 1e-6 && s < L - tw + 1e-6);
-    // Whitewash, greyer and grubbier along the bottom where the animals rub and muck splashes.
-    const Ti = uniq([0, GRIME_T, Hi, H + gableRise, ...ops.flatMap(o => [o.t0, o.t1])]);
+    // (a barn's: whitewash, greyer and grubbier along the bottom where the animals rub and muck splashes)
+    const Ti = uniq([0, ...(lowT ? [lowT] : []), Hi, ...(ceil < Infinity ? [] : [H + gableRise]), ...ops.flatMap(o => [o.t0, o.t1])]);
     for (let i = 0; i < Xi.length - 1; i++) for (let j = 0; j < Ti.length - 1; j++) {
       const cs = (Xi[i] + Xi[i+1]) / 2, ct = (Ti[j] + Ti[j+1]) / 2;
       if (ops.some(o => cs > o.s0 && cs < o.s1 && ct > o.t0 && ct < o.t1)) continue;
       let c = [[Xi[i], Ti[j]], [Xi[i+1], Ti[j]], [Xi[i+1], Ti[j+1]], [Xi[i], Ti[j+1]]];
       if (Ti[j+1] > Hi + 1e-6) {
-        if (gableRise <= 0) continue;
+        if (gableRise <= 0 || ceil < Infinity) continue;
         const k = gableRise / (L / 2);
         c = clipPoly(clipPoly(c, -k, 1, H), k, 1, H + 2 * gableRise);
       }
-      paint(ct < GRIME_T ? GRIME : WHITEWASH, ct < GRIME_T ? "grime" : "whitewash");
+      const f = fin.low && ct < lowT ? fin.low : fin.wall;
+      paint(f[0], f[1]);
       if (c.length >= 3) poly("fittings", c.map(q => WP(w, q[0], q[1], -tw)), neg(w.n));
     }
-    // A tarred kickboard along the bottom, except across openings that come down to it.
-    paint(KICKBOARD, "timber");
+    // A kickboard (a barn's tarred, a house's skirting) along the bottom, except across openings that come down to it.
+    const [kickC, kickS, KT] = fin.kick;
+    paint(kickC, kickS);
     for (let i = 0; i < Xi.length - 1; i++) {
       const cs = (Xi[i] + Xi[i+1]) / 2;
-      if (Xi[i+1] - Xi[i] < 0.02 || ops.some(o => cs > o.s0 && cs < o.s1 && o.t0 < KICK_T)) continue;
-      wbox("fittings", w, Xi[i], Xi[i+1], 0, KICK_T, -tw - 0.025, -tw);
+      if (Xi[i+1] - Xi[i] < 0.02 || ops.some(o => cs > o.s0 && cs < o.s1 && o.t0 < KT)) continue;
+      wbox("fittings", w, Xi[i], Xi[i+1], 0, KT, -tw - 0.025, -tw);
     }
   }
 
@@ -985,7 +991,7 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
       }
     } else wbox("trim", w, o.s0 - fr - 0.04 * k, o.s1 + fr + 0.04 * k, o.t0 - 0.07 * k, o.t0, 0, out + 0.05 * k);
   });
-  if (p.interior) for (const o of ops) if (o.kind === "window" && o.glass) { const R = roomFor(w, o, ops, r, topAt, !!dormer, dormer || p.windows.find(x => x.id === o.id)); rooms.push(R); buildRoom(R); }
+  if (p.interior) for (const o of ops) if (o.kind === "window" && o.glass && !(hollow && !dormer && o.t0 < p.floorHeight)) { const R = roomFor(w, o, ops, r, topAt, !!dormer, dormer || p.windows.find(x => x.id === o.id)); rooms.push(R); buildRoom(R); }
 }
 
 /** Appends a ready-made mesh (with its own normals) to material mat. */
@@ -1002,6 +1008,8 @@ function addMesh(mat, m) {
 /** The floor finish: a skin, so anything lying on the floor (bedding, droppings, plates) shows above it. */
 const FLOOR_T = 0.004;
 const WHITEWASH = "#E9E4D8", GRIME = "#C2B8A3", GRIME_T = 0.9, KICKBOARD = "#3F352C", KICK_T = 0.28, ROOF_BOARDS = "#8C7457";
+/** A barn's inside walls: whitewash, a grimy band at the bottom and a tarred kickboard ([colour, surface, height]). */
+const BARN_WALLS = {wall: [WHITEWASH, "whitewash"], low: [GRIME, "grime", GRIME_T], kick: [KICKBOARD, "timber", KICK_T]};
 /** The color the next "fittings" faces get, and their surface (a key of SURFACES, or none: plain color). */
 const paint = (hex, surf) => {
   if (surf !== undefined && !SURFACES[surf]) throw new Error(`No surface called "${surf}"`);
@@ -1304,7 +1312,8 @@ function build() {
   // two materials on the walls: where the lower one ends (none at the walls' top or above: the gables are the upper's)
   const splitAt = p.wallSplit === "floor" ? fh : p.wallSplit === "height" ? p.splitHeight : 0;
   const split = splitAt > 0.05 && splitAt < H - 0.05 ? splitAt : null;
-  boardsFrom = hollow ? top + 0.05 : Infinity;
+  // (under a ceiling the roof's underside is never seen from inside: a soffit, not raw boards)
+  boardsFrom = hollow && !kind.ceiling ? top + 0.05 : Infinity;
   const tanP = Math.tan(p.roofPitch * Math.PI / 180), o = p.overhang, th = 0.16;
   const ridgeX = p.roofType === "hip" ? W >= D : p.ridge === "width";
   const Lr = ridgeX ? W : D, span = ridgeX ? D : W;
@@ -1322,7 +1331,7 @@ function build() {
   const ext = b => p.roofType === "hip" ? rhx + b * (hAx - rhx) / hBx : Lr / 2;
   // The wing (an L or T, houses only) in the roof's terms. Its roof is built in its own axes: x out along its
   // ridge from the house's middle, z across it from its ridge; Mw maps those to the world, Ml directions.
-  const wing = hollow ? null : liveWing(p);
+  const wing = liveWing(p);
   let WG = null;
   if (wing && wing.type !== "flat") {
     const m = wallFrames(W, D, F)[wing.wall], cpt = wing.at(wing.sc, 0), yR = top + wing.ww / 2 * tanP;
@@ -1557,7 +1566,7 @@ function build() {
     // and for any other opening tall enough to walk through (a cow barn's doorway to the pasture).
     if (F > 0.01) abox("collision", [-W/2, 0, -D/2], [W/2, F, D/2]);
     for (const key in WS) {
-      const w = WS[key], gaps = opsByWall[key].ops.filter(o => o.kind === "door" || (o.kind === "hatch" && o.t1 >= 1.8)).sort((a, b) => a.s0 - b.s0);
+      const w = WS[key], gaps = opsByWall[key].ops.filter(o => (o.kind === "door" && o.opens) || (o.kind === "hatch" && o.t1 >= 1.8)).sort((a, b) => a.s0 - b.s0);
       const slab = (s0, s1, t0, t1) => { if (s1 - s0 > 1e-6 && t1 - t0 > 1e-6) wbox("collision", w, s0, s1, t0, t1, -WALL_T, 0); };
       let s = 0;
       for (const g of gaps) { slab(s, g.s0, 0, H); slab(g.s0, g.s1, g.t1, H); s = g.s1; }
@@ -1643,7 +1652,12 @@ function build() {
   }
   const ridgeHalf = p.roofType === "hip" ? Math.max(0, Lr/2 - span/2) : Lr/2;
   if (p.ventilators > 0 && p.roofType !== "flat") buildVentilators(Lr, ridgeY, tanP, M, ridgeHalf, th, F);
-  if (hollow && p.roofType !== "flat") {
+  if (hollow && kind.ceiling) {
+    // the ceiling over the ground floor (the floors above are closed from inside)
+    const room = roomOf(p, openings), y = F + p.floorHeight;
+    paint(kind.ceiling, "whitewash");
+    poly("fittings", [[room.x0, y, room.z0], [room.x1, y, room.z0], [room.x1, y, room.z1], [room.x0, y, room.z1]], neg(UP));
+  } else if (hollow && p.roofType !== "flat") {
     // (the tie beams at the ends are 12 cm thick: kept clear of the gable walls)
     const ext = p.roofType === "hip" ? Math.max(0, ridgeHalf - 0.3) : Lr/2 - WALL_T - 0.08;
     buildRoofFrame(ext, span, top, ridgeY, tanP, M, th, p.ventilators > 0 ? ventSpots(p.ventilators, ridgeHalf) : []);
@@ -1658,7 +1672,7 @@ build();
 const {collision, ...visual} = G;
 // the doors in the window list's order (door1, door2 ...)
 doors.sort((a, b) => (a.op.id || 0) - (b.op.id || 0));
-return {G: visual, dims, opsByWall, collision, rooms, downpipes, doors, refs, wing: hollow ? null : liveWing(p)};
+return {G: visual, dims, opsByWall, collision, rooms, downpipes, doors, refs, wing: liveWing(p)};
 }
 
 /* ---------- Materials ---------- */

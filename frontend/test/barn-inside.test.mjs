@@ -56,7 +56,9 @@ test("roof frame: a walk-in barn shows rafters and beams under its roof, a farmh
   const high = verts(f.geo.G.fittings).filter(q => q[1] > top - 0.3 && f.inside(q));
   assert.ok(high.length > 100, "rafters, a ridge beam and ties");
   for (const q of high) assert.ok(q[1] <= f.under(q) + 1e-6, "all of it under the roof");
-  assert.equal(buildGeometry(sanitize({})).G.fittings.i.length, 0);
+  // a farmhouse: nothing inside above its ceiling (its furniture stands below)
+  { const h = sanitize({}), y = h.foundation + h.floorHeight + 0.01, g = buildGeometry(h).G.fittings;
+    for (let i = 1; i < g.p.length; i += 3) assert.ok(g.p[i] <= y, `farmhouse fitting at ${g.p[i]}`); }
 });
 
 test("inside walls: a darker band and a kickboard at the bottom, none across the door", () => {

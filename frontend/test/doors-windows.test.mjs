@@ -41,7 +41,7 @@ test("a window turned into a door: an opening down to the floor, a door leaf, no
   assert.equal(op.kind, "door");
   assert.equal(op.t0, 0);
   assert.ok(Math.abs(op.t1 - 2) < 1e-9);
-  assert.equal(geo.rooms.length, buildGeometry(p0).rooms.filter(r => true).length - p0.windows.filter(w => w.wall === "back" && w.floor === 0).length, "no room behind a door");
+  assert.ok(geo.rooms.every(r => r.op.kind !== "door"), "no room behind a door");
   const {w} = geo.opsByWall.back, s = q => (q[0] - w.o[0]) * w.u[0] + (q[2] - w.o[2]) * w.u[2];
   let n = 0;
   for (let k = 0; k < geo.G.door.p.length; k += 3) { const q = geo.G.door.p.slice(k, k + 3); if (Math.abs(q[2] - w.o[2]) < 0.3 && s(q) > op.s0 - 0.01 && s(q) < op.s1 + 0.01) n++; }

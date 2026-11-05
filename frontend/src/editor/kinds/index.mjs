@@ -1,7 +1,11 @@
 // Building kinds. Each kind is a module with the same shape (see house.mjs and chicken.mjs):
 //   id, name, plural      what it is ("Hen house"), and as a heading over a group ("Hen houses")
 //   category              where "New" lists it (CATEGORIES)
-//   walkIn                inside walls, hollow collision, a door that opens and a furnished inside
+//   walkIn                inside walls, hollow collision, doors that open and a furnished inside
+//   ceiling               walk-in: the colour of a ceiling over the ground floor (the floors above closed)
+//   doorsIn, entrance     walk-in: doors swing in (a house) rather than out; a new first door's porch
+//   insideWalls           walk-in: {wall, low, kick} finish of the inside walls (default: a barn's)
+//   objects               its game objects (objects.mjs): {types, required, pasture, defaults(p)}
 //   defaults, sections    its own settings and the editor sections for them (shown first)
 //   hides                 titles of shared editor sections it doesn't use
 //   normalize(p)          the settings as this kind uses them (applied when loading and exporting)
@@ -9,8 +13,6 @@
 //   description(p)        default text for the mod list
 //   furnish(c)            walk-in kinds: builds the inside (c: drawing context from the core)
 //   scene(c)              extra i3d nodes, placeable XML and ground areas (c: export context)
-//   places, gamePlaces(c) its game places (FS25 boxes and icons the player can move and size, see
-//                         places.mjs): [{id, name, hint, wall, glyph}], and where they are for the preview
 //   presets               starting points for "New"
 // Kinds import only the i3d writer and the core's pure helpers (layout.mjs, places.mjs), never model.mjs,
 // so there are no import cycles.

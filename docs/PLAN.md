@@ -108,7 +108,7 @@ Varje steg ska vara färdigt, testat (TDD) och kontrollerat i webbläsaren innan
 
 1. **Väggmaterial i zoner.** Klart (november 2026): "Two materials on the walls" under Surfaces, delat vid bottenvåningens överkant eller på en vald höjd, med vattbräda i skarven.
 2. **Spelobjekt som objekt, hagen också.** Klart (november 2026): sektionen "Game objects" och planvyn "Move them in the plan view".
-3. **Insida för alla byggnader och val av öppningsbar dörr.** Bostadshuset blir en byggnad man kan gå in i, bottenvåningen.
+3. **Insida för alla byggnader och val av öppningsbar dörr.** Klart (november 2026): bostadshusets bottenvåning går att gå in i, med innertak och möbler; varje dörr har "Opens".
 4. **Flera delar.** Flygeln blir en del i listan, plus tillbyggnader, och insidan sträcker sig över alla delar.
 5. **Claude-guiden** (`fromPhotos.mjs`) uppdateras till den nya modellen, så att foton blir delar, zoner, öppningar och objekt.
 

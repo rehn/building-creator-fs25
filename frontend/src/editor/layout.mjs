@@ -109,7 +109,8 @@ export function roomOf(p, openings = []) {
     return {x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]), z0: Math.min(a[1], b[1]), z1: Math.max(a[1], b[1])};
   };
   // every door is kept clear inside
-  const doors = doorsOf(p).map(w => ({rect: keep(w.wall, ...openingSpan(w, frames[w.wall].L), DOOR_CLEAR), what: "a door"}));
+  // every door that opens is kept clear inside (a door on the wing, or one that stays shut, needn't be)
+  const doors = doorsOf(p).filter(w => w.opens !== false && frames[w.wall]).map(w => ({rect: keep(w.wall, ...openingSpan(w, frames[w.wall].L), DOOR_CLEAR), what: "a door"}));
   const door = doors.length ? doors[0].rect : null;
   const keepOut = [...doors, ...openings.map(o => ({rect: keep(o.wall, o.s0, o.s1, o.clear), what: o.what}))];
   const walls = [
@@ -160,7 +161,8 @@ export function snapItem(item, def, room) {
 const overlap = (a, b, eps = 1e-6) => a.x0 < b.x1 - eps && b.x0 < a.x1 - eps && a.z0 < b.z1 - eps && b.z0 < a.z1 - eps;
 /** What's wrong with each item, if anything: Map id -> message. Outside first, then keep-outs, then overlaps. */
 export function problems(items, catalog, room) {
-  const out = new Map(), rects = items.map(it => [it, footprint(it, catalog[it.type])]);
+  // (pieces the catalog doesn't have, from another kind of building, are left out like the build leaves them out)
+  const out = new Map(), rects = items.filter(it => catalog[it.type]).map(it => [it, footprint(it, catalog[it.type])]);
   for (const [it, f] of rects) {
     if (f.x0 < room.x0 - 1e-6 || f.x1 > room.x1 + 1e-6 || f.z0 < room.z0 - 1e-6 || f.z1 > room.z1 + 1e-6) out.set(it.id, "Sticks out through a wall (outside the room)");
     else {

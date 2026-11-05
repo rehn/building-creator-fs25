@@ -4,6 +4,7 @@ import { tg, camera } from "../i3d.mjs";
 import { wallsOf, openingSpan } from "../layout.mjs";
 import { placeOnWall } from "../places.mjs";
 import { objectOf, boxFrom } from "../objects.mjs";
+import { CATALOG, autoFurnish } from "./furniture.mjs";
 
 /**
  * Scene nodes and placeable XML for the sleep point. c: export context from the core
@@ -53,11 +54,21 @@ export default {
   name: "Farmhouse",
   plural: "Farmhouses",
   category: "homes",
-  walkIn: false,
+  // the ground floor is walked into, under a ceiling (the floors above are closed from inside; their windows
+  // have the small rooms behind them); its doors open inwards
+  walkIn: true,
+  ceiling: "#F4F1EA",
+  doorsIn: true,
+  // what a new house's first door has in front of it
+  entrance: "porch",
+  insideWalls: {wall: ["#E6DCC6", "whitewash"], low: null, kick: ["#F2EFE8", "wood", 0.12]},
+  furnish: c => c.floor("#A9835A", "boards"),
+  catalog: CATALOG,
+  autoFurnish,
   defaults: {},
   sections: [],
-  hides: ["Inside"],
-  normalize: p => p,
+  hides: [],
+  normalize: p => ({...p, interior: true}),
   placeable: p => objectOf(p, "sleep")
     ? {type: "farmhouse", fn: "$l10n_function_farmHouse", shop: {category: "farmhouses", type: "placeable", brush: "buildings", tab: "farmhouses"},
       note: `Sleep point: use <placeable type="farmhouse" ...> so the player can sleep here, as in the base game's farmhouses.`}

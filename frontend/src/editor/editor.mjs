@@ -701,6 +701,7 @@ function renderWinUI() {
     if (door) {
       html += `<div class="field"><div class="fl"><label for="wf-porch">In front of the door</label></div><select id="wf-porch">${PORCH_OPTIONS.map(o => opt(o[0], o[1], s.porch)).join("")}</select></div>`;
       if (s.porch !== "none") html += PORCH_FIELDS.map(f => range(f)).join("");
+      html += `<label class="check"><input type="checkbox" id="wf-opens" ${s.opens !== false ? "checked" : ""}> Opens (you can walk through it in the game)</label>`;
     }
     if (!door) html += choiceFields("wc", s);
     if (!lastDoor) html += `<button type="button" id="winRemove">Remove this ${door ? "door" : "window"}</button>`;
@@ -739,6 +740,7 @@ function renderWinUI() {
     $("wf-wall").onchange = e => { s.wall = e.target.value; winChanged(); renderWinUI(); updateHighlight(); };
     $("wf-style").onchange = e => { s.style = e.target.value; persist(); rebuild(false); };
     if ($("wf-porch")) $("wf-porch").onchange = e => { s.porch = e.target.value; winChanged(); renderWinUI(); };
+    if ($("wf-opens")) $("wf-opens").onchange = e => { s.opens = e.target.checked; winChanged(); };
     if ($("winRemove")) $("winRemove").onclick = () => { p.windows = p.windows.filter(w => w.id !== selId); selId = null; winChanged(); renderWinUI(); };
   }
 }
@@ -1012,7 +1014,9 @@ function setInsideView(v) {
   // Plan: cut through the walls at window height, like a drawing. 3D: just under the eaves (which
   // hang lower than the wall tops by the overhang's drop), so no roof is left over the walls.
   const eaves = r.H - (p.roofType === "flat" ? 0 : p.overhang * Math.tan(p.roofPitch * Math.PI / 180));
-  clipPlane.constant = r.F + (v === "plan" ? 1.3 : Math.max(1.4, eaves - 0.12));
+  // (under a ceiling: just under it)
+  const cut3d = kindOf(p).ceiling ? p.floorHeight - 0.05 : Math.max(1.4, eaves - 0.12);
+  clipPlane.constant = r.F + (v === "plan" ? 1.3 : cut3d);
   renderer.clippingPlanes = [clipPlane];
   if (v === "3d") {
     view.target = [(r.x0 + r.x1) / 2, r.F + 0.4, (r.z0 + r.z1) / 2];

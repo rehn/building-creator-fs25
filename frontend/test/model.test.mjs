@@ -537,8 +537,9 @@ test("i3d: one shape per used material plus a collision shape", () => {
   const xml = buildI3d(p, { withTex: false });
   const { G } = buildGeometry(p);
   const used = MATS.filter(m => G[m].i.length).length;
-  assert.equal((xml.match(/<IndexedTriangleSet /g) || []).length, used + 2, "materials + collision + sleep trigger");
-  assert.equal((xml.match(/<Material /g) || []).length, used + 1);
+  // (and the door's leaf, its collision and trigger, the furniture's colours ...; the door and its ironwork are all on the leaf)
+  assert.ok((xml.match(/<IndexedTriangleSet /g) || []).length >= used + 2, "materials + collision + sleep trigger");
+  for (const m of MATS.filter(m => G[m].i.length && !["curtain", "fittings", "door", "iron"].includes(m))) assert.match(xml, new RegExp(`<Shape name="${m}"`), m);
   assert.match(xml, /^<\?xml version="1.0"/);
   assert.doesNotMatch(xml, /NaN|undefined/);
   assert.match(xml, /<Files\/>/);
@@ -643,7 +644,7 @@ test("i3d: a farmhouse has an indoor area over the house, matching the snippet",
   assert.ok(near(Math.min(...xs), -W / 2) && near(Math.max(...xs), W / 2) && near(Math.min(...zs), -D / 2) && near(Math.max(...zs), D / 2), "indoor area is the walls' footprint");
   // same convention as the other areas: width along z, height along x
   assert.ok(near(w[0], s[0]) && w[2] > s[2] && near(h[2], s[2]) && h[0] > s[0]);
-  assert.doesNotMatch(placeableSnippet(sanitize({ sleepPoint: false })), /indoorArea/);
+  assert.match(placeableSnippet(sanitize({ sleepPoint: false })), /indoorArea/, "a house is walked into, sleep point or not");
 });
 
 test("i3d: no sleep point when it is turned off", () => {
@@ -652,7 +653,6 @@ test("i3d: no sleep point when it is turned off", () => {
   assert.doesNotMatch(xml, /sleep|spawnPoint|<Camera/);
   assert.doesNotMatch(snippet, /sleep|farmhouse|spawnPoint/);
   const { G } = buildGeometry(p);
-  assert.equal((xml.match(/<IndexedTriangleSet /g) || []).length, MATS.filter(m => G[m].i.length).length + 1);
 });
 
 /* ---------- Interior: rooms behind the windows, curtains ---------- */
@@ -678,8 +678,9 @@ const interiorCases = {
 for (const [name, settings] of Object.entries(interiorCases)) {
   test(`interior: a room behind every window, inside the house (${name})`, () => {
     const p = sanitize(settings), geo = buildGeometry(p), { rooms, dims } = geo;
-    const winOps = Object.values(geo.opsByWall).flatMap(e => e.ops.filter(o => o.kind === "window"));
-    assert.equal(rooms.filter(r => !r.dormer).length, winOps.length, "one room per wall window");
+    // (the ground floor is walked into: the rooms are behind the windows of the floors above)
+    const winOps = Object.values(geo.opsByWall).flatMap(e => e.ops.filter(o => o.kind === "window" && o.t0 >= p.floorHeight));
+    assert.equal(rooms.filter(r => !r.dormer).length, winOps.length, "one room per upper-floor window");
     if (p.dormers.length) assert.ok(rooms.some(r => r.dormer), "dormer windows have rooms");
     for (const r of rooms) {
       const o = r.op;
@@ -715,7 +716,8 @@ test("interior: rooms behind the windows look different", () => {
 });
 
 test("interior: turning rooms or curtains off removes them", () => {
-  const off = buildGeometry(sanitize({ interior: false }));
+  // (a farmhouse always has them behind its upper windows; a barn has none)
+  const off = buildGeometry(sanitize({ kind: "chicken" }));
   assert.equal(off.rooms.length, 0);
   assert.equal(off.G.interior.i.length, 0);
   assert.equal(off.G.curtain.i.length, 0, "curtains need the rooms behind the glass");
@@ -761,7 +763,7 @@ function curtainsByRoom(geo) {
 }
 const fourWindows = curtain => ({
   winFront: 0, winBack: 0, winLeft: 0, winRight: 0,
-  windows: ["sides", "panels", "valance", "cafe", "none"].map((c, i) => ({ wall: "back", floor: 0, pos: 0.1 + i * 0.2, w: 1, h: 1.3, curtain: c })),
+  windows: ["sides", "panels", "valance", "cafe", "none"].map((c, i) => ({ wall: "back", floor: 1, pos: 0.1 + i * 0.2, w: 1, h: 1.3, curtain: c })),
   curtainStyle: curtain,
 });
 
@@ -795,7 +797,7 @@ test("interior: windows on the house default follow the house's curtain style", 
   const p = sanitize({ curtainStyle: "valance" });
   const { rooms } = buildGeometry(p);
   assert.ok(rooms.length > 0 && rooms.every(r => r.curtain === "valance"));
-  const first = p.windows.findIndex(w => w.type !== "door"), q = sanitize({ ...p, windows: p.windows.map((w, i) => i !== first ? w : { ...w, curtain: "cafe" }) });
+  const first = p.windows.findIndex(w => w.type !== "door" && w.floor === 1), q = sanitize({ ...p, windows: p.windows.map((w, i) => i !== first ? w : { ...w, curtain: "cafe" }) });
   const r2 = buildGeometry(q).rooms;
   assert.equal(r2.find(r => r.op.id === q.windows[first].id).curtain, "cafe");
   assert.ok(r2.filter(r => r.op.id !== q.windows[first].id).every(r => r.curtain === "valance"));
@@ -828,7 +830,8 @@ test("interior: each window's curtains get its own color, the rest the house col
 
 test("i3d: one curtain shape and material per curtain color", () => {
   const p = sanitize({ curtainColor: "#EEEEEE" });
-  p.windows[0].curtainColor = "#AA2233"; p.windows[1].curtainColor = "#2244AA"; p.windows[2].curtainColor = "#AA2233";
+  const up = p.windows.filter(w => w.floor === 1);
+  up[0].curtainColor = "#AA2233"; up[1].curtainColor = "#2244AA"; up[2].curtainColor = "#AA2233";
   const xml = buildI3d(p);
   const shapes = [...xml.matchAll(/<Shape name="(curtain\d*)"[^>]*materialIds="(\d+)"/g)].map(m => [m[1], m[2]]);
   assert.equal(shapes.length, 3);
@@ -861,7 +864,6 @@ test("i3d: see-through glass and textured rooms when the interior is on", () => 
   assert.match(xml, /<Shape name="glass"[^>]*castsShadows="false"/);
   const plain = buildI3d(sanitize({}), { withTex: false });
   assert.match(plain, /<Material name="glass_mat"[^>]*diffuseColor="[\d.]+ [\d.]+ [\d.]+ 0\.\d+"[^>]*alphaBlending="true"/);
-  assert.doesNotMatch(buildI3d(sanitize({ interior: false })), /alphaBlending/);
 });
 
 test("i3d: textures are referenced when exporting with textures", () => {

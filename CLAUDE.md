@@ -31,6 +31,13 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   read in sanitize. withPasture (pasture.mjs) derives pastureWall, fenceDepth, pastureMid for the rest of the kind
   (doorway/hatch at pastureMid, troughs on [ea, eb]). House: a sleep object makes it a farmhouse (no sleepPoint
   setting). Editor: Game objects section + plan view (ob state, fitSite, drag boxes and the pasture's 3 handles).
+  Walk-in everywhere (PLAN step 3, done): the farmhouse is walkIn too, with kind.ceiling (a ceiling over the ground
+  floor; inside walls stop there; no roof frame; roof underside a soffit), doorsIn (its doors swing in), entrance
+  ("porch" for a new first door), insideWalls {wall, low, kick} (barns default BARN_WALLS), furnish (board floor),
+  catalog + autoFurnish in kinds/furniture.mjs (kitchen, stove, table, chair, bed, sofa, wardrobe, bookshelf, rug;
+  tall pieces kept off windows). Pretend rooms only behind upper-floor windows (house forces interior: true; the
+  "Rooms behind the windows" checkbox is gone). Every door has opens (default true): a door that doesn't open is
+  drawn but gets no leaves/animation, closes the wall's collision and isn't kept clear inside (roomOf).
   Wall zones (PLAN step 1, done): wallSplit one|floor|height, splitHeight, lowerCladding, lowerColor; material
   "wallsLow" (in MATS, its own colour/texture/age) below the split, "walls" above (gables, dormers and porch gables
   are always "walls"); buildWall({split}) adds a drip board (trim) 9 cm in from the ends, broken at openings.
@@ -96,7 +103,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Frontend tests: cd frontend && npm test (node --test, no browser needed)
 
 ## Status
-- Go tests (60) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (361) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
+- Go tests (60) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (383) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
 - Cow barn (kinds/cow.mjs): cowHusbandryPasture (no milk, like cowBarnSmall), automatic water, feed
   and water troughs outside on the pasture wall (kind.outside), a plain walk-through doorway for the
   cows (openings with plain: true; tall openings get a collision gap), feed pad + bale trigger

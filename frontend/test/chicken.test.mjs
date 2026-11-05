@@ -369,9 +369,9 @@ test("shell: you can walk from the middle of a chicken barn out through the door
     const back = geo.opsByWall[{ front: "back", back: "front", left: "right", right: "left" }[firstDoorWall(p)]].w;
     assert.ok(hits(geo.collision, centre, wp(back, back.L / 2, F + 1, 1)), `${id}: walked through the back wall`);
   }
-  // houses stay solid
+  // a house too, now (its door opens)
   const p = sanitize({}), geo = buildGeometry(p), { w, s } = doorMid(geo, p);
-  assert.ok(hits(geo.collision, [0, p.foundation + 1, 0], wp(w, s, p.foundation + 1, 2)));
+  assert.ok(!hits(geo.collision, wp(w, s, p.foundation + 1, -1), wp(w, s, p.foundation + 1, 2)), "a house's doorway is open");
 });
 
 // i3d "0 a 0" rotation about the hinge (right-handed about +y).
@@ -416,7 +416,7 @@ test("mod: the door opens and closes with the game's door prompt", () => {
   const sid = mesh.attrs.match(/shapeId="(\d+)"/)[1];
   const set = i3d.match(new RegExp(`<IndexedTriangleSet name="[^"]*" shapeId="${sid}"[^>]*>[\\s\\S]*?<v p="([^"]+)"`));
   near(set[1].split(" ").map(Number).map((v, k) => v + leaf.hinge[k]), geo.G.door.p.slice(leaf.parts.door[0] * 3, leaf.parts.door[0] * 3 + 3), "door mesh");
-  assert.doesNotMatch(buildI3d(sanitize({})) + placeableXml(sanitize({}), "x"), /door1|animatedObject/, "houses keep a fixed door");
+  assert.match(buildI3d(sanitize({})) + placeableXml(sanitize({}), "x"), /door1Leaf1[\s\S]*animatedObject/, "a house's door opens too");
 });
 
 test("door: a wide door is a pair of leaves, hinged at either side, both swinging out", () => {
@@ -469,8 +469,7 @@ test("coop: filling automatically picks a style that follows the barn's size", (
   assert.equal(style("gardenCoop"), "backyard");
   assert.equal(style("longHenHouse"), "floor");
   assert.equal(style("poultryBarn"), "commercial");
-  assert.equal(buildGeometry(sanitize({})).G.fittings.i.length, 0, "houses have no fittings");
-  assert.equal("items" in sanitize({}), false, "houses have no pieces");
+  assert.ok(sanitize({}).items.length > 0, "houses are furnished too");
 });
 
 test("coop: every preset starts furnished, with every piece where it may be", () => {
