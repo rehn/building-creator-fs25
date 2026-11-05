@@ -74,6 +74,8 @@ const node = (tag, name, attrs = {}, children = []) => ({tag, name, attrs, child
 export const tg = (name, translation, children = [], attrs = {}) => node("TransformGroup", name, {translation, ...attrs}, children);
 export const shape = (name, attrs, children = []) => node("Shape", name, attrs, children);
 export const camera = (name, attrs) => node("Camera", name, attrs);
+/** Another i3d loaded in place (referenceId: its File id), as the base game's barns load props. */
+export const refNode = (name, attrs) => node("ReferenceNode", name, attrs);
 
 const attrText = v => Array.isArray(v) ? v3(v) : typeof v === "number" ? num(v) : String(v);
 

@@ -1,9 +1,10 @@
 // Building model: settings, validation, geometry and i3d export. The core every building shares;
 // what differs per kind of building (farmhouse, hen house ...) lives in kinds/.
 // Pure functions with no DOM or three.js, so they run (and are tested) in Node.
-import { I3dDoc, tg, shape, boxMesh, splitByColor, mappingsFor, num, v3 } from "./i3d.mjs";
+import { I3dDoc, tg, shape, refNode, boxMesh, splitByColor, mappingsFor, num, v3 } from "./i3d.mjs";
 import { KINDS, kindOf } from "./kinds/index.mjs";
 import { WALL_T, wallFrames, doorSpan, roomOf, footprint, toWorld, cleanItems, problems } from "./layout.mjs";
+import { withAssets, placement, assetFolder } from "./assets.mjs";
 export { boxMesh } from "./i3d.mjs";
 export { KINDS, KIND, kindOf, groupByKind, CATEGORIES } from "./kinds/index.mjs";
 export { henYard, henCap, HENS_PER_M2, MAX_HENS } from "./kinds/chicken.mjs";
@@ -208,8 +209,26 @@ export function sanitize(obj) {
   out.dormers = Array.isArray(obj.dormers) ? cleanDormers(obj.dormers) : [];
   const q = kind.normalize(out);
   // The inside of a walk-in building: the saved pieces, or filled automatically for a new one.
-  if (kind.catalog) q.items = Array.isArray(obj.items) ? cleanItems(obj.items, kind.catalog) : kind.autoFurnish(q).items;
+  if (kind.catalog) q.items = Array.isArray(obj.items) ? cleanItems(obj.items, catalogFor({kind: kind.id, items: obj.items})) : kind.autoFurnish(q).items;
   return q;
+}
+
+/* ---------- Imported items ---------- */
+// The user's imported items (assets.mjs), as the API lists them. The editor sets them once loaded;
+// until then a building's items are kept as stand-ins (see withAssets), never dropped.
+let ASSETS = [];
+/** Sets the user's imported items (the API's list). */
+export function setAssets(list) { ASSETS = Array.isArray(list) ? list : []; }
+/** The pieces a building can have inside: its kind's own, the user's items for it, stand-ins for deleted ones. */
+export function catalogFor(p) {
+  const kind = kindOf(p);
+  return kind.catalog ? withAssets(kind.catalog, ASSETS, kind.id, p.items) : {};
+}
+/** The imported items placed in the building (and inside its walls): what an export has to pack. */
+export function usedAssets(p) {
+  const seen = new Map();
+  for (const r of buildGeometry(p).refs) seen.set(r.asset.id, r.asset);
+  return [...seen.values()];
 }
 
 /**
@@ -448,6 +467,8 @@ export function buildGeometry(p) {
 p = normalize(p);
 const kind = kindOf(p);
 let G, opsByWall = {}, dims = {}, rooms = [], downpipes = [], doorLeaf = null;
+// Imported items placed inside: [{asset, item, translation, rotY}] (see assets.mjs placement).
+const refs = [];
 // Walk-in kinds (a hen house ...): walls with an inside face, hollow collision, a door that opens.
 const hollow = kind.walkIn;
 // Openings the kind adds to its walls, [{wall, s0, s1, t1, clear, what}] (a hen hatch ...).
@@ -819,12 +840,14 @@ function buildVentilators(Lr, ridgeY, tanP, M, half) {
  * room (the building was made smaller) is left out until it's moved back in.
  */
 function buildInside(kind, F, H) {
-  const room = roomOf(p, openings), catalog = kind.catalog || {}, items = p.items || [];
+  const room = roomOf(p, openings), catalog = catalogFor(p), items = p.items || [];
   if (kind.furnish) kind.furnish({floor: color => { paint(color); abox("fittings", [room.x0, F, room.z0], [room.x1, F + 0.02, room.z1]); }});
   const outside = new Set([...problems(items, catalog, room)].filter(([, m]) => /outside/i.test(m)).map(([id]) => id));
   for (const it of items) {
     const def = catalog[it.type];
-    if (!def || outside.has(it.id)) continue;
+    if (!def || outside.has(it.id) || def.missing) continue;
+    // An imported item: the game loads its own i3d (with its collision); the editor draws its .obj.
+    if (def.asset) { refs.push({asset: def.asset, item: it, ...placement(def.asset.meta, it, F)}); continue; }
     const box = (x0, x1, z0, z1, y0, y1) => { const a = toWorld(it, x0, z0), b = toWorld(it, x1, z1); abox("fittings", [a[0], F + y0, a[1]], [b[0], F + y1, b[1]]); };
     const round = (x, z, y, r, h, seg) => { const q = toWorld(it, x, z); cyl([q[0], F + y, q[1]], r, h, seg); };
     def.build({H, paint, box, cyl: round}, it);
@@ -1155,7 +1178,7 @@ function build() {
 }
 build();
 const {collision, ...visual} = G;
-return {G: visual, dims, opsByWall, collision, rooms, downpipes, doorLeaf};
+return {G: visual, dims, opsByWall, collision, rooms, downpipes, doorLeaf, refs};
 }
 
 /* ---------- Materials ---------- */
@@ -1340,6 +1363,14 @@ function exportParts(p, {withTex = false} = {}) {
     tg(`${k}AreaWidth01`, [0, 0, r.z1 - r.z0]), tg(`${k}AreaHeight01`, [r.x1 - r.x0, 0, 0])])]);
   // Box or rectangle from start to end, with end a child of start.
   const corner = (group, k, min, max) => tg(group, [0, 0, 0], [tg(`${k}Start01`, min, [tg(`${k}End01`, max.map((v, i) => v - min[i]))])]);
+  // Imported items: their own i3d, in items/<name>_<id>/ next to this one, loaded where they're placed.
+  const counts = {};
+  const refNodes = geo.refs.map(r => {
+    const folder = assetFolder(r.asset), stem = folder.slice(6).replace(/_.*$/, "");
+    counts[stem] = (counts[stem] || 0) + 1;
+    return refNode(stem + String(counts[stem]).padStart(2, "0"), {translation: r.translation, rotation: [0, r.rotY, 0],
+      referenceId: doc.file(`${folder}/${r.asset.meta.i3d}`)});
+  });
   const A = placementAreas(geo, own.areas), t = A.test, {W, D} = geo.dims;
   const indoor = kind.walkIn || p.sleepPoint;
   const root = tg("house", [0, 0, 0], [
@@ -1352,6 +1383,7 @@ function exportParts(p, {withTex = false} = {}) {
     ...doorNodes,
     ...own.nodes,
     ...(indoor ? [rect("indoor", {x0: -W / 2, x1: W / 2, z0: -D / 2, z1: D / 2})] : []),
+    ...(refNodes.length ? [tg("items", [0, 0, 0], refNodes)] : []),
   ]);
 
   const blocks = `${own.xml}${doorXml}${indoor ? `

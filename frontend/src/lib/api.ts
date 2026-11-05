@@ -24,6 +24,16 @@ export interface Project extends ProjectSummary {
   data: Record<string, unknown>;
 }
 
+/** An imported item (see src/editor/assets.mjs for meta). */
+export interface Asset {
+  id: string;
+  name: string;
+  meta: Record<string, unknown>;
+  files: { name: string; size: number }[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Invite {
   id: number;
   email: string;
@@ -38,16 +48,15 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  return send<T>(method, path, body === undefined ? undefined : JSON.stringify(body), body === undefined ? undefined : { "Content-Type": "application/json" });
+}
+
+/** A request with a body as is (JSON text, or a FormData the browser encodes itself). */
+async function send<T>(method: string, path: string, body?: BodyInit, headers?: HeadersInit): Promise<T> {
   let res: Response;
   try {
-    res = await fetch("/api" + path, {
-      method,
-      headers: body === undefined ? undefined : { "Content-Type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-      credentials: "same-origin",
-      cache: "no-store",
-    });
+    res = await fetch("/api" + path, { method, headers, body, credentials: "same-origin", cache: "no-store" });
   } catch {
     throw new ApiError(0, "offline", "Can't reach the server. Check your connection.");
   }
@@ -74,6 +83,18 @@ export const api = {
     request<Project>("PATCH", "/projects/" + encodeURIComponent(id), patch),
   deleteProject: (id: string) => request<void>("DELETE", "/projects/" + encodeURIComponent(id)),
   duplicateProject: (id: string) => request<Project>("POST", "/projects/" + encodeURIComponent(id) + "/duplicate"),
+
+  assets: () => request<Asset[]>("GET", "/assets"),
+  /** Imports an item: form fields name, meta (JSON) and files. */
+  importAsset: (form: FormData) => send<Asset>("POST", "/assets", form),
+  updateAsset: (id: string, patch: { name?: string; meta?: Record<string, unknown> }) =>
+    request<Asset>("PATCH", "/assets/" + encodeURIComponent(id), patch),
+  deleteAsset: (id: string) => request<void>("DELETE", "/assets/" + encodeURIComponent(id)),
+  assetFile: async (id: string, name: string) => {
+    const res = await fetch(`/api/assets/${encodeURIComponent(id)}/files/${encodeURIComponent(name)}`, { credentials: "same-origin", cache: "no-store" });
+    if (!res.ok) throw new ApiError(res.status, "file", `Couldn't load ${name} (${res.status}).`);
+    return res.arrayBuffer();
+  },
 
   invites: () => request<Invite[]>("GET", "/admin/invites"),
   createInvite: (email: string) => request<{ invite: Invite; link: string }>("POST", "/admin/invites", { email }),

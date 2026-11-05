@@ -205,3 +205,31 @@ table.list th { color: var(--muted); font-weight: 500; font-size: 14px; }
   .hx-stage .orbit-hint { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .hx-toast { transition: none; } }
+
+/* ---------- My items ---------- */
+.item-form { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 24px; }
+@media (max-width: 760px) { .item-form { grid-template-columns: 1fr; } }
+.item-view { width: 100%; aspect-ratio: 4 / 3; border-radius: 8px; display: block; background: var(--stage); }
+.item-fields { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.item-fields label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.item-fields label.choice { flex-direction: row; align-items: center; gap: 8px; }
+.item-fields fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.item-fields legend { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
+.item-fields .warn { color: var(--accent); font-size: 14px; margin: 0; }
+.item-files { list-style: none; padding: 0; margin: 0; font-size: 14px; display: flex; flex-direction: column; gap: 2px; }
+.item-files li::before { content: "✓ "; color: var(--pine); }
+.item-files li.missing::before { content: "✗ "; color: var(--accent); }
+.item-files li.missing { color: var(--accent); }
+.item-files small { color: var(--muted); }
+.seg { display: flex; }
+.seg button { border-radius: 0; }
+.seg button + button { margin-left: -1px; }
+.seg button:first-child { border-radius: 6px 0 0 6px; }
+.seg button:last-child { border-radius: 0 6px 6px 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.item-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.item-list li { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+.item-list li > div:first-child { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 200px; }
+.item-list small { color: var(--muted); }
+.item-list .actions { display: flex; gap: 6px; }
+#insideEditor .palette-head { margin: 10px 0 0; font-size: 14px; }

@@ -6,7 +6,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 ## Layout
 - backend/  Go 1.25 API, stdlib net/http + SQLite (modernc.org/sqlite, no cgo) by default,
   Postgres (pgx) when DATABASE_URL is set.
-  internal/auth (PBKDF2 passwords, tokens), internal/store (SQLite),
+  internal/auth (PBKDF2 passwords, tokens), internal/store (SQLite/Postgres),
   internal/api (handlers), internal/config (env vars), cmd/server.
 - frontend/ Next.js 16 (App Router, TypeScript). /api/* is proxied to the Go API
   by src/app/api/[...path]/route.ts.
@@ -21,6 +21,13 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   A walk-in kind has a catalog of pieces and autoFurnish(p); buildGeometry draws p.items.
   src/editor/editor.mjs = controls + three.js r128 preview, mounted by Editor.tsx.
   src/editor/interior.mjs = paints the room atlas (layout: ATLAS in model.mjs) and glass texture.
+  Imported items ("My items", /items page): props from Giants Editor, stored per user in the DB
+  (assets + asset_files, /api/assets, files as blobs, 50 MB per item). The game loads an item's own
+  i3d via a ReferenceNode (its .shapes is encrypted, we can't read it); the preview draws the .obj
+  GE exports of it (same coordinates: its bounding box places the reference). src/editor/assets.mjs
+  (pure: readI3d, readObj, placement, withAssets ...), item types "asset:<id>"; model.mjs setAssets/
+  catalogFor/usedAssets (items of unknown assets are kept as stand-ins, never dropped); exports pack
+  the item files in items/<name>_<id>/ (not the .obj). src/editor/itemView.mjs = the page's 3D view.
 - charts/house-to-i3d = Helm chart (SQLite on a PVC, or Postgres in-release/external);
   charts/test.sh renders and checks every setup.
 - docker-compose.yml runs api + web; CI in .github/workflows/ci.yml pushes
@@ -35,7 +42,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Frontend tests: cd frontend && npm test (node --test, no browser needed)
 
 ## Status
-- Go tests (46) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (188) pass.
+- Go tests (51) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (203) pass.
 - Cow barn (kinds/cow.mjs): cowHusbandryPasture (no milk, like cowBarnSmall), automatic water, feed
   and water troughs outside on the pasture wall (kind.outside), a plain walk-through doorway for the
   cows (openings with plain: true; tall openings get a collision gap), feed pad + bale trigger

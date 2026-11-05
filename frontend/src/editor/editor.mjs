@@ -9,10 +9,14 @@ import {
 import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, henYard, henCap, seeThroughGlass, kindOf } from "./model.mjs";
 import { cowYard } from "./kinds/cow.mjs";
 import { roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, History } from "./layout.mjs";
+import { setAssets, catalogFor, usedAssets } from "./model.mjs";
+import { readObj, assetFolder, flattenI3d } from "./assets.mjs";
 import { paintInterior, paintGlass } from "./interior.mjs";
 export { slugify };
 
 const lerp = (a, b, t) => a + (b - a) * t;
+/** Text for innerHTML (names of imported items are the user's own text). */
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 // Two sides of settings: building the house (left) and finishing it (right). On narrower
 // screens they share one column and the tabs switch between them (see globals.css).
 const MARKUP = `<div class="hx-editor" data-tab="build">
@@ -49,9 +53,10 @@ const MARKUP = `<div class="hx-editor" data-tab="build">
  * Mounts the editor in root.
  * options.initial: saved settings to start from
  * options.onChange(settings): called after every edit with the settings to save
+ * options.assets: the user's imported items, {list(), file(id, name)} (see editor.d.mts)
  * Returns {getSettings, setSettings, exportModel, exportSettings, importSettings, snapshot, toast, destroy}.
  */
-export function createEditor(root, {initial, onChange, author = ""} = {}) {
+export function createEditor(root, {initial, onChange, author = "", assets = null} = {}) {
 root.innerHTML = MARKUP;
 const $ = id => root.querySelector("#" + id);
 const cleanups = [];
@@ -339,6 +344,8 @@ function initThree() {
   selMesh.visible = false; scene.add(selMesh);
   sleepObj = makeSleepMarker(); scene.add(sleepObj.group);
   yardObj = makeYardMarker(); scene.add(yardObj.group);
+  itemsGroup = new THREE.Group(); scene.add(itemsGroup);
+  itemMat = new THREE.MeshStandardMaterial({color: 0x9aa3a8, roughness: 0.7, metalness: 0.15});
   ortho = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 200);
   makeInsideOverlay();
   $("viewPlan").onclick = () => setInsideView("plan");
@@ -605,6 +612,68 @@ function applyKindRules() {
   for (const k in q) if (typeof q[k] !== "object" && q[k] !== p[k]) { p[k] = q[k]; changed = true; }
   return changed;
 }
+/* ---------- Imported items ---------- */
+// The game loads an item's own i3d; the preview draws the .obj exported with it, in one plain colour.
+// Geometries by asset id: null while loading, false if the file couldn't be read.
+const itemGeos = new Map();
+let itemsGroup = null, itemMat = null, lastRefs = [];
+function itemGeometry(asset) {
+  if (itemGeos.has(asset.id)) return itemGeos.get(asset.id);
+  itemGeos.set(asset.id, null);
+  if (assets && asset.meta.obj) assets.file(asset.id, asset.meta.obj).then(buf => {
+    if (destroyed) return;
+    const o = readObj(new TextDecoder().decode(buf), asset.meta.hidden);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(o.positions, 3));
+    g.computeVertexNormals();
+    itemGeos.set(asset.id, g); drawItems(lastRefs);
+  }).catch(() => itemGeos.set(asset.id, false));
+  return null;
+}
+/** The placed items (buildGeometry's refs), each its model turned and moved like the game will. */
+function drawItems(refs) {
+  lastRefs = refs;
+  if (!itemsGroup) return;
+  itemsGroup.clear();
+  for (const r of refs) {
+    const g = itemGeometry(r.asset);
+    if (!g) continue;
+    const m = new THREE.Mesh(g, itemMat);
+    m.castShadow = m.receiveShadow = true;
+    m.position.set(...r.translation); m.rotation.y = r.rotY * Math.PI / 180;
+    itemsGroup.add(m);
+  }
+  needs = true;
+}
+/** Loads the user's items; again when the page gets focus (they may have imported one in another tab). */
+async function loadAssets() {
+  if (!assets) return;
+  try {
+    const list = await assets.list();
+    if (destroyed) return;
+    setAssets(list); rebuild(false);
+  } catch (e) { /* the building still works without them; its items wait as stand-ins */ }
+}
+if (assets) {
+  const onFocus = () => loadAssets();
+  window.addEventListener("focus", onFocus);
+  cleanups.push(() => window.removeEventListener("focus", onFocus));
+}
+// An i3d is ISO-8859-1 text: one character per byte, both ways, so nothing else changes.
+const latin1 = buf => { const b = new Uint8Array(buf); let s = ""; for (let i = 0; i < b.length; i += 8192) s += String.fromCharCode(...b.subarray(i, i + 8192)); return s; };
+const bytesOf = s => Uint8Array.from(s, ch => ch.charCodeAt(0) & 0xff);
+/** The placed items' files, each item in its own folder next to the building's i3d (not the .obj: that's for the preview). */
+async function addItems(dir) {
+  for (const a of usedAssets(p)) {
+    const folder = assetFolder(a), names = a.files.map(f => f.name);
+    for (const f of a.files) {
+      if (f.name === a.meta.obj) continue;
+      const buf = await assets.file(a.id, f.name);
+      dir.file(`${folder}/${f.name}`, f.name === a.meta.i3d ? bytesOf(flattenI3d(latin1(buf), names)) : buf);
+    }
+  }
+}
+
 /* ---------- Arranging the inside ---------- */
 // Interior mode: the building cut off at the top of its walls (a clipping plane), seen from straight
 // above (Plan, an orthographic camera) or in 3D. Pieces are picked and dragged on the floor; the
@@ -614,7 +683,7 @@ let ortho = null, ghost = null, marks = null, planLines = null;
 const clipPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0);
 const activeCam = () => ins.on && ins.view === "plan" ? ortho : camera;
 const roomNow = () => { const k = kindOf(p); return roomOf(p, k.openings ? k.openings(p) : []); };
-const catalogNow = () => kindOf(p).catalog || {};
+const catalogNow = () => catalogFor(p);
 const selected = () => (p.items || []).find(it => it.id === ins.sel) || null;
 
 function enterInside() {
@@ -752,12 +821,12 @@ function updateInsideBar() {
 function renderInsideUI() {
   const ed = $("insideEditor"), kind = kindOf(p);
   if (!ed || !kind.catalog || ins.keep) return;
-  const cat = kind.catalog, items = p.items || [], pr = problems(items, cat, roomNow());
+  const cat = catalogNow(), items = p.items || [], pr = problems(items, cat, roomNow());
   const fillRow = `<div class="row"><button type="button" id="insideFill">Fill automatically</button><button type="button" id="insideClear" ${items.length ? "" : "disabled"}>Remove all</button></div>`;
   if (!ins.on) {
     const counts = new Map();
     for (const it of items) counts.set(it.type, (counts.get(it.type) || 0) + 1);
-    const list = [...counts].map(([type, n]) => `<li>${cat[type].name}${n > 1 ? ` × ${n}` : ""}</li>`).join("");
+    const list = [...counts].map(([type, n]) => `<li>${esc(cat[type].name)}${n > 1 ? ` × ${n}` : ""}</li>`).join("");
     const out = [...pr.values()].filter(m => /outside/i.test(m)).length, other = pr.size - out;
     ed.innerHTML = (items.length ? `<ul class="pieces">${list}</ul>` : `<p class="hint">Nothing inside yet.</p>`)
       + (out ? `<p class="warn">${out} piece${out > 1 ? "s stick" : " sticks"} out through a wall and ${out > 1 ? "are" : "is"} left out. Make the building bigger, move ${out > 1 ? "them" : "it"} or fill it again.</p>` : "")
@@ -767,9 +836,14 @@ function renderInsideUI() {
   } else {
     const it = selected(), def = it && cat[it.type];
     const fmtP = (f, v) => (+v).toFixed(f.step >= 1 ? 0 : 1) + (f.unit || "");
+    const entries = Object.entries(cat), mine = entries.filter(([, d]) => d.asset);
+    const addBtn = ([type, d]) => `<button type="button" data-add="${type}">+ ${esc(d.name)}</button>`;
     ed.innerHTML = `<p class="hint">Click a piece to add it, then drag it into place. Wall pieces go against the nearest wall.</p>`
-      + `<div class="palette">${Object.entries(cat).map(([type, d]) => `<button type="button" data-add="${type}">+ ${d.name}</button>`).join("")}</div>`
-      + (it ? `<div class="piece"><h4>${def.name}</h4>${pr.has(it.id) ? `<p class="warn">${pr.get(it.id)}.</p>` : ""}`
+      + `<div class="palette">${entries.filter(([, d]) => !d.asset && !d.missing).map(addBtn).join("")}</div>`
+      + `<h4 class="palette-head">My items</h4>`
+      + (mine.length ? `<div class="palette">${mine.map(addBtn).join("")}</div>` : `<p class="hint">Items you import from Giants Editor show here.</p>`)
+      + `<p class="hint"><a href="/items" target="_blank" rel="noopener">Import an item…</a></p>`
+      + (it ? `<div class="piece"><h4>${esc(def.name)}</h4>${def.missing ? `<p class="warn">This item isn’t in My items any more, so it’s left out. Remove it, or import it again.</p>` : ""}${pr.has(it.id) ? `<p class="warn">${pr.get(it.id)}.</p>` : ""}`
           + def.params.map(f => `<div class="field"><div class="fl"><label for="pc-${f.k}">${f.label}</label><output id="pc-${f.k}-o">${fmtP(f, it[f.k])}</output></div><input type="range" id="pc-${f.k}" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}" value="${it[f.k]}"></div>`).join("")
           + `<div class="row"><button type="button" id="pcTurn" ${def.mount === "wall" ? "disabled title=\"Wall pieces always face the room\"" : ""}>Turn</button><button type="button" id="pcRemove" class="danger">Remove</button></div></div>`
         : `<p class="hint">Click a piece in the building to change or move it.</p>`)
@@ -1079,6 +1153,7 @@ function rebuild(fit) {
       }
     });
     scheduleSurfaces();
+    drawItems(geo.refs);
     if (!ins.on) {
       view.target = [0, dims.ridgeY * 0.45, 0];
       if (fit) view.r = Math.max(dims.W, dims.D, dims.ridgeY) * 2.3 + 6;
@@ -1166,6 +1241,7 @@ async function exportMod(name) {
     zip.file(MOD_FILES.xml, placeableXml(p, name));
     zip.file(MOD_FILES.i3d, buildI3d(p, {withTex: true}));
     await addTextures(zip);
+    await addItems(zip);
     const store = renderStoreImage(512), icon = renderStoreImage(256);
     if (store) zip.file(MOD_FILES.store, await canvasBlob(store));
     if (icon) zip.file(MOD_FILES.icon, await canvasBlob(icon));
@@ -1181,6 +1257,7 @@ async function exportModel(name) {
     dir.file("house.i3d", buildI3d(p, {withTex: true}));
     dir.file("placeable_snippet.xml", placeableSnippet(p));
     await addTextures(dir);
+    await addItems(dir);
     saveFile(`${slug}.zip`, await zip.generateAsync({type: "blob"}), plain);
   } catch (e) { plain(); }
 }
@@ -1218,6 +1295,9 @@ function destroy() {
   if (sleepObj) sleepObj.dispose();
   if (yardObj) yardObj.dispose();
   if (interiorTex) interiorTex.dispose();
+  for (const g of itemGeos.values()) if (g) g.dispose();
+  if (itemMat) itemMat.dispose();
+  setAssets([]);
   if (renderer) renderer.dispose();
   root.innerHTML = "";
 }
@@ -1225,6 +1305,7 @@ function destroy() {
 syncControls();
 initThree();
 rebuild(true);
+loadAssets();
 
 return {getSettings: () => serialize(p), setSettings, exportModel, exportMod, exportSettings, importSettings, snapshot, toast, destroy};
 }

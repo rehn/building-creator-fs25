@@ -36,9 +36,9 @@ func (c Config) GoogleRedirectURL() string { return c.PublicURL + "/api/auth/goo
 
 const (
 	sessionCookie = "hx_session"
-	loginAttempts = 10              // per IP and email, per 15 minutes
-	maxDataBytes  = 1 << 20         // house settings
-	maxThumbBytes = 300 << 10       // preview image as a data URL
+	loginAttempts = 10               // per IP and email, per 15 minutes
+	maxDataBytes  = 1 << 20          // house settings
+	maxThumbBytes = 300 << 10        // preview image as a data URL
 	maxBodyBytes  = 2 * maxDataBytes // whole request body
 	inviteTTL     = 14 * 24 * time.Hour
 )
@@ -99,6 +99,12 @@ func (s *Server) routes() {
 	m.HandleFunc("PATCH /api/projects/{id}", s.requireUser(s.updateProject))
 	m.HandleFunc("DELETE /api/projects/{id}", s.requireUser(s.deleteProject))
 	m.HandleFunc("POST /api/projects/{id}/duplicate", s.requireUser(s.duplicateProject))
+
+	m.HandleFunc("GET /api/assets", s.requireUser(s.listAssets))
+	m.HandleFunc("POST /api/assets", s.requireUser(s.createAsset))
+	m.HandleFunc("PATCH /api/assets/{id}", s.requireUser(s.updateAsset))
+	m.HandleFunc("DELETE /api/assets/{id}", s.requireUser(s.deleteAsset))
+	m.HandleFunc("GET /api/assets/{id}/files/{name}", s.requireUser(s.assetFile))
 
 	m.HandleFunc("GET /api/admin/invites", s.requireAdmin(s.listInvites))
 	m.HandleFunc("POST /api/admin/invites", s.requireAdmin(s.createInvite))

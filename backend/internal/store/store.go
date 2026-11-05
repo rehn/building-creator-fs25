@@ -1,4 +1,4 @@
-// Package store keeps users, sessions, invites and projects in SQLite (default) or Postgres.
+// Package store keeps users, sessions, invites, projects and imported items (assets) in SQLite (default) or Postgres.
 package store
 
 import (
@@ -75,6 +75,23 @@ CREATE TABLE IF NOT EXISTS projects (
 	updated_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS projects_user ON projects(user_id, updated_at DESC);
+CREATE TABLE IF NOT EXISTS assets (
+	id         TEXT    PRIMARY KEY,
+	user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	name       TEXT    NOT NULL,
+	meta       TEXT    NOT NULL,
+	created_at INTEGER NOT NULL,
+	updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS assets_user ON assets(user_id, updated_at DESC);
+CREATE TABLE IF NOT EXISTS asset_files (
+	asset_id TEXT    NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+	pos      INTEGER NOT NULL,
+	name     TEXT    NOT NULL,
+	size     INTEGER NOT NULL,
+	data     BLOB    NOT NULL,
+	PRIMARY KEY (asset_id, name)
+);
 `
 
 // Same tables for Postgres. Emails are unique and looked up case-insensitively through lower(email),
@@ -118,6 +135,23 @@ CREATE TABLE IF NOT EXISTS projects (
 	updated_at BIGINT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS projects_user ON projects(user_id, updated_at DESC);
+CREATE TABLE IF NOT EXISTS assets (
+	id         TEXT   PRIMARY KEY,
+	user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	name       TEXT   NOT NULL,
+	meta       TEXT   NOT NULL,
+	created_at BIGINT NOT NULL,
+	updated_at BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS assets_user ON assets(user_id, updated_at DESC);
+CREATE TABLE IF NOT EXISTS asset_files (
+	asset_id TEXT   NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+	pos      INTEGER NOT NULL,
+	name     TEXT   NOT NULL,
+	size     BIGINT NOT NULL,
+	data     BYTEA  NOT NULL,
+	PRIMARY KEY (asset_id, name)
+);
 `
 
 // IsPostgresURL reports whether dsn is a Postgres connection URL (postgres:// or postgresql://).

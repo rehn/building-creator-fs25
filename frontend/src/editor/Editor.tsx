@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef } from "react";
 import { createEditor, type EditorHandle, type Settings } from "./editor.mjs";
+import { api } from "@/lib/api";
 
 interface Props {
   initial: Settings;
@@ -21,7 +22,10 @@ export default function Editor({ initial, onChange, onReady, author = "" }: Prop
 
   useEffect(() => {
     if (!host.current) return;
-    const ed = createEditor(host.current, { initial: start.current, onChange: s => change.current(s), author: by.current });
+    const ed = createEditor(host.current, {
+      initial: start.current, onChange: s => change.current(s), author: by.current,
+      assets: { list: api.assets, file: api.assetFile },
+    });
     ready.current(ed);
     return () => { ready.current(null); ed.destroy(); };
   }, []);

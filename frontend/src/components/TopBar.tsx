@@ -13,6 +13,7 @@ export function TopBar({ user }: { user: User | null }) {
     <header className="topbar">
       <Brand />
       {user && <span className="who">{user.name}</span>}
+      {user && <Link className="btn" href="/items">My items</Link>}
       {user?.isAdmin && <Link className="btn" href="/admin">Invites</Link>}
       {user && <button type="button" onClick={logout}>Log out</button>}
     </header>

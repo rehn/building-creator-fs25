@@ -10,5 +10,10 @@ export interface EditorHandle {
   toast(message: string): void;
   destroy(): void;
 }
-export function createEditor(root: HTMLElement, options?: { initial?: Settings; onChange?: (settings: Settings) => void; author?: string }): EditorHandle;
+/** The user's imported items: the list (as the API sends it) and the contents of one of their files. */
+export interface AssetSource {
+  list(): Promise<unknown[]>;
+  file(id: string, name: string): Promise<ArrayBuffer>;
+}
+export function createEditor(root: HTMLElement, options?: { initial?: Settings; onChange?: (settings: Settings) => void; author?: string; assets?: AssetSource }): EditorHandle;
 export function slugify(name: string): string;
