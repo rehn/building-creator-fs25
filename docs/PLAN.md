@@ -75,6 +75,17 @@ En undre och en övre zon, var och en med egen beklädnad (puts, lockpanel, ligg
 Sovplats, foderplats, balplats, äggpallar, djurlastplats, infoområde och senare fler är objekt i en lista. De läggs till, dras, vrids och skalas i samma vy som inredningen (utanför väggarna).
 - **Exportens FS25-typ** räknas ut från objekten. En sovplats ger till exempel ett bostadshus, och foder och lastplats för kor ger en kogård.
 - **Varningar:** appen säger till om något saknas, till exempel en kogård utan foderplats, eller om två objekt inte går ihop.
+
+**Hagen** (staketet) är också ett objekt:
+- **Lägga till:** man lägger till en "Hage" och drar ut den från huset.
+- **Snäpper mot huset:** dess två hörn mot huset fäster mot husets hörn (alla delars, så att en hage kan ligga i innerhörnet på ett L), mellan dem mot väggarna, och resten mot rutnätet.
+- **Djup:** hur långt ut den går dras i den yttre kanten. Ersätter dagens "Pasture side" och "Pasture depth".
+- **Djurens öppning:** kornas dörröppning och hönsens lucka hamnar på väggen hagen ligger mot och följer med när hagen flyttas. Kornas tråg står längs den väggen.
+- **Spelets regler kollas**, med varning och förslag på rättelse:
+  - hagen är för liten (kor minst 16 m bred, höns 12 × 6 m);
+  - djurens öppning ligger utanför hagen;
+  - en dörr eller ett annat objekt hamnar inne i hagen.
+- **Rektangel räcker:** hagen är bara startformen. FS25 låter spelaren dra staketet till vilken form som helst när byggnaden placeras.
 - **Ersätter** dagens "Game places", som har en fast uppsättning per byggnadstyp.
 
 ### 6. Det vi behåller
@@ -96,7 +107,7 @@ Gamla sparningar konverteras där det går.
 Varje steg ska vara färdigt, testat (TDD) och kontrollerat i webbläsaren innan nästa börjar.
 
 1. **Väggmaterial i zoner.** Fristående och snabbt, och syns mest. Ger ladan puts och panel direkt.
-2. **Spelobjekt som objekt.** Fristående från formen. Ersätter "Game places".
+2. **Spelobjekt som objekt, hagen också.** Fristående från formen. Ersätter "Game places" och hagens inställningar.
 3. **Insida för alla byggnader och val av öppningsbar dörr.** Bostadshuset blir en byggnad man kan gå in i, bottenvåningen.
 4. **Flera delar.** Flygeln blir en del i listan, plus tillbyggnader, och insidan sträcker sig över alla delar.
 5. **Claude-guiden** (`fromPhotos.mjs`) uppdateras till den nya modellen, så att foton blir delar, zoner, öppningar och objekt.
