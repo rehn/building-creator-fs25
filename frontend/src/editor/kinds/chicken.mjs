@@ -3,7 +3,8 @@
 // Imports only the i3d writer; the core hands in what it needs (see kinds/index.mjs).
 import { tg, shape } from "../i3d.mjs";
 import { roomOf, furnisher } from "../layout.mjs";
-import { OPPOSITE, wallLength, yardFrame, pastureWallFor } from "./pasture.mjs";
+import { OPPOSITE, wallLength, yardFrame, shellOf, teleportFor, withPasture, pastureWallFor } from "./pasture.mjs";
+import { objectOf, boxOf, iconOf, boxFrom, pastureOf } from "../objects.mjs";
 import { tone, shade, strawBale } from "./props.mjs";
 import { placeOnWall, placeOnBuilding } from "../places.mjs";
 
@@ -30,55 +31,65 @@ const MIN_PASTURE_WIDTH = 12;
  *   areas:   ground rectangles of the food and pallet places, for clearing and leveling
  * The feed and pallet sides are two of the three walls that aren't the pasture's, walls without a
  * door: the wall opposite the pasture for feed if it has no door, else a side wall without one.
- * Each place (PLACES) can be moved, sized or put on another wall by the player (places.mjs);
- * places: where each went ({wall, s, d, ...} from placeOnWall).
+ * The player moves and sizes them as game objects (objects.mjs, p.objects).
  */
 export function henYard(geo, p) {
   // The game can't make a walking area for a tiny pasture (a 6 x 4.4 m one failed): at least 12 m wide.
-  const {fence, feedKey, otherKey, frames, rectOf, mid} = yardFrame(geo, p, MIN_PASTURE_WIDTH);
-  // Feed pad: low on the ground, so a tipping trailer's or auger's raycast starts above it. The
-  // trailer spot is further out on the same side.
-  const food = placeOnWall(p, "food", frames, feedKey, w => { const [c, len] = mid(w); return {s: c, d: 1.75, along: Math.max(2.5, Math.min(4, len)), out: 3, h: 0.3, icon: [c, 1.75]}; });
-  const loading = placeOnWall(p, "loading", frames, feedKey, w => { const [c, len] = mid(w); return {s: c, d: 5.5, along: Math.min(4, len), out: 4, h: 3, icon: [c, 5.5]}; });
-  const pallets = placeOnWall(p, "pallets", frames, otherKey, w => {
-    const [c, len] = mid(w), lines = Math.min(4.8, Math.max(1.2, len - 1));
-    return {s: c, d: 2.8, along: Math.min(lines + 1, len), out: 3.2, h: 2.5, icon: null};
-  });
-  // two spawn lines inside the pallet trigger, 50 cm in from its ends and 80 cm either side of its middle
-  const ll = Math.max(0.2, pallets.along - 1) / 2, dd = Math.min(0.8, Math.max(0, pallets.out / 2 - 0.2));
-  const lines = [-dd, dd].map(o => [pallets.at(pallets.s - ll, pallets.d + o, 0), pallets.at(pallets.s + ll, pallets.d + o, 0)]);
-  const {W, D} = geo.dims;
+  const yf = yardFrame(geo, p, MIN_PASTURE_WIDTH), {rectOf} = yf, pa = pastureOf(p);
+  const {food, loading, pallets, info} = henObjects(geo, p, yf);
+  // two spawn lines inside the pallet trigger, along its longer side: 50 cm in from its ends and 80 cm
+  // either side of its middle
+  const [cx, , cz] = pallets.box.center, [sw, , sd] = pallets.box.size, long = sw >= sd;
+  const ll = Math.max(0.2, (long ? sw : sd) - 1) / 2, dd = Math.min(0.8, Math.max(0, (long ? sd : sw) / 2 - 0.2));
+  const lines = [-dd, dd].map(o => long ? [[cx - ll, 0, cz + o], [cx + ll, 0, cz + o]] : [[cx + o, 0, cz - ll], [cx + o, 0, cz + ll]]);
   return {
-    fence,
+    fence: pa ? pa.fence : yf.fence,
     food: {...food.box, marker: food.icon},
     pallet: {lines, trigger: pallets.box, stripes: cornerStripes(rectOf(pallets.box))},
-    loading: {...loading.box, marker: loading.icon, teleport: loading.at(loading.s, loading.d + 3, 0)},
-    info: placeOnBuilding(p, "info", {center: [0, 1.5, 0], size: [W + 2, 3, D + 2]}),
-    blocker: {center: [0, 1, 0], size: [W, 2, D]},
+    loading: {...loading.box, marker: loading.icon, teleport: teleportFor(loading, geo.dims)},
+    info: info.box,
+    blocker: {center: [0, 1, 0], size: [geo.dims.W, 2, geo.dims.D]},
     areas: [food.box, pallets.box].map(rectOf),
-    places: {food, loading, pallets},
   };
 }
-/** The hen house's game places, for the editor (places.mjs). */
-const PLACES = [
-  {id: "food", name: "Feed pad", hint: "Tip feed onto it from a trailer, shovel or auger. Its icon shows in the game.", wall: true, glyph: "food"},
-  {id: "loading", name: "Animal trailer spot", hint: "Where a livestock trailer loads and unloads hens. The map's teleport point is 3 m further out.", wall: true, glyph: "hen"},
-  {id: "pallets", name: "Egg pallets", hint: "The trigger where egg pallets appear (two rows inside it), with warning stripes in its corners.", wall: true, glyph: "pallet"},
-  {id: "info", name: "Info area", hint: "Standing in it shows the barn's info box. Moved left/right and front/back, sized in the building's axes.", wall: false, glyph: null},
-];
-/** What the preview shows of the game places: [{id, name, box, icon, glyph}]. */
-function gamePlaces({geo, p}) {
-  const y = henYard(geo, p), box = b => ({center: b.center, size: b.size});
-  const at = {food: [box(y.food), y.food.marker], loading: [box(y.loading), y.loading.marker], pallets: [box(y.pallet.trigger), null], info: [box(y.info), null]};
-  // wall: the wall it went on (null: placed in the building's axes); dims: [width, depth, height] as the player sets them
-  const on = id => y.places[id] ? {wall: y.places[id].wall, dims: [y.places[id].along, y.places[id].out, y.places[id].h]} : {wall: null, dims: [y.info.size[0], y.info.size[2], y.info.size[1]]};
-  return PLACES.map(pl => ({id: pl.id, name: pl.name, glyph: pl.glyph, box: at[pl.id][0], icon: at[pl.id][1], ...on(pl.id)}));
+/**
+ * The hen house's game objects as {box, icon}: the building's (p.objects), or where they go to start
+ * with: the feed pad and trailer spot on the feed side, the egg pallets on another wall, the info area
+ * round the barn (the feed and pallet sides: walls that aren't the pasture's, walls without a door first).
+ */
+function henObjects(geo, p, yf = yardFrame(geo, p, MIN_PASTURE_WIDTH)) {
+  const {feedKey, otherKey, frames, mid} = yf, {W, D} = geo.dims;
+  const start = {
+    // Feed pad: low on the ground, so a tipping trailer's or auger's raycast starts above it.
+    food: placeOnWall({}, "food", frames, feedKey, w => { const [c, len] = mid(w); return {s: c, d: 1.75, along: Math.max(2.5, Math.min(4, len)), out: 3, h: 0.3, icon: [c, 1.75]}; }),
+    loading: placeOnWall({}, "loading", frames, feedKey, w => { const [c, len] = mid(w); return {s: c, d: 5.5, along: Math.min(4, len), out: 4, h: 3, icon: [c, 5.5]}; }),
+    pallets: placeOnWall({}, "pallets", frames, otherKey, w => {
+      const [c, len] = mid(w), lines = Math.min(4.8, Math.max(1.2, len - 1));
+      return {s: c, d: 2.8, along: Math.min(lines + 1, len), out: 3.2, h: 2.5, icon: null};
+    }),
+    info: {box: placeOnBuilding({}, "info", {center: [0, 1.5, 0], size: [W + 2, 3, D + 2]}), icon: null},
+  };
+  const out = {};
+  for (const t of ["food", "loading", "pallets", "info"]) {
+    const o = objectOf(p, t);
+    out[t] = o ? {box: boxOf(o), icon: iconOf(o)} : start[t];
+  }
+  return out;
+}
+/** Where the hen house's objects go to start with (kind.objects.defaults): from its pasture wall and depth. */
+function defaultObjects(p) {
+  const q = {...p, pastureWall: pastureWallFor(p), objects: undefined}, y = henObjects(shellOf(q), q);
+  return [
+    ...["food", "loading", "pallets", "info"].map(t => boxFrom(t, y[t].box, t === "food" || t === "loading" ? y[t].icon : null)),
+    // (a new barn's pasture goes on a wall without a door, if it can)
+    {type: "pasture", wall: q.pastureWall, a: 0, b: 0, depth: p.fenceDepth},
+  ];
 }
 
 /** The hen hatch: 40 x 50 cm at floor level in the middle of the pasture wall, kept clear 80 cm inside. */
 function openings(p) {
-  const L = (p.pastureWall === "front" || p.pastureWall === "back") ? p.width : p.depth;
-  return [{wall: p.pastureWall, s0: L / 2 - 0.2, s1: L / 2 + 0.2, t1: 0.5, clear: 0.8, what: "the hen hatch"}];
+  const L = (p.pastureWall === "front" || p.pastureWall === "back") ? p.width : p.depth, m = p.pastureMid ?? L / 2;
+  return [{wall: p.pastureWall, s0: m - 0.2, s1: m + 0.2, t1: 0.5, clear: 0.8, what: "the hen hatch"}];
 }
 
 /**
@@ -428,18 +439,15 @@ export default {
   defaults: {hens: 30, pastureWall: "back", fenceDepth: 8, winStyle: "single", doorStyle: "zbrace"},
   /** Editor sections only this kind has (shown first), and shared ones it doesn't use. */
   sections: [
-    {title: "Chickens", side: "build", hint: "Hens go in and out through a small hatch in the pasture side. The fence starts there, at least 12 m wide and 6 m deep (the game can’t handle a smaller pasture), and you can drag it to any shape when placing the barn in the game. The pasture moves off a wall that has a door; feed and egg pallets go on walls without a door where they can.", fields: [
-      {k: "hens", label: "Hens", min: 1, max: MAX_HENS, step: 1},
-      {k: "pastureWall", label: "Pasture side (with the hen hatch)", type: "select", options: [["front", "Front"], ["back", "Back"], ["left", "Left side"], ["right", "Right side"]]},
-      {k: "fenceDepth", label: "Pasture depth, from the wall", min: 6, max: 40, step: 0.5, unit: " m"}]},
+    {title: "Chickens", side: "build", hint: "Hens go in and out through a small hatch in the middle of the wall the pasture encloses. The pasture (at least 12 m wide and 6 m deep: the game can't handle a smaller one), the feed pad, the egg pallets and the rest are under Game objects.", fields: [
+      {k: "hens", label: "Hens", min: 1, max: MAX_HENS, step: 1}]},
   ],
-  hides: ["Interior", "Farmhouse", "Kupor (dormers)", "Wing"],
+  hides: ["Interior", "Kupor (dormers)", "Wing"],
   /**
    * Settings as this kind uses them: no sleep point, rooms or dormers; no more hens than fit; and
    * the pasture on a wall without a door if it can be (the opposite one, else another).
    */
-  normalize: p => ({...p, sleepPoint: false, interior: false, dormers: [], hens: Math.min(p.hens, henCap(p)),
-    pastureWall: pastureWallFor(p)}),
+  normalize: p => withPasture({...p, interior: false, dormers: [], hens: Math.min(p.hens, henCap(p))}),
   openings,
   placeable: () => ({type: "chickenHusbandryPasture", fn: "$l10n_function_animalPenChicken",
     shop: {category: "animalpens", type: "husbandry", brush: "animals", tab: "chickens"},
@@ -450,8 +458,8 @@ export default {
   autoFurnish,
   summary,
   scene,
-  places: PLACES,
-  gamePlaces,
+  objects: {types: ["food", "loading", "pallets", "info", "pasture"], required: ["food", "loading", "pallets", "info", "pasture"],
+    pasture: {minWidth: MIN_PASTURE_WIDTH, depth: [6, 40]}, defaults: defaultObjects},
   presets: [
     {id: "gardenCoop", name: "Red garden coop", blurb: "4 × 3 m coop for 30 hens, red boards with white trim.", settings: {
       hens: 30, fenceDepth: 8,

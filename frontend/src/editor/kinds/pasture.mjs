@@ -1,6 +1,8 @@
 // What animal buildings with a pasture share: the fence from the pasture wall, and where the places
 // outside go (feed on one wall, something else on another, walls without a door first).
 // Pure; used by the hen house and the cow barn.
+import { wallsOf } from "../layout.mjs";
+import { pastureOf } from "../objects.mjs";
 
 export const OPPOSITE = {front: "back", back: "front", left: "right", right: "left"};
 export const wallLength = (p, wall) => (wall === "front" || wall === "back") ? p.width : p.depth;
@@ -55,4 +57,20 @@ export function yardFrame(geo, p, minWidth) {
   return {fence, past, feed: walls[feedSide].w, other: walls[otherSide].w, feedKey: feedSide, otherKey: otherSide, frames, at, boxAt, rectOf, clear,
     // the middle of the stretch clear of the fence on wall w, and its length
     mid: w => { const [a, b] = clear(w); return [(a + b) / 2, b - a]; }};
+}
+
+/** The building's walls as buildGeometry gives them ({opsByWall, dims}), without building it: for where things go to start with. */
+export const shellOf = p => ({opsByWall: Object.fromEntries(Object.entries(wallsOf(p)).map(([k, w]) => [k, {w, ops: []}])), dims: {W: p.width, D: p.depth}});
+/** The map's teleport point for an animal trailer spot {box}: 3 m further out from the building than its middle. */
+export function teleportFor(l, {W, D}) {
+  const [x, , z] = l.box.center, alongX = Math.abs(x) - W / 2 > Math.abs(z) - D / 2;
+  return alongX ? [x + Math.sign(x || 1) * 3, 0, z] : [x, 0, z + Math.sign(z || 1) * 3];
+}
+/**
+ * The settings the rest of the kind reads, from its pasture object: pastureWall, fenceDepth and
+ * pastureMid (where on that wall the animals go out: the middle of the stretch the pasture encloses).
+ */
+export function withPasture(q) {
+  const pa = pastureOf(q);
+  return pa ? {...q, pastureWall: pa.wall, fenceDepth: pa.depth, pastureMid: pa.mid} : q;
 }

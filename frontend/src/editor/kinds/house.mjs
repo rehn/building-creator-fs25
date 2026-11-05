@@ -1,6 +1,9 @@
 // Farmhouse: a house with rooms seen through the windows and, optionally, a sleep point that makes
 // it an FS25 farmhouse placeable. Imports only the i3d writer; the core hands in the rest.
 import { tg, camera } from "../i3d.mjs";
+import { wallsOf, openingSpan } from "../layout.mjs";
+import { placeOnWall } from "../places.mjs";
+import { objectOf, boxFrom } from "../objects.mjs";
 
 /**
  * Scene nodes and placeable XML for the sleep point. c: export context from the core
@@ -8,8 +11,8 @@ import { tg, camera } from "../i3d.mjs";
  */
 function scene(c) {
   const {p, geo} = c;
-  if (!p.sleepPoint) return {nodes: [], xml: "", areas: []};
   const sp = c.sleepPoint(geo, p);
+  if (!sp) return {nodes: [], xml: "", areas: []};
   const nodes = [tg("farmhouseFeatures", [0, 0, 0], [
     c.box("sleepingTrigger", sp.trigger, c.trigger("0x20000000", "0x100000")),
     tg("sleepTriggerMarker", sp.marker),
@@ -31,16 +34,19 @@ function scene(c) {
 `;
   return {nodes, xml, areas: []};
 }
-/** The farmhouse's game places, for the editor (places.mjs). */
-const PLACES = [
-  {id: "sleep", name: "Sleep point", hint: "Walk into the box to get the option to sleep; the bed icon floats over it. It starts at the first door; on another wall it goes to that wall's first door, or its middle.", wall: true, glyph: "sleep"},
-];
-/** What the preview shows of the game places: [{id, name, box, icon, glyph}]; nothing without a sleep point. */
-const gamePlaces = c => {
-  if (!c.p.sleepPoint) return [];
-  const sp = c.sleepPoint(c.geo, c.p);
-  return [{id: "sleep", name: PLACES[0].name, glyph: "sleep", box: sp.trigger, icon: sp.marker, wall: sp.place.wall, dims: [sp.place.along, sp.place.out, sp.place.h]}];
-};
+/**
+ * Where the sleep point goes to start with: in front of the first door (the window list's first), 1.8 m
+ * square, 2.2 m high above the floor; none when the house had it turned off (saves from before objects).
+ */
+function defaultObjects(p) {
+  if (p.sleepPoint === false) return [];
+  const walls = wallsOf(p), doors = (p.windows || []).filter(w => w.type === "door" && w.floor === 0 && walls[w.wall]).sort((a, b) => a.id - b.id);
+  const pl = placeOnWall({}, "sleep", walls, doors.length ? doors[0].wall : "front", (w, key) => {
+    const d = doors.find(x => x.wall === key), s = d ? openingSpan(d, w.L).reduce((u, v) => (u + v) / 2) : w.L / 2;
+    return {s, d: 0.9, along: 1.8, out: 1.8, h: p.foundation + 2.2, icon: [s, 0.9]};
+  });
+  return [boxFrom("sleep", pl.box, pl.icon)];
+}
 
 export default {
   id: "house",
@@ -52,14 +58,14 @@ export default {
   sections: [],
   hides: ["Inside"],
   normalize: p => p,
-  placeable: p => p.sleepPoint
+  placeable: p => objectOf(p, "sleep")
     ? {type: "farmhouse", fn: "$l10n_function_farmHouse", shop: {category: "farmhouses", type: "placeable", brush: "buildings", tab: "farmhouses"},
       note: `Sleep point: use <placeable type="farmhouse" ...> so the player can sleep here, as in the base game's farmhouses.`}
     : {type: "simplePlaceable", fn: "$l10n_function_decoration", shop: {category: "farmhouses", type: "placeable", brush: "buildings", tab: "farmhouses"}},
-  description: p => `A ${(+p.width).toFixed(1)} x ${(+p.depth).toFixed(1)} m house made with House to i3d.${p.sleepPoint ? " Sleep here to skip the night." : ""}`,
+  description: p => `A ${(+p.width).toFixed(1)} x ${(+p.depth).toFixed(1)} m house made with House to i3d.${objectOf(p, "sleep") ? " Sleep here to skip the night." : ""}`,
   scene,
-  places: PLACES,
-  gamePlaces,
+  // the sleep point is optional: with one, the house is a farmhouse in the game
+  objects: {types: ["sleep"], required: [], defaults: defaultObjects},
   presets: [
     {id: "farmhouse", name: "Farmhouse", blurb: "Two-storey red farmhouse with a porch. Players can sleep here.", settings: {}},
   ],

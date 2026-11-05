@@ -99,8 +99,8 @@ test("wing: a door on the wing works, and the sleep point goes there", async () 
   const geo = buildGeometry(q);
   assert.equal(geo.opsByWall.wingEnd.ops.filter(o => o.kind === "door").length, 1);
   const { sleepPoint } = await import("../src/editor/model.mjs");
-  const sp = sleepPoint(geo, q);
-  assert.equal(sp.place.wall, "wingEnd");
+  // (the sleep point starts at the first door: a new house's, so its objects start over)
+  const sp = sleepPoint(geo, sanitize({...q, objects: undefined}));
   assert.ok(sp.trigger.center[2] < -3.5 - 5, "in front of the wing's end");
   // without the wing a door on it doesn't count: the house gets one of its own
   const off = sanitize({...q, wing: false});

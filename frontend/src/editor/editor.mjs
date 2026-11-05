@@ -10,7 +10,7 @@ import { WINDOW_STYLES, DOOR_STYLES, PORCH_OPTIONS, PORCH_W, PORCH_D } from "./m
 import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, henYard, henCap, seeThroughGlass, kindOf } from "./model.mjs";
 import { cowYard } from "./kinds/cow.mjs";
 import { roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, History, wingOf, liveWing, wallsOf, WING_WALLS } from "./layout.mjs";
-import { PLACE_DEFAULT, PLACE_LIMITS } from "./places.mjs";
+import { OBJECT_TYPES, OBJECT_LIMITS, objectOf, pastureOf, snapBox, snapPasture, objectProblems } from "./objects.mjs";
 import { setAssets, catalogFor, usedAssets } from "./model.mjs";
 import { readObj, assetFolder, flattenI3d } from "./assets.mjs";
 import { paintInterior, paintGlass } from "./interior.mjs";
@@ -159,13 +159,13 @@ SCHEMA.forEach(g => {
       if (ruled) syncControls(); else syncOutputs();
       persist(); rebuild(false);
       if (["floors", "halfStorey", "roofType", "ridge", "interior", "curtainStyle", "curtainColor", "winStyle", "doorStyle"].includes(f.k) || f.k.startsWith("wing")) { renderWinUI(); renderDormUI(); }
-      if (f.k === "sleepPoint" || placeSel) renderPlacesUI();
+      if (ob.sel || ob.on) renderObjectsUI();
     });
   });
   if (g.title === "Wing") { const w = document.createElement("p"); w.className = "warn"; w.id = "wingWarn"; w.hidden = true; d.appendChild(w); }
   if (g.custom === "dormers") { const ed = document.createElement("div"); ed.id = "dormEditor"; d.appendChild(ed); }
   if (g.custom === "inside") { const ed = document.createElement("div"); ed.id = "insideEditor"; d.appendChild(ed); }
-  if (g.custom === "places") { const ed = document.createElement("div"); ed.id = "placesEditor"; d.appendChild(ed); }
+  if (g.custom === "objects") { const ed = document.createElement("div"); ed.id = "objectsEditor"; d.appendChild(ed); }
   if (g.custom === "windows") {
     const ed = document.createElement("div"); ed.id = "winEditor"; d.appendChild(ed);
     const sub = document.createElement("p"); sub.className = "sub"; sub.textContent = "Size for new windows"; d.appendChild(sub);
@@ -187,7 +187,7 @@ function syncControls() {
   syncKind();
   renderWinUI();
   renderDormUI();
-  renderPlacesUI();
+  renderObjectsUI();
 }
 function syncOutputs() {
   for (const k in inputs) {
@@ -432,6 +432,15 @@ function setupOrbit() {
   const zoomPlan = k => { ortho.zoom = Math.min(8, Math.max(0.3, ortho.zoom * k)); ortho.updateProjectionMatrix(); needs = true; };
   canvas.addEventListener("pointerdown", e => {
     canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); downAt = ptrs.size === 1 ? [e.clientX, e.clientY] : null;
+    // The yard's plan view: pressing on an object (or a pasture handle) picks it up.
+    if (ob.on && ptrs.size === 1) {
+      const q = groundPoint(e), hit = q && objectAt(q);
+      if (hit) {
+        const o = objectsNow().find(x => x.id === hit.id);
+        ob.sel = hit.id; ob.drag = {...hit, off: o.type === "pasture" ? [0, 0] : [q[0] - o.x, q[1] - o.z], moved: false, before: p.objects};
+        renderObjectsUI(); updatePlacesMarker();
+      }
+    }
     // Arranging the inside: pressing on a piece picks it up.
     if (ins.on && ptrs.size === 1) {
       const q = floorPoint(e), id = q && itemAt(p.items || [], catalogNow(), q[0], q[1]);
@@ -444,6 +453,11 @@ function setupOrbit() {
   });
   canvas.addEventListener("pointerup", e => {
     const click = downAt && ptrs.size === 1 && Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) < 5;
+    if (ob.drag) {
+      const d = ob.drag; ob.drag = null;
+      if (d.moved) setObjects(sanitize({...p, objects: p.objects}).objects, d.id); else { renderObjectsUI(); updatePlacesMarker(); }
+      downAt = null; return;
+    }
     if (ins.drag) {
       const d = ins.drag; ins.drag = null;
       if (d.moved && (d.cand.x !== p.items.find(x => x.id === d.id).x || d.cand.z !== p.items.find(x => x.id === d.id).z)) commitItems(p.items.map(x => x.id === d.id ? d.cand : x));
@@ -456,6 +470,27 @@ function setupOrbit() {
   canvas.addEventListener("pointermove", e => {
     if (!ptrs.has(e.pointerId)) return;
     const prev = ptrs.get(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+    if (ob.drag && ptrs.size === 1) {
+      // where it would go, snapped as it moves (the pasture rebuilds the fence, doorway and troughs as it goes)
+      const q = groundPoint(e);
+      if (q) {
+        const next = dragTo(ob.drag, q);
+        p.objects = objectsNow().map(x => x.id === ob.drag.id ? next : x);
+        ob.drag.moved = true; applyKindRules(); rebuild(false);
+      }
+      return;
+    }
+    if (ob.on) {
+      if (ptrs.size === 1) {
+        const b = canvas.getBoundingClientRect(), k = (ortho.right - ortho.left) / ortho.zoom / b.width;
+        ob.pan[0] -= (e.clientX - prev[0]) * k; ob.pan[1] -= (e.clientY - prev[1]) * k; fitSite();
+      } else if (ptrs.size === 2) {
+        const [a, b] = [...ptrs.values()], d = Math.hypot(a[0]-b[0], a[1]-b[1]);
+        if (pinch) zoomPlan(d / pinch);
+        pinch = d;
+      }
+      return;
+    }
     if (ins.drag && ptrs.size === 1) {
       // Where the piece would land: snapped as it moves.
       const q = floorPoint(e);
@@ -708,55 +743,142 @@ function renderWinUI() {
   }
 }
 /* ---------- Game places ---------- */
-let placeSel = null;
-/** A place's sliders: [key, label on a wall, label in the building's axes, unit text]. */
-const PLACE_SLIDERS = [
-  ["along", "Along the wall (+ to the right)", "Left / right (+ to the right)", 0.05],
-  ["out", "Out from the wall", "Back / front (+ to the front)", 0.05],
-  ["width", "Width (along the wall)", "Width (left to right)", 0.05],
-  ["depth", "Depth (out from the wall)", "Depth (back to front)", 0.05],
-  ["height", "Height", "Height", 0.05],
-  ["iconAlong", "Icon along the wall", null, 0.05],
-  ["iconOut", "Icon out from the wall", null, 0.05]];
-const SIZE_KEYS = {width: 0, depth: 1, height: 2};
-/** The slider's value: a size the player set, or the size the place has now (its kind's). */
-const placeValue = (a, k, x) => k in SIZE_KEYS ? (a[k] || +x.dims[SIZE_KEYS[k]].toFixed(2)) : a[k];
-const placeOut = (a, k, x) => k in SIZE_KEYS ? `${placeValue(a, k, x).toFixed(2)} m${a[k] ? "" : " (automatic)"}` : `${a[k] >= 0 ? "+" : ""}${a[k].toFixed(2)} m`;
-function renderPlacesUI() {
-  const ed = $("placesEditor");
+/* ---------- Game objects ---------- */
+// The game's boxes and icons and the pasture's fence (objects.mjs): a list in the Game objects section, and
+// a plan view of the yard to drag them in (ob.on).
+const ob = {on: false, sel: null, drag: null, pan: [0, 0], saved: null};
+/** A box object's sliders: [key, label, step]. */
+const BOX_SLIDERS = [["x", "Left / right (+ to the right)", 0.25], ["z", "Back / front (+ to the front)", 0.25], ["w", "Width (left to right)", 0.05],
+  ["d", "Depth (back to front)", 0.05], ["h", "Height", 0.05], ["ix", "Icon left / right", 0.05], ["iz", "Icon back / front", 0.05]];
+const objectsNow = () => p.objects || [];
+const selObject = () => objectsNow().find(o => o.id === ob.sel) || null;
+const objName = o => OBJECT_TYPES[o.type].name;
+/** An edit to the objects: snapped, saved and built. */
+function setObjects(list, sel = ob.sel) {
+  p.objects = list; ob.sel = sel;
+  const ruled = applyKindRules(); if (ruled) syncControls();
+  persist(); rebuild(false); renderObjectsUI();
+}
+const snapObj = o => o.type === "pasture" ? snapPasture(o, kindOf(p), p) : snapBox(o, p);
+function renderObjectsUI() {
+  const ed = $("objectsEditor");
   if (!ed) return;
-  const kind = kindOf(p), defs = kind.places || [], list = gamePlaces(p, buildGeometry(p));
-  if (!defs.length) { ed.innerHTML = `<p class="hint">This building has no game places.</p>`; return; }
-  if (!list.length) { ed.innerHTML = `<p class="hint">Turn on the sleep point under Farmhouse to place it.</p>`; return; }
-  if (!list.some(x => x.id === placeSel)) placeSel = null;
+  const kind = kindOf(p), spec = kind.objects || {types: [], required: []}, list = objectsNow(), pr = objectProblems(p);
+  if (!spec.types.length) { ed.innerHTML = `<p class="hint">This building has no game objects.</p>`; return; }
+  if (!list.some(o => o.id === ob.sel)) ob.sel = null;
   const opt = (v, label, cur) => `<option value="${v}" ${v === cur ? "selected" : ""}>${esc(label)}</option>`;
-  let html = `<div class="field"><div class="fl"><label for="placeSel">Edit a place</label></div><select id="placeSel">${opt("", "Choose one", placeSel || "")}${list.map(x => opt(x.id, x.name, placeSel)).join("")}</select></div>`;
-  const x = list.find(q => q.id === placeSel), def = defs.find(q => q.id === placeSel);
-  if (x && def) {
-    const a = p.places[x.id], onWall = !!def.wall;
-    html += `<div class="wincard"><p class="hint">${esc(def.hint)}</p>`;
-    if (onWall) html += `<div class="field"><div class="fl"><label for="pl-wall">Wall</label></div><select id="pl-wall">${opt("auto", `Automatic${a.wall === "auto" && WALL_NAMES[x.wall] ? ` (${WALL_NAMES[x.wall].toLowerCase()})` : ""}`, a.wall)}${WALLS.map(k => opt(k, WALL_NAMES[k], a.wall)).join("")}</select></div>`;
-    for (const [k, wallLabel, bldLabel, step] of PLACE_SLIDERS) {
-      const label = onWall ? wallLabel : bldLabel;
-      if (!label || (k.startsWith("icon") && !x.icon)) continue;
-      const [lo, hi] = PLACE_LIMITS[k];
-      html += `<div class="field"><div class="fl"><label for="pl-${k}">${label}</label><output id="pl-${k}-o">${placeOut(a, k, x)}</output></div><input type="range" id="pl-${k}" data-k="${k}" min="${lo}" max="${hi}" step="${step}" value="${placeValue(a, k, x)}"></div>`;
+  const missing = spec.types.filter(t => !list.some(o => o.type === t));
+  let html = `<div class="row"><button type="button" class="primary" id="objPlan" ${renderer ? "" : "disabled"}>${ob.on ? "Done moving" : "Move them in the plan view"}</button></div>`;
+  html += `<ul class="objlist">${list.map(o => `<li><button type="button" data-obj="${o.id}" aria-pressed="${o.id === ob.sel}">${esc(objName(o))}</button>${pr.has(o.id) ? ` <span class="warn">${esc(pr.get(o.id))}</span>` : ""}</li>`).join("")}</ul>`;
+  if (missing.length) html += `<div class="addrow">${missing.map(t => `<button type="button" data-addobj="${t}">+ ${esc(OBJECT_TYPES[t].name)}</button>`).join("")}</div>`;
+  const o = selObject();
+  if (o) {
+    const t = OBJECT_TYPES[o.type], must = spec.required.includes(o.type), range = (k, label, lo, hi, step, v, unit = " m") =>
+      `<div class="field"><div class="fl"><label for="ob-${k}">${label}</label><output id="ob-${k}-o">${(+v).toFixed(2)}${unit}</output></div><input type="range" id="ob-${k}" data-k="${k}" min="${lo}" max="${hi}" step="${step}" value="${v}"></div>`;
+    html += `<div class="wincard"><p class="hint">${esc(t.hint)}</p>${pr.has(o.id) ? `<p class="warn">${esc(pr.get(o.id))}.</p>` : ""}`;
+    if (o.type === "pasture") {
+      const pa = pastureOf(p), ps = spec.pasture;
+      html += `<div class="field"><div class="fl"><label for="ob-wall">Wall</label></div><select id="ob-wall">${WALLS.map(k => opt(k, WALL_NAMES[k], o.wall)).join("")}</select></div>`;
+      html += range("a", "Start, from the wall’s left end (0: the corner)", OBJECT_LIMITS.end[0], pa.L, 0.25, o.a);
+      html += range("b", "End, from the wall’s right end (0: the corner)", OBJECT_LIMITS.end[0], pa.L, 0.25, o.b);
+      html += range("depth", "Depth, out from the wall", ps.depth[0], ps.depth[1], 0.5, o.depth);
+      html += `<p class="hint">At least ${ps.minWidth} m wide. Below 0 it runs past the corner and back along the wall to the building.</p>`;
+    } else for (const [k, label, step] of BOX_SLIDERS) {
+      if ((k === "ix" || k === "iz") && !t.icon) continue;
+      const [lo, hi] = OBJECT_LIMITS[k];
+      html += range(k, label, lo, hi, step, o[k]);
     }
-    html += `<button type="button" id="placeReset">Back to automatic</button></div>`;
-  }
+    html += `<div class="row">${o.type !== "pasture" ? `<button type="button" id="objTurn">Turn</button>` : ""}<button type="button" id="objRemove" class="danger" ${must ? `disabled title="The ${esc(kind.name.toLowerCase())} needs it"` : ""}>Remove</button></div></div>`;
+  } else html += `<p class="hint">Choose one to change it, or move them in the plan view.</p>`;
+  html += `<button type="button" id="objAuto">Place all automatically</button>`;
   ed.innerHTML = html;
-  $("placeSel").onchange = e => { placeSel = e.target.value || null; renderPlacesUI(); updatePlacesMarker(buildGeometry(p)); };
-  if (!x || !def) return;
-  const a = p.places[x.id];
-  if ($("pl-wall")) $("pl-wall").onchange = e => { a.wall = e.target.value; persist(); rebuild(false); renderPlacesUI(); };
-  ed.querySelectorAll(".wincard input[type=range]").forEach(inp => inp.oninput = () => {
-    const k = inp.dataset.k;
-    a[k] = +inp.value;
-    persist(); rebuild(false);
-    const now = gamePlaces(p, buildGeometry(p)).find(q => q.id === x.id) || x;
-    $(`pl-${k}-o`).textContent = placeOut(a, k, now);
+  $("objPlan").onclick = () => ob.on ? leaveObjects() : (setTab("finish"), enterObjects());
+  ed.querySelectorAll("[data-obj]").forEach(b => b.onclick = () => { ob.sel = +b.dataset.obj; renderObjectsUI(); updatePlacesMarker(); });
+  ed.querySelectorAll("[data-addobj]").forEach(b => b.onclick = () => {
+    // a new one goes where the kind puts it to start with
+    const t = b.dataset.addobj, def = spec.defaults({...p}).find(x => x.type === t), id = list.reduce((m, x) => Math.max(m, x.id), 0) + 1;
+    setObjects(sanitize({...p, objects: [...list, {...(def || {type: t, x: p.width / 2 + 3, z: 0}), id}]}).objects, id);
+    toast(`${OBJECT_TYPES[t].name} added`);
   });
-  $("placeReset").onclick = () => { p.places[x.id] = {...PLACE_DEFAULT}; persist(); rebuild(false); renderPlacesUI(); toast(`${x.name}: back where it goes automatically`); };
+  $("objAuto").onclick = () => { setObjects(sanitize({...p, objects: spec.defaults({...p})}).objects, null); toast("Game objects placed where they go automatically"); };
+  if (!o) return;
+  const swap = next => setObjects(sanitize({...p, objects: list.map(x => x.id === o.id ? next : x)}).objects, o.id);
+  ed.querySelectorAll(".wincard input[type=range]").forEach(inp => {
+    inp.oninput = () => {
+      const k = inp.dataset.k, cur = selObject(), next = {...cur, [k]: +inp.value};
+      p.objects = objectsNow().map(x => x.id === cur.id ? next : x);
+      $(`ob-${k}-o`).textContent = `${(+inp.value).toFixed(2)} m`;
+      applyKindRules(); rebuild(false);
+    };
+    inp.onchange = () => swap(snapObj(selObject()));
+  });
+  if ($("ob-wall")) $("ob-wall").onchange = e => swap(snapObj({...selObject(), wall: e.target.value}));
+  if ($("objTurn")) $("objTurn").onclick = () => { const c = selObject(); swap(snapObj({...c, w: c.d, d: c.w, ix: -c.iz, iz: c.ix})); };
+  $("objRemove").onclick = () => setObjects(list.filter(x => x.id !== o.id), null);
+}
+
+/** The plan view of the yard: the building, its objects and its pasture from above, to drag them in. */
+function enterObjects() {
+  if (!renderer) return;
+  if (ins.on) leaveInside();
+  ob.on = true; ob.drag = null; ob.pan = [0, 0];
+  ob.saved = {...view, target: [...view.target]};
+  sunLight.castShadow = false;
+  $("orbitHint").textContent = "Drag objects or the fence’s dots · drag to pan";
+  fitSite(); renderObjectsUI(); updatePlacesMarker();
+}
+function leaveObjects() {
+  if (!ob.on) return;
+  ob.on = false; ob.drag = null;
+  sunLight.castShadow = true;
+  $("orbitHint").textContent = "Drag to orbit, scroll to zoom";
+  Object.assign(view, ob.saved);
+  updateCam(); rebuild(false); renderObjectsUI();
+}
+/** The plan camera over the building, its objects and its pasture, with a few metres round. */
+function fitSite() {
+  const rs = [{x0: -p.width / 2, x1: p.width / 2, z0: -p.depth / 2, z1: p.depth / 2}];
+  for (const o of objectsNow()) if (o.type !== "pasture") rs.push({x0: o.x - o.w / 2, x1: o.x + o.w / 2, z0: o.z - o.d / 2, z1: o.z + o.d / 2});
+  const pa = pastureOf(p); if (pa) rs.push(pa.rect);
+  const x0 = Math.min(...rs.map(r => r.x0)) - 3, x1 = Math.max(...rs.map(r => r.x1)) + 3, z0 = Math.min(...rs.map(r => r.z0)) - 3, z1 = Math.max(...rs.map(r => r.z1)) + 3;
+  const s = stage.getBoundingClientRect(), aspect = (s.width || 1) / (s.height || 1);
+  const cx = (x0 + x1) / 2 + ob.pan[0], cz = (z0 + z1) / 2 + ob.pan[1];
+  let hw = (x1 - x0) / 2, hh = (z1 - z0) / 2;
+  if (hw / hh > aspect) hh = hw / aspect; else hw = hh * aspect;
+  Object.assign(ortho, {left: -hw, right: hw, top: hh, bottom: -hh});
+  ortho.position.set(cx, 80, cz); ortho.up.set(0, 0, -1); ortho.lookAt(cx, 0, cz);
+  ortho.updateProjectionMatrix(); needs = true;
+}
+/** Where the pointer meets the ground: [x, z], or null. */
+function groundPoint(e) {
+  const b = canvas.getBoundingClientRect(), v = new THREE.Vector2(((e.clientX - b.left) / b.width) * 2 - 1, -((e.clientY - b.top) / b.height) * 2 + 1);
+  const rc = new THREE.Raycaster(); rc.setFromCamera(v, activeCam());
+  const hit = rc.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3());
+  return hit ? [hit.x, hit.z] : null;
+}
+/** The pasture's handles: its two ends (the fence's sides) and its outer edge, [{k, at: [x, z]}]. */
+function pastureHandles() {
+  const pa = pastureOf(p);
+  if (!pa) return [];
+  const at = (s, d) => { const q = pa.at(s, d); return [q[0], q[2]]; };
+  return [{k: "a", at: at(pa.s0, pa.depth / 2)}, {k: "b", at: at(pa.s1, pa.depth / 2)}, {k: "depth", at: at((pa.s0 + pa.s1) / 2, pa.depth)}];
+}
+/** What's under the pointer in the plan view: a pasture handle (within 1 m), else the smallest box there. */
+function objectAt(q) {
+  const scale = (ortho.right - ortho.left) / ortho.zoom / 60, reach = Math.max(1, scale);
+  const h = pastureHandles().find(x => Math.hypot(x.at[0] - q[0], x.at[1] - q[1]) < reach);
+  if (h) return {id: objectOf(p, "pasture").id, handle: h.k};
+  const hits = objectsNow().filter(o => o.type !== "pasture" && Math.abs(q[0] - o.x) <= o.w / 2 && Math.abs(q[1] - o.z) <= o.d / 2)
+    .sort((a, b) => a.w * a.d - b.w * b.d);
+  return hits.length ? {id: hits[0].id} : null;
+}
+/** A drag of object (or pasture handle) d to ground point q: where it would go, snapped. */
+function dragTo(d, q) {
+  const o = objectsNow().find(x => x.id === d.id);
+  if (!d.handle) return snapBox({...o, x: q[0] - d.off[0], z: q[1] - d.off[1]}, p);
+  const pa = pastureOf(p), w = pa.w, s = (q[0] - w.o[0]) * w.u[0] + (q[1] - w.o[2]) * w.u[2], dd = (q[0] - w.o[0]) * w.n[0] + (q[1] - w.o[2]) * w.n[2];
+  const next = d.handle === "a" ? {...o, a: s} : d.handle === "b" ? {...o, b: pa.L - s} : {...o, depth: dd};
+  return snapPasture(next, kindOf(p), p);
 }
 let dSel = null;
 const TYPE_NAMES = {frontespis:"Frontespis", gable:"Gable kupa", shed:"Shed kupa"};
@@ -854,13 +976,14 @@ async function addItems(dir) {
 const ins = {on: false, view: "plan", sel: null, drag: null, hist: null, keep: false, pan: [0, 0]};
 let ortho = null, ghost = null, marks = null, planLines = null;
 const clipPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0);
-const activeCam = () => ins.on && ins.view === "plan" ? ortho : camera;
+const activeCam = () => (ins.on && ins.view === "plan") || ob.on ? ortho : camera;
 const roomNow = () => { const k = kindOf(p); return roomOf(p, k.openings ? k.openings(p) : []); };
 const catalogNow = () => catalogFor(p);
 const selected = () => (p.items || []).find(it => it.id === ins.sel) || null;
 
 function enterInside() {
   if (!renderer || !kindOf(p).catalog) return;
+  if (ob.on) leaveObjects();
   ins.on = true; ins.sel = null; ins.drag = null; ins.pan = [0, 0];
   ins.hist = new History(p.items || []);
   ins.saved = {...view, target: [...view.target]};
@@ -1180,30 +1303,37 @@ function makePlacesMarker() {
     }
     return icons[id];
   };
+  // the pasture's handles in the yard's plan view: its two ends and its outer edge
+  const handleGeo = new THREE.CylinderGeometry(0.45, 0.45, 0.06, 24), handleMat = new THREE.MeshBasicMaterial({color: 0x2f6fd0, depthTest: false});
+  const handles = [0, 1, 2].map(() => { const m = new THREE.Mesh(handleGeo, handleMat); m.visible = false; m.renderOrder = 11; group.add(m); return m; });
   const dispose = () => {
     boxGeo.dispose(); edgeGeo.dispose();
+    handleGeo.dispose(); handleMat.dispose();
     Object.values(boxes).forEach(b => { b.mesh.material.dispose(); b.edges.material.dispose(); });
     Object.values(icons).forEach(s => s.material.dispose());
     Object.values(textures).forEach(t => t.dispose());
   };
-  return {group, boxes, icons, boxFor, iconFor, dispose};
+  return {group, boxes, icons, handles, boxFor, iconFor, dispose};
 }
-function updatePlacesMarker(geo) {
+function updatePlacesMarker() {
   if (!placesObj) return;
   placesObj.group.visible = true;
-  const list = gamePlaces(p, geo), shown = new Set(list.map(x => x.id));
+  const list = gamePlaces(p), shown = new Set(list.map(x => x.type)), pr = objectProblems(p);
   for (const [id, b] of Object.entries(placesObj.boxes)) b.mesh.visible = shown.has(id);
   for (const [id, s] of Object.entries(placesObj.icons)) s.visible = shown.has(id);
   for (const x of list) {
-    const b = placesObj.boxFor(x.id), on = x.id === placeSel;
+    const b = placesObj.boxFor(x.type), on = x.id === ob.sel, bad = pr.has(x.id);
     b.mesh.position.set(...x.box.center); b.mesh.scale.set(...x.box.size);
-    b.mesh.material.opacity = on ? 0.32 : x.id === "info" ? 0.05 : 0.14;
-    b.edges.material.opacity = on ? 1 : 0.35;
+    b.mesh.material.opacity = on ? 0.32 : x.type === "info" ? 0.05 : 0.14;
+    b.edges.material.opacity = on || bad ? 1 : 0.35;
+    b.edges.material.color.set(bad ? 0xd03a2a : on ? 0x2f6fd0 : (PLACE_COLORS[x.type] || 0x888888));
     // the icon over its spot in the game, or a preview-only one over the middle of an icon-less place
     if (!x.glyph) continue;
-    const at = x.icon || [x.box.center[0], 0, x.box.center[2]], s = placesObj.iconFor(x.id, x.glyph);
+    const at = x.icon || [x.box.center[0], 0, x.box.center[2]], s = placesObj.iconFor(x.type, x.glyph);
     s.position.set(at[0], at[1] + 1.3, at[2]);
   }
+  const hs = ob.on ? pastureHandles() : [];
+  placesObj.handles.forEach((m, i) => { m.visible = !!hs[i]; if (hs[i]) m.position.set(hs[i].at[0], 0.05, hs[i].at[1]); });
   needs = true;
 }
 function drawBed(x) {
@@ -1350,12 +1480,13 @@ function rebuild(fit) {
       if (fit) view.r = Math.max(dims.W, dims.D, dims.ridgeY) * 2.3 + 6;
       updateCam();
       updateHighlight();
-      updatePlacesMarker(geo);
+      updatePlacesMarker();
       updateYardMarker(geo);
     }
     updateInsideOverlay();
   }
   refreshWin(); refreshDorm(); renderInsideUI();
+  if ($("objPlan")) $("objPlan").disabled = !renderer;
   MATS.forEach(m => tris += G[m].i.length / 3);
   readout.innerHTML = `<span><b>${dims.W.toFixed(1)} \u00D7 ${dims.D.toFixed(1)} m</b>${wingNow ? ` + <b>${wingNow.ww.toFixed(1)} × ${wingNow.wd.toFixed(1)} m</b> wing` : ""} footprint</span><span><b>${dims.ridgeY.toFixed(1)} m</b> to the top</span><span><b>${tris.toLocaleString()}</b> triangles</span>`;
 }

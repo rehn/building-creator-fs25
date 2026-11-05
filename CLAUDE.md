@@ -23,6 +23,14 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   so eaves line up: a valley wing cuts a 45° triangle out of the slope (notch), the house's eave/gutter/dormers stop at
   WG.cut; a gable-end wing is a lower annex under the gable overhang. Wing roof built in its own axes (WG.Mw/Ml).
   Windows under the wing are hidden (layoutWall cover). geo.wing; test/wing.test.mjs, flicker test covers wings.
+  Game objects (PLAN step 2, done): src/editor/objects.mjs; p.objects = boxes {id, type, x, z, w, d, h, ix, iz} (sleep,
+  food, bales, loading, pallets, info) and the pasture {type: "pasture", wall, a (m from the wall's start), b (m from its
+  END: 0 = corner, so it stays at the corners when the building is resized; < 0 runs past), depth}. kind.objects =
+  {types, required, pasture: {minWidth, depth}, defaults(p)}; cleanObjects adds missing required ones; defaults come from
+  the old placeOnWall logic (henObjects/cowObjects with p.objects undefined), legacy pastureWall/fenceDepth/sleepPoint
+  read in sanitize. withPasture (pasture.mjs) derives pastureWall, fenceDepth, pastureMid for the rest of the kind
+  (doorway/hatch at pastureMid, troughs on [ea, eb]). House: a sleep object makes it a farmhouse (no sleepPoint
+  setting). Editor: Game objects section + plan view (ob state, fitSite, drag boxes and the pasture's 3 handles).
   Wall zones (PLAN step 1, done): wallSplit one|floor|height, splitHeight, lowerCladding, lowerColor; material
   "wallsLow" (in MATS, its own colour/texture/age) below the split, "walls" above (gables, dormers and porch gables
   are always "walls"); buildWall({split}) adds a drip board (trim) 9 cm in from the ends, broken at openings.
@@ -31,10 +39,9 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   A walk-in kind has a catalog of pieces and autoFurnish(p); buildGeometry draws p.items.
   src/editor/editor.mjs = controls + three.js r128 preview, mounted by Editor.tsx.
   src/editor/interior.mjs = paints the room atlas (layout: ATLAS in model.mjs) and glass texture.
-  src/editor/places.mjs = game places: the FS25 boxes and icons (sleep trigger + bed icon, feed pad, bale drop, trailer
-  spot + teleport, egg pallets, info area). kind.places lists them; p.places[id] = {wall auto|key, along, out, width,
-  depth, height (0 = the kind's), iconAlong, iconOut} (cleanPlaces); kinds place them with placeOnWall/placeOnBuilding;
-  gamePlaces(p) gives the preview the same boxes and icons the export writes. Editor: "Game places" section.
+  src/editor/places.mjs = placeOnWall/placeOnBuilding: where the kinds put their game objects to start with (the
+  objects themselves are in objects.mjs; p.places and cleanPlaces are from before and no longer used).
+  gamePlaces(p) (model.mjs) gives the preview the same boxes and icons the export writes.
   src/editor/age.mjs = p.age (0-60 years): agedColor (via colorFor) and weather() on texture shade/height/marks
   (Mk codes coloured by MASK_RGB: mortar, bare wood, moss, rust, lichen, white rust); tiling, so no
   position-dependent dirt (e.g. a band at the wall bottom) yet.
@@ -89,7 +96,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Frontend tests: cd frontend && npm test (node --test, no browser needed)
 
 ## Status
-- Go tests (60) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (362) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
+- Go tests (60) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (361) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
 - Cow barn (kinds/cow.mjs): cowHusbandryPasture (no milk, like cowBarnSmall), automatic water, feed
   and water troughs outside on the pasture wall (kind.outside), a plain walk-through doorway for the
   cows (openings with plain: true; tall openings get a collision gap), feed pad + bale trigger

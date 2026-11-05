@@ -34,7 +34,7 @@ test("from photos: every kind's request is a valid answer schema with a guide to
   // a kind's own settings are there, with its own range
   const cow = photoRequest("cow");
   assert.ok(cow.schema.properties.settings.properties.cows);
-  assert.match(cow.schema.properties.settings.properties.fenceDepth.description, new RegExp(`${fieldsFor(KIND.cow).fenceDepth.min} to`));
+  assert.match(cow.schema.properties.pasture.properties.depth.description, new RegExp(`${KIND.cow.objects.pasture.depth[0]} to`), "the pasture with the kind's own range");
   assert.ok(!photoRequest("house").schema.properties.settings.properties.cows);
   assert.throws(() => photoRequest("spaceship"));
 });
@@ -81,9 +81,12 @@ test("from photos: a poor answer still makes a building", () => {
 });
 
 test("from photos: animal buildings are told the app makes the animals' doorway", () => {
-  assert.match(photoRequest("cow").guide, /pastureWall side by itself/);
-  assert.match(photoRequest("chicken").guide, /pastureWall side by itself/);
-  assert.doesNotMatch(photoRequest("house").guide, /pastureWall/);
+  assert.match(photoRequest("cow").guide, /pasture's wall by itself/);
+  assert.match(photoRequest("chicken").guide, /pasture's wall by itself/);
+  assert.doesNotMatch(photoRequest("house").guide, /pasture.wall/);
+  assert.ok(photoRequest("cow").schema.properties.pasture && !photoRequest("house").schema.properties.pasture);
+  const p = applyAnswer("cow", {settings: {}, openings: [], pasture: {wall: "left", depth: 25}});
+  assert.deepEqual([p.pastureWall, p.fenceDepth], ["left", 25], "the answer's pasture becomes the barn's");
 });
 
 test("from photos: a house's answer can have a wing, with openings on its walls", () => {

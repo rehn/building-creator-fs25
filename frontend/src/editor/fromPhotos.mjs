@@ -62,20 +62,25 @@ export function photoRequest(kindId) {
   const wing = fields.some(([f]) => f.k === "wing");
   const settings = {type: "object", additionalProperties: false, required: fields.map(([f]) => f.k), properties: {}};
   for (const [f] of fields) settings.properties[f.k] = fieldSchema(f);
+  // an animal building's pasture: the wall the animals go out on and how far out the fence goes
+  const ps = kind.objects && kind.objects.pasture, pasture = ps ? {type: "object", additionalProperties: false, required: ["wall", "depth"], properties: {
+    wall: {type: "string", enum: WALLS, description: "The wall the animals go out through to the pasture"},
+    depth: {type: "number", description: `How far out from that wall the fence goes, ${ps.depth[0]} to ${ps.depth[1]} m`}}} : null;
   const schema = {
-    type: "object", additionalProperties: false, required: ["seen", "settings", "openings", "notes"],
+    type: "object", additionalProperties: false, required: ["seen", "settings", "openings", "notes", ...(pasture ? ["pasture"] : [])],
     properties: {
       seen: {type: "string", description: "What the photos show: the footprint's shape (rectangle, L or T), which wall each photo shows, materials, how you judged the sizes"},
       settings,
       openings: {type: "array", items: opening(wing ? [...WALLS, ...WING_WALLS] : WALLS), description: "Every window and door on the walls"},
       notes: {type: "string", description: "For the admin: what the app can't match and what to check"},
+      ...(pasture ? {pasture} : {}),
     },
   };
-  const animals = fields.some(([f]) => f.k === "pastureWall")
+  const animals = !!pasture
     ? `
 
-Animals: the app makes the animals' own way out to the pasture (and the fence) on the pastureWall side by itself. ` +
-      `Don't list that opening as a door; set pastureWall to the side where the animals go out, and keep the doors you list off that wall.`
+Animals: the app makes the animals' own way out to the pasture (and the fence) on the pasture's wall by itself. ` +
+      `Don't list that opening as a door; set pasture.wall to the side where the animals go out (it must not have a door), and pasture.depth to how far out the fence goes.`
     : "";
   const wingText = wing
     ? `
@@ -122,6 +127,8 @@ export function applyAnswer(kindId, answer) {
   const a = answer && typeof answer === "object" ? answer : {};
   const s = a.settings && typeof a.settings === "object" ? a.settings : {};
   const settings = {...s, kind: kindId};
+  // the pasture: its wall and depth (the rest of the game objects go where the kind puts them)
+  if (a.pasture && typeof a.pasture === "object") Object.assign(settings, {pastureWall: a.pasture.wall, fenceDepth: a.pasture.depth});
   const openings = Array.isArray(a.openings) ? a.openings.filter(o => o && typeof o === "object") : [];
   if (openings.length) {
     settings.windows = openings.map(o => {

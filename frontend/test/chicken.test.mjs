@@ -41,8 +41,8 @@ test("sanitize: old saves without a kind are houses", () => {
 });
 
 test("sanitize: a chicken barn has no sleep point, rooms or dormers", () => {
-  const p = sanitize({ kind: "chicken", sleepPoint: true, interior: true, dormers: [{ type: "gable", side: 1, pos: 0.5 }] });
-  assert.equal(p.sleepPoint, false);
+  const p = sanitize({ kind: "chicken", sleepPoint: true, interior: true, dormers: [{ type: "gable", side: 1, pos: 0.5 }], objects: [{ type: "sleep" }] });
+  assert.ok(!p.objects.some(o => o.type === "sleep"));
   assert.equal(p.interior, false);
   assert.deepEqual(p.dormers, []);
 });
@@ -62,7 +62,7 @@ test("sanitize: hens are limited by the floor area", () => {
 test("schema: chicken barns hide the house-only sections and show the chicken one", () => {
   const byTitle = Object.fromEntries(SCHEMA.map(g => [g.title, g]));
   const shows = (g, kind) => !g.kinds || g.kinds.includes(kind);
-  for (const t of ["Interior", "Farmhouse", "Kupor (dormers)"]) {
+  for (const t of ["Interior", "Kupor (dormers)"]) {
     assert.ok(shows(byTitle[t], "house"), t);
     assert.ok(!shows(byTitle[t], "chicken"), t);
   }

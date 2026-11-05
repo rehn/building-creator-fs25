@@ -32,7 +32,7 @@ test("schema: sections are split into building the house and finishing it", () =
   const side = s => SCHEMA.filter(g => g.side === s).map(g => g.title);
   assert.ok(SCHEMA.every(g => g.side === "build" || g.side === "finish"), "every section has a side");
   assert.deepEqual(side("build"), ["Chickens", "Cows", "Size", "Wing", "Roof", "Kupor (dormers)", "Windows", "Doors", "Inside"]);
-  assert.deepEqual(side("finish"), ["Surfaces", "Colors", "Interior", "Farmhouse", "Game places", "Game mod"]);
+  assert.deepEqual(side("finish"), ["Surfaces", "Colors", "Interior", "Game objects", "Game mod"]);
 });
 
 test("sanitize: unknown keys are dropped", () => {
@@ -552,15 +552,15 @@ const camForward = ([rx, ry]) => {
   return [-Math.cos(a) * Math.sin(b), Math.sin(a), -Math.cos(a) * Math.cos(b)];
 };
 
-test("sanitize: the sleep point is on by default and can be turned off", () => {
-  assert.equal(sanitize({}).sleepPoint, true);
-  assert.equal(sanitize({ sleepPoint: false }).sleepPoint, false);
+test("sanitize: a house has a sleep point to start with; a save that had it off has none", () => {
+  assert.deepEqual(sanitize({}).objects.map(o => o.type), ["sleep"]);
+  assert.deepEqual(sanitize({ sleepPoint: false }).objects, []);
 });
 
 for (const doorWall of ["front", "back", "left", "right"]) {
   test(`sleep point: trigger, icon, spawn and camera for a door on the ${doorWall} wall`, () => {
     const p = sanitize({ doorWall, doorPos: 0.4, foundation: 0.6, entrance: "porch" });
-    const geo = buildGeometry(p), sp = sleepPoint(geo);
+    const geo = buildGeometry(p), sp = sleepPoint(geo, p);
     const { w, ops } = geo.opsByWall[doorWall], door = ops.find(o => o.kind === "door");
     const sc = (door.s0 + door.s1) / 2;
     const out = q => (q[0] - w.o[0]) * w.n[0] + (q[2] - w.o[2]) * w.n[2];
@@ -590,7 +590,7 @@ for (const doorWall of ["front", "back", "left", "right"]) {
 
 test("i3d: sleep point nodes match the snippet and use the base game's trigger filter", () => {
   const p = sanitize({ doorWall: "right" });
-  const sp = sleepPoint(buildGeometry(p));
+  const sp = sleepPoint(buildGeometry(p), p);
   const tree = sceneTree(buildI3d(p)), snippet = placeableSnippet(p);
   const map = Object.fromEntries([...snippet.matchAll(/<i3dMapping id="([^"]+)" node="([^"]+)"\/>/g)].map(m => [m[1], m[2]]));
   for (const id of ["sleepingTrigger", "sleepTriggerMarker", "spawnPoint", "sleepCamera"]) assert.ok(map[id], `${id} has no i3dMapping`);

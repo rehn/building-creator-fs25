@@ -192,7 +192,7 @@ test("doors: windows added to a wall leave room for every door on it", () => {
 
 test("doors: export order is the doors' order; the sleep point is at the first door", () => {
   const p = sanitize({windows: [door("left", 0.5), door("front", 0.5)]});
-  const sp = sleepPoint(buildGeometry(p));
+  const sp = sleepPoint(buildGeometry(p), p);
   assert.ok(sp.trigger.center[0] < -p.width / 2, "in front of the left door");
   const q = hen({windows: [door("left", 0.5), door("front", 0.5)], pastureWall: "back"});
   assert.deepEqual(buildGeometry(q).doors.map(d => d.wall), ["left", "front"]);
