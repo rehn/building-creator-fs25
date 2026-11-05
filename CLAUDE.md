@@ -112,6 +112,9 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   see-through windows, and an inside
   from kind.furnish(). Confirmed in-game: hens show, door opens, walk-in collision.
   Not yet confirmed: feeding, fence joining the corners, warning stripes, see-through windows, coop interior.
+- docs/PLAN.md (Swedish) is the current plan, agreed Nov 2026: one model for every building (parts = rectangles
+  attached to each other, two wall zones, ground floor walk-in everywhere, doors openable or not, game objects as
+  placeable objects). Steps: 1 wall zones, 2 game objects, 3 walk-in for all + openable doors, 4 parts, 5 Claude guide.
 - Agreed plan with the user (old saves may break; aim: a good, user-friendly app):
   1. done: core + kind modules. 2. done: interior as a list of placed pieces (catalog per kind,
   snapping rules, "Fill automatically"; editor has an Inside section with fill/clear). 3. done:
