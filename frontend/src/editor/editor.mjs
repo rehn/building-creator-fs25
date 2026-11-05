@@ -6,6 +6,7 @@ import {
   SCHEMA, fieldsFor, WALLS, WALL_NAMES, DTYPES, DORM_DEF, MATS, fittingTextures,
   genRow, sanitize, serialize, slugify, buildGeometry, buildI3d, placeableSnippet, sleepPoint, surfaceSpec, scaledUV, colorFor, WP
 } from "./model.mjs";
+import { WINDOW_STYLES, DOOR_STYLES } from "./model.mjs";
 import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, henYard, henCap, seeThroughGlass, kindOf } from "./model.mjs";
 import { cowYard } from "./kinds/cow.mjs";
 import { roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, History } from "./layout.mjs";
@@ -154,7 +155,7 @@ SCHEMA.forEach(g => {
       const ruled = applyKindRules();
       if (ruled) syncControls(); else syncOutputs();
       persist(); rebuild(false);
-      if (["floors", "halfStorey", "roofType", "ridge", "interior", "curtainStyle", "curtainColor"].includes(f.k)) { renderWinUI(); renderDormUI(); }
+      if (["floors", "halfStorey", "roofType", "ridge", "interior", "curtainStyle", "curtainColor", "winStyle", "doorStyle"].includes(f.k)) { renderWinUI(); renderDormUI(); }
     });
   });
   if (g.custom === "dormers") { const ed = document.createElement("div"); ed.id = "dormEditor"; d.appendChild(ed); }
@@ -166,7 +167,7 @@ SCHEMA.forEach(g => {
   d.appendChild(wrap);
   if (g.custom === "windows") {
     const b = document.createElement("button"); b.type = "button"; b.className = "wide"; b.textContent = "Use this size for all windows";
-    b.onclick = () => { p.windows.forEach(w => { w.w = p.winW; w.h = p.winH; w.sill = p.sill; }); persist(); rebuild(false); renderWinUI(); toast("All windows now use this size"); };
+    b.onclick = () => { p.windows.forEach(w => { if (w.type === "door") return; w.w = p.winW; w.h = p.winH; w.sill = p.sill; }); persist(); rebuild(false); renderWinUI(); toast("All windows now use this size"); };
     d.appendChild(b);
   }
   $("controls-" + g.side).appendChild(d);
@@ -350,7 +351,7 @@ function initThree() {
   MATS.forEach(m => {
     // The rooms are unlit and a little dark, so they read as indoors behind the glass.
     matObjs[m] = m === "interior" ? new THREE.MeshBasicMaterial({map: interiorTex, color: 0xc8c8c8})
-      : new THREE.MeshStandardMaterial(m === "glass" ? {roughness:0.12, metalness:0.4} : m === "gutter" ? {roughness:0.45, metalness:0.35} : m === "curtain" || m === "fittings" ? {roughness:0.95, metalness:0, vertexColors:true} : {roughness:0.85, metalness:0});
+      : new THREE.MeshStandardMaterial(m === "glass" ? {roughness:0.12, metalness:0.4} : m === "gutter" || m === "iron" ? {roughness:0.45, metalness:0.35} : m === "curtain" || m === "fittings" ? {roughness:0.95, metalness:0, vertexColors:true} : {roughness:0.85, metalness:0});
     const mesh = new THREE.Mesh(new THREE.BufferGeometry(), matObjs[m]);
     mesh.castShadow = !["glass", "interior", "curtain"].includes(m); mesh.receiveShadow = m !== "interior";
     meshes[m] = mesh; scene.add(mesh);
@@ -548,7 +549,8 @@ function sortedWindows() {
 }
 function winLabel(w) {
   const row = sortedWindows().filter(x => x.wall === w.wall && x.floor === w.floor);
-  return `${WALL_NAMES[w.wall]}, ${floorName(w.floor).toLowerCase()}, window ${row.indexOf(w) + 1}` + (w._hidden ? " (hidden)" : "");
+  const same = row.filter(x => x.type === w.type);
+  return `${WALL_NAMES[w.wall]}, ${floorName(w.floor).toLowerCase()}, ${w.type === "door" ? "door" : "window"} ${same.indexOf(w) + 1}` + (w._hidden ? " (hidden)" : "");
 }
 const WIN_FIELDS = [
   {k:"pos", label:"Position", min:0, max:1, step:0.005},
@@ -591,7 +593,7 @@ function renderWinUI() {
     html += `<tr><th scope="row">${WALL_NAMES[wall]}</th>`;
     for (let f = 0; f < floors; f++) {
       if (f === p.floors && !gableWall(wall)) { html += `<td><span aria-label="No attic windows on this wall">\u2013</span></td>`; continue; }
-      const n = p.windows.filter(w => w.wall === wall && w.floor === f).length, nm = `${WALL_NAMES[wall]}, ${floorName(f).toLowerCase()}`;
+      const n = p.windows.filter(w => w.wall === wall && w.floor === f && w.type !== "door").length, nm = `${WALL_NAMES[wall]}, ${floorName(f).toLowerCase()}`;
       html += `<td><div class="step"><button type="button" data-w="${wall}" data-f="${f}" data-d="-1" aria-label="Fewer windows: ${nm}" ${n ? "" : "disabled"}>\u2212</button><span>${n}</span><button type="button" data-w="${wall}" data-f="${f}" data-d="1" aria-label="More windows: ${nm}" ${n >= 8 ? "disabled" : ""}>+</button></div></td>`;
     }
     html += `</tr>`;
@@ -599,18 +601,25 @@ function renderWinUI() {
   html += `</tbody></table>`;
   const list = sortedWindows();
   if (!list.some(w => w.id === selId)) selId = null;
-  html += `<div class="field"><div class="fl"><label for="winSel">Edit a window</label></div><div class="selrow"><button type="button" id="winPrev" aria-label="Previous window">\u2039</button><select id="winSel"><option value="">Choose a window</option>${list.map(w => `<option value="${w.id}" ${w.id === selId ? "selected" : ""}>${winLabel(w)}</option>`).join("")}</select><button type="button" id="winNext" aria-label="Next window">\u203A</button></div></div>`;
+  html += `<div class="field"><div class="fl"><label for="winSel">Edit a window or door</label></div><div class="selrow"><button type="button" id="winPrev" aria-label="Previous window">\u2039</button><select id="winSel"><option value="">Choose one</option>${list.map(w => `<option value="${w.id}" ${w.id === selId ? "selected" : ""}>${winLabel(w)}</option>`).join("")}</select><button type="button" id="winNext" aria-label="Next window">\u203A</button></div></div>`;
   const s = list.find(w => w.id === selId);
   if (s) {
-    html += `<div class="wincard"><p class="warn" id="winWarn" ${s._hidden ? "" : "hidden"}>This window overlaps the door or another window, so it\u2019s hidden. Move it or make it smaller.</p>`;
-    for (const f of WIN_FIELDS) html += `<div class="field"><div class="fl"><label for="wf-${f.k}">${f.label}</label><output id="wf-${f.k}-o">${winOut(f, s)}</output></div><input type="range" id="wf-${f.k}" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}" value="${s[f.k]}"></div>`;
-    html += choiceFields("wc", s);
-    html += `<button type="button" id="winRemove">Remove this window</button></div>`;
+    const door = s.type === "door", styles = door ? DOOR_STYLES : WINDOW_STYLES;
+    const own = (styles.find(x => x.id === (door ? p.doorStyle : p.winStyle)) || styles[0]).name.toLowerCase();
+    const opt = (v, label, cur) => `<option value="${v}" ${v === cur ? "selected" : ""}>${esc(label)}</option>`;
+    html += `<div class="wincard"><p class="warn" id="winWarn" ${s._hidden ? "" : "hidden"}>This overlaps a door or another window, so it’s hidden. Move it or make it smaller.</p>`;
+    // a window on the ground floor can be a door (and back)
+    html += `<div class="field"><div class="fl"><label for="wf-type">This is a</label></div><select id="wf-type">${opt("window", "Window", s.type)}${s.floor === 0 ? opt("door", "Door", s.type) : ""}</select></div>`;
+    if (s.floor !== 0) html += `<p class="hint">Doors can only go on the ground floor.</p>`;
+    html += `<div class="field"><div class="fl"><label for="wf-style">Style</label></div><select id="wf-style">${opt("default", `Same as the building (${own})`, s.style)}${styles.map(x => opt(x.id, x.name, s.style)).join("")}</select></div>`;
+    for (const f of WIN_FIELDS) if (!(door && f.k === "sill")) html += `<div class="field"><div class="fl"><label for="wf-${f.k}">${f.label}</label><output id="wf-${f.k}-o">${winOut(f, s)}</output></div><input type="range" id="wf-${f.k}" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}" value="${s[f.k]}"></div>`;
+    if (!door) html += choiceFields("wc", s);
+    html += `<button type="button" id="winRemove">Remove this ${door ? "door" : "window"}</button></div>`;
   }
   ed.innerHTML = html;
   ed.querySelectorAll(".step button").forEach(b => b.onclick = () => {
     const wall = b.dataset.w, f = +b.dataset.f;
-    const n = p.windows.filter(w => w.wall === wall && w.floor === f).length + (+b.dataset.d);
+    const n = p.windows.filter(w => w.wall === wall && w.floor === f && w.type !== "door").length + (+b.dataset.d);
     p.windows = genRow(p, p.windows, wall, f, Math.max(0, Math.min(8, n)));
     persist(); rebuild(false); renderWinUI();
   });
@@ -631,6 +640,13 @@ function renderWinUI() {
       persist(); rebuild(false);
     });
     bindChoices("wc", s);
+    $("wf-type").onchange = e => {
+      // a new door gets a door's size, a window made again the building's window size
+      if (e.target.value === "door") Object.assign(s, {type: "door", style: "default", w: 0.9, h: Math.min(2, p.floorHeight - 0.3)});
+      else Object.assign(s, {type: "window", style: "default", w: p.winW, h: p.winH, sill: p.sill});
+      persist(); rebuild(false); renderWinUI(); updateHighlight();
+    };
+    $("wf-style").onchange = e => { s.style = e.target.value; persist(); rebuild(false); };
     $("winRemove").onclick = () => { p.windows = p.windows.filter(w => w.id !== selId); selId = null; persist(); rebuild(false); renderWinUI(); };
   }
 }
@@ -1004,7 +1020,7 @@ function pick(e) {
     const {w, ops} = opsByWall[key];
     const dx = q.x - w.o[0], dz = q.z - w.o[2], s = dx*w.u[0] + dz*w.u[2], d = dx*w.n[0] + dz*w.n[2], t = q.y - w.o[1];
     if (d < -0.3 || d > 0.2) continue;
-    const op = ops.find(o => o.kind === "window" && s > o.s0 - 0.12 && s < o.s1 + 0.12 && t > o.t0 - 0.12 && t < o.t1 + 0.12);
+    const op = ops.find(o => o.id && (o.kind === "window" || o.kind === "door") && s > o.s0 - 0.12 && s < o.s1 + 0.12 && t > o.t0 - 0.12 && t < o.t1 + 0.12);
     if (op) {
       selId = op.id;
       setTab("build");

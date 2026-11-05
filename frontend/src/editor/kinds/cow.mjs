@@ -368,7 +368,7 @@ export default {
   plural: "Cow barns",
   category: "animals",
   walkIn: true,
-  defaults: {cows: 12, pastureWall: "back", fenceDepth: 15},
+  defaults: {cows: 12, pastureWall: "back", fenceDepth: 15, winStyle: "stall", doorStyle: "xbrace"},
   sections: [
     {title: "Cows", side: "build", hint: "Cows graze in the pasture and come in through a wide doorway in the pasture side; they eat and drink at troughs along that wall. Fill feed (or drop bales) at the feed place outside the fence; water is automatic. The fence starts at least 16 m wide, and you can drag it to any shape when placing the barn in the game. This is a barn without milking (like the game’s small cow barn).", fields: [
       {k: "cows", label: "Cows", min: 1, max: MAX_COWS, step: 1},
@@ -408,7 +408,7 @@ export default {
       width: 8, depth: 6, floors: 1, floorHeight: 2.6, foundation: 0.4, foundationColor: "#8C8A84", roofType: "gable", ridge: "width", roofPitch: 30, overhang: 0.4,
       roofMaterial: "tiles", roofColor: "#7A2E1F", chimney: false, gutters: false, downpipes: 0, ventilators: 0,
       winFront: 2, winBack: 0, winLeft: 1, winRight: 1, winW: 0.7, winH: 0.5, sill: 1.4,
-      doorWall: "front", doorPos: -0.5, doorW: 1.2, doorH: 2.1, doorColor: "#F2EFE8", entrance: "none",
+      doorWall: "front", doorPos: -0.5, doorW: 1.2, doorH: 2.1, doorColor: "#F2EFE8", entrance: "none", doorStyle: "zbrace",
       modPrice: 15000, modUpkeep: 40}},
     {id: "losdriftsstall", name: "Lösdriftsstall", blurb: "30 × 16 m modern loose-housing barn for 70 cows, a low metal roof and lanterns along the ridge.", settings: {
       cows: 70, pastureWall: "front", fenceDepth: 30,
@@ -416,7 +416,7 @@ export default {
       width: 30, depth: 16, floors: 1, floorHeight: 3.6, foundation: 0.3, foundationColor: "#8C8A84", roofType: "gable", ridge: "width", roofPitch: 15, overhang: 0.5,
       roofMaterial: "metal", roofColor: "#4A4F52", chimney: false, gutters: true, downpipes: 2, ventilators: 4,
       winFront: 8, winBack: 8, winLeft: 0, winRight: 0, winW: 1.4, winH: 0.6, sill: 1.5,
-      doorWall: "right", doorPos: 0, doorW: 2.5, doorH: 2.6, doorColor: "#3B3F42", entrance: "none",
+      doorWall: "right", doorPos: 0, doorW: 2.5, doorH: 2.6, doorColor: "#3B3F42", entrance: "none", doorStyle: "sliding", winStyle: "single",
       modPrice: 140000, modUpkeep: 300}},
   ],
 };

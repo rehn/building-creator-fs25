@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { sanitize, buildGeometry, PRESETS, kindOf } from "../src/editor/model.mjs";
 import { WALL_T } from "../src/editor/layout.mjs";
+import { WINDOW_STYLES, DOOR_STYLES } from "../src/editor/openings.mjs";
 
 // Two visible faces in the same plane, facing the same way and overlapping, flicker in the game
 // (z-fighting): it can't tell which is in front. This looks for them in every preset.
@@ -49,6 +50,12 @@ function hidden(t, geo, walkIn, F) {
   if (c[1] < 0) return true;
   if (c[1] < F && ax < W / 2 + 0.06 && az < D / 2 + 0.06) return true;
   if (c[1] >= top || ax >= W / 2 || az >= D / 2) return false;
+  // in an opening (a window's sash, a door in its reveal) is seen
+  for (const {w, ops} of Object.values(geo.opsByWall)) {
+    const v = [c[0] - w.o[0], c[1] - w.o[1], c[2] - w.o[2]], s = v[0] * w.u[0] + v[2] * w.u[2], d = v[0] * w.n[0] + v[2] * w.n[2];
+    if (d < -WALL_T - 0.02 || d > 0.01) continue;
+    if (ops.some(o => s > o.s0 - 0.01 && s < o.s1 + 0.01 && v[1] > o.t0 - 0.01 && v[1] < o.t1 + 0.01)) return false;
+  }
   return !walkIn || ax > W / 2 - WALL_T || az > D / 2 - WALL_T;
 }
 /** Overlapping coplanar same-facing pairs that can be seen: [{a, b}] (at most max). */
@@ -71,7 +78,7 @@ function flickers(geo, mats, {walkIn = false, F = 0, max = 5} = {}) {
 const show = ({a, b}) => `${a.m} and ${b.m} at ${a.pts[0].map(v => v.toFixed(2))} facing ${a.n.map(v => v.toFixed(2))}`;
 
 // The building's shell (the inside pieces are drawn by the kinds and have their own tests).
-const SHELL = ["walls", "trim", "roof", "door", "foundation", "chimney", "gutter"];
+const SHELL = ["walls", "trim", "roof", "door", "foundation", "chimney", "gutter", "iron", "glass"];
 
 for (const pr of PRESETS) test(`no flickering faces on the outside of ${pr.id}`, () => {
   const p = sanitize(pr.settings), f = flickers(buildGeometry(p), SHELL, {walkIn: !!kindOf(p).walkIn, F: p.foundation});
@@ -82,5 +89,12 @@ test("no flickering faces with a porch or steps at the door", () => {
   for (const entrance of ["porch", "shed", "gable", "none"]) for (const foundation of [0.3, 0.8]) {
     const f = flickers(buildGeometry(sanitize({entrance, foundation})), SHELL, {F: foundation});
     assert.equal(f.length, 0, `${entrance}, foundation ${foundation}:\n` + f.map(show).join("\n"));
+  }
+});
+
+test("no flickering faces with any window or door style, on a house and in a barn", () => {
+  for (const base of [{}, PRESETS.find(x => x.id === "ladugard").settings]) for (const s of WINDOW_STYLES) for (const d of DOOR_STYLES) for (const doorW of [1, 2.2]) {
+    const p = sanitize({...base, winStyle: s.id, doorStyle: d.id, doorW}), f = flickers(buildGeometry(p), SHELL, {walkIn: !!kindOf(p).walkIn, F: p.foundation});
+    assert.equal(f.length, 0, `${p.kind} ${s.id} ${d.id} ${doorW} m:\n` + f.map(show).join("\n"));
   }
 });

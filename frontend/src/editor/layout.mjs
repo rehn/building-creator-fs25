@@ -28,6 +28,11 @@ export function wallFrames(W, D, F) {
   };
 }
 
+/** Where an entry of the window list (a window, or a door made from one) is along its wall (length L): [s0, s1]. */
+export function openingSpan(win, L) {
+  const ww = Math.min(win.w, L - 0.4), c = Math.min(L - ww/2 - 0.2, Math.max(ww/2 + 0.2, win.pos * L));
+  return [c - ww/2, c + ww/2];
+}
 /** Where the door is along its wall (length L): [s0, s1]. */
 export function doorSpan(p, L) {
   const dw = Math.min(p.doorW, L - 0.6), c = L/2 + p.doorPos * Math.max(0, L/2 - p.doorW/2 - 0.3);
@@ -53,7 +58,9 @@ export function roomOf(p, openings = []) {
     return {x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]), z0: Math.min(a[1], b[1]), z1: Math.max(a[1], b[1])};
   };
   const door = keep(p.doorWall, ...doorSpan(p, frames[p.doorWall].L), DOOR_CLEAR);
-  const keepOut = [{rect: door, what: "the door"}, ...openings.map(o => ({rect: keep(o.wall, o.s0, o.s1, o.clear), what: o.what}))];
+  // doors made from windows are kept clear too
+  const sideDoors = (p.windows || []).filter(w => w.type === "door" && w.floor === 0).map(w => ({rect: keep(w.wall, ...openingSpan(w, frames[w.wall].L), DOOR_CLEAR), what: "a door"}));
+  const keepOut = [{rect: door, what: "the door"}, ...sideDoors, ...openings.map(o => ({rect: keep(o.wall, o.s0, o.s1, o.clear), what: o.what}))];
   const walls = [
     {name: "back", x0, x1, z0, z1: z0, into: [0, 1], rot: 0},
     {name: "front", x0, x1, z0: z1, z1, into: [0, -1], rot: 180},

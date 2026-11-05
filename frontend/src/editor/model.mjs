@@ -3,9 +3,11 @@
 // Pure functions with no DOM or three.js, so they run (and are tested) in Node.
 import { I3dDoc, tg, shape, refNode, boxMesh, splitByColor, mappingsFor, num, v3 } from "./i3d.mjs";
 import { KINDS, kindOf } from "./kinds/index.mjs";
-import { WALL_T, wallFrames, doorSpan, roomOf, footprint, toWorld, cleanItems, problems } from "./layout.mjs";
+import { WALL_T, wallFrames, doorSpan, openingSpan, roomOf, footprint, toWorld, cleanItems, problems } from "./layout.mjs";
 import { withAssets, placement, assetFolder } from "./assets.mjs";
 import { SURFACES } from "./surfaces.mjs";
+import { WINDOW_STYLES, DOOR_STYLES, WINDOW_STYLE_IDS, DOOR_STYLE_IDS, DOUBLE_DOOR_FROM, isPair, styleOf, drawSash, drawLeaf } from "./openings.mjs";
+export { WINDOW_STYLES, DOOR_STYLES, DOUBLE_DOOR_FROM } from "./openings.mjs";
 export { boxMesh } from "./i3d.mjs";
 export { KINDS, KIND, kindOf, groupByKind, CATEGORIES } from "./kinds/index.mjs";
 export { henYard, henCap, HENS_PER_M2, MAX_HENS } from "./kinds/chicken.mjs";
@@ -16,8 +18,8 @@ export const DEFAULTS = {
   kind:"house",
   width:10, depth:7, floors:2, floorHeight:2.7, foundation:0.4, halfStorey:false, kneeWall:0.9,
   roofType:"gable", ridge:"width", roofPitch:38, overhang:0.5, chimney:true,
-  winFront:2, winBack:3, winLeft:1, winRight:1, winW:1.0, winH:1.25, sill:0.85,
-  doorWall:"front", doorPos:0, doorW:1.0, doorH:2.1,
+  winFront:2, winBack:3, winLeft:1, winRight:1, winW:1.0, winH:1.25, sill:0.85, winStyle:"casement",
+  doorWall:"front", doorPos:0, doorW:1.0, doorH:2.1, doorStyle:"panel",
   wallCladding:"lockpanel", panelSpacing:0.2, battenWidth:0.06, roofMaterial:"tiles", chimneyStyle:"brick", chimneyColor:"#8A3B2C",
   entrance:"porch", entranceWidth:2.2, entranceDepth:1.6, gutters:true, downpipes:2, gutterColor:"#3B3F42",
   wallColor:"#8E2A1E", trimColor:"#F2EFE8", roofColor:"#2B2D2F", doorColor:"#3E5A4A", foundationColor:"#6E6E6A",
@@ -39,8 +41,6 @@ const LEAF_T = 0.05;
 const DOOR_OPEN = -100;
 /** How far the plinth stands out from the walls. */
 const PLINTH_OUT = 0.06;
-/** Doors wider than this are a pair of doors (a walk-in building's are two leaves that open together). */
-export const DOUBLE_DOOR_FROM = 1.4;
 /**
  * Settings as the building's kind uses them (a hen house has no sleep point, rooms or dormers ...),
  * with any of the kind's own settings that are missing taken from its defaults.
@@ -70,7 +70,8 @@ const SHARED_SECTIONS = [
     {k:"downpipes", label:"Downpipes per long side", min:0, max:2, step:1},
     {k:"ventilators", label:"Roof ventilators (lanterns on the ridge)", min:0, max:4, step:1}]},
   {title:"Kupor (dormers)", side:"build", custom:"dormers", fields:[]},
-  {title:"Windows", side:"build", custom:"windows", hint:"Set how many windows each floor has. To change one window, choose it below or tap it in the preview.", fields:[
+  {title:"Windows", side:"build", custom:"windows", hint:"Set how many windows each floor has. To change one window, or turn it into a door, choose it below or tap it in the preview.", fields:[
+    {k:"winStyle", label:"Style", type:"select", options:WINDOW_STYLES.map(s => [s.id, s.name])},
     {k:"winW", label:"Width", min:0.4, max:2.5, step:0.05, unit:" m"},
     {k:"winH", label:"Height", min:0.4, max:2.2, step:0.05, unit:" m"},
     {k:"sill", label:"Sill height", min:0.2, max:1.5, step:0.05, unit:" m"}]},
@@ -78,7 +79,8 @@ const SHARED_SECTIONS = [
     {k:"doorWall", label:"Wall", type:"select", options:[["front","Front"],["back","Back"],["left","Left side"],["right","Right side"]]},
     {k:"doorPos", label:"Position, left to right", min:-1, max:1, step:0.05},
     {k:"doorW", label:"Width", min:0.7, max:2.5, step:0.05, unit:" m"},
-    {k:"doorH", label:"Height", min:1.8, max:2.6, step:0.05, unit:" m"}]},
+    {k:"doorH", label:"Height", min:1.8, max:2.6, step:0.05, unit:" m"},
+    {k:"doorStyle", label:"Style (also for doors made from windows)", type:"select", options:DOOR_STYLES.map(s => [s.id, s.name])}]},
   {title:"Entrance", side:"build", fields:[
     {k:"entrance", label:"Canopy", type:"select", options:[["none","None"],["shed","Shed canopy on brackets"],["gable","Gable canopy on brackets"],["porch","Porch with posts (förstukvist)"]]},
     {k:"entranceWidth", label:"Width", min:1.2, max:5, step:0.05, unit:" m"},
@@ -141,7 +143,8 @@ export const clampN = (v, lo, hi, d) => { v = +v; return isFinite(v) ? Math.min(
 export function genRow(P, list, wall, floor, n) {
   const L = (wall === "front" || wall === "back") ? P.width : P.depth;
   let id = list.reduce((m, w) => Math.max(m, w.id), 0);
-  const keep = list.filter(w => !(w.wall === wall && w.floor === floor));
+  // (doors made from windows stay: the count is of windows)
+  const keep = list.filter(w => !(w.wall === wall && w.floor === floor && w.type !== "door"));
   const pos = [];
   if (n > 0) {
     if (P.doorWall === wall && floor === 0) {
@@ -151,7 +154,7 @@ export function genRow(P, list, wall, floor, n) {
       slots.splice(bi, 1); pos.push(...slots);
     } else for (let i = 0; i < n; i++) pos.push((i + 0.5) / n * L);
   }
-  for (const s of pos) keep.push({id: ++id, wall, floor, pos: s / L, w: P.winW, h: P.winH, sill: P.sill, room: "auto", curtain: "default", curtainColor: "default"});
+  for (const s of pos) keep.push({id: ++id, wall, floor, pos: s / L, w: P.winW, h: P.winH, sill: P.sill, type: "window", style: "default", room: "auto", curtain: "default", curtainColor: "default"});
   return keep;
 }
 export function genAll(P, src) {
@@ -163,10 +166,18 @@ export function genAll(P, src) {
   }
   return list;
 }
+/** An entry of the window list's type ("window" or, on the ground floor, "door") and style ("default" or one of its type's). */
+function openingKind(w) {
+  const type = w.type === "door" && Math.round(clampN(w.floor, 0, 2, 0)) === 0 ? "door" : "window";
+  const ids = type === "door" ? DOOR_STYLE_IDS : WINDOW_STYLE_IDS;
+  return {type, style: ids.includes(w.style) ? w.style : "default"};
+}
 function cleanWindows(arr) {
   return arr.filter(w => w && WALLS.includes(w.wall)).slice(0, 80).map((w, i) => ({
     id: i + 1, wall: w.wall, floor: Math.round(clampN(w.floor, 0, 2, 0)), pos: clampN(w.pos, 0, 1, 0.5),
     w: clampN(w.w, 0.3, 3, 1), h: clampN(w.h, 0.3, 2.4, 1.25), sill: clampN(w.sill, 0, 2, 0.85),
+    // a door: only on the ground floor; its style a door style, a window's a window style
+    ...openingKind(w),
     room: pickRoom(w.room), curtain: pickCurtain(w.curtain), curtainColor: pickColor(w.curtainColor)
   }));
 }
@@ -270,7 +281,7 @@ export function slugify(name) {
 export const WP = (w,s,t,d) => [w.o[0] + w.u[0]*s + w.n[0]*d, w.o[1] + t, w.o[2] + w.u[2]*s + w.n[2]*d];
 // fittings: a walk-in barn's inside (whitewashed walls, litter, nests, perches, feeders), vertex
 // colored like the curtains and exported as one plain part per color.
-export const MATS = ["walls","trim","roof","glass","door","foundation","chimney","gutter","interior","curtain","fittings"];
+export const MATS = ["walls","trim","roof","glass","door","foundation","chimney","gutter","iron","interior","curtain","fittings"];
 /**
  * Texture atlas for the rooms behind the windows (u, v from the bottom left, as [u0, v0, u1, v1]).
  * Four room types (living room, bedroom, kitchen, study), each with its own back wall,
@@ -297,6 +308,20 @@ const add = (a,b) => [a[0]+b[0], a[1]+b[1], a[2]+b[2]];
 const scl = (a,k) => [a[0]*k, a[1]*k, a[2]*k];
 const dist = (a,b) => Math.hypot(...sub(a,b));
 
+/** Mesh g without its vertices in ranges [[from, to] ...] (what door leaves carry), with colours and surfaces if it has them. */
+function exceptRanges(g, ranges) {
+  const drop = v => ranges.some(([a, b]) => v >= a && v < b), map = new Map(), out = {p: [], n: [], uv: [], i: []};
+  if (g.c) out.c = []; if (g.s) out.s = [];
+  for (let v = 0; v < g.p.length / 3; v++) {
+    if (drop(v)) continue;
+    map.set(v, out.p.length / 3);
+    out.p.push(g.p[v * 3], g.p[v * 3 + 1], g.p[v * 3 + 2]); out.n.push(g.n[v * 3], g.n[v * 3 + 1], g.n[v * 3 + 2]); out.uv.push(g.uv[v * 2], g.uv[v * 2 + 1]);
+    if (g.c) out.c.push(g.c[v * 3], g.c[v * 3 + 1], g.c[v * 3 + 2]);
+    if (g.s) out.s.push(g.s[v]);
+  }
+  for (let t = 0; t < g.i.length; t += 3) if (map.has(g.i[t])) out.i.push(map.get(g.i[t]), map.get(g.i[t + 1]), map.get(g.i[t + 2]));
+  return out;
+}
 /** The part of mesh g made of its vertices from .. to (not included), as a mesh of its own (a door leaf). */
 function sliceMesh(g, from, to) {
   const out = {p: g.p.slice(from * 3, to * 3), n: g.n.slice(from * 3, to * 3), uv: g.uv.slice(from * 2, to * 2), i: []};
@@ -500,7 +525,7 @@ export function gutterMesh(c0, c1, out, r, {seg = 12} = {}) {
 export function buildGeometry(p) {
 p = normalize(p);
 const kind = kindOf(p);
-let G, opsByWall = {}, dims = {}, rooms = [], downpipes = [], doorLeaves = [];
+let G, opsByWall = {}, dims = {}, rooms = [], downpipes = [], doors = [];
 // Imported items placed inside: [{asset, item, translation, rotY}] (see assets.mjs placement).
 const refs = [];
 // Walk-in kinds (a hen house ...): walls with an inside face, hollow collision, a door that opens.
@@ -568,7 +593,7 @@ function layoutWall(key, L, fh, topAt) {
   const ops = [];
   if (p.doorWall === key) {
     const [s0, s1] = doorSpan(p, L), dh = Math.min(p.doorH, fh - 0.25);
-    ops.push({s0, s1, t0: 0, t1: dh, kind: "door"});
+    ops.push({s0, s1, t0: 0, t1: dh, kind: "door", main: true, style: p.doorStyle});
   }
   // The kind's own openings (a hen hatch ...), before the windows so a window over one is hidden.
   for (const h of openings) if (h.wall === key) ops.push({s0: h.s0, s1: h.s1, t0: 0, t1: h.t1, kind: "hatch", plain: !!h.plain});
@@ -576,11 +601,13 @@ function layoutWall(key, L, fh, topAt) {
     if (win.wall !== key) continue;
     win._hidden = false;
     if (win.floor >= nf) continue;
-    const ww = Math.min(win.w, L - 0.4), c = Math.min(L - ww/2 - 0.2, Math.max(ww/2 + 0.2, win.pos * L));
-    const t0 = win.floor * fh + win.sill, t1 = win.floor < p.floors ? Math.min(t0 + win.h, (win.floor + 1) * fh - 0.25) : t0 + win.h;
-    const op = {s0: c - ww/2, s1: c + ww/2, t0, t1, kind: "window", id: win.id};
+    const [s0, s1] = openingSpan(win, L), door = win.type === "door";
+    // a door made from a window stands on the floor, no taller than the floor allows
+    const t0 = door ? 0 : win.floor * fh + win.sill;
+    const t1 = door ? Math.min(win.h, fh - 0.25) : win.floor < p.floors ? Math.min(t0 + win.h, (win.floor + 1) * fh - 0.25) : t0 + win.h;
+    const op = {s0, s1, t0, t1, kind: door ? "door" : "window", id: win.id, style: styleOf(p, win)};
     const g = 0.18;
-    if (t1 - t0 < 0.3 || ww < 0.3 || ops.some(q => q.s0 < op.s1 + g && op.s0 < q.s1 + g && q.t0 < op.t1 + g && op.t0 < q.t1 + g)
+    if (t1 - t0 < 0.3 || s1 - s0 < 0.3 || ops.some(q => q.s0 < op.s1 + g && op.s0 < q.s1 + g && q.t0 < op.t1 + g && op.t0 < q.t1 + g)
         || (topAt && t1 + 0.12 > Math.min(topAt(op.s0 - 0.1), topAt(op.s1 + 0.1)))) { win._hidden = true; continue; }
     ops.push(op);
   }
@@ -732,12 +759,61 @@ function buildHatch(w, o, F, fr, out) {
     }
   }
 }
+/** How many vertices each material has so far, to find what was drawn after (see rangesSince). */
+const vcount = () => Object.fromEntries(MATS.map(m => [m, G[m].p.length / 3]));
+/** The vertices of each material drawn since vcount() gave before: {mat: [from, to]}. */
+const rangesSince = before => {
+  const out = {};
+  for (const m of MATS) { const n = G[m].p.length / 3; if (n > before[m]) out[m] = [before[m], n]; }
+  return out;
+};
+/**
+ * A door in opening o of wall w (key: the wall's name), in its style: one leaf, or a pair when it is
+ * wide. Swinging leaves sit in the reveal, hinged on their outside face, and open outwards; a sliding
+ * door hangs outside the wall on a rail and slides along it. In a walk-in building (inner) the
+ * leaves are recorded in doors: each with what it moves (its vertices, per material), its hinge
+ * (the node the game moves it about) and its collision box.
+ */
+function buildDoor(w, o, kit, inner, r, out, key) {
+  const slide = o.style === "sliding", pair = isPair(o.s1 - o.s0), g = 0.01, mid = (o.s0 + o.s1) / 2;
+  let spans, dIn, dOut, t0 = o.t0 + g, t1 = o.t1 - g, travel = 0;
+  if (slide) {
+    // over the opening and its frame, 10 cm past each side; the rail above, long enough to slide clear
+    const lap = 0.1, a = o.s0 - lap, b = o.s1 + lap;
+    dIn = out + 0.006; dOut = dIn + LEAF_T; t0 = o.t0 + 0.005; t1 = o.t1 + 0.1;
+    spans = pair ? [[a, mid - 0.003], [mid + 0.003, b]] : [[a, b]];
+    travel = pair ? (o.s1 - o.s0) / 2 + lap : o.s1 - o.s0 + lap;
+    const r0 = Math.max(0.03, a - travel), r1 = Math.min(w.L - 0.03, pair ? b + travel : b), ry = t1 + 0.03;
+    kit.box("iron", r0, r1, ry, ry + 0.06, dIn, dOut + 0.02);
+    for (let s = r0; s <= r1 + 1e-6; s += Math.max(0.3, (r1 - r0) / Math.max(1, Math.round((r1 - r0) / 1.0)))) {
+      const s0 = Math.min(Math.max(s - 0.025, r0 + 0.02), r1 - 0.07);   // (in from the rail's ends: flush faces flicker)
+      kit.box("iron", s0, s0 + 0.05, ry + 0.005, ry + 0.055, 0, dIn + 0.01);   // brackets back to the wall
+    }
+  } else {
+    dIn = -r; dOut = -r + LEAF_T;
+    spans = pair ? [[o.s0 + g, mid - g / 2], [mid + g / 2, o.s1 - g]] : [[o.s0 + g, o.s1 - g]];
+  }
+  const leaves = [];
+  spans.forEach(([s0, s1], k) => {
+    const before = vcount(), right = k === 1;
+    drawLeaf(kit, o.style, {s0, s1, t0, t1, dIn, dOut, right});
+    if (slide) for (const u of [0.15, s1 - s0 - 0.2]) kit.box("iron", s0 + u, s0 + u + 0.05, t1, t1 + 0.06, dIn + 0.015, dOut - 0.015);   // hangers up to the rail
+    if (!inner) return;
+    const ax = Math.abs(w.u[0]) > 0.5, along = s1 - s0, tall = t1 - t0, thick = dOut - dIn;
+    const box = {center: WP(w, (s0 + s1) / 2, (t0 + t1) / 2, (dIn + dOut) / 2), size: ax ? [along, tall, thick] : [thick, tall, along]};
+    if (slide) {
+      const v = (right ? 1 : -1) * travel;
+      leaves.push({hinge: WP(w, s0, o.t0, dIn), motion: {translation: [w.u[0] * v, 0, w.u[2] * v]}, parts: rangesSince(before), box});
+    } else leaves.push({hinge: WP(w, right ? s1 : s0, o.t0, dOut), motion: {rotation: right ? -DOOR_OPEN : DOOR_OPEN}, parts: rangesSince(before), box});
+  });
+  if (inner) doors.push({wall: key, op: o, slide, leaves});
+}
 /**
  * inner: build the wall's inside face too, WALL_T behind the outside one (where the opening
  * reveals end), facing in. inner.lift raises an eave wall's inside face into the roof slab so no
- * gap shows under the roof. Doors become leaves that can open (see doorLeaves).
+ * gap shows under the roof. key: the wall's name, for its doors (see buildDoor).
  */
-function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inner = null} = {}) {
+function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inner = null, key = null} = {}) {
   const L = w.L, xs = [0, L, L/2], ts = [0, H, H + gableRise];
   ops.forEach(o => { xs.push(o.s0, o.s1); ts.push(o.t0, o.t1); });
   const uniq = a => [...new Set(a.map(v => +v.toFixed(5)))].sort((a,b) => a - b);
@@ -780,43 +856,39 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
   }
 
   const r = 0.15, out = 0.04;
+  // what the window and door styles (openings.mjs) draw with, in this wall's coordinates; skip: "d0" or
+  // "d1", the face to leave out (it lies on another surface, where it would only flicker)
+  const kit = {box: (mat, s0, s1, t0, t1, d0, d1, skip) => {
+      const P = (a, b, c) => WP(w, lerp(s0, s1, a), lerp(t0, t1, b), lerp(d0, d1, c));
+      for (const a of [0, 1]) poly(mat, [P(a,0,0), P(a,1,0), P(a,1,1), P(a,0,1)], a ? w.u : neg(w.u));
+      for (const b of [0, 1]) poly(mat, [P(0,b,0), P(1,b,0), P(1,b,1), P(0,b,1)], b ? UP : neg(UP));
+      for (const c of [0, 1]) if (skip !== (c ? "d1" : "d0")) poly(mat, [P(0,0,c), P(1,0,c), P(1,1,c), P(0,1,c)], c ? w.n : neg(w.n));
+    },
+    slab: (mat, pts, d0, d1, skip) => {
+      const f0 = pts.map(([s, t]) => WP(w, s, t, d0)), f1 = pts.map(([s, t]) => WP(w, s, t, d1));
+      if (skip !== "d0") poly(mat, f0, neg(w.n));
+      if (skip !== "d1") poly(mat, f1, w.n);
+      pts.forEach((_, i) => { const j = (i + 1) % pts.length, m = mid([f0[i], f0[j]]), c = mid(f0); poly(mat, [f0[i], f0[j], f1[j], f1[i]], sub(m, c)); });
+    }};
   ops.forEach(o => {
     const isDoor = o.kind === "door", isWin = o.kind === "window";
     // Frame width: 8 cm, slimmer on a small window (down to 4.5 cm), so the frame doesn't swamp it.
     const fr = isWin ? Math.min(0.08, Math.max(0.045, 0.075 * Math.min(o.s1 - o.s0, o.t1 - o.t0))) : 0.08, k = fr / 0.08;
     // The opening's linings, through the wall's thickness: painted boards like the frame.
-    if (!isDoor) poly("trim", [WP(w,o.s0,o.t0,0), WP(w,o.s1,o.t0,0), WP(w,o.s1,o.t0,-r), WP(w,o.s0,o.t0,-r)], UP);
+    // (no bottom lining on an opening down at the floor: it would lie on the plinth top and flicker)
+    if (!isDoor && o.t0 > 0.01) poly("trim", [WP(w,o.s0,o.t0,0), WP(w,o.s1,o.t0,0), WP(w,o.s1,o.t0,-r), WP(w,o.s0,o.t0,-r)], UP);
     poly("trim", [WP(w,o.s0,o.t1,0), WP(w,o.s1,o.t1,0), WP(w,o.s1,o.t1,-r), WP(w,o.s0,o.t1,-r)], neg(UP));
     poly("trim", [WP(w,o.s0,o.t0,0), WP(w,o.s0,o.t1,0), WP(w,o.s0,o.t1,-r), WP(w,o.s0,o.t0,-r)], w.u);
     poly("trim", [WP(w,o.s1,o.t0,0), WP(w,o.s1,o.t1,0), WP(w,o.s1,o.t1,-r), WP(w,o.s1,o.t0,-r)], neg(w.u));
     if (o.kind === "hatch") { buildHatch(w, o, F, fr, out); return; }
-    // The glass sits 12 mm in front of the back of the window bars: in the same plane they flicker.
-    const dg = isDoor ? -r : -r + 0.012;
-    const pane = [WP(w,o.s0,o.t0,dg), WP(w,o.s1,o.t0,dg), WP(w,o.s1,o.t1,dg), WP(w,o.s0,o.t1,dg)];
-    if (isDoor && inner) {
-      // A leaf with a handle on each side, hinged on its outside face, opening outwards: one hinged at
-      // s0, or for a wide door a pair, the second hinged at s1 and carrying the strip over the gap.
-      const g = 0.01, t0 = o.t0 + g, t1 = o.t1 - g, dIn = -r, dOut = -r + LEAF_T, mid = (o.s0 + o.s1) / 2;
-      const pair = o.s1 - o.s0 > DOUBLE_DOOR_FROM;
-      const spans = pair ? [[o.s0 + g, mid - g / 2], [mid + g / 2, o.s1 - g]] : [[o.s0 + g, o.s1 - g]];
-      spans.forEach(([s0, s1], k) => {
-        const from = G.door.p.length / 3, right = k === 1;
-        wbox("door", w, s0, s1, t0, t1, dIn, dOut);
-        if (right) wbox("door", w, s0 - 0.03, s0 + 0.04, t0, t1, dOut, dOut + 0.015);
-        const hx = right ? s0 + 0.15 : s1 - 0.12;   // the handles, near the free edge
-        wbox("door", w, hx - 0.03, hx, o.t0 + 0.95, o.t0 + 1.08, dOut, dOut + 0.06);
-        wbox("door", w, hx - 0.03, hx, o.t0 + 0.95, o.t0 + 1.08, dIn - 0.06, dIn);
-        const ax = Math.abs(w.u[0]) > 0.5, along = s1 - s0, tall = t1 - t0;
-        doorLeaves.push({hinge: WP(w, right ? s1 : s0, o.t0, dOut), openAngle: right ? -DOOR_OPEN : DOOR_OPEN, from, to: G.door.p.length / 3,
-          box: {center: WP(w, (s0 + s1) / 2, (t0 + t1) / 2, (dIn + dOut) / 2), size: ax ? [along, tall, LEAF_T] : [LEAF_T, tall, along]}});
-      });
-    } else {
-      poly(isDoor ? "door" : "glass", pane, w.n);
-      // a wide door is a pair of doors: a meeting stile down the middle
-      if (isDoor && o.s1 - o.s0 > DOUBLE_DOOR_FROM) { const mid = (o.s0 + o.s1) / 2; wbox("door", w, mid - 0.025, mid + 0.025, o.t0, o.t1, -r, -r + 0.02); }
+    if (isDoor) buildDoor(w, o, kit, inner, r, out, key);
+    else {
+      // The sash in the window's style; the glass sits 12 mm in front of the back of its bars (in the
+      // same plane they flicker), seen from both sides in a walk-in building.
+      o.glass = drawSash(kit, o.style, o, {k, r}).glass;
+      const dg = -r + 0.012, pane = [WP(w,o.s0,o.t0,dg), WP(w,o.s1,o.t0,dg), WP(w,o.s1,o.t1,dg), WP(w,o.s0,o.t1,dg)];
+      if (o.glass) { poly("glass", pane, w.n); if (inner) poly("glass", pane, neg(w.n)); }
     }
-    // From inside, the glass is seen from behind: give it a face that way too.
-    if (!isDoor && inner) poly("glass", pane, neg(w.n));
     // The frame and sill start at the wall's face: inside the wall they would share planes with the
     // linings and flicker.
     const b0 = isDoor ? o.t0 : o.t0 - fr;
@@ -824,27 +896,14 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
     wbox("trim", w, o.s1, o.s1 + fr, b0, o.t1 + fr, 0, out);
     wbox("trim", w, o.s0, o.s1, o.t1, o.t1 + fr, 0, out);
     if (isDoor) {
-      if (F > 0.05 && p.entrance !== "porch") {
+      if (F > 0.05 && !(o.main && p.entrance === "porch")) {
         // the doorstep, from where the plinth ends (its top in the same plane would flicker)
         wbox("foundation", w, o.s0 - 0.3, o.s1 + 0.3, -F, 0, PLINTH_OUT, 0.7);
         wbox("collision", w, o.s0 - 0.3, o.s1 + 0.3, -F, 0, PLINTH_OUT, 0.7);
       }
-      // the handle, near the free edge; on a pair of doors one either side of the stile
-      const pair = o.s1 - o.s0 > DOUBLE_DOOR_FROM, mid = (o.s0 + o.s1) / 2;
-      const hxs = pair ? [mid - 0.06, mid + 0.09] : [o.s1 - 0.12];
-      if (!inner) for (const hx of hxs) wbox("trim", w, hx - 0.03, hx, o.t0 + 0.95, o.t0 + 1.08, -r, -r + 0.06);
-    } else {
-      wbox("trim", w, o.s0 - fr - 0.04 * k, o.s1 + fr + 0.04 * k, o.t0 - 0.07 * k, o.t0, 0, out + 0.05 * k);
-      // Glazing bars: a centre bar from 75 cm wide (a small window is one pane), a cross bar over 1 m high.
-      const bw = 0.03 * k;
-      if (o.s1 - o.s0 >= 0.75) { const mid = (o.s0 + o.s1) / 2; wbox("trim", w, mid - bw, mid + bw, o.t0, o.t1, -r, -r + 0.04); }
-      if (o.t1 - o.t0 > 1.0) {
-        const tm = o.t0 + (o.t1 - o.t0) * 0.62;
-        wbox("trim", w, o.s0, o.s1, tm - bw, tm + bw, -r, -r + 0.04);
-      }
-    }
+    } else wbox("trim", w, o.s0 - fr - 0.04 * k, o.s1 + fr + 0.04 * k, o.t0 - 0.07 * k, o.t0, 0, out + 0.05 * k);
   });
-  if (p.interior) for (const o of ops) if (o.kind === "window") { const R = roomFor(w, o, ops, r, topAt, !!dormer, dormer || p.windows.find(x => x.id === o.id)); rooms.push(R); buildRoom(R); }
+  if (p.interior) for (const o of ops) if (o.kind === "window" && o.glass) { const R = roomFor(w, o, ops, r, topAt, !!dormer, dormer || p.windows.find(x => x.id === o.id)); rooms.push(R); buildRoom(R); }
 }
 
 /** Appends a ready-made mesh (with its own normals) to material mat. */
@@ -1138,7 +1197,7 @@ function buildEntrance(w, o, limit, F, mainEave) {
 
 function build() {
   // "collision" collects simple closed solids next to the visual meshes; it is split off at the end.
-  rooms = []; downpipes = []; doorLeaves = [];
+  rooms = []; downpipes = []; doors = [];
   G = {}; [...MATS, "collision"].forEach(m => G[m] = {p:[], n:[], uv:[], i:[]});
   G.curtain.c = []; G.fittings.c = []; G.fittings.s = []; fitSurf = undefined;
   const W = p.width, D = p.depth, F = p.foundation, fh = p.floorHeight, H = p.floors * fh + (p.halfStorey ? p.kneeWall : 0), top = F + H;
@@ -1252,9 +1311,9 @@ function build() {
     const ops = layoutWall(key, Lw, fh, sv => H + R * Math.max(0, 1 - Math.abs(sv - Lw/2) / (Lw/2)));
     // Eave walls' inside faces reach into the roof slab (which sits lower further in), staying below its top.
     const inner = hollow ? {lift: R > 0 || p.roofType === "flat" ? 0 : Math.min(WALL_T * tanP, th - 0.02)} : null;
-    buildWall(WS[key], ops, H, R, F, {topAt: sv => H + R * Math.max(0, 1 - Math.abs(sv - Lw/2) / (Lw/2)), inner});
+    buildWall(WS[key], ops, H, R, F, {topAt: sv => H + R * Math.max(0, 1 - Math.abs(sv - Lw/2) / (Lw/2)), inner, key});
     opsByWall[key] = {w: WS[key], ops};
-    const dOp = ops.find(op => op.kind === "door");
+    const dOp = ops.find(op => op.kind === "door" && op.main);
     if (dOp) entr = {w: WS[key], o: dOp, key, gable};
   }
   if (entr && p.entrance !== "none") {
@@ -1381,12 +1440,14 @@ function build() {
 }
 build();
 const {collision, ...visual} = G;
-return {G: visual, dims, opsByWall, collision, rooms, downpipes, doorLeaves, refs};
+// the main door first (door1), then the others in the order they were made
+doors.sort((a, b) => (b.op.main ? 1 : 0) - (a.op.main ? 1 : 0) || (a.op.id || 0) - (b.op.id || 0));
+return {G: visual, dims, opsByWall, collision, rooms, downpipes, doors, refs};
 }
 
 /* ---------- Materials ---------- */
 export function colorFor(p, m) {
-  return {walls:p.wallColor, trim:p.trimColor, roof:p.roofColor, glass:"#2E3B44", door:p.doorColor, foundation:p.foundationColor, chimney:p.chimneyColor, gutter:p.gutterColor, interior:"#B8AE9C", curtain:p.curtainColor, fittings:"#E9E4D8"}[m];
+  return {walls:p.wallColor, trim:p.trimColor, roof:p.roofColor, glass:"#2E3B44", door:p.doorColor, foundation:p.foundationColor, chimney:p.chimneyColor, gutter:p.gutterColor, iron:"#2C2D2F", interior:"#B8AE9C", curtain:p.curtainColor, fittings:"#E9E4D8"}[m];
 }
 export function surfaceSpec(p, m) {
   const kind = m === "walls" ? p.wallCladding
@@ -1504,9 +1565,9 @@ function materialFor(doc, p, m, name, g, withTex) {
   return doc.material(`${m}_mat`, {diffuseColor: rgb(colorFor(p, m))});
 }
 
-/** Where a walk-in building's door prompt shows: a box across the doorway, both sides. */
-function doorTrigger(geo, p) {
-  const {w, ops} = geo.opsByWall[p.doorWall], o = ops.find(q => q.kind === "door"), s = (o.s0 + o.s1) / 2;
+/** Where a walk-in building's door prompt shows: a box across the doorway (opening o of wall), both sides. */
+function doorTrigger(geo, wall, o) {
+  const {w} = geo.opsByWall[wall], s = (o.s0 + o.s1) / 2;
   const ax = Math.abs(w.u[0]) > 0.5, along = o.s1 - o.s0 + 0.6;
   return {center: [w.o[0] + w.u[0] * s, w.o[1] + 1.1, w.o[2] + w.u[2] * s], size: ax ? [along, 2.2, 2.4] : [2.4, 2.2, along]};
 }
@@ -1515,32 +1576,30 @@ function doorTrigger(geo, p) {
  * Everything the export writes, built once: the i3d document and scene tree, and the placeable XML
  * blocks that name its nodes. The i3dMappings are looked up in the scene by name, so they always match.
  * Scene: house > clear/level/test/tipOcclusion areas, visuals, collisions (like the base game's
- * garden sheds), then a walk-in building's door, the kind's own nodes and the indoor area.
+ * garden sheds), then a walk-in building's doors, the kind's own nodes and the indoor area.
  */
 function exportParts(p, {withTex = false} = {}) {
   p = normalize(p);
   const kind = kindOf(p), geo = buildGeometry(p), {G} = geo, doc = new I3dDoc();
+  // A walk-in building's door leaves move, so what they carry (door, trim, glass, ironwork) comes
+  // out of the building's own parts and goes on the leaves.
+  const doors = kind.walkIn ? geo.doors : [];
+  const moving = {};
+  for (const d of doors) for (const leaf of d.leaves) for (const [m, r] of Object.entries(leaf.parts)) (moving[m] = moving[m] || []).push(r);
   // One part per material, except curtains and fittings: one per color (i3d materials have one color).
   const parts = [];
   for (const m of MATS) {
-    if (!G[m].i.length) continue;
-    if (m === "curtain" || m === "fittings") splitByColor(G[m]).forEach((g, j) => parts.push({name: j ? `${m}${j + 1}` : m, m, g}));
-    else parts.push({name: m, m, g: G[m]});
+    const g = moving[m] ? exceptRanges(G[m], moving[m]) : G[m];
+    if (!g.i.length) continue;
+    if (m === "curtain" || m === "fittings") splitByColor(g).forEach((q, j) => parts.push({name: j ? `${m}${j + 1}` : m, m, g: q}));
+    else parts.push({name: m, m, g});
   }
-  // A walk-in building's door leaves are each their own node at its hinge, so a leaf's mesh is relative to its hinge.
-  const leaves = kind.walkIn ? geo.doorLeaves : [];
+  const mats = {};
+  const matOf = (m, name, g) => g.color ? materialFor(doc, p, m, name, g, withTex) : (mats[m] = mats[m] || materialFor(doc, p, m, name, g, withTex));
   const visuals = [];
-  let doors = [];
   for (const {name, m, g} of parts) {
-    const mat = materialFor(doc, p, m, name, g, withTex), uv = scaledUV(p, m, g);
-    if (leaves.length && m === "door") {
-      doors = leaves.map((leaf, k) => {
-        const s = sliceMesh(g, leaf.from, leaf.to);
-        return {leaf, mat, shape: doc.shape(k ? `${name}${k + 1}` : name, {...s, p: s.p.map((v, i) => v - leaf.hinge[i % 3])}, {uv: scaledUV(p, m, s)})};
-      });
-      continue;
-    }
-    visuals.push(shape(name, {shapeId: doc.shape(name, g, {uv}), castsShadows: !(NO_SHADOW.includes(m) && (m !== "glass" || seeThroughGlass(p))), receiveShadows: true, materialIds: mat}));
+    const uv = scaledUV(p, m, g);
+    visuals.push(shape(name, {shapeId: doc.shape(name, g, {uv}), castsShadows: !(NO_SHADOW.includes(m) && (m !== "glass" || seeThroughGlass(p))), receiveShadows: true, materialIds: matOf(m, name, g)}));
   }
   const cm = doc.material("collision_mat", {diffuseColor: "1 0 1 1"});
   const collision = shape("collision", {shapeId: doc.shape("collision", geo.collision, {cpu: true}), static: true, collisionFilterGroup: "0x3e",
@@ -1554,30 +1613,38 @@ function exportParts(p, {withTex = false} = {}) {
 
   let doorNodes = [], doorXml = "";
   if (doors.length) {
-    doorNodes = [tg("doors", [0, 0, 0], [
-      // Each leaf turned about its hinge by the animatedObject; its collision moves with it.
-      ...doors.map(({leaf, shape: sid, mat}, k) => shape(`door${k + 1}`, {translation: leaf.hinge, shapeId: sid, castsShadows: true, receiveShadows: true, materialIds: mat}, [
-        shape(`door${k + 1}Collision`, {translation: leaf.box.center.map((v, i) => v - leaf.hinge[i]), shapeId: doc.shape(`door${k + 1}CollisionBox`, boxMesh(leaf.box.size), {cpu: true}),
-          kinematic: true, collisionFilterGroup: "0x1034", collisionFilterMask: "0xfffffbff", nonRenderable: true, castsShadows: false, receiveShadows: false, materialIds: cm})])),
-      box("door1Trigger", doorTrigger(geo, p), trigger("0x20000000", "0x110000")),
-    ])];
+    const cap = s => s[0].toUpperCase() + s.slice(1);
+    // Each leaf: a node at its hinge holding the node the game moves (turns or slides), which holds
+    // the leaf's meshes, relative to the hinge, and its collision, which moves with it.
+    const leafNode = (leaf, nm) => tg(`${nm}Hinge`, leaf.hinge, [tg(nm, [0, 0, 0], [
+      ...Object.entries(leaf.parts).map(([m, [a, b]]) => {
+        const s = sliceMesh(G[m], a, b), local = {...s, p: s.p.map((v, i) => v - leaf.hinge[i % 3])};
+        return shape(`${nm}${cap(m)}`, {shapeId: doc.shape(`${nm}${cap(m)}`, local, {uv: scaledUV(p, m, s)}), castsShadows: m !== "glass", receiveShadows: true, materialIds: matOf(m, m, s)});
+      }),
+      shape(`${nm}Collision`, {translation: leaf.box.center.map((v, i) => v - leaf.hinge[i]), shapeId: doc.shape(`${nm}CollisionBox`, boxMesh(leaf.box.size), {cpu: true}),
+        kinematic: true, collisionFilterGroup: "0x1034", collisionFilterMask: "0xfffffbff", nonRenderable: true, castsShadows: false, receiveShadows: false, materialIds: cm})])]);
+    doorNodes = [tg("doors", [0, 0, 0], doors.flatMap((d, i) => [
+      ...d.leaves.map((leaf, k) => leafNode(leaf, `door${i + 1}Leaf${k + 1}`)),
+      box(`door${i + 1}Trigger`, doorTrigger(geo, d.wall, d.op), trigger("0x20000000", "0x110000")),
+    ]))];
+    const key = (leaf, t) => leaf.motion.translation ? `translation="${t ? v3(leaf.motion.translation) : "0 0 0"}"` : `rotation="0 ${t ? num(leaf.motion.rotation) : 0} 0"`;
     doorXml = `
-    <!-- The door${doors.length > 1 ? "s: both leaves open together" : ""}: walk up to it and use the open/close prompt, as on the base game's barns. -->
+    <!-- The doors: walk up to one and use the open/close prompt, as on the base game's barns. A pair of doors opens together. -->
     <animatedObjects>
-        <animatedObject saveId="door1">
-            <animation duration="1.5">
-${doors.map(({leaf}, k) => `                <part node="door${k + 1}">
-                    <keyFrame time="0" rotation="0 0 0"/>
-                    <keyFrame time="1" rotation="0 ${leaf.openAngle} 0"/>
+${doors.map((d, i) => `        <animatedObject saveId="door${i + 1}">
+            <animation duration="${d.slide ? 3 : 1.5}">
+${d.leaves.map((leaf, k) => `                <part node="door${i + 1}Leaf${k + 1}">
+                    <keyFrame time="0" ${key(leaf, 0)}/>
+                    <keyFrame time="1" ${key(leaf, 1)}/>
                 </part>`).join("\n")}
             </animation>
-            <controls triggerNode="door1Trigger" posAction="ACTIVATE_HANDTOOL" posText="action_openDoor" negText="action_closeDoor"/>
+            <controls triggerNode="door${i + 1}Trigger" posAction="ACTIVATE_HANDTOOL" posText="action_openDoor" negText="action_closeDoor"/>
             <sounds>
-                <moving linkNode="door1" template="woodDoorSqueaksSmall"/>
-                <posEnd linkNode="door1" template="woodDoorOpen"/>
-                <negEnd linkNode="door1" template="woodDoorCloseRandom"/>
+                <moving linkNode="door${i + 1}Leaf1" template="${d.slide ? "slidingGateWoodLoop" : "woodDoorSqueaksSmall"}"/>
+                <posEnd linkNode="door${i + 1}Leaf1" template="woodDoorOpen"/>
+                <negEnd linkNode="door${i + 1}Leaf1" template="${d.slide ? "woodDoorClose" : "woodDoorCloseRandom"}"/>
             </sounds>
-        </animatedObject>
+        </animatedObject>`).join("\n")}
     </animatedObjects>
 `;
   }

@@ -404,7 +404,7 @@ export default {
   category: "animals",
   /** Walk-in: inside walls, hollow collision, a door that opens and a furnished inside. */
   walkIn: true,
-  defaults: {hens: 30, pastureWall: "back", fenceDepth: 8},
+  defaults: {hens: 30, pastureWall: "back", fenceDepth: 8, winStyle: "single", doorStyle: "zbrace"},
   /** Editor sections only this kind has (shown first), and shared ones it doesn't use. */
   sections: [
     {title: "Chickens", side: "build", hint: "Hens go in and out through a small hatch in the pasture side. The fence starts there, at least 12 m wide and 6 m deep (the game can’t handle a smaller pasture), and you can drag it to any shape when placing the barn in the game. The people door is always on another wall, outside the fence; feed and egg pallets go on the walls without the door.", fields: [
@@ -441,14 +441,14 @@ export default {
       hens: 110, fenceDepth: 14,
       width: 9, depth: 5, floors: 1, floorHeight: 2.4, foundation: 0.2, roofType: "gable", ridge: "width", roofPitch: 18, overhang: 0.4,
       chimney: false, gutters: true, downpipes: 1, winFront: 5, winBack: 0, winLeft: 0, winRight: 1, winW: 0.8, winH: 0.5, sill: 1.3,
-      doorWall: "left", pastureWall: "front", doorPos: 0, doorW: 1.6, doorH: 2, entrance: "none",
+      doorWall: "left", pastureWall: "front", doorPos: 0, doorW: 1.6, doorH: 2, entrance: "none", winStyle: "stall",
       wallCladding: "horizontal", roofMaterial: "metal", wallColor: "#E8E4DA", trimColor: "#3E5A4A", roofColor: "#4A4F52", doorColor: "#3E5A4A",
       modPrice: 22000, modUpkeep: 30}},
     {id: "poultryBarn", name: "Poultry barn", blurb: "20 × 8 m barn for 360 hens, as many as the biggest barn in the game.", settings: {
       hens: 360, fenceDepth: 20,
       width: 20, depth: 8, floors: 1, floorHeight: 3, foundation: 0.3, roofType: "gable", ridge: "width", roofPitch: 15, overhang: 0.5,
       chimney: false, gutters: true, downpipes: 2, winFront: 8, winBack: 8, winLeft: 0, winRight: 0, winW: 1.2, winH: 0.6, sill: 1.5,
-      doorWall: "right", pastureWall: "front", doorPos: 0, doorW: 2.5, doorH: 2.6, entrance: "none",
+      doorWall: "right", pastureWall: "front", doorPos: 0, doorW: 2.5, doorH: 2.6, entrance: "none", doorStyle: "sliding",
       wallCladding: "lockpanel", roofMaterial: "metal", wallColor: "#7C8A8F", trimColor: "#F2EFE8", roofColor: "#3B3F42", doorColor: "#F2EFE8",
       modPrice: 79000, modUpkeep: 100}},
   ],
