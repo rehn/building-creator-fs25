@@ -9,7 +9,7 @@ const CATALOG = {
   crate: { name: "Crate", mount: "floor", params: [], defaults: {}, size: () => [0.8, 0.6], height: () => 0.5 },
 };
 // 6 x 4 m building, door in the middle of the front wall (z = +2).
-const P = { width: 6, depth: 4, foundation: 0.2, floors: 1, floorHeight: 2.4, halfStorey: false, doorWall: "front", doorPos: 0, doorW: 1 };
+const P = { width: 6, depth: 4, foundation: 0.2, floors: 1, floorHeight: 2.4, halfStorey: false, windows: [{ wall: "front", floor: 0, pos: 0.5, w: 1, type: "door" }] };
 const near = (a, b, what) => assert.ok(Math.abs(a - b) < 1e-9, `${what}: ${a} vs ${b}`);
 
 test("roomOf: the floor inside the walls and the strip inside the door", () => {

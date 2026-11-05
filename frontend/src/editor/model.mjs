@@ -3,7 +3,7 @@
 // Pure functions with no DOM or three.js, so they run (and are tested) in Node.
 import { I3dDoc, tg, shape, refNode, boxMesh, splitByColor, mappingsFor, num, v3 } from "./i3d.mjs";
 import { KINDS, kindOf } from "./kinds/index.mjs";
-import { WALL_T, wallFrames, doorSpan, openingSpan, roomOf, footprint, toWorld, cleanItems, problems } from "./layout.mjs";
+import { WALL_T, wallFrames, openingSpan, roomOf, footprint, toWorld, cleanItems, problems } from "./layout.mjs";
 import { withAssets, placement, assetFolder } from "./assets.mjs";
 import { SURFACES } from "./surfaces.mjs";
 import { agedColor } from "./age.mjs";
@@ -20,10 +20,9 @@ export const DEFAULTS = {
   width:10, depth:7, floors:2, floorHeight:2.7, foundation:0.4, halfStorey:false, kneeWall:0.9,
   roofType:"gable", ridge:"width", roofPitch:38, overhang:0.5, chimney:true,
   winFront:2, winBack:3, winLeft:1, winRight:1, winW:1.0, winH:1.25, sill:0.85, winStyle:"casement",
-  // the main door's wall and size: copies of its entry in the window list (syncDoor), read by kinds
-  doorWall:"front", doorW:1.0, doorH:2.1, doorStyle:"panel",
+  doorStyle:"panel",
   wallCladding:"lockpanel", panelSpacing:0.2, battenWidth:0.06, roofMaterial:"tiles", chimneyStyle:"brick", chimneyColor:"#8A3B2C",
-  entrance:"porch", entranceWidth:2.2, entranceDepth:1.6, gutters:true, downpipes:2, gutterColor:"#3B3F42",
+  gutters:true, downpipes:2, gutterColor:"#3B3F42",
   wallColor:"#8E2A1E", trimColor:"#F2EFE8", roofColor:"#2B2D2F", doorColor:"#3E5A4A", foundationColor:"#6E6E6A",
   sleepPoint:true, interior:true, curtainStyle:"sides", curtainColor:"#EFE9DC", ventilators:0, age:0,
   modPrice:75000, modUpkeep:75, modAuthor:"", modDescription:""
@@ -72,17 +71,13 @@ const SHARED_SECTIONS = [
     {k:"downpipes", label:"Downpipes per long side", min:0, max:2, step:1},
     {k:"ventilators", label:"Roof ventilators (lanterns on the ridge)", min:0, max:4, step:1}]},
   {title:"Kupor (dormers)", side:"build", custom:"dormers", fields:[]},
-  {title:"Windows", side:"build", custom:"windows", hint:"Set how many windows each floor has. To change one window or door, move it to another wall, turn it into a door or make it the main door, choose it below or tap it in the preview.", fields:[
+  {title:"Windows", side:"build", custom:"windows", hint:"Set how many windows each floor has. To change one window or door, move it to another wall, turn a window into a door or give a door a porch, choose it below or tap it in the preview.", fields:[
     {k:"winStyle", label:"Style", type:"select", options:WINDOW_STYLES.map(s => [s.id, s.name])},
     {k:"winW", label:"Width", min:0.4, max:2.5, step:0.05, unit:" m"},
     {k:"winH", label:"Height", min:0.4, max:2.2, step:0.05, unit:" m"},
     {k:"sill", label:"Sill height", min:0.2, max:1.5, step:0.05, unit:" m"}]},
-  {title:"Door", side:"build", hint:"The style of every door. The main door is in the list under Windows: choose it there (or tap it in the preview) to move it or change its size.", fields:[
+  {title:"Doors", side:"build", hint:"The style of every door. The doors themselves are in the list under Windows: choose one there (or tap it in the preview) to move it, change its size or give it a porch or canopy.", fields:[
     {k:"doorStyle", label:"Style", type:"select", options:DOOR_STYLES.map(s => [s.id, s.name])}]},
-  {title:"Entrance", side:"build", fields:[
-    {k:"entrance", label:"Canopy", type:"select", options:[["none","None"],["shed","Shed canopy on brackets"],["gable","Gable canopy on brackets"],["porch","Porch with posts (förstukvist)"]]},
-    {k:"entranceWidth", label:"Width", min:1.2, max:5, step:0.05, unit:" m"},
-    {k:"entranceDepth", label:"Depth", min:0.6, max:3, step:0.05, unit:" m"}]},
   {title:"Inside", side:"build", custom:"inside", hint:"The pieces inside the building. Fill it automatically to match its size, then change it as you like.", fields:[]},
   {title:"Surfaces", side:"finish", fields:[
     {k:"wallCladding", label:"Wall cladding", type:"select", options:[["lockpanel","Board and batten (lockpanel)"],["horizontal","Horizontal boards"],["plaster","Plaster"]]},
@@ -142,16 +137,30 @@ export const clampN = (v, lo, hi, d) => { v = +v; return isFinite(v) ? Math.min(
 export function genRow(P, list, wall, floor, n) {
   const L = (wall === "front" || wall === "back") ? P.width : P.depth;
   let id = list.reduce((m, w) => Math.max(m, w.id), 0);
-  // (doors made from windows stay: the count is of windows)
+  // (doors stay: the count is of windows)
   const keep = list.filter(w => !(w.wall === wall && w.floor === floor && w.type !== "door"));
-  const pos = [], main = list.find(w => w.main);
+  const pos = [];
   if (n > 0) {
-    if (main && main.wall === wall && floor === 0) {
-      const [d0, d1] = doorSpan({windows: [main]}, L), dc = (d0 + d1) / 2;
-      const slots = Array.from({length: n + 1}, (_, i) => (i + 0.5) / (n + 1) * L);
-      let bi = 0; slots.forEach((s, i) => { if (Math.abs(s - dc) < Math.abs(slots[bi] - dc)) bi = i; });
-      slots.splice(bi, 1); pos.push(...slots);
-    } else for (let i = 0; i < n; i++) pos.push((i + 0.5) / n * L);
+    const doors = floor === 0 ? list.filter(w => w.type === "door" && w.wall === wall).map(d => openingSpan(d, L)) : [];
+    // Evenly spaced, one slot more per door and the slot nearest each door left out (a door in the
+    // middle gets a window either side) ...
+    const slots = Array.from({length: n + doors.length}, (_, i) => (i + 0.5) / (n + doors.length) * L);
+    for (const [a, b] of doors) { const c = (a + b) / 2; let bi = 0; slots.forEach((s, i) => { if (Math.abs(s - c) < Math.abs(slots[bi] - c)) bi = i; }); slots.splice(bi, 1); }
+    const half = P.winW / 2 + 0.25, clear = s => doors.every(([a, b]) => s + half <= a || s - half >= b);
+    if (slots.every(clear)) pos.push(...slots);
+    else {
+      // ... unless one would be over a door: then spread them over the stretches between the doors.
+      const lo = Math.min(L / 2, P.winW / 2 + 0.2), hi = Math.max(L / 2, L - P.winW / 2 - 0.2), free = [];
+      let at = lo;
+      for (const [a, b] of [...doors].sort((x, y) => x[0] - y[0])) { if (a - half > at) free.push([at, a - half]); at = Math.max(at, b + half); }
+      if (hi > at) free.push([at, hi]);
+      if (!free.length) free.push([lo, hi]);
+      // windows per stretch by its room (a stretch's length plus one window), largest remainders first
+      const room = free.map(([a, b]) => b - a + 2 * half), total = room.reduce((s, v) => s + v, 0);
+      const k = room.map(r => Math.floor(n * r / total));
+      room.map((r, i) => [n * r / total - k[i], i]).sort((x, y) => y[0] - x[0]).slice(0, n - k.reduce((s, v) => s + v, 0)).forEach(([, i]) => k[i]++);
+      free.forEach(([a, b], i) => { for (let j = 0; j < k[i]; j++) pos.push(a + (b - a) * (k[i] === 1 ? 0.5 : j / (k[i] - 1))); });
+    }
   }
   for (const s of pos) keep.push({id: ++id, wall, floor, pos: s / L, w: P.winW, h: P.winH, sill: P.sill, type: "window", style: "default", room: "auto", curtain: "default", curtainColor: "default"});
   return keep;
@@ -171,54 +180,41 @@ function openingKind(w) {
   const ids = type === "door" ? DOOR_STYLE_IDS : WINDOW_STYLE_IDS;
   return {type, style: ids.includes(w.style) ? w.style : "default"};
 }
-/** The main door's size limits: [min, max] width and height. */
-const MAIN_W = [0.7, 2.5], MAIN_H = [1.8, 2.6];
-function cleanWindows(arr) {
-  let main = false;
+/** What a door can have in front of it: [id, name]. */
+export const PORCH_OPTIONS = [["none", "Nothing"], ["shed", "Shed canopy on brackets"], ["gable", "Gable canopy on brackets"], ["porch", "Porch with posts (förstukvist)"]];
+const PORCH_TYPES = PORCH_OPTIONS.map(o => o[0]);
+/** A porch's or canopy's width and depth, [min, max, default]. */
+export const PORCH_W = [1.2, 5, 2.2], PORCH_D = [0.6, 3, 1.6];
+/** A door's porch or canopy: type, width and depth. */
+const cleanPorch = (type, w, d) => ({porch: PORCH_TYPES.includes(type) ? type : "none", porchW: clampN(w, PORCH_W[0], PORCH_W[1], PORCH_W[2]), porchD: clampN(d, PORCH_D[0], PORCH_D[1], PORCH_D[2])});
+/**
+ * The window list, cleaned. Doors stand on the ground floor, can be taller than windows and have a
+ * porch or canopy. legacy: the building's entrance settings of when one door was the main one.
+ */
+function cleanWindows(arr, legacy = {}) {
   return arr.filter(w => w && WALLS.includes(w.wall)).slice(0, 80).map((w, i) => {
-    // the main door (the first entry marked so): a door on the ground floor, a door's size
-    const isMain = !main && !!w.main && (main = true);
-    const o = isMain ? {...w, type: "door", floor: 0} : w;
+    const k = openingKind(w), door = k.type === "door";
+    const porch = !door ? {} : w.porch !== undefined ? cleanPorch(w.porch, w.porchW, w.porchD)
+      : cleanPorch(w.main ? legacy.entrance : "none", legacy.entranceWidth, legacy.entranceDepth);
     return {
-      id: i + 1, wall: o.wall, floor: Math.round(clampN(o.floor, 0, 2, 0)), pos: clampN(o.pos, 0, 1, 0.5),
-      w: isMain ? clampN(o.w, ...MAIN_W, 1) : clampN(o.w, 0.3, 3, 1), h: isMain ? clampN(o.h, ...MAIN_H, 2.1) : clampN(o.h, 0.3, 2.4, 1.25),
-      sill: clampN(o.sill, 0, 2, 0.85),
-      // a door: only on the ground floor; its style a door style, a window's a window style
-      ...openingKind(o), ...(isMain ? {main: true} : {}),
-      room: pickRoom(o.room), curtain: pickCurtain(o.curtain), curtainColor: pickColor(o.curtainColor)
+      id: i + 1, wall: w.wall, floor: Math.round(clampN(w.floor, 0, 2, 0)), pos: clampN(w.pos, 0, 1, 0.5),
+      w: clampN(w.w, 0.3, 3, 1), h: clampN(w.h, 0.3, door ? 2.6 : 2.4, 1.25), sill: clampN(w.sill, 0, 2, 0.85),
+      ...k, ...porch,
+      room: pickRoom(w.room), curtain: pickCurtain(w.curtain), curtainColor: pickColor(w.curtainColor)
     };
   });
 }
 /**
- * The main door (the building's entrance: the porch, the sleep point and the kind's yard go by it) from
- * the settings of before it was in the window list (doorWall, doorPos -1..1, doorW, doorH): presets use them.
+ * A door from the settings of before doors were in the window list (doorWall, doorPos -1..1, doorW,
+ * doorH, and the entrance in front of it): presets use them, and old saves. A walk-in building's
+ * door has no porch unless asked.
  */
-function legacyMainDoor(obj, P) {
-  const wall = WALLS.includes(obj.doorWall) ? obj.doorWall : P.doorWall, L = (wall === "front" || wall === "back") ? P.width : P.depth;
-  const w = clampN(obj.doorW, ...MAIN_W, P.doorW), h = clampN(obj.doorH, ...MAIN_H, P.doorH);
+function legacyDoor(obj, P, kind) {
+  const wall = WALLS.includes(obj.doorWall) ? obj.doorWall : "front", L = (wall === "front" || wall === "back") ? P.width : P.depth;
+  const w = clampN(obj.doorW, 0.7, 2.5, 1), h = clampN(obj.doorH, 1.8, 2.6, 2.1);
   const c = L/2 + clampN(obj.doorPos, -1, 1, 0) * Math.max(0, L/2 - w/2 - 0.3);
-  return {wall, floor: 0, pos: c / L, w, h, sill: 0, type: "door", style: "default", main: true, room: "auto", curtain: "default", curtainColor: "default"};
-}
-/** The building's main door: its entry in the window list. */
-export const mainDoor = p => (p.windows || []).find(w => w.main);
-/** Copies the main door's wall and size to the settings kinds read (doorWall, doorW, doorH). Changes p. */
-export function syncDoor(p) {
-  const d = mainDoor(p);
-  if (d) Object.assign(p, {doorWall: d.wall, doorW: d.w, doorH: d.h});
-  return p;
-}
-/**
- * Makes the ground-floor window or door id the main door. A window takes the old main door's size and
- * style; the old main door becomes a window of the building's size. Changes p.
- */
-export function setMainDoor(p, id) {
-  const w = p.windows.find(x => x.id === id), old = mainDoor(p);
-  if (!w || w.main || w.floor !== 0) return p;
-  if (w.type === "door") Object.assign(w, {w: clampN(w.w, ...MAIN_W, 1), h: clampN(w.h, ...MAIN_H, 2.1)});
-  else Object.assign(w, {type: "door", w: old ? old.w : p.doorW, h: old ? old.h : p.doorH, style: old ? old.style : "default"});
-  w.main = true;
-  if (old) { delete old.main; Object.assign(old, {type: "window", style: "default", w: p.winW, h: p.winH, sill: p.sill}); }
-  return syncDoor(p);
+  return {wall, floor: 0, pos: c / L, w, h, sill: 0, type: "door", style: "default",
+    ...cleanPorch(obj.entrance === undefined ? (kind.walkIn ? "none" : "porch") : obj.entrance, obj.entranceWidth, obj.entranceDepth)};
 }
 export const DTYPES = ["frontespis", "gable", "shed"];
 export const DORM_DEF = {
@@ -260,11 +256,11 @@ export function sanitize(obj) {
   }
   // Saves from before curtain styles had a curtains on/off switch.
   if (obj.curtainStyle === undefined && obj.curtains === false) out.curtainStyle = "none";
-  // the windows and doors; a save or preset without a main door gets one from its old door settings
-  let ws = Array.isArray(obj.windows) ? cleanWindows(obj.windows) : [];
-  if (!ws.some(w => w.main)) ws = cleanWindows([...ws, legacyMainDoor(obj, out)]);
+  // the windows and doors: a building always has a door (a save or preset without one gets it from
+  // its old door settings)
+  let ws = Array.isArray(obj.windows) ? cleanWindows(obj.windows, obj) : [];
+  if (!ws.some(w => w.type === "door")) ws = cleanWindows([...ws, legacyDoor(obj, out, kind)]);
   out.windows = Array.isArray(obj.windows) ? ws : genAll(out, obj, ws);
-  syncDoor(out);
   out.dormers = Array.isArray(obj.dormers) ? cleanDormers(obj.dormers) : [];
   const q = kind.normalize(out);
   // The inside of a walk-in building: the saved pieces, or filled automatically for a new one.
@@ -634,22 +630,19 @@ function prism(mat, sec, at) {
 function layoutWall(key, L, fh, topAt) {
   const nf = p.floors + (p.halfStorey ? 1 : 0);
   const ops = [];
-  const main = mainDoor(p);
-  if (main && main.wall === key) {
-    const [s0, s1] = doorSpan(p, L), dh = Math.min(main.h, fh - 0.25);
-    ops.push({s0, s1, t0: 0, t1: dh, kind: "door", main: true, id: main.id, style: styleOf(p, main)});
-  }
-  // The kind's own openings (a hen hatch ...), before the windows so a window over one is hidden.
+  // The kind's own openings (a hen hatch ...) first, then the doors, then the windows: a window over a
+  // door is hidden, not the door.
   for (const h of openings) if (h.wall === key) ops.push({s0: h.s0, s1: h.s1, t0: 0, t1: h.t1, kind: "hatch", plain: !!h.plain});
-  for (const win of p.windows) {
-    if (win.wall !== key) continue;
+  const list = p.windows.filter(w => w.wall === key);
+  for (const win of [...list.filter(w => w.type === "door"), ...list.filter(w => w.type !== "door")]) {
     win._hidden = false;
-    if (win.main || win.floor >= nf) continue;
+    if (win.floor >= nf) continue;
     const [s0, s1] = openingSpan(win, L), door = win.type === "door";
     // a door made from a window stands on the floor, no taller than the floor allows
     const t0 = door ? 0 : win.floor * fh + win.sill;
     const t1 = door ? Math.min(win.h, fh - 0.25) : win.floor < p.floors ? Math.min(t0 + win.h, (win.floor + 1) * fh - 0.25) : t0 + win.h;
     const op = {s0, s1, t0, t1, kind: door ? "door" : "window", id: win.id, style: styleOf(p, win)};
+    if (door) op.porch = {type: win.porch || "none", w: win.porchW || PORCH_W[2], d: win.porchD || PORCH_D[2]};
     const g = 0.18;
     if (t1 - t0 < 0.3 || s1 - s0 < 0.3 || ops.some(q => q.s0 < op.s1 + g && op.s0 < q.s1 + g && q.t0 < op.t1 + g && op.t0 < q.t1 + g)
         || (topAt && t1 + 0.12 > Math.min(topAt(op.s0 - 0.1), topAt(op.s1 + 0.1)))) { win._hidden = true; continue; }
@@ -940,7 +933,7 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
     wbox("trim", w, o.s1, o.s1 + fr, b0, o.t1 + fr, 0, out);
     wbox("trim", w, o.s0, o.s1, o.t1, o.t1 + fr, 0, out);
     if (isDoor) {
-      if (F > 0.05 && !(o.main && p.entrance === "porch")) {
+      if (F > 0.05 && o.porch.type !== "porch") {
         // the doorstep, from where the plinth ends (its top in the same plane would flicker)
         wbox("foundation", w, o.s0 - 0.3, o.s1 + 0.3, -F, 0, PLINTH_OUT, 0.7);
         wbox("collision", w, o.s0 - 0.3, o.s1 + 0.3, -F, 0, PLINTH_OUT, 0.7);
@@ -1185,8 +1178,8 @@ function sbox(mat, w, sc, thk, p0, p1) {
   }, w.u, [w.n[0]*ud, ut, w.n[2]*ud], [w.n[0]*pd, pt, w.n[2]*pd]);
 }
 function buildEntrance(w, o, limit, F, mainEave) {
-  const type = p.entrance, cd = p.entranceDepth;
-  const cw = Math.min(w.L + 0.4, Math.max(p.entranceWidth, o.s1 - o.s0 + 0.5)), hw = cw / 2;
+  const type = o.porch.type, cd = o.porch.d;
+  const cw = Math.min(w.L + 0.4, Math.max(o.porch.w, o.s1 - o.s0 + 0.5)), hw = cw / 2;
   const cs = (o.s0 + o.s1) / 2, sL = cs - hw, sR = cs + hw;
   const hv = (a, t, d) => [w.u[0]*a + w.n[0]*d, t, w.u[2]*a + w.n[2]*d];
   const sd = q => { const dx = q[0] - w.o[0], dz = q[2] - w.o[2]; return [dx*w.u[0] + dz*w.u[2], dx*w.n[0] + dz*w.n[2]]; };
@@ -1364,7 +1357,7 @@ function build() {
   };
 
   const WS = wallFrames(W, D, F);
-  let entr = null;
+  const entrances = [];
   opsByWall = {};
   for (const key in WS) {
     const gable = p.roofType === "gable" && (ridgeX ? (key === "left" || key === "right") : (key === "front" || key === "back"));
@@ -1374,18 +1367,21 @@ function build() {
     const inner = hollow ? {lift: R > 0 || p.roofType === "flat" ? 0 : Math.min(WALL_T * tanP, th - 0.02)} : null;
     buildWall(WS[key], ops, H, R, F, {topAt: sv => H + R * Math.max(0, 1 - Math.abs(sv - Lw/2) / (Lw/2)), inner, key});
     opsByWall[key] = {w: WS[key], ops};
-    const dOp = ops.find(op => op.kind === "door" && op.main);
-    if (dOp) entr = {w: WS[key], o: dOp, key, gable};
+    for (const dOp of ops) if (dOp.kind === "door" && dOp.porch.type !== "none") entrances.push({w: WS[key], o: dOp, key, gable});
   }
-  if (entr && p.entrance !== "none") {
+  // A porch or canopy at every door that has one.
+  for (const entr of entrances) {
+    const {type, w: pw, d: pd} = entr.o.porch;
     let limit = 1e9;
     if (p.roofType === "flat") limit = H - 0.05;
-    else if (!entr.gable && p.entrance === "shed") limit = H - th - Math.min(o, p.entranceDepth + 0.15) * tanP - 0.05;
+    else if (!entr.gable && type === "shed") limit = H - th - Math.min(o, pd + 0.15) * tanP - 0.05;
     // A walk-in building's wall is thin, so a canopy can't tuck in under the eaves (it would show
     // inside): it stays below them instead, a little flatter if need be.
     else if (!entr.gable && hollow) limit = H - 0.05;
-    const k = entr.key;
-    if (p.floors > 1 && p.windows.some(x => x.wall === k && x.floor === 1)) limit = Math.min(limit, fh + Math.min(...p.windows.filter(x => x.wall === k && x.floor === 1).map(x => x.sill)) - 0.1);
+    // and under the windows of the floor above it
+    const k = entr.key, cs = (entr.o.s0 + entr.o.s1) / 2, hw = Math.max(pw, entr.o.s1 - entr.o.s0 + 0.5) / 2 + 0.2;
+    const above = p.windows.filter(x => x.wall === k && x.floor === 1 && x.type !== "door" && (([a, b]) => a < cs + hw && b > cs - hw)(openingSpan(x, entr.w.L)));
+    if (p.floors > 1 && above.length) limit = Math.min(limit, fh + Math.min(...above.map(x => x.sill)) - 0.1);
     const mainEave = !entr.gable && p.roofType !== "flat" ? {H, tanP} : null;
     buildEntrance(entr.w, entr.o, limit, F, mainEave);
   }
@@ -1501,8 +1497,8 @@ function build() {
 }
 build();
 const {collision, ...visual} = G;
-// the main door first (door1), then the others in the order they were made
-doors.sort((a, b) => (b.op.main ? 1 : 0) - (a.op.main ? 1 : 0) || (a.op.id || 0) - (b.op.id || 0));
+// the doors in the window list's order (door1, door2 ...)
+doors.sort((a, b) => (a.op.id || 0) - (b.op.id || 0));
 return {G: visual, dims, opsByWall, collision, rooms, downpipes, doors, refs};
 }
 
@@ -1581,8 +1577,9 @@ export function placementAreas(geo, extra = []) {
  */
 export function sleepPoint(geo) {
   const {dims} = geo;
-  const {w, ops} = Object.values(geo.opsByWall).find(e => e.ops.some(o => o.kind === "door"));
-  const door = ops.find(o => o.kind === "door"), sc = (door.s0 + door.s1) / 2;
+  // at the first door (the window list's first)
+  const doors = Object.values(geo.opsByWall).flatMap(e => e.ops.filter(o => o.kind === "door").map(o => ({w: e.w, o})));
+  const {w, o: door} = doors.sort((a, b) => (a.o.id || 0) - (b.o.id || 0))[0], sc = (door.s0 + door.s1) / 2;
   const at = (d, y) => [w.o[0] + w.u[0]*sc + w.n[0]*d, y, w.o[2] + w.u[2]*sc + w.n[2]*d];
   const toward = (from, to) => {
     const dx = to[0] - from[0], dy = to[1] - from[1], dz = to[2] - from[2], deg = 180 / Math.PI;

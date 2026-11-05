@@ -6,7 +6,7 @@ import {
   SCHEMA, fieldsFor, WALLS, WALL_NAMES, DTYPES, DORM_DEF, MATS, fittingTextures,
   genRow, sanitize, serialize, slugify, buildGeometry, buildI3d, placeableSnippet, sleepPoint, surfaceSpec, scaledUV, colorFor, WP
 } from "./model.mjs";
-import { WINDOW_STYLES, DOOR_STYLES, setMainDoor, syncDoor } from "./model.mjs";
+import { WINDOW_STYLES, DOOR_STYLES, PORCH_OPTIONS, PORCH_W, PORCH_D } from "./model.mjs";
 import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, henYard, henCap, seeThroughGlass, kindOf } from "./model.mjs";
 import { cowYard } from "./kinds/cow.mjs";
 import { roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, History } from "./layout.mjs";
@@ -199,7 +199,6 @@ function syncOutputs() {
   off("gutters", p.roofType === "flat");
   off("downpipes", !p.gutters || p.roofType === "flat");
   off("ventilators", p.roofType === "flat");
-  off("entranceWidth", p.entrance === "none"); off("entranceDepth", p.entrance === "none");
   off("curtainStyle", !p.interior); off("curtainColor", !p.interior);
   inputs.modDescription.placeholder = defaultModDescription(p);
 }
@@ -563,17 +562,18 @@ function sortedWindows() {
 function winLabel(w) {
   const row = sortedWindows().filter(x => x.wall === w.wall && x.floor === w.floor);
   const same = row.filter(x => x.type === w.type);
-  if (w.main) return `${WALL_NAMES[w.wall]}, main door`;
-  return `${WALL_NAMES[w.wall]}, ${floorName(w.floor).toLowerCase()}, ${w.type === "door" ? "door" : "window"} ${same.filter(x => !x.main).indexOf(w) + 1}` + (w._hidden ? " (hidden)" : "");
+  return `${WALL_NAMES[w.wall]}, ${floorName(w.floor).toLowerCase()}, ${w.type === "door" ? "door" : "window"} ${same.indexOf(w) + 1}` + (w._hidden ? " (hidden)" : "");
 }
 const WIN_FIELDS = [
   {k:"pos", label:"Position", min:0, max:1, step:0.005},
   {k:"w", label:"Width", min:0.3, max:3, step:0.05},
   {k:"h", label:"Height", min:0.3, max:2.4, step:0.05},
   {k:"sill", label:"Sill height", min:0, max:2, step:0.05}];
-// the main door's size limits (as model.mjs keeps them)
-const MAIN_RANGE = {w: [0.7, 2.5], h: [1.8, 2.6]};
-/** After a window or door changed: the building's door settings and the kind's rules follow, then save and redraw. */
+// a door's porch or canopy: its size, when it has one
+const PORCH_FIELDS = [
+  {k:"porchW", label:"Porch width", min:PORCH_W[0], max:PORCH_W[1], step:0.05},
+  {k:"porchD", label:"Porch depth", min:PORCH_D[0], max:PORCH_D[1], step:0.05}];
+/** After a window or door changed: the kind's rules follow (a pasture moves off a wall with a door), then save and redraw. */
 function winChanged() {
   if (applyKindRules()) syncControls();
   persist(); rebuild(false);
@@ -626,13 +626,15 @@ function renderWinUI() {
   const s = list.find(w => w.id === selId);
   if (s) {
     const door = s.type === "door", styles = door ? DOOR_STYLES : WINDOW_STYLES;
+    // a building keeps at least one door
+    const lastDoor = door && p.windows.filter(w => w.type === "door").length === 1;
     const own = (styles.find(x => x.id === (door ? p.doorStyle : p.winStyle)) || styles[0]).name.toLowerCase();
     const opt = (v, label, cur) => `<option value="${v}" ${v === cur ? "selected" : ""}>${esc(label)}</option>`;
+    const range = (f, lo = f.min, hi = f.max) => `<div class="field"><div class="fl"><label for="wf-${f.k}">${f.label}</label><output id="wf-${f.k}-o">${winOut(f, s)}</output></div><input type="range" id="wf-${f.k}" data-k="${f.k}" min="${lo}" max="${hi}" step="${f.step}" value="${s[f.k]}"></div>`;
     html += `<div class="wincard"><p class="warn" id="winWarn" ${s._hidden ? "" : "hidden"}>This overlaps a door or another window, so it’s hidden. Move it or make it smaller.</p>`;
-    // a window on the ground floor can be a door (and back), or the main door
-    const kindNow = s.main ? "main" : s.type;
-    html += `<div class="field"><div class="fl"><label for="wf-type">This is a</label></div><select id="wf-type" ${s.main ? "disabled" : ""}>${opt("window", "Window", kindNow)}${s.floor === 0 ? opt("door", "Door", kindNow) + opt("main", "Main door (the entrance)", kindNow) : ""}</select></div>`;
-    if (s.main) html += `<p class="hint">A building always has one main door: the porch and the way in are there. To move the entrance, choose another window or door and make it the main door; this one then becomes a window.</p>`;
+    // a window on the ground floor can be a door (and back)
+    html += `<div class="field"><div class="fl"><label for="wf-type">This is a</label></div><select id="wf-type" ${lastDoor ? "disabled" : ""}>${opt("window", "Window", s.type)}${s.floor === 0 ? opt("door", "Door", s.type) : ""}</select></div>`;
+    if (lastDoor) html += `<p class="hint">This is the building’s only door, so it stays a door. Make another window a door first to remove this one or make it a window.</p>`;
     else if (s.floor !== 0) html += `<p class="hint">Doors can only go on the ground floor.</p>`;
     // any window or door can move to another wall (attic windows only to a gable)
     const walls = WALLS.filter(k => s.floor < p.floors || gableWall(k));
@@ -640,11 +642,14 @@ function renderWinUI() {
     html += `<div class="field"><div class="fl"><label for="wf-style">Style</label></div><select id="wf-style">${opt("default", `Same as the building (${own})`, s.style)}${styles.map(x => opt(x.id, x.name, s.style)).join("")}</select></div>`;
     for (const f of WIN_FIELDS) {
       if (door && f.k === "sill") continue;
-      const [lo, hi] = s.main && MAIN_RANGE[f.k] || [f.min, f.max];
-      html += `<div class="field"><div class="fl"><label for="wf-${f.k}">${f.label}</label><output id="wf-${f.k}-o">${winOut(f, s)}</output></div><input type="range" id="wf-${f.k}" data-k="${f.k}" min="${lo}" max="${hi}" step="${f.step}" value="${s[f.k]}"></div>`;
+      html += door && f.k === "h" ? range(f, 1.5, 2.6) : range(f);
+    }
+    if (door) {
+      html += `<div class="field"><div class="fl"><label for="wf-porch">In front of the door</label></div><select id="wf-porch">${PORCH_OPTIONS.map(o => opt(o[0], o[1], s.porch)).join("")}</select></div>`;
+      if (s.porch !== "none") html += PORCH_FIELDS.map(f => range(f)).join("");
     }
     if (!door) html += choiceFields("wc", s);
-    if (!s.main) html += `<button type="button" id="winRemove">Remove this ${door ? "door" : "window"}</button>`;
+    if (!lastDoor) html += `<button type="button" id="winRemove">Remove this ${door ? "door" : "window"}</button>`;
     html += `</div>`;
   }
   ed.innerHTML = html;
@@ -667,21 +672,20 @@ function renderWinUI() {
   if (s) {
     ed.querySelectorAll(".wincard input[type=range]").forEach(inp => inp.oninput = () => {
       s[inp.dataset.k] = +inp.value;
-      $(`wf-${inp.dataset.k}-o`).textContent = winOut(WIN_FIELDS.find(f => f.k === inp.dataset.k), s);
+      $(`wf-${inp.dataset.k}-o`).textContent = winOut([...WIN_FIELDS, ...PORCH_FIELDS].find(f => f.k === inp.dataset.k), s);
       winChanged(); updateHighlight();
     });
     bindChoices("wc", s);
     $("wf-type").onchange = e => {
-      const v = e.target.value;
-      if (v === "main") { setMainDoor(p, s.id); toast("This is the main door now. The old one is a window: choose it to change it."); }
-      // a new door gets a door's size, a window made again the building's window size
-      else if (v === "door") Object.assign(s, {type: "door", style: "default", w: 0.9, h: Math.min(2, p.floorHeight - 0.3)});
-      else Object.assign(s, {type: "window", style: "default", w: p.winW, h: p.winH, sill: p.sill});
+      // a new door gets a door's size and no porch, a window made again the building's window size
+      if (e.target.value === "door") Object.assign(s, {type: "door", style: "default", w: 0.9, h: Math.min(2, p.floorHeight - 0.3), porch: "none", porchW: PORCH_W[2], porchD: PORCH_D[2]});
+      else { Object.assign(s, {type: "window", style: "default", w: p.winW, h: p.winH, sill: p.sill}); delete s.porch; delete s.porchW; delete s.porchD; }
       winChanged(); renderWinUI(); updateHighlight();
     };
     $("wf-wall").onchange = e => { s.wall = e.target.value; winChanged(); renderWinUI(); updateHighlight(); };
     $("wf-style").onchange = e => { s.style = e.target.value; persist(); rebuild(false); };
-    if (!s.main) $("winRemove").onclick = () => { p.windows = p.windows.filter(w => w.id !== selId); selId = null; persist(); rebuild(false); renderWinUI(); };
+    if ($("wf-porch")) $("wf-porch").onchange = e => { s.porch = e.target.value; winChanged(); renderWinUI(); };
+    if ($("winRemove")) $("winRemove").onclick = () => { p.windows = p.windows.filter(w => w.id !== selId); selId = null; winChanged(); renderWinUI(); };
   }
 }
 let dSel = null;
@@ -706,7 +710,6 @@ function dormLabel(d) {
 }
 /** Applies the kind's rules to the simple settings; true if that changed any. */
 function applyKindRules() {
-  syncDoor(p);
   const q = kindOf(p).normalize(p);
   let changed = false;
   for (const k in q) if (typeof q[k] !== "object" && q[k] !== p[k]) { p[k] = q[k]; changed = true; }

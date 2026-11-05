@@ -28,9 +28,11 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   hatch; DOOR_STYLES: plain, plank, zbrace, xbrace, panel, sliding), drawn with a kit in wall coordinates
   (box/slab, skip leaves out a face lying on another). p.winStyle / p.doorStyle per building; each entry of
   p.windows has type "window" | "door" (doors only on floor 0, made from a window in the editor) and style
-  ("default" = the building's). The main door (the entrance: porch, sleep point, yard) is the entry with main: true (mainDoor, setMainDoor;
-  old saves get one from doorWall/doorPos/doorW/doorH); syncDoor copies its wall and size to p.doorWall/doorW/doorH,
-  which kinds read. Any window or door can move to another wall in the editor. Doors over 1.4 m are a pair.
+  ("default" = the building's). Every door is the same (no main door): each has porch "none" | "shed" | "gable"
+  | "porch" with porchW/porchD (a doorstep where there's no porch); a building always has at least one door (old
+  saves and presets get one from doorWall/doorPos/doorW/doorH/entrance, legacyDoor). The sleep point is at the first
+  door; animal kinds keep the pasture and outside places off walls with a door (pasture.mjs doorWalls,
+  pastureWallFor). Any window or door can move to another wall in the editor. Doors over 1.4 m are a pair.
   Walk-in buildings: geo.doors [{wall, op, slide, leaves: [{hinge, motion {rotation} | {translation}, parts
   {mat: [from, to]}, box}]}]; export: door{n}Leaf{k}Hinge > door{n}Leaf{k} (moved) > meshes + collision,
   one animatedObject + trigger per door; the static parts leave out what leaves carry (exceptRanges).
@@ -65,7 +67,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Frontend tests: cd frontend && npm test (node --test, no browser needed)
 
 ## Status
-- Go tests (54) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (331) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
+- Go tests (54) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (332) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
 - Cow barn (kinds/cow.mjs): cowHusbandryPasture (no milk, like cowBarnSmall), automatic water, feed
   and water troughs outside on the pasture wall (kind.outside), a plain walk-through doorway for the
   cows (openings with plain: true; tall openings get a collision gap), feed pad + bale trigger
@@ -73,8 +75,8 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   Next for cows: a dairy (cowHusbandryBarnMilk with the game's milking robots), straw and manure.
 - Shared: kinds/pasture.mjs (yardFrame: fence, feed/other side), layout.mjs furnisher (autoFurnish
   helpers), fieldsFor(kind) (kinds can share a key with different ranges), roof ventilators.
-- Hen house: pastureWall (fence + a 40 x 50 cm hen hatch, kind.openings) is never the doorWall;
-  feed pad and egg pallets go on the walls without the door. No gate in the fence (user's choice).
+- Hen house: pastureWall (fence + a 40 x 50 cm hen hatch, kind.openings) moves off a wall with a door;
+  feed pad and egg pallets go on walls without a door where they can. No gate in the fence (user's choice).
   Canopies on walk-in buildings stay below the eaves (else they showed inside).
   Walk-in insides: exposed roof frame (buildRoofFrame: rafters, ridge beam, tie beams, collar ties),
   a grimy band and a tarred kickboard on the inside walls, and a round galvanised duct under each ventilator (ventDuct);

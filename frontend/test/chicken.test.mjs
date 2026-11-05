@@ -85,7 +85,7 @@ test("presets: a farmhouse and chicken barns, the biggest for 360 hens", () => {
     // window counts (winFront ...) only seed the window list
     for (const wall of ["Front", "Back", "Left", "Right"]) {
       const n = x.settings["win" + wall];
-      if (n !== undefined) assert.equal(p.windows.filter(w => w.wall === wall.toLowerCase() && w.floor === 0 && !w.main).length, n, `${x.id} win${wall}`);
+      if (n !== undefined) assert.equal(p.windows.filter(w => w.wall === wall.toLowerCase() && w.floor === 0 && w.type !== "door").length, n, `${x.id} win${wall}`);
     }
   }
   const hens = PRESETS.filter(x => x.settings.kind === "chicken").map(x => sanitize(x.settings).hens);
@@ -344,7 +344,7 @@ function hits(g, a, b) {
   return false;
 }
 const chickenPresets = () => PRESETS.filter(x => x.settings.kind === "chicken").map(x => [x.id, sanitize(x.settings)]);
-const doorMid = (geo, p) => { const { w, ops } = geo.opsByWall[p.doorWall], o = ops.find(q => q.kind === "door"); return { w, o, s: (o.s0 + o.s1) / 2 }; };
+const doorMid = (geo, p) => { const { w, ops } = geo.opsByWall[firstDoorWall(p)], o = ops.find(q => q.kind === "door"); return { w, o, s: (o.s0 + o.s1) / 2 }; };
 const wp = (w, s, y, d) => [w.o[0] + w.u[0]*s + w.n[0]*d, y, w.o[2] + w.u[2]*s + w.n[2]*d];
 
 test("shell: a chicken barn's walls have an inside face; a house's don't", () => {
@@ -366,7 +366,7 @@ test("shell: you can walk from the middle of a chicken barn out through the door
     assert.ok(!hits(geo.collision, centre, inside), `${id}: blocked on the way to the door`);
     assert.ok(!hits(geo.collision, inside, wp(w, s, F + 1, 2)), `${id}: blocked in the doorway`);
     assert.ok(!hits(geo.collision, [0, F + 0.2, 0], [0, F + 1.9, 0]), `${id}: no headroom`);
-    const back = geo.opsByWall[{ front: "back", back: "front", left: "right", right: "left" }[p.doorWall]].w;
+    const back = geo.opsByWall[{ front: "back", back: "front", left: "right", right: "left" }[firstDoorWall(p)]].w;
     assert.ok(hits(geo.collision, centre, wp(back, back.L / 2, F + 1, 1)), `${id}: walked through the back wall`);
   }
   // houses stay solid
@@ -448,7 +448,7 @@ test("mod: a pair of doors opens together, each leaf about its own hinge", () =>
 
 test("a wide house door is a pair of leaves too (closed)", () => {
   const leaves = p => {
-    const geo = buildGeometry(p), { w, ops } = geo.opsByWall[p.doorWall], o = ops.find(q => q.kind === "door"), mid = (o.s0 + o.s1) / 2;
+    const geo = buildGeometry(p), { w, ops } = geo.opsByWall[firstDoorWall(p)], o = ops.find(q => q.kind === "door"), mid = (o.s0 + o.s1) / 2;
     let n = 0;
     for (let k = 0; k < geo.G.door.p.length; k += 3) { const q = geo.G.door.p.slice(k, k + 3), s = (q[0] - w.o[0]) * w.u[0] + (q[2] - w.o[2]) * w.u[2]; if (Math.abs(Math.abs(s - mid) - 0.005) < 1e-6) n++; }
     return n;
@@ -577,7 +577,7 @@ test("pasture side: never the people door's wall", () => {
   assert.equal(sanitize({ kind: "chicken", doorWall: "front", pastureWall: "left" }).pastureWall, "left");
   assert.equal(sanitize({ kind: "chicken", doorWall: "front", pastureWall: "front" }).pastureWall, "back");
   assert.equal(sanitize({ kind: "chicken", doorWall: "left", pastureWall: "left" }).pastureWall, "right");
-  for (const x of PRESETS.filter(x => x.kind === "chicken")) assert.notEqual(sanitize(x.settings).pastureWall, sanitize(x.settings).doorWall, x.id);
+  for (const x of PRESETS.filter(x => x.kind === "chicken")) assert.notEqual(sanitize(x.settings).pastureWall, firstDoorWall(sanitize(x.settings)), x.id);
 });
 
 test("hatch: a hen-sized opening at floor level in the middle of the pasture wall", () => {
@@ -665,3 +665,6 @@ test("i3d: a house still has no chicken nodes", () => {
   assert.doesNotMatch(xml, /exactFillRootNodeFood|navigationRootNode|fence1Node/);
   assert.equal(DEFAULTS.kind, "house");
 });
+
+/** The wall of the building's first door. */
+function firstDoorWall(p) { return p.windows.find(w => w.type === "door" && w.floor === 0).wall; }

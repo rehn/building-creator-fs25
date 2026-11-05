@@ -65,7 +65,7 @@ test("inside walls: a darker band and a kickboard at the bottom, none across the
   for (let k = 0; k < g.c.length; k += 3) colors.add(g.c.slice(k, k + 3).map(v => v.toFixed(3)).join(","));
   assert.ok(colors.size >= 4, "whitewash, grime, kickboard, floor ...");
   // nothing of the kickboard in the doorway
-  const {ops, w} = geo.opsByWall[p.doorWall], door = ops.find(o => o.kind === "door");
+  const {ops, w} = geo.opsByWall[firstDoorWall(p)], door = ops.find(o => o.kind === "door");
   const inDoor = verts(g).filter(q => {
     const s = (q[0] - w.o[0]) * w.u[0] + (q[2] - w.o[2]) * w.u[2], d = (q[0] - w.o[0]) * w.n[0] + (q[2] - w.o[2]) * w.n[2];
     return s > door.s0 + 0.01 && s < door.s1 - 0.01 && d < -WALL_T + 0.001 && d > -WALL_T - 0.04 && q[1] < p.foundation + 0.3 && q[1] > p.foundation + 0.05;
@@ -103,3 +103,6 @@ test("a hairpin bend in a pipe stays close to the pipe", () => {
   const pts = [[0, 0, 0], [0, 0.1, 0], [0, 0.1001, 0.005], [0, 0, 0.01]];
   for (const ring of tubeRings(pts, 0.004, 4)) for (const q of ring) assert.ok(Math.hypot(q[0], q[1] - 0.05, q[2]) < 0.1, `ring point ${q} far off`);
 });
+
+/** The wall of the building's first door. */
+function firstDoorWall(p) { return p.windows.find(w => w.type === "door" && w.floor === 0).wall; }

@@ -44,7 +44,7 @@ test("cow barn: a cow kind among the animal buildings, with Swedish presets", ()
   for (const x of cowPresets()) {
     const p = sanitize(x.settings);
     assert.equal(p.kind, "cow");
-    assert.notEqual(p.pastureWall, p.doorWall, x.id);
+    assert.notEqual(p.pastureWall, firstDoorWall(p), x.id);
     assert.match(placeableXml(p, x.name), /<placeable type="cowHusbandryPasture">/, x.id);
     assert.match(buildI3d(p), /<\/i3D>/, x.id);
   }
@@ -172,3 +172,6 @@ test("roof: ventilators stand on the ridge, a Swedish barn's lantern", () => {
   assert.equal(sanitize({}).ventilators, 0, "houses have none by default");
   assert.ok(sanitize(PRESETS.find(x => x.id === "ladugard").settings).ventilators >= 1, "the red barn has one");
 });
+
+/** The wall of the building's first door. */
+function firstDoorWall(p) { return p.windows.find(w => w.type === "door" && w.floor === 0).wall; }

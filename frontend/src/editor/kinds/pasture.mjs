@@ -1,9 +1,20 @@
 // What animal buildings with a pasture share: the fence from the pasture wall, and where the places
-// outside go (feed on one wall, something else on another, never the people door's wall).
+// outside go (feed on one wall, something else on another, walls without a door first).
 // Pure; used by the hen house and the cow barn.
 
 export const OPPOSITE = {front: "back", back: "front", left: "right", right: "left"};
 export const wallLength = (p, wall) => (wall === "front" || wall === "back") ? p.width : p.depth;
+/** The walls with a door (the window list's ground-floor doors). */
+export const doorWalls = p => new Set((p.windows || []).filter(w => w.type === "door" && w.floor === 0).map(w => w.wall));
+/**
+ * The pasture's wall: the one asked for, unless it has a door; then the opposite wall, or else any
+ * wall without a door. If every wall has a door it stays.
+ */
+export function pastureWallFor(p) {
+  const doors = doorWalls(p), want = p.pastureWall;
+  if (!doors.has(want)) return want;
+  return [OPPOSITE[want], "back", "front", "left", "right"].find(k => !doors.has(k)) || want;
+}
 
 /**
  * The yard around an animal building, from built geometry.
@@ -12,7 +23,7 @@ export const wallLength = (p, wall) => (wall === "front" || wall === "back") ? p
  *             wall (at least minWidth along it: the game can't make a walking area for a tiny one),
  *             the fence runs back along the wall line to the barn's corners, as in the base game's cow barn.
  *   past:     the pasture wall's frame {o, u, n, L}
- *   feed, other: the frames of the two walls (not the pasture's, not the door's) the outside places go
+ *   feed, other: the frames of the two walls (not the pasture's; walls without a door first) the outside places go
  *             on: the wall opposite the pasture for feed if it's free, else a side wall
  *   at(w, s, d, y), boxAt(w, s, d, along, out, h), rectOf(box): points and world-axis boxes by a wall
  *   clear(w): along wall w, the stretch [a, b] at least 1 m behind the pasture wall (the fence line)
@@ -20,7 +31,9 @@ export const wallLength = (p, wall) => (wall === "front" || wall === "back") ? p
 export function yardFrame(geo, p, minWidth) {
   const walls = geo.opsByWall, past = walls[p.pastureWall].w, opp = OPPOSITE[p.pastureWall];
   const sides = Object.keys(walls).filter(k => k !== p.pastureWall && k !== opp);
-  const [feedSide, otherSide] = [opp, ...sides].filter(k => k !== p.doorWall);
+  // walls without a door first
+  const doors = doorWalls(p), order = [opp, ...sides];
+  const [feedSide, otherSide] = [...order.filter(k => !doors.has(k)), ...order.filter(k => doors.has(k))];
   const at = (w, s, d, y = 0) => [w.o[0] + w.u[0]*s + w.n[0]*d, y, w.o[2] + w.u[2]*s + w.n[2]*d];
   // World-axis box in front of wall w: centred at s along it and d out, `along` wide, `out` deep, h high.
   const boxAt = (w, s, d, along, out, h) => {

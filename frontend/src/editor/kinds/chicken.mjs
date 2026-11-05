@@ -3,7 +3,7 @@
 // Imports only the i3d writer; the core hands in what it needs (see kinds/index.mjs).
 import { tg, shape } from "../i3d.mjs";
 import { roomOf, furnisher } from "../layout.mjs";
-import { OPPOSITE, wallLength, yardFrame } from "./pasture.mjs";
+import { OPPOSITE, wallLength, yardFrame, pastureWallFor } from "./pasture.mjs";
 import { tone, shade, strawBale } from "./props.mjs";
 
 /** Floor space per hen, as in the base game's 360-hen barn (about 2.2 per m², rounded up). */
@@ -27,8 +27,8 @@ const MIN_PASTURE_WIDTH = 12;
  *   loading: animal trailer trigger box further out on the feed side; marker; teleport spot beyond
  *   info:    box around the barn; blocker: the barn's footprint, kept out of the walking area
  *   areas:   ground rectangles of the food and pallet places, for clearing and leveling
- * The feed and pallet sides are two of the three walls that aren't the pasture's, never the people
- * door's: the wall opposite the pasture for feed if it's free, else a side wall.
+ * The feed and pallet sides are two of the three walls that aren't the pasture's, walls without a
+ * door: the wall opposite the pasture for feed if it has no door, else a side wall without one.
  */
 export function henYard(geo, p) {
   // The game can't make a walking area for a tiny pasture (a 6 x 4.4 m one failed): at least 12 m wide.
@@ -407,7 +407,7 @@ export default {
   defaults: {hens: 30, pastureWall: "back", fenceDepth: 8, winStyle: "single", doorStyle: "zbrace"},
   /** Editor sections only this kind has (shown first), and shared ones it doesn't use. */
   sections: [
-    {title: "Chickens", side: "build", hint: "Hens go in and out through a small hatch in the pasture side. The fence starts there, at least 12 m wide and 6 m deep (the game can’t handle a smaller pasture), and you can drag it to any shape when placing the barn in the game. The people door is always on another wall, outside the fence; feed and egg pallets go on the walls without the door.", fields: [
+    {title: "Chickens", side: "build", hint: "Hens go in and out through a small hatch in the pasture side. The fence starts there, at least 12 m wide and 6 m deep (the game can’t handle a smaller pasture), and you can drag it to any shape when placing the barn in the game. The pasture moves off a wall that has a door; feed and egg pallets go on walls without a door where they can.", fields: [
       {k: "hens", label: "Hens", min: 1, max: MAX_HENS, step: 1},
       {k: "pastureWall", label: "Pasture side (with the hen hatch)", type: "select", options: [["front", "Front"], ["back", "Back"], ["left", "Left side"], ["right", "Right side"]]},
       {k: "fenceDepth", label: "Pasture depth, from the wall", min: 6, max: 40, step: 0.5, unit: " m"}]},
@@ -415,10 +415,10 @@ export default {
   hides: ["Interior", "Farmhouse", "Kupor (dormers)"],
   /**
    * Settings as this kind uses them: no sleep point, rooms or dormers; no more hens than fit; and
-   * the pasture never on the people door's wall (it moves to the opposite one).
+   * the pasture on a wall without a door if it can be (the opposite one, else another).
    */
   normalize: p => ({...p, sleepPoint: false, interior: false, dormers: [], hens: Math.min(p.hens, henCap(p)),
-    pastureWall: p.pastureWall === p.doorWall ? OPPOSITE[p.doorWall] : p.pastureWall}),
+    pastureWall: pastureWallFor(p)}),
   openings,
   placeable: () => ({type: "chickenHusbandryPasture", fn: "$l10n_function_animalPenChicken",
     shop: {category: "animalpens", type: "husbandry", brush: "animals", tab: "chickens"},

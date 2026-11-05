@@ -5,7 +5,7 @@
 // Imports only the i3d writer and the pure helpers; the core hands in the rest (see kinds/index.mjs).
 import { tg, shape } from "../i3d.mjs";
 import { roomOf, furnisher } from "../layout.mjs";
-import { OPPOSITE, wallLength, yardFrame } from "./pasture.mjs";
+import { wallLength, yardFrame, pastureWallFor } from "./pasture.mjs";
 import { tone, shade, arc, strawBale, strawLitter } from "./props.mjs";
 
 /** About one cow per 6 m² of floor; at most 100 (the base game's biggest pasture barn takes 99). */
@@ -378,11 +378,11 @@ export default {
   hides: ["Interior", "Farmhouse", "Kupor (dormers)"],
   /**
    * Settings as this kind uses them: no sleep point, rooms or dormers; at least 6 x 6 m (troughs on
-   * both sides of the doorway); no more cows than fit; the pasture never on the people door's wall.
+   * both sides of the doorway); no more cows than fit; the pasture on a wall without a door if it can be.
    */
   normalize: p => {
     const q = {...p, sleepPoint: false, interior: false, dormers: [], width: Math.max(6, p.width), depth: Math.max(6, p.depth)};
-    return {...q, cows: Math.min(q.cows, cowCap(q)), pastureWall: q.pastureWall === q.doorWall ? OPPOSITE[q.doorWall] : q.pastureWall};
+    return {...q, cows: Math.min(q.cows, cowCap(q)), pastureWall: pastureWallFor(q)};
   },
   openings,
   placeable: () => ({type: "cowHusbandryPasture",

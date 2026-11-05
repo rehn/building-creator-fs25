@@ -16,13 +16,13 @@ function withDoor(p, wall, extra = {}) {
 /* ---------- Settings ---------- */
 test("sanitize: windows have a type and a style; doors only on the ground floor", () => {
   const p = sanitize({});
-  for (const w of p.windows.filter(w => !w.main)) { assert.equal(w.type, "window"); assert.equal(w.style, "default"); }
+  for (const w of p.windows.filter(w => w.type !== "door")) { assert.equal(w.type, "window"); assert.equal(w.style, "default"); }
   const q = sanitize({windows: [
     {wall: "front", floor: 0, pos: 0.2, w: 1, h: 2, sill: 0, type: "door", style: "zbrace"},
     {wall: "front", floor: 1, pos: 0.5, w: 1, h: 2, sill: 0, type: "door"},
     {wall: "back", floor: 0, pos: 0.5, w: 1, h: 1, sill: 1, type: "nonsense", style: "nonsense"},
     {wall: "back", floor: 0, pos: 0.8, w: 1, h: 1, sill: 1, type: "window", style: "zbrace"}]});
-  assert.deepEqual(q.windows.filter(w => !w.main).map(w => [w.type, w.style]), [["door", "zbrace"], ["window", "default"], ["window", "default"], ["window", "default"]]);
+  assert.deepEqual(q.windows.map(w => [w.type, w.style]), [["door", "zbrace"], ["window", "default"], ["window", "default"], ["window", "default"]]);
 });
 test("sanitize: the building's window and door styles, by kind, and only known ones", () => {
   assert.equal(sanitize({}).doorStyle, "panel");
@@ -37,7 +37,7 @@ test("sanitize: the building's window and door styles, by kind, and only known o
 /* ---------- A door where a window was ---------- */
 test("a window turned into a door: an opening down to the floor, a door leaf, no room behind it", () => {
   const p0 = sanitize({}), p = withDoor(p0, "back");
-  const geo = buildGeometry(p), op = geo.opsByWall.back.ops.find(o => o.kind === "door" && !o.main);
+  const geo = buildGeometry(p), op = geo.opsByWall.back.ops.find(o => o.kind === "door");
   assert.equal(op.kind, "door");
   assert.equal(op.t0, 0);
   assert.ok(Math.abs(op.t1 - 2) < 1e-9);
@@ -46,8 +46,8 @@ test("a window turned into a door: an opening down to the floor, a door leaf, no
   let n = 0;
   for (let k = 0; k < geo.G.door.p.length; k += 3) { const q = geo.G.door.p.slice(k, k + 3); if (Math.abs(q[2] - w.o[2]) < 0.3 && s(q) > op.s0 - 0.01 && s(q) < op.s1 + 0.01) n++; }
   assert.ok(n > 0, "door leaf at the new door");
-  // the main door is still the building's entrance (the porch is in front of it)
-  assert.ok(geo.opsByWall.front.ops.some(o => o.kind === "door" && o.main));
+  // the front door is still there, with its porch
+  assert.ok(geo.opsByWall.front.ops.some(o => o.kind === "door" && o.porch.type === "porch"));
 });
 test("walk-in building: every door opens with its own prompt; a side door is kept clear inside", () => {
   const q = withDoor(hen({doorW: 1.2, doorWall: "front"}), "left");
@@ -78,7 +78,7 @@ test("walk-in export: a braced leaf's trim moves with it, and isn't also left in
   assert.equal(count("trim"), geo.G.trim.p.length / 3 - (b - a));
 });
 test("sliding door: hangs outside the wall on a rail and slides along it", () => {
-  const p = cow({doorStyle: "sliding", doorW: 1.2}), geo = buildGeometry(p), d = geo.doors[0], {w} = geo.opsByWall[p.doorWall];
+  const p = cow({doorStyle: "sliding", doorW: 1.2}), geo = buildGeometry(p), d = geo.doors[0], {w} = geo.opsByWall[firstDoorWall(p)];
   assert.equal(d.leaves.length, 1);
   const leaf = d.leaves[0], out = q => (q[0] - w.o[0]) * w.n[0] + (q[2] - w.o[2]) * w.n[2];
   const [a, b] = leaf.parts.door;
@@ -116,78 +116,100 @@ test("more or fewer windows in a row keeps the doors made from windows there", a
   }
 });
 
-/* ---------- The main door is in the window list ---------- */
-import { mainDoor, setMainDoor, syncDoor } from "../src/editor/model.mjs";
-const mains = p => p.windows.filter(w => w.main);
 
-test("the main door is an entry of the window list: one, a door, on the ground floor", () => {
-  const p = sanitize({});
-  assert.equal(mains(p).length, 1);
-  const d = mainDoor(p);
-  assert.deepEqual([d.type, d.floor, d.wall, d.w, d.h], ["door", 0, "front", 1, 2.1]);
-  assert.equal(p.doorWall, "front");
-  assert.ok(Math.abs(d.pos - 0.5) < 1e-9, "in the middle");
-  // presets and old saves: from the old door settings
-  const q = sanitize({doorWall: "left", doorPos: -1, doorW: 1.2, doorH: 2.3}), e = mainDoor(q);
-  assert.deepEqual([e.wall, e.w, e.h], ["left", 1.2, 2.3]);
-  assert.ok(Math.abs(e.pos * q.depth - 0.9) < 1e-6, "at the left end, 30 cm in");
-  const old = sanitize({doorWall: "back", doorW: 2.4, doorH: 2.6, windows: [{wall: "front", floor: 0, pos: 0.5, w: 1, h: 1, sill: 1}]});
-  assert.deepEqual([mainDoor(old).wall, mainDoor(old).w, mainDoor(old).h, old.windows.length], ["back", 2.4, 2.6, 2]);
-  // never two, never on an upper floor, a door's size
-  const two = sanitize({windows: [{wall: "back", floor: 0, pos: 0.3, w: 3, h: 3, type: "door", main: true}, {wall: "left", floor: 0, pos: 0.5, w: 1, h: 2, type: "door", main: true}]});
-  assert.equal(mains(two).length, 1);
-  assert.deepEqual([mainDoor(two).wall, mainDoor(two).w, mainDoor(two).h], ["back", 2.5, 2.6]);
-  const up = sanitize({windows: [{wall: "back", floor: 1, pos: 0.3, w: 1, h: 2, type: "door", main: true}]});
-  assert.equal(mainDoor(up).floor, 0);
-});
-
-test("move the main door to another wall and put a window where it was", () => {
-  const p = sanitize({width: 10, depth: 7, winFront: 2}), d = mainDoor(p);
-  const ws = [...p.windows.filter(w => !w.main), {...d, wall: "back", pos: 0.3}, {id: 0, wall: "front", floor: 0, pos: 0.5, w: 1, h: 1.25, sill: 0.85, type: "window"}];
-  const q = sanitize({...p, windows: ws}), geo = buildGeometry(q);
-  assert.equal(q.doorWall, "back");
-  const main = geo.opsByWall.back.ops.find(o => o.main);
-  assert.ok(main && Math.abs((main.s0 + main.s1) / 2 - 3) < 1e-6, "the door 3 m along the back");
-  assert.equal(main.id, mainDoor(q).id, "the editor can pick it");
-  assert.ok(!geo.opsByWall.front.ops.some(o => o.kind === "door"), "no door left on the front");
-  const win = q.windows.find(w => w.wall === "front" && w.floor === 0 && Math.abs(w.pos - 0.5) < 1e-9);
-  assert.equal(win._hidden, false, "the new window shows");
-});
-
-test("setMainDoor: another opening becomes the entrance, the old one a window; syncDoor follows edits", () => {
-  const p = sanitize({width: 10, winBack: 2}), old = mainDoor(p), win = p.windows.find(w => w.wall === "back" && w.floor === 0);
-  setMainDoor(p, win.id);
-  assert.equal(mainDoor(p).id, win.id);
-  assert.deepEqual([win.type, win.floor, win.main], ["door", 0, true]);
-  assert.ok(win.w >= 0.7 && win.h >= 1.8, "a door's size");
-  assert.equal(p.doorWall, "back");
-  assert.deepEqual([old.type, !!old.main, old.w, old.h, old.sill], ["window", false, p.winW, p.winH, p.sill]);
-  // upper-floor windows can't be the entrance
-  const up = p.windows.find(w => w.floor === 1);
-  setMainDoor(p, up.id);
-  assert.equal(mainDoor(p).id, win.id);
-  // edits in the editor change the entry; syncDoor brings the building's door settings along
-  win.wall = "left"; win.w = 1.4;
-  syncDoor(p);
-  assert.deepEqual([p.doorWall, p.doorW], ["left", 1.4]);
-});
-
-test("a hen house: moving the main door to the pasture wall moves the pasture", () => {
-  const p = hen({doorWall: "front", pastureWall: "back"}), d = mainDoor(p);
-  const q = sanitize({...p, windows: [...p.windows.filter(w => !w.main), {...d, wall: "back"}]});
-  assert.equal(q.doorWall, "back");
-  assert.notEqual(q.pastureWall, "back");
-});
-
-test("adding windows to the main door's wall leaves room for the door", () => {
-  for (const pos of [0.2, 0.5, 0.8]) {
-    const p = sanitize({width: 10}), d = mainDoor(p);
-    const q = sanitize({...p, windows: [{...d, pos}]});
-    q.windows = genRowFor(q, "front", 3);
-    assert.equal(q.windows.filter(w => w.wall === "front" && w.floor === 0 && !w.main).length, 3);
-    buildGeometry(q);
-    assert.ok(q.windows.filter(w => w.wall === "front" && w.floor === 0 && !w.main).every(w => !w._hidden), `door at ${pos}: a window hidden`);
-  }
-});
+/* ---------- Every door is the same; each can have a porch or canopy ---------- */
 import { genRow } from "../src/editor/model.mjs";
-const genRowFor = (p, wall, n) => genRow(p, p.windows, wall, 0, n);
+const doors = p => p.windows.filter(w => w.type === "door");
+const door = (wall, pos, extra = {}) => ({wall, floor: 0, pos, w: 1, h: 2.1, sill: 0, type: "door", ...extra});
+
+test("doors: old settings make the first door, with the old entrance as its porch", () => {
+  const p = sanitize({});
+  assert.equal(doors(p).length, 1);
+  const d = doors(p)[0];
+  assert.deepEqual([d.wall, d.floor, d.w, d.h, d.porch], ["front", 0, 1, 2.1, "porch"]);
+  assert.ok(Math.abs(d.pos - 0.5) < 1e-9);
+  assert.equal(p.doorWall, undefined, "no main door settings left");
+  assert.equal(p.entrance, undefined);
+  const q = sanitize({doorWall: "left", doorPos: -1, doorW: 1.2, doorH: 2.3, entrance: "shed", entranceWidth: 3, entranceDepth: 1.2}), e = doors(q)[0];
+  assert.deepEqual([e.wall, e.w, e.h, e.porch, e.porchW, e.porchD], ["left", 1.2, 2.3, "shed", 3, 1.2]);
+  assert.ok(Math.abs(e.pos * q.depth - 0.9) < 1e-6, "at the left end, 30 cm in");
+  // a walk-in building's door has no porch unless asked
+  assert.equal(doors(hen())[0].porch, "none");
+  // a save from when one door was the main door: it keeps the building's entrance
+  const m = sanitize({entrance: "gable", windows: [door("back", 0.3, {main: true}), door("left", 0.5)]});
+  assert.deepEqual(doors(m).map(d => d.porch), ["gable", "none"]);
+  assert.ok(m.windows.every(w => !("main" in w)));
+});
+
+test("doors: a building always has one; doors may be taller than windows; porches are cleaned", () => {
+  const p = sanitize({windows: [{wall: "front", floor: 0, pos: 0.5, w: 1, h: 1.2, sill: 0.9}]});
+  assert.equal(doors(p).length, 1, "a door added to a save with none");
+  const q = sanitize({windows: [door("back", 0.3, {h: 2.6, w: 2.4, porch: "nonsense", porchW: 99, porchD: -1}), door("left", 0.5, {porch: "shed"})]});
+  assert.equal(doors(q).length, 2, "no door added when there is one");
+  assert.deepEqual([doors(q)[0].h, doors(q)[0].w, doors(q)[0].porch, doors(q)[0].porchW, doors(q)[0].porchD], [2.6, 2.4, "none", 5, 0.6]);
+  assert.equal(doors(q)[1].porch, "shed");
+  // windows have no porch
+  assert.ok(q.windows.filter(w => w.type === "window").every(w => !("porch" in w)));
+});
+
+test("doors: a porch or canopy at every door that has one, and a doorstep at the others", () => {
+  const p = sanitize({foundation: 0.6, windows: [door("front", 0.3, {porch: "porch"}), door("back", 0.5, {porch: "shed"}), door("left", 0.5)]});
+  const geo = buildGeometry(p), op = k => geo.opsByWall[k].ops.find(o => o.kind === "door");
+  assert.deepEqual(["front", "back", "left"].map(k => op(k).porch.type), ["porch", "shed", "none"]);
+  // something stands out in front of each door: porch posts/deck or canopy at the front and back
+  const out = (k, lo, hi) => {
+    const {w} = geo.opsByWall[k], o = op(k);
+    let n = 0;
+    for (const m of ["trim", "foundation", "roof", "walls"]) {
+      const g = geo.G[m];
+      for (let i = 0; i < g.p.length; i += 3) {
+        const q = [g.p[i], g.p[i + 1], g.p[i + 2]], s = (q[0] - w.o[0]) * w.u[0] + (q[2] - w.o[2]) * w.u[2], d = (q[0] - w.o[0]) * w.n[0] + (q[2] - w.o[2]) * w.n[2];
+        if (s > o.s0 - 1 && s < o.s1 + 1 && d > lo && d < hi) n++;
+      }
+    }
+    return n;
+  };
+  assert.ok(out("front", 1, 2) > 0, "porch at the front");
+  assert.ok(out("back", 0.8, 1.7) > 0, "canopy at the back");
+  assert.equal(out("left", 0.8, 3), 0, "nothing far out at the left door");
+  assert.ok(out("left", 0.1, 0.7) > 0, "a doorstep at the left door");
+  // the old entrance settings are gone from the editor
+  assert.ok(!SCHEMA.some(g => g.fields.some(f => /^entrance|^door(Wall|Pos|W|H)$/.test(f.k))));
+});
+
+test("doors: windows added to a wall leave room for every door on it", () => {
+  const p = sanitize({width: 10, windows: [door("front", 0.2), door("front", 0.75)]});
+  p.windows = genRow(p, p.windows, "front", 0, 3);
+  buildGeometry(p);
+  const ws = p.windows.filter(w => w.wall === "front" && w.floor === 0 && w.type === "window");
+  assert.equal(ws.length, 3);
+  assert.ok(ws.every(w => !w._hidden), "no window hidden by a door");
+  // a door is never hidden by a window over it: the window is
+  const q = sanitize({windows: [{wall: "back", floor: 0, pos: 0.5, w: 1, h: 1.2, sill: 0.5}, door("back", 0.52)]});
+  buildGeometry(q);
+  assert.deepEqual(q.windows.map(w => [w.type, w._hidden]), [["window", true], ["door", false]]);
+});
+
+test("doors: export order is the doors' order; the sleep point is at the first door", () => {
+  const p = sanitize({windows: [door("left", 0.5), door("front", 0.5)]});
+  const sp = sleepPoint(buildGeometry(p));
+  assert.ok(sp.trigger.center[0] < -p.width / 2, "in front of the left door");
+  const q = hen({windows: [door("left", 0.5), door("front", 0.5)], pastureWall: "back"});
+  assert.deepEqual(buildGeometry(q).doors.map(d => d.wall), ["left", "front"]);
+});
+
+test("animal buildings: the fence and the places outside keep away from every wall with a door", () => {
+  const p = hen({pastureWall: "back", windows: [door("front", 0.5), door("left", 0.5)]});
+  const y = henYard(buildGeometry(p), p), geo = buildGeometry(p);
+  const wallOf = q => { let best, bd = 1e9; for (const [k, {w}] of Object.entries(geo.opsByWall)) { const d = (q[0] - w.o[0]) * w.n[0] + (q[2] - w.o[2]) * w.n[2]; if (d > 0 && d < bd) { bd = d; best = k; } } return best; };
+  assert.equal(wallOf(y.food.center), "right", "feed on the wall without a door");
+  // a pasture on a wall with a door moves to one without
+  const q = hen({pastureWall: "front", windows: [door("front", 0.5)]});
+  assert.notEqual(q.pastureWall, "front");
+  const c = sanitize({kind: "cow", pastureWall: "left", windows: [door("left", 0.5), door("back", 0.3)]});
+  assert.ok(!["left", "back"].includes(c.pastureWall), c.pastureWall);
+});
+import { SCHEMA, sleepPoint, henYard } from "../src/editor/model.mjs";
+
+/** The wall of the building's first door. */
+function firstDoorWall(p) { return p.windows.find(w => w.type === "door" && w.floor === 0).wall; }

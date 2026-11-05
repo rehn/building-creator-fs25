@@ -33,23 +33,12 @@ export function openingSpan(win, L) {
   const ww = Math.min(win.w, L - 0.4), c = Math.min(L - ww/2 - 0.2, Math.max(ww/2 + 0.2, win.pos * L));
   return [c - ww/2, c + ww/2];
 }
-/**
- * Where the main door is along its wall (length L): [s0, s1]. It's the window list's entry marked main;
- * settings without one (doorPos -1..1 from left to right, doorW) are the older way.
- */
-export function doorSpan(p, L) {
-  const d = (p.windows || []).find(w => w.main);
-  if (!d) {
-    const dw = Math.min(p.doorW, L - 0.6), c = L/2 + (p.doorPos || 0) * Math.max(0, L/2 - p.doorW/2 - 0.3);
-    return [c - dw/2, c + dw/2];
-  }
-  const dw = Math.min(d.w, L - 0.6), c = Math.min(L - dw/2 - 0.3, Math.max(dw/2 + 0.3, d.pos * L));
-  return [c - dw/2, c + dw/2];
-}
+/** The building's doors: the window list's ground-floor doors, in order. */
+export const doorsOf = p => (p.windows || []).filter(w => w.type === "door" && w.floor === 0);
 
 /**
  * The room inside a walk-in building: the floor inside the walls {x0, x1, z0, z1}, floor height F,
- * wall height H, the doorway's keep-out rectangle (door), every keep-out as keepOut [{rect, what}],
+ * wall height H, the first door's keep-out rectangle (door), every keep-out as keepOut [{rect, what}],
  * and each wall's inside face as
  * {x0, x1, z0, z1 (the line), into: [x, z] (towards the room), rot (of an item facing into the room)}.
  * openings: other openings to keep clear inside, [{wall, s0, s1, clear, what}] (a hen hatch ...).
@@ -65,17 +54,17 @@ export function roomOf(p, openings = []) {
     const a = at(s0 - 0.3, -t), b = at(s1 + 0.3, -t - clear);
     return {x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]), z0: Math.min(a[1], b[1]), z1: Math.max(a[1], b[1])};
   };
-  const door = keep(p.doorWall, ...doorSpan(p, frames[p.doorWall].L), DOOR_CLEAR);
-  // doors made from windows are kept clear too
-  const sideDoors = (p.windows || []).filter(w => w.type === "door" && w.floor === 0 && !w.main).map(w => ({rect: keep(w.wall, ...openingSpan(w, frames[w.wall].L), DOOR_CLEAR), what: "a door"}));
-  const keepOut = [{rect: door, what: "the door"}, ...sideDoors, ...openings.map(o => ({rect: keep(o.wall, o.s0, o.s1, o.clear), what: o.what}))];
+  // every door is kept clear inside
+  const doors = doorsOf(p).map(w => ({rect: keep(w.wall, ...openingSpan(w, frames[w.wall].L), DOOR_CLEAR), what: "a door"}));
+  const door = doors.length ? doors[0].rect : null;
+  const keepOut = [...doors, ...openings.map(o => ({rect: keep(o.wall, o.s0, o.s1, o.clear), what: o.what}))];
   const walls = [
     {name: "back", x0, x1, z0, z1: z0, into: [0, 1], rot: 0},
     {name: "front", x0, x1, z0: z1, z1, into: [0, -1], rot: 180},
     {name: "left", x0, x1: x0, z0, z1, into: [1, 0], rot: 90},
     {name: "right", x0: x1, x1, z0, z1, into: [-1, 0], rot: 270},
   ];
-  return {x0, x1, z0, z1, F, H, door, keepOut, walls, doorWall: p.doorWall};
+  return {x0, x1, z0, z1, F, H, door, keepOut, walls};
 }
 
 const R = rot => rot * Math.PI / 180;
