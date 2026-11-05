@@ -9,7 +9,7 @@ import {
 import { WINDOW_STYLES, DOOR_STYLES, PORCH_OPTIONS, PORCH_W, PORCH_D } from "./model.mjs";
 import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, henYard, henCap, seeThroughGlass, kindOf } from "./model.mjs";
 import { cowYard } from "./kinds/cow.mjs";
-import { roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, History } from "./layout.mjs";
+import { roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, History, wingOf, liveWing, wallsOf, WING_WALLS } from "./layout.mjs";
 import { PLACE_DEFAULT, PLACE_LIMITS } from "./places.mjs";
 import { setAssets, catalogFor, usedAssets } from "./model.mjs";
 import { readObj, assetFolder, flattenI3d } from "./assets.mjs";
@@ -151,15 +151,18 @@ SCHEMA.forEach(g => {
       // Mod details don't change the house, so skip the rebuild.
       if (f.k.startsWith("mod")) { syncOutputs(); persist(); return; }
       if (f.k === "halfStorey" && v) p.windows = p.windows.filter(w => !(w.floor >= p.floors && !gableWall(w.wall)));
+      if (f.k === "wing" && v && liveWing(p) && !p.windows.some(w => WING_WALLS.includes(w.wall)))
+        for (const k of WING_WALLS) for (let fl = 0; fl < p.floors; fl++) p.windows = genRow(p, p.windows, k, fl, k === "wingEnd" ? 2 : 1);
       // Keep the kind's rules (a hen house's pasture never on the door's wall, no more hens than
       // fit ...) and show any setting they changed, so the preview, controls and export agree.
       const ruled = applyKindRules();
       if (ruled) syncControls(); else syncOutputs();
       persist(); rebuild(false);
-      if (["floors", "halfStorey", "roofType", "ridge", "interior", "curtainStyle", "curtainColor", "winStyle", "doorStyle"].includes(f.k)) { renderWinUI(); renderDormUI(); }
+      if (["floors", "halfStorey", "roofType", "ridge", "interior", "curtainStyle", "curtainColor", "winStyle", "doorStyle"].includes(f.k) || f.k.startsWith("wing")) { renderWinUI(); renderDormUI(); }
       if (f.k === "sleepPoint" || placeSel) renderPlacesUI();
     });
   });
+  if (g.title === "Wing") { const w = document.createElement("p"); w.className = "warn"; w.id = "wingWarn"; w.hidden = true; d.appendChild(w); }
   if (g.custom === "dormers") { const ed = document.createElement("div"); ed.id = "dormEditor"; d.appendChild(ed); }
   if (g.custom === "inside") { const ed = document.createElement("div"); ed.id = "insideEditor"; d.appendChild(ed); }
   if (g.custom === "places") { const ed = document.createElement("div"); ed.id = "placesEditor"; d.appendChild(ed); }
@@ -204,6 +207,9 @@ function syncOutputs() {
   off("downpipes", !p.gutters || p.roofType === "flat");
   off("ventilators", p.roofType === "flat");
   off("curtainStyle", !p.interior); off("curtainColor", !p.interior);
+  for (const k of ["wingWall", "wingPos", "wingWidth", "wingDepth"]) off(k, !p.wing);
+  const ww = $("wingWarn"), wg = wingOf(p);
+  if (ww) { ww.hidden = !(wg && wg.off); ww.textContent = wg && wg.off ? wg.off : ""; }
   inputs.modDescription.placeholder = defaultModDescription(p);
 }
 
@@ -557,11 +563,16 @@ function applySurfaces() {
 /* ---------- Window editor ---------- */
 let selId = null;
 function floorName(f) { return p.halfStorey && f === p.floors ? "Attic" : `Floor ${f + 1}`; }
-function gableWall(wall) { return p.roofType === "gable" && (p.ridge === "width" ? (wall === "left" || wall === "right") : (wall === "front" || wall === "back")); }
-const wallLen = wall => (wall === "front" || wall === "back") ? p.width : p.depth;
+function gableWall(wall) {
+  if (wall === "wingEnd") return p.roofType !== "flat" && !!liveWing(p);
+  return p.roofType === "gable" && (p.ridge === "width" ? (wall === "left" || wall === "right") : (wall === "front" || wall === "back"));
+}
+/** The building's walls now: the four, and the wing's when it has one. */
+const wallKeys = () => Object.keys(wallsOf(p));
+const wallLen = wall => (wallsOf(p)[wall] || {L: 1}).L;
 function sortedWindows() {
-  const order = {front:0, back:1, left:2, right:3};
-  return p.windows.filter(w => w.floor < p.floors + (p.halfStorey ? 1 : 0)).sort((a, b) => order[a.wall] - order[b.wall] || a.floor - b.floor || a.pos - b.pos);
+  const order = {front:0, back:1, left:2, right:3, wingEnd:4, wingLeft:5, wingRight:6}, walls = wallsOf(p);
+  return p.windows.filter(w => walls[w.wall] && w.floor < p.floors + (p.halfStorey ? 1 : 0)).sort((a, b) => order[a.wall] - order[b.wall] || a.floor - b.floor || a.pos - b.pos);
 }
 function winLabel(w) {
   const row = sortedWindows().filter(x => x.wall === w.wall && x.floor === w.floor);
@@ -614,7 +625,7 @@ function renderWinUI() {
   if (!ed) return;
   const floors = p.floors + (p.halfStorey ? 1 : 0);
   let html = `<table class="wgrid"><thead><tr><th scope="col"><span class="sr">Wall</span></th>${Array.from({length: floors}, (_, f) => `<th scope="col">${floorName(f)}</th>`).join("")}</tr></thead><tbody>`;
-  for (const wall of WALLS) {
+  for (const wall of wallKeys()) {
     html += `<tr><th scope="row">${WALL_NAMES[wall]}</th>`;
     for (let f = 0; f < floors; f++) {
       if (f === p.floors && !gableWall(wall)) { html += `<td><span aria-label="No attic windows on this wall">\u2013</span></td>`; continue; }
@@ -641,7 +652,7 @@ function renderWinUI() {
     if (lastDoor) html += `<p class="hint">This is the building’s only door, so it stays a door. Make another window a door first to remove this one or make it a window.</p>`;
     else if (s.floor !== 0) html += `<p class="hint">Doors can only go on the ground floor.</p>`;
     // any window or door can move to another wall (attic windows only to a gable)
-    const walls = WALLS.filter(k => s.floor < p.floors || gableWall(k));
+    const walls = wallKeys().filter(k => s.floor < p.floors || gableWall(k));
     html += `<div class="field"><div class="fl"><label for="wf-wall">Wall</label></div><select id="wf-wall">${walls.map(k => opt(k, WALL_NAMES[k], s.wall)).join("")}</select></div>`;
     html += `<div class="field"><div class="fl"><label for="wf-style">Style</label></div><select id="wf-style">${opt("default", `Same as the building (${own})`, s.style)}${styles.map(x => opt(x.id, x.name, s.style)).join("")}</select></div>`;
     for (const f of WIN_FIELDS) {
@@ -1303,6 +1314,7 @@ function updateYardMarker(geo) {
 function rebuild(fit) {
   const geo = buildGeometry(p);
   ({G, dims, opsByWall} = geo);
+  const wingNow = geo.wing;
   let tris = 0;
   if (renderer) {
     MATS.forEach(m => {
@@ -1341,7 +1353,7 @@ function rebuild(fit) {
   }
   refreshWin(); refreshDorm(); renderInsideUI();
   MATS.forEach(m => tris += G[m].i.length / 3);
-  readout.innerHTML = `<span><b>${dims.W.toFixed(1)} \u00D7 ${dims.D.toFixed(1)} m</b> footprint</span><span><b>${dims.ridgeY.toFixed(1)} m</b> to the top</span><span><b>${tris.toLocaleString()}</b> triangles</span>`;
+  readout.innerHTML = `<span><b>${dims.W.toFixed(1)} \u00D7 ${dims.D.toFixed(1)} m</b>${wingNow ? ` + <b>${wingNow.ww.toFixed(1)} × ${wingNow.wd.toFixed(1)} m</b> wing` : ""} footprint</span><span><b>${dims.ridgeY.toFixed(1)} m</b> to the top</span><span><b>${tris.toLocaleString()}</b> triangles</span>`;
 }
 
 const toastEl = $("toast"); let toastT;

@@ -1,7 +1,7 @@
 // A building from photos: what to tell Claude about a kind's settings (a guide and the JSON schema of
 // its answer) and how to turn the answer into the kind's settings. The server adds the photos and
 // sends it (backend/internal/vision); the admin then adjusts the result in the editor. No DOM.
-import { SCHEMA, KIND, sanitize, WALLS, WALL_NAMES, PORCH_OPTIONS } from "./model.mjs";
+import { SCHEMA, KIND, sanitize, WALLS, WALL_NAMES, PORCH_OPTIONS, WING_WALLS } from "./model.mjs";
 
 /** Sections Claude leaves alone: the game's own places, the inside, the shop. */
 const SKIP = new Set(["Game mod", "Game places", "Inside", "Interior", "Farmhouse"]);
@@ -36,11 +36,11 @@ function fieldLine(f) {
   return `- ${f.k} (${isInt(f) ? "whole number" : "number"}, ${f.min} to ${f.max}${unit(f)}): ${f.label}`;
 }
 
-const OPENING = {
+const opening = walls => ({
   type: "object", additionalProperties: false,
   required: ["wall", "type", "floor", "along", "width", "height", "sill", "porch"],
   properties: {
-    wall: {type: "string", enum: WALLS},
+    wall: {type: "string", enum: walls},
     type: {type: "string", enum: ["window", "door"]},
     floor: {type: "integer", description: "0 = ground floor, 1 = the floor above ..."},
     along: {type: "number", description: "Middle of the opening along the wall, 0 = its left end, 1 = its right end, seen from outside"},
@@ -49,7 +49,7 @@ const OPENING = {
     sill: {type: "number", description: "metres from that floor's floor to the bottom of the opening; 0 for doors"},
     porch: {type: "string", enum: PORCH_OPTIONS.map(o => o[0]), description: "What is in front of a door; none for windows"},
   },
-};
+});
 
 /**
  * What to send Claude for a kind of building: {guide, schema}. The answer is
@@ -59,6 +59,7 @@ export function photoRequest(kindId) {
   const kind = KIND[kindId];
   if (!kind) throw new Error("unknown kind " + kindId);
   const fields = photoFields(kindId);
+  const wing = fields.some(([f]) => f.k === "wing");
   const settings = {type: "object", additionalProperties: false, required: fields.map(([f]) => f.k), properties: {}};
   for (const [f] of fields) settings.properties[f.k] = fieldSchema(f);
   const schema = {
@@ -66,7 +67,7 @@ export function photoRequest(kindId) {
     properties: {
       seen: {type: "string", description: "What the photos show: which wall each photo shows, materials, how you judged the sizes"},
       settings,
-      openings: {type: "array", items: OPENING, description: "Every window and door on the walls"},
+      openings: {type: "array", items: opening(wing ? [...WALLS, ...WING_WALLS] : WALLS), description: "Every window and door on the walls"},
       notes: {type: "string", description: "For the admin: what the app can't match and what to check"},
     },
   };
@@ -75,6 +76,15 @@ export function photoRequest(kindId) {
 
 Animals: the app makes the animals' own way out to the pasture (and the fence) on the pastureWall side by itself. ` +
       `Don't list that opening as a door; set pastureWall to the side where the animals go out, and keep the doors you list off that wall.`
+    : "";
+  const wingText = wing
+    ? `
+
+L- and T-shaped houses: the part along the front is the house, the other part a wing on one of its walls (wingWall), ` +
+      `wingPos along that wall like an opening's "along", wingWidth across it and wingDepth out from the wall. The wing has the house's ` +
+      `floors and roof pitch; on a long side its roof meets the house's in a valley, on a gable end it is a lower annex. ` +
+      `Its openings go on its own walls: wingEnd (its far end), wingLeft and wingRight (its sides, as you stand outside facing wingEnd). ` +
+      `A plain rectangular house has wing false.`
     : "";
   const sections = [];
   for (const [f, title] of fields) {
@@ -94,7 +104,7 @@ Heights: "floorHeight" is one full floor's height, so the walls are floors x flo
 Openings: list every window and door you can see, on the wall it is on. "along" is where its middle is along that wall, ` +
 `from 0 at the left end to 1 at the right end, as you see the wall from outside. Doors stand on the ground floor (floor 0, sill 0); ` +
 `a pair of doors or a wide barn door is one door up to 3 m wide and 2.6 m tall. A loft door or hatch up in a gable can't be built: ` +
-`leave it out and mention it in notes. Window sills are measured from their own floor's floor. A building needs at least one door.${animals}
+`leave it out and mention it in notes. Window sills are measured from their own floor's floor. A building needs at least one door.${animals}${wingText}
 
 Settings, by the editor's sections:
 ${sections.map(s => `${s.title}:\n${s.lines.join("\n")}`).join("\n\n")}`;

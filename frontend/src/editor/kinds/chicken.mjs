@@ -433,7 +433,7 @@ export default {
       {k: "pastureWall", label: "Pasture side (with the hen hatch)", type: "select", options: [["front", "Front"], ["back", "Back"], ["left", "Left side"], ["right", "Right side"]]},
       {k: "fenceDepth", label: "Pasture depth, from the wall", min: 6, max: 40, step: 0.5, unit: " m"}]},
   ],
-  hides: ["Interior", "Farmhouse", "Kupor (dormers)"],
+  hides: ["Interior", "Farmhouse", "Kupor (dormers)", "Wing"],
   /**
    * Settings as this kind uses them: no sleep point, rooms or dormers; no more hens than fit; and
    * the pasture on a wall without a door if it can be (the opposite one, else another).

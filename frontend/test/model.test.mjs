@@ -31,7 +31,7 @@ test("sanitize: invalid selects, colors and booleans fall back to defaults", () 
 test("schema: sections are split into building the house and finishing it", () => {
   const side = s => SCHEMA.filter(g => g.side === s).map(g => g.title);
   assert.ok(SCHEMA.every(g => g.side === "build" || g.side === "finish"), "every section has a side");
-  assert.deepEqual(side("build"), ["Chickens", "Cows", "Size", "Roof", "Kupor (dormers)", "Windows", "Doors", "Inside"]);
+  assert.deepEqual(side("build"), ["Chickens", "Cows", "Size", "Wing", "Roof", "Kupor (dormers)", "Windows", "Doors", "Inside"]);
   assert.deepEqual(side("finish"), ["Surfaces", "Colors", "Interior", "Farmhouse", "Game places", "Game mod"]);
 });
 

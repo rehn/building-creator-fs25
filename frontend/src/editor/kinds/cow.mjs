@@ -394,7 +394,7 @@ export default {
       {k: "pastureWall", label: "Pasture side (with the cows’ doorway)", type: "select", options: [["front", "Front"], ["back", "Back"], ["left", "Left side"], ["right", "Right side"]]},
       {k: "fenceDepth", label: "Pasture depth, from the wall", min: 10, max: 60, step: 0.5, unit: " m"}]},
   ],
-  hides: ["Interior", "Farmhouse", "Kupor (dormers)"],
+  hides: ["Interior", "Farmhouse", "Kupor (dormers)", "Wing"],
   /**
    * Settings as this kind uses them: no sleep point, rooms or dormers; at least 6 x 6 m (troughs on
    * both sides of the doorway); no more cows than fit; the pasture on a wall without a door if it can be.

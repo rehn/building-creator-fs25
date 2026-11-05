@@ -28,6 +28,60 @@ export function wallFrames(W, D, F) {
   };
 }
 
+/** A wing's walls (as keys of the window list): its far end, and its sides as you face that end. */
+export const WING_WALLS = ["wingEnd", "wingLeft", "wingRight"];
+/** The roof's thickness (the model's too): a gable-end wing's roof stays under the house's gable overhang. */
+const ROOF_T = 0.16;
+/**
+ * The house's wing (an L or T), or null without one: {type, wall, s0, s1 (along that wall), ww (width),
+ * wd (length out from the wall), frames {wingEnd, wingLeft, wingRight}, rect {x0, x1, z0, z1}}.
+ * type: "valley" on a wall along the ridge (its roof meets the house's in a valley), "gable" on a gable
+ * end (a lower annex under the gable), "flat" under a flat roof. The wing shares the house's floors,
+ * pitch and overhang, so the eaves line up; it is made narrower and moved along its wall when it has
+ * to be to fit. When the wing can't go there: {off: why}.
+ */
+export function wingOf(P) {
+  if (!P || !P.wing) return null;
+  const W = P.width, D = P.depth, F = P.foundation, main = wallFrames(W, D, F);
+  const key = main[P.wingWall] ? P.wingWall : "back", m = main[key];
+  const ridgeX = P.roofType === "hip" ? W >= D : P.ridge === "width";
+  const alongRidge = (Math.abs(m.u[0]) > 0.5) === ridgeX;
+  const tanP = Math.tan(P.roofPitch * Math.PI / 180), o = P.overhang, Lr = ridgeX ? W : D, span = ridgeX ? D : W;
+  let type, half;
+  if (P.roofType === "flat") { type = "flat"; half = m.L / 2; }
+  else if (alongRidge) {
+    // the roof's notch, eaves and all, stays inside the house's roof along the wall
+    type = "valley";
+    half = (P.roofType === "hip" ? Lr / 2 + o : Lr / 2 + Math.min(o, 0.5)) - o;
+  } else if (P.roofType === "gable") {
+    // the annex's ridge stays under the house's gable overhang
+    type = "gable";
+    half = span / 2 - ROOF_T / tanP - 0.05;
+  } else return {off: "On a hip roof a wing goes on a long side, under the eaves."};
+  half = Math.min(half, m.L / 2);
+  const ww = Math.min(P.wingWidth, 2 * half, type === "valley" ? span : Infinity);
+  if (ww < 2) return {off: "There isn't room for a wing on that wall. Make the house bigger or the overhang smaller."};
+  const cmax = half - ww / 2, c = Math.min(cmax, Math.max(-cmax, (P.wingPos - 0.5) * m.L));
+  const sc = m.L / 2 + c, s0 = sc - ww / 2, s1 = sc + ww / 2, wd = P.wingDepth;
+  const at = (s, d) => [m.o[0] + m.u[0] * s + m.n[0] * d, F, m.o[2] + m.u[2] * s + m.n[2] * d];
+  const neg = v => v.map(x => -x + 0);
+  const frames = {
+    wingEnd: {o: at(s0, wd), u: m.u, n: m.n, L: ww},
+    wingLeft: {o: at(s0, 0), u: m.n, n: neg(m.u), L: wd},
+    wingRight: {o: at(s1, wd), u: neg(m.n), n: m.u, L: wd},
+  };
+  const a = at(s0, 0), b = at(s1, wd);
+  const rect = {x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]), z0: Math.min(a[2], b[2]), z1: Math.max(a[2], b[2])};
+  return {type, wall: key, s0, s1, sc, ww, wd, frames, rect, at};
+}
+/** The wing, if the house has one that fits (not {off}). */
+export const liveWing = P => { const w = wingOf(P); return w && w.frames ? w : null; };
+/** Every wall of the building by key: the four, and the wing's three when it has one. */
+export function wallsOf(P) {
+  const w = liveWing(P);
+  return {...wallFrames(P.width, P.depth, P.foundation), ...(w ? w.frames : {})};
+}
+
 /** Where an entry of the window list (a window, or a door made from one) is along its wall (length L): [s0, s1]. */
 export function openingSpan(win, L) {
   const ww = Math.min(win.w, L - 0.4), c = Math.min(L - ww/2 - 0.2, Math.max(ww/2 + 0.2, win.pos * L));

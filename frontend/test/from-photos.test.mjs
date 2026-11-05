@@ -85,3 +85,16 @@ test("from photos: animal buildings are told the app makes the animals' doorway"
   assert.match(photoRequest("chicken").guide, /pastureWall side by itself/);
   assert.doesNotMatch(photoRequest("house").guide, /pastureWall/);
 });
+
+test("from photos: a house's answer can have a wing, with openings on its walls", () => {
+  const {schema, guide} = photoRequest("house");
+  assert.ok(schema.properties.settings.properties.wing && schema.properties.settings.properties.wingWall);
+  assert.ok(schema.properties.openings.items.properties.wall.enum.includes("wingEnd"));
+  assert.match(guide, /L- and T-shaped houses/);
+  assert.ok(!photoRequest("cow").schema.properties.openings.items.properties.wall.enum.includes("wingEnd"), "barns have no wing");
+  const p = applyAnswer("house", {settings: {wing: true, wingWall: "back", wingPos: 0.2, wingWidth: 6, wingDepth: 5},
+    openings: [{wall: "wingEnd", type: "door", floor: 0, along: 0.5, width: 1, height: 2.1, sill: 0, porch: "porch"},
+               {wall: "wingLeft", type: "window", floor: 0, along: 0.5, width: 1, height: 1.2, sill: 0.9, porch: "none"}]});
+  assert.equal(p.wing, true);
+  assert.deepEqual(p.windows.map(w => w.wall).sort(), ["wingEnd", "wingLeft"]);
+});

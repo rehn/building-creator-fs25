@@ -40,6 +40,15 @@ function overlap(a, b, n) {
   }
   return true;
 }
+/** Whether point c is in an opening (a window's sash, a door in its reveal), where it is seen. */
+function inOpening(c, geo) {
+  for (const {w, ops} of Object.values(geo.opsByWall)) {
+    const v = [c[0] - w.o[0], c[1] - w.o[1], c[2] - w.o[2]], s = v[0] * w.u[0] + v[2] * w.u[2], d = v[0] * w.n[0] + v[2] * w.n[2];
+    if (d < -WALL_T - 0.02 || d > 0.01) continue;
+    if (ops.some(o => s > o.s0 - 0.01 && s < o.s1 + 0.01 && v[1] > o.t0 - 0.01 && v[1] < o.t1 + 0.01)) return true;
+  }
+  return false;
+}
 /**
  * Whether a face can't be seen: it faces into the ground, the plinth or a solid wall (just in front of
  * it is solid). A house is solid inside its walls; a walk-in building only in its walls' thickness.
@@ -48,14 +57,14 @@ function hidden(t, geo, walkIn, F) {
   const c = [0, 1, 2].map(i => (t.pts[0][i] + t.pts[1][i] + t.pts[2][i]) / 3 + 0.005 * t.n[i]);
   const {W, D, top} = geo.dims, ax = Math.abs(c[0]), az = Math.abs(c[2]);
   if (c[1] < 0) return true;
+  // a house's wing is solid too (its plinth starts 6 cm out from the house's)
+  const wr = geo.wing && geo.wing.rect, inWing = (m = 0) => wr && c[0] > wr.x0 - m && c[0] < wr.x1 + m && c[2] > wr.z0 - m && c[2] < wr.z1 + m;
+  if (c[1] < F && inWing(0.06)) return true;
+  if (c[1] < top && inWing() && !inOpening(c, geo)) return true;
   if (c[1] < F && ax < W / 2 + 0.06 && az < D / 2 + 0.06) return true;
   if (c[1] >= top || ax >= W / 2 || az >= D / 2) return false;
   // in an opening (a window's sash, a door in its reveal) is seen
-  for (const {w, ops} of Object.values(geo.opsByWall)) {
-    const v = [c[0] - w.o[0], c[1] - w.o[1], c[2] - w.o[2]], s = v[0] * w.u[0] + v[2] * w.u[2], d = v[0] * w.n[0] + v[2] * w.n[2];
-    if (d < -WALL_T - 0.02 || d > 0.01) continue;
-    if (ops.some(o => s > o.s0 - 0.01 && s < o.s1 + 0.01 && v[1] > o.t0 - 0.01 && v[1] < o.t1 + 0.01)) return false;
-  }
+  if (inOpening(c, geo)) return false;
   return !walkIn || ax > W / 2 - WALL_T || az > D / 2 - WALL_T;
 }
 /** Overlapping coplanar same-facing pairs that can be seen: [{a, b}] (at most max). */
@@ -96,5 +105,30 @@ test("no flickering faces with any window or door style, on a house and in a bar
   for (const base of [{}, PRESETS.find(x => x.id === "ladugard").settings]) for (const s of WINDOW_STYLES) for (const d of DOOR_STYLES) for (const doorW of [1, 2.2]) {
     const p = sanitize({...base, winStyle: s.id, doorStyle: d.id, doorW}), f = flickers(buildGeometry(p), SHELL, {walkIn: !!kindOf(p).walkIn, F: p.foundation});
     assert.equal(f.length, 0, `${p.kind} ${s.id} ${d.id} ${doorW} m:\n` + f.map(show).join("\n"));
+  }
+});
+
+test("no flickering faces on a house with a wing (L, T, against a gable, hip and flat roofs)", async () => {
+  const { genRow } = await import("../src/editor/model.mjs");
+  const cases = [
+    {wingWall: "back", wingPos: 0.15}, {wingWall: "back", wingPos: 0.5}, {wingWall: "front", wingPos: 0.9, wingWidth: 7},
+    {wingWall: "left", wingPos: 0.5, wingWidth: 4}, {wingWall: "right", wingPos: 0.3, wingWidth: 4, ridge: "width"},
+    {wingWall: "back", roofType: "hip", width: 12}, {wingWall: "left", roofType: "flat"}, {wingWall: "back", foundation: 0.9, overhang: 0.9},
+    {wingWall: "left", ridge: "depth", wingPos: 0.2},
+  ];
+  for (const c of cases) {
+    let p = sanitize({wing: true, wingWidth: 6, wingDepth: 5, ...c});
+    for (const k of ["wingEnd", "wingLeft", "wingRight"]) for (let f = 0; f < p.floors; f++) p.windows = genRow(p, p.windows, k, f, 2);
+    p.windows.push({id: 99, wall: "wingEnd", floor: 0, pos: 0.5, w: 1, h: 2.1, sill: 0, type: "door", style: "default", porch: "porch", porchW: 2.2, porchD: 1.6});
+    p = sanitize(p);
+    const f = flickers(buildGeometry(p), SHELL, {F: p.foundation});
+    assert.equal(f.length, 0, `${JSON.stringify(c)}:\n` + f.map(show).join("\n"));
+  }
+});
+
+test("no flickering faces on a hip roof (its end gutters meet the eaves)", () => {
+  for (const s of [{roofType: "hip"}, {roofType: "hip", width: 12, downpipes: 1}, {roofType: "hip", ridge: "depth", depth: 12}]) {
+    const p = sanitize(s), f = flickers(buildGeometry(p), SHELL, {F: p.foundation});
+    assert.equal(f.length, 0, `${JSON.stringify(s)}:\n` + f.map(show).join("\n"));
   }
 });
