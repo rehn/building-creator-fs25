@@ -4,6 +4,7 @@
 import { tg, shape } from "../i3d.mjs";
 import { roomOf, furnisher } from "../layout.mjs";
 import { OPPOSITE, wallLength, yardFrame } from "./pasture.mjs";
+import { tone, shade, strawBale } from "./props.mjs";
 
 /** Floor space per hen, as in the base game's 360-hen barn (about 2.2 per m², rounded up). */
 export const HENS_PER_M2 = 2.5;
@@ -79,15 +80,20 @@ function cornerStripes(r, arm = 1, w = 0.25) {
 }
 
 /* ---------- Interior ---------- */
-const COOP = {litter: "#B8935A", straw: "#DDBF73", bale: "#D9BC6A", wood: "#A47A4E", dark: "#4A3422", metal: "#A3A9AD", pipe: "#C9CED2", red: "#B8382C"};
+const COOP = {litter: "#B8935A", straw: "#DDBF73", bale: "#D9BC6A", wood: "#A47A4E", ply: "#C29C68", dark: "#4A3422", metal: "#A3A9AD",
+  galv: "#BCC2C5", pipe: "#D4D8DB", red: "#B8382C", feed: "#C49A4C", water: "#8FA9B5", egg: "#F1E8D6", eggBrown: "#C79166",
+  hose: "#2E2F30", wire: "#7D8388", dung: "#6A5B44", chalk: "#DCD6C8"};
 
 /** The floor: litter over the whole room. c: {floor(color)} from the core. */
 function furnish(c) { c.floor(COOP.litter); }
 
+/** A wire or chain from y up to the ceiling (c.H), at (x, z) of the piece. */
+const hanger = (c, x, z, y) => { c.paint(COOP.wire); c.rod([x, y, z], [x, c.H, z], 0.004, 4); };
+
 /**
  * The pieces a hen house can have (see layout.mjs for what a catalog entry is). build(c, it) draws
- * in the piece's own frame: c.box(x0, x1, z0, z1, y0, y1) and c.cyl(x, z, y, r, h, seg) with y up
- * from the floor, c.paint(color), and c.H, the wall height (hanging things go up to it).
+ * in the piece's own frame with the kit in props.mjs; y is up from the floor, -z is the wall side
+ * of a wall piece, c.H the wall height (hanging things go up to it).
  */
 const nestDepth = 0.6, perchReach = tiers => 0.25 + 0.3 * (tiers - 1) + 0.05;
 const CATALOG = {
@@ -96,18 +102,47 @@ const CATALOG = {
     defaults: {count: 6, tiers: 1},
     size: it => [it.count * 0.35, nestDepth], height: it => 0.5 + it.tiers * 0.42,
     build(c, it) {
-      const w = it.count * 0.35, xA = -w / 2, xB = w / 2, zb = -nestDepth / 2;
+      const w = it.count * 0.35, xA = -w / 2, xB = w / 2, zb = -nestDepth / 2, zf = zb + 0.42;
       for (let k = 0; k < it.tiers; k++) {
-        const yb = 0.5 + k * 0.42;
+        const yb = 0.5 + k * 0.42, top = k === it.tiers - 1;
+        c.paint(COOP.dark); c.box(xA, xB, zb, zb + 0.012, yb, yb + 0.37);                     // back, dark in the boxes
+        c.paint(COOP.ply); c.box(xA, xB, zb, zf, yb, yb + 0.02);                               // floor
+        for (let i = 0; i < it.count; i++) {
+          const x0 = xA + i * 0.35;
+          c.paint(tone(COOP.wood, i + k)); c.box(x0 + 0.01, x0 + 0.34, zf - 0.02, zf, yb, yb + 0.11);   // front lip, board by board
+          c.paint(tone(COOP.straw, i * 2 + k)); c.box(x0 + 0.02, x0 + 0.33, zb + 0.015, zf - 0.02, yb + 0.02, yb + 0.06);
+          c.paint(shade(COOP.straw, 0.3));
+          c.board([x0 + 0.08, yb + 0.06, zb + 0.08], [x0 + 0.2, yb + 0.075, zb + 0.2], 0.03, 0.01);
+          c.board([x0 + 0.27, yb + 0.06, zb + 0.1], [x0 + 0.17, yb + 0.07, zb + 0.28], 0.03, 0.01);
+          // an egg or two
+          if ((i + k) % 2 === 0) { c.paint((i + k) % 4 ? COOP.eggBrown : COOP.egg); c.cyl(x0 + 0.15 + (i % 3) * 0.03, zb + 0.2, yb + 0.06, 0.022, 0.045, 8); }
+          // the nest curtain: red strips over the top of the opening, so it's dark inside
+          c.paint(COOP.red);
+          for (let s = 0; s < 4; s++) c.box(x0 + 0.03 + s * 0.075, x0 + 0.1 + s * 0.075, zf - 0.006, zf - 0.002, yb + 0.21, yb + 0.35);
+        }
         c.paint(COOP.wood);
-        c.box(xA, xB, zb, zb + 0.4, yb, yb + 0.02);               // floor board
-        c.box(xA, xB, zb, zb + 0.42, yb + 0.35, yb + 0.37);       // top board
-        c.box(xA, xB, zb + 0.4, zb + 0.42, yb, yb + 0.1);         // front lip
-        for (let i = 0; i <= it.count; i++) { const x = xA + i * 0.35; c.box(Math.max(xA, x - 0.01), Math.min(xB, x + 0.01), zb, zb + 0.4, yb, yb + 0.35); }
-        c.box(xA, xB, zb + 0.55, zb + 0.6, yb - 0.12, yb - 0.07); // landing bar
-        if (k === 0) for (const x of [xA, xB - 0.05]) c.box(x, x + 0.05, zb + 0.55, zb + 0.6, 0, yb - 0.07);
-        c.paint(COOP.dark); c.box(xA, xB, zb, zb + 0.01, yb + 0.02, yb + 0.35);
-        c.paint(COOP.straw); c.box(xA + 0.01, xB - 0.01, zb + 0.02, zb + 0.38, yb + 0.02, yb + 0.06);
+        for (let i = 0; i <= it.count; i++) {                                                    // dividers and end walls
+          const x = xA + i * 0.35, t = i === 0 || i === it.count ? 0.018 : 0.01;
+          c.box(Math.max(xA, x - t), Math.min(xB, x + t), zb, zf, yb, yb + 0.37);
+        }
+        c.paint(COOP.ply); c.box(xA, xB, zb, zf, yb + 0.35, yb + 0.37);                         // ceiling of the row
+        c.paint(tone(COOP.wood, 1)); c.box(xA, xB, zf - 0.02, zf, yb + 0.33, yb + 0.37);        // header board
+        if (top) {
+          // a sloping lid, so hens can't roost on top
+          c.paint(tone(COOP.wood, 2));
+          c.board([0, yb + 0.415, zb + 0.015], [0, yb + 0.375, zf], w - 0.004, 0.015);
+        }
+        // landing bar on brackets, in front of the row
+        c.paint(COOP.wood);
+        c.rod([xA + 0.02, yb - 0.09, zb + 0.56], [xB - 0.02, yb - 0.09, zb + 0.56], 0.02, 6);
+        for (const x of [xA + 0.04, xB - 0.05, ...(it.count > 5 ? [0] : [])])
+          c.board([x, yb - 0.02, zf - 0.01], [x, yb - 0.09, zb + 0.56], 0.02, 0.03);
+      }
+      // legs and a brace under the bottom row
+      c.paint(tone(COOP.wood, 1));
+      for (const x of [xA + 0.005, xB - 0.045]) {
+        c.box(x, x + 0.04, zf - 0.05, zf - 0.01, 0, 0.5);
+        c.board([x + 0.02, 0.04, zf - 0.03], [x + 0.02, 0.46, zb + 0.03], 0.03, 0.03);
       }
     }},
   perch: {name: "Perch ladder", mount: "wall", collision: true,
@@ -115,49 +150,109 @@ const CATALOG = {
     defaults: {length: 2, tiers: 3},
     size: it => [it.length, perchReach(it.tiers)], height: it => 0.45 + 0.3 * (it.tiers - 1),
     build(c, it) {
-      const L = it.length, d = perchReach(it.tiers), n = Math.floor(L / 1.5);
-      const posts = [-L / 2, ...Array.from({length: n}, (_, i) => -L / 2 + (i + 1) * L / (n + 1)), L / 2 - 0.05];
-      c.paint(COOP.wood);
+      const L = it.length, d = perchReach(it.tiers), n = Math.floor(L / 1.5), top = 0.45 + 0.3 * (it.tiers - 1);
+      const xs = [-L / 2 + 0.03, ...Array.from({length: n}, (_, i) => -L / 2 + (i + 1) * L / (n + 1)), L / 2 - 0.03];
+      // droppings under the ladder: a dark, trodden patch with white flecks
+      c.paint(COOP.dung); c.box(-L / 2 + 0.02, L / 2 - 0.02, -d / 2 + 0.03, d / 2 - 0.02, 0, 0.008);
+      c.paint(COOP.chalk);
+      for (let x = -L / 2 + 0.15, k = 0; x < L / 2 - 0.1; x += 0.23, k++) {
+        const z = -d / 2 + 0.1 + ((k * 7) % 5) / 5 * (d - 0.2);
+        c.box(x - 0.015, x + 0.015, z - 0.012, z + 0.012, 0.008, 0.012);
+      }
+      // stringers from the floor in front up to the wall, a cleat on the wall
+      c.paint(tone(COOP.wood, 1));
+      for (const x of xs) c.board([x, 0.05, d / 2 - 0.045], [x, top - 0.02, -d / 2 + 0.05], 0.035, 0.07);
+      c.box(-L / 2, L / 2, -d / 2, -d / 2 + 0.025, top - 0.08, top + 0.0);
+      // round perches, worn lighter on top
       for (let k = 0; k < it.tiers; k++) {
-        const y = 0.45 + 0.3 * k, z = -d / 2 + 0.25 + 0.3 * (it.tiers - 1 - k);
-        c.box(-L / 2, L / 2, z - 0.025, z + 0.025, y - 0.05, y);
-        for (const x of posts) c.box(x, x + 0.05, z - 0.025, z + 0.025, 0, y - 0.05);
+        const y = 0.45 + 0.3 * k - 0.025, z = -d / 2 + 0.25 + 0.3 * (it.tiers - 1 - k);
+        c.paint(tone(COOP.ply, k));
+        c.rod([-L / 2, y, z], [L / 2, y, z], 0.022, 8);
       }
     }},
   feeder: {name: "Tube feeder", mount: "floor", params: [], defaults: {},
     size: () => [0.4, 0.4], height: () => 0.7,
     build(c) {
-      c.paint(COOP.metal); c.cyl(0, 0, 0.12, 0.2, 0.07); c.cyl(0, 0, 0.19, 0.1, 0.45);
-      c.paint(COOP.red); c.cyl(0, 0, 0.64, 0.12, 0.04);
-      c.paint(COOP.metal); c.cyl(0, 0, 0.68, 0.005, c.H - 0.68, 4);
+      c.paint(COOP.galv);
+      c.cone(0, 0, 0.1, 0.12, 0.19, 0.06, 20);                 // the flared pan
+      c.cyl(0, 0, 0.16, 0.195, 0.012, 20);                    // its rolled rim
+      c.paint(COOP.feed); c.cone(0, 0, 0.172, 0.17, 0.09, 0.02, 16);
+      c.paint(shade(COOP.galv, -0.4)); c.cone(0, 0, 0.17, 0.11, 0.07, 0.06, 16);   // spreader cone
+      for (let k = 0; k < 8; k++) {                            // the grill over the pan
+        const a = k / 8 * Math.PI * 2;
+        c.rod([0.07 * Math.cos(a), 0.2, 0.07 * Math.sin(a)], [0.18 * Math.cos(a), 0.18, 0.18 * Math.sin(a)], 0.004, 4);
+      }
+      c.paint(COOP.red); c.cyl(0, 0, 0.22, 0.085, 0.38, 16);  // the tube
+      c.paint(shade(COOP.red, -0.5)); c.cyl(0, 0, 0.4, 0.088, 0.012, 16);
+      c.paint(COOP.red); c.cone(0, 0, 0.6, 0.095, 0.03, 0.07, 16);   // lid
+      c.paint(COOP.wire); c.rod([-0.04, 0.6, 0], [0, 0.69, 0], 0.004, 4); c.rod([0.04, 0.6, 0], [0, 0.69, 0], 0.004, 4);
+      hanger(c, 0, 0, 0.69);
     }},
   drinker: {name: "Bell drinker", mount: "floor", params: [], defaults: {},
     size: () => [0.36, 0.36], height: () => 0.5,
     build(c) {
-      c.paint(COOP.red); c.cyl(0, 0, 0.15, 0.18, 0.08); c.cyl(0, 0, 0.23, 0.06, 0.25);
-      c.paint(COOP.metal); c.cyl(0, 0, 0.48, 0.005, c.H - 0.48, 4);
+      c.paint(COOP.red);
+      c.cone(0, 0, 0.13, 0.13, 0.175, 0.06, 20);               // the drinking ring
+      c.paint(COOP.water); c.cyl(0, 0, 0.19, 0.16, 0.004, 20);
+      c.paint(shade(COOP.red, 0.25)); c.cone(0, 0, 0.19, 0.125, 0.04, 0.22, 20);   // the bell
+      c.paint(shade(COOP.red, -0.35));
+      c.cyl(0, 0, 0.19, 0.13, 0.012, 20);                      // the lip between bell and water
+      for (let k = 0; k < 6; k++) {                            // ribs down the bell
+        const a = k / 6 * Math.PI * 2, [ca, sa] = [Math.cos(a), Math.sin(a)];
+        c.board([0.045 * ca, 0.4, 0.045 * sa], [0.128 * ca, 0.2, 0.128 * sa], 0.012, 0.012);
+      }
+      c.paint(COOP.galv); c.cyl(0, 0, 0.41, 0.035, 0.05, 12);  // valve and ballast cap
+      c.paint(COOP.wire); c.pipe([[0, 0.46, 0], [0, 0.49, 0.015], [0, 0.5, 0], [-0.01, 0.53, -0.01]], 0.004, 4);   // the hook
+      c.paint(COOP.hose);
+      c.pipe([[0.02, 0.45, 0], [0.04, 0.6, 0.03], [0.08, 0.9, 0.08], [0.1, c.H, 0.1]], 0.008, 6);
+      hanger(c, -0.01, 0, 0.46);
     }},
   trough: {name: "Feeder trough", mount: "floor",
     params: [{k: "length", label: "Length", min: 1, max: 30, step: 0.1, unit: " m"}], defaults: {length: 4},
     size: it => [it.length, 0.2], height: () => 0.4,
     build(c, it) {
-      const L = it.length;
-      c.paint(COOP.metal); c.box(-L / 2, L / 2, -0.08, 0.08, 0.25, 0.37);
-      for (let x = -L / 2 + 0.2; x < L / 2; x += 3) c.box(x, x + 0.01, -0.005, 0.005, 0.37, c.H);
-      c.paint(COOP.straw); c.box(-L / 2, L / 2, -0.06, 0.06, 0.37, 0.375);
+      const L = it.length, xA = -L / 2 + 0.01, xB = L / 2 - 0.01;
+      c.paint(COOP.galv);
+      c.box(xA, xB, -0.035, 0.035, 0.25, 0.265);                                   // a V of galvanised steel, in steps
+      for (const s of [-1, 1]) {
+        c.box(xA, xB, s > 0 ? 0.035 : -0.055, s > 0 ? 0.055 : -0.035, 0.255, 0.31);
+        c.box(xA, xB, s > 0 ? 0.055 : -0.075, s > 0 ? 0.075 : -0.055, 0.3, 0.36);
+        c.rod([xA, 0.365, s * 0.08], [xB, 0.365, s * 0.08], 0.009, 6);             // rolled lip
+      }
+      c.paint(COOP.feed); c.box(xA + 0.01, xB - 0.01, -0.06, 0.06, 0.3, 0.335);
+      c.paint(shade(COOP.feed, -0.4));
+      for (let x = xA + 0.2; x < xB - 0.1; x += 0.45) c.box(x - 0.05, x + 0.05, -0.03, 0.04, 0.335, 0.345);
+      c.paint(shade(COOP.galv, -0.4));
+      for (const x of [xA, xB - 0.012]) c.box(x, x + 0.012, -0.085, 0.085, 0.25, 0.37);   // end caps
+      // the anti-roost spinner on its wire, so hens can't sit on the trough
+      c.paint(COOP.red); c.rod([xA + 0.01, 0.385, 0], [xB - 0.01, 0.385, 0], 0.011, 6);
+      c.paint(COOP.wire);
+      for (const x of [xA + 0.006, xB - 0.006]) c.box(x - 0.004, x + 0.004, -0.004, 0.004, 0.37, 0.385);
+      for (let x = xA + 0.25; x < xB; x += 1.5) { c.box(x - 0.01, x + 0.01, -0.085, 0.085, 0.36, 0.37); hanger(c, x, 0, 0.37); }
     }},
   nipples: {name: "Nipple drinker line", mount: "floor",
     params: [{k: "length", label: "Length", min: 1, max: 30, step: 0.1, unit: " m"}], defaults: {length: 4},
     size: it => [it.length, 0.1], height: () => 0.55,
     build(c, it) {
-      const L = it.length;
-      c.paint(COOP.pipe); c.box(-L / 2, L / 2, -0.02, 0.02, 0.5, 0.54);
-      for (let x = -L / 2 + 0.2; x < L / 2; x += 3) c.box(x, x + 0.01, -0.005, 0.005, 0.54, c.H);
-      c.paint(COOP.red); for (let x = -L / 2 + 0.3; x < L / 2 - 0.1; x += 0.6) c.box(x - 0.03, x + 0.03, -0.03, 0.03, 0.44, 0.5);
+      const L = it.length, xA = -L / 2 + 0.01, xB = L / 2 - 0.01;
+      c.paint(COOP.pipe); c.box(xA + 0.15, xB, -0.012, 0.012, 0.5, 0.524);          // the square water pipe
+      c.paint(COOP.galv); c.box(xA + 0.15, xB, -0.018, 0.018, 0.524, 0.536);        // the profile it hangs from
+      c.paint(COOP.wire); c.rod([xA + 0.17, 0.545, 0], [xB, 0.545, 0], 0.003, 4);   // anti-roost wire
+      for (let x = xA + 0.28; x < xB - 0.05; x += 0.25) {
+        c.paint(COOP.galv); c.cyl(x, 0, 0.475, 0.006, 0.025, 6);                    // nipple
+        c.paint(COOP.red); c.cone(x + 0.025, 0, 0.465, 0.008, 0.02, 0.018, 8);      // drip cup
+        c.box(x + 0.006, x + 0.02, -0.003, 0.003, 0.48, 0.5);
+      }
+      // the pressure regulator at the start, fed by a hose from above
+      c.paint(COOP.pipe); c.box(xA, xA + 0.14, -0.045, 0.045, 0.44, 0.54);
+      c.paint(COOP.red); c.box(xA + 0.03, xA + 0.11, -0.047, 0.047, 0.5, 0.53);
+      c.paint(COOP.water); c.cyl(xA + 0.07, 0, 0.54, 0.018, 0.01, 8);              // sight tube cap
+      c.paint(COOP.hose); c.pipe([[xA + 0.04, 0.54, 0.02], [xA + 0.05, 0.8, 0.03], [xA + 0.06, c.H, 0.03]], 0.008, 6);
+      for (let x = xA + 0.6; x < xB; x += 1.5) hanger(c, x, 0, 0.536);
     }},
   bale: {name: "Straw bale", mount: "floor", collision: true, params: [], defaults: {},
     size: () => [0.9, 0.5], height: () => 0.4,
-    build(c) { c.paint(COOP.bale); c.box(-0.45, 0.45, -0.25, 0.25, 0, 0.4); }},
+    build(c) { strawBale(c, 0, 0, 0, COOP.bale); }},
 };
 
 /** What the pieces add up to: nest boxes, metres of perch, feeders and drinkers. */

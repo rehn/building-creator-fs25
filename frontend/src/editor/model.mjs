@@ -846,6 +846,25 @@ function buildVentilators(Lr, ridgeY, tanP, M, half, th, F) {
     }
   }
 }
+/** A round rod (pipe, perch, wire) in "fittings" from p0 to p1, radius r, seg sides. */
+function rod(p0, p1, r, seg = 8) {
+  const d = norm(sub(p1, p0));
+  let side = cross(d, UP);
+  side = Math.hypot(...side) < 1e-6 ? [1, 0, 0] : norm(side);
+  const up = norm(cross(side, d));
+  const sec = Array.from({length: seg}, (_, k) => { const a = (k + 0.5) / seg * 2 * Math.PI; return [r * Math.cos(a), r * Math.sin(a)]; });
+  prism("fittings", sec, ([x, y], k) => add(k ? p1 : p0, add(side.map(v => v * x), up.map(v => v * y))));
+}
+/** Upright frustum in "fittings": radius r0 at its base c, r1 at the top, h high, closed at both ends. */
+function cone(c, r0, r1, h, seg = 16) {
+  const ring = (y, r) => Array.from({length: seg}, (_, k) => { const a = k / seg * 2 * Math.PI; return [c[0] + r * Math.cos(a), y, c[2] + r * Math.sin(a)]; });
+  const lo = ring(c[1], r0), hi = ring(c[1] + h, r1), slope = (r0 - r1) / h;
+  for (let k = 0; k < seg; k++) {
+    const j = (k + 1) % seg, mx = (lo[k][0] + lo[j][0]) / 2 - c[0], mz = (lo[k][2] + lo[j][2]) / 2 - c[2], l = Math.hypot(mx, mz) || 1;
+    poly("fittings", [lo[k], lo[j], hi[j], hi[k]], [mx / l, slope, mz / l]);
+  }
+  poly("fittings", hi, UP); poly("fittings", lo, neg(UP));
+}
 /** A beam in "fittings" from p0 to p1 (centre line), w wide and h deep, its h side as upright as it can be. */
 function beam(p0, p1, w, h) {
   const d = norm(sub(p1, p0));
@@ -933,7 +952,14 @@ function buildInside(kind, F, H) {
     if (def.asset) { refs.push({asset: def.asset, item: it, ...placement(def.asset.meta, it, F)}); continue; }
     const box = (x0, x1, z0, z1, y0, y1) => { const a = toWorld(it, x0, z0), b = toWorld(it, x1, z1); abox("fittings", [a[0], F + y0, a[1]], [b[0], F + y1, b[1]]); };
     const round = (x, z, y, r, h, seg) => { const q = toWorld(it, x, z); cyl([q[0], F + y, q[1]], r, h, seg); };
-    def.build({H, paint, box, cyl: round}, it);
+    // points of the piece's frame ([x, y, z], y up from the floor) in the world
+    const at = ([x, y, z]) => { const q = toWorld(it, x, z); return [q[0], F + y, q[1]]; };
+    const pieceKit = {H, paint, box, cyl: round,
+      cone: (x, z, y, r0, r1, h, seg) => { const q = toWorld(it, x, z); cone([q[0], F + y, q[1]], r0, r1, h, seg); },
+      rod: (a, b, r, seg) => rod(at(a), at(b), r, seg),
+      pipe: (pts, r, seg) => { for (let k = 0; k + 1 < pts.length; k++) rod(at(pts[k]), at(pts[k + 1]), r, seg); },
+      board: (a, b, w, h) => beam(at(a), at(b), w, h)};
+    def.build(pieceKit, it);
     if (def.collision) { const f = footprint(it, def); abox("collision", [f.x0, F, f.z0], [f.x1, F + def.height(it), f.z1]); }
   }
 }

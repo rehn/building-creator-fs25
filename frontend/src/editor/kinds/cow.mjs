@@ -6,6 +6,7 @@
 import { tg, shape } from "../i3d.mjs";
 import { roomOf, furnisher } from "../layout.mjs";
 import { OPPOSITE, wallLength, yardFrame } from "./pasture.mjs";
+import { tone, shade, arc, strawBale, strawLitter } from "./props.mjs";
 
 /** About one cow per 6 m² of floor; at most 100 (the base game's biggest pasture barn takes 99). */
 export const M2_PER_COW = 6;
@@ -82,72 +83,162 @@ function outside(c) {
 }
 
 /* ---------- Inside ---------- */
-const COLORS = {concrete: "#9A968C", floor: "#8A857B", rubber: "#2E2E2C", steel: "#A9AFB3", wood: "#A47A4E", straw: "#DDBF73", hay: "#B7B064", bale: "#D9BC6A"};
+const COLORS = {concrete: "#9A968C", floor: "#8A857B", rubber: "#2E2E2C", steel: "#A9AFB3", wood: "#A47A4E", straw: "#DDBF73", hay: "#B7B064", bale: "#D9BC6A",
+  galv: "#B3B9BC", galvDark: "#8D9498", kerb: "#86827A", table: "#A9A59B", sawdust: "#B09B74", brisket: "#44523F",
+  silage: "#857C45", plank: "#9C7148", iron: "#3A3A3A", bowl: "#56656D", water: "#7FA0AE", bucketRed: "#B23A2E", bucketWhite: "#E8E6E0"};
 /** The floor: concrete over the whole room. */
 function furnish(c) { c.floor(COLORS.floor); }
 
-/** Thin steel tube along x, y or z between two points of the piece's frame (as a slim box). */
-const bar = (c, [x0, y0, z0], [x1, y1, z1], r = 0.025) =>
-  c.box(Math.min(x0, x1) - r, Math.max(x0, x1) + r, Math.min(z0, z1) - r, Math.max(z0, z1) + r, Math.min(y0, y1), Math.max(y0, y1) + (y0 === y1 ? 2 * r : 0));
-const stallDepth = 2.3;
+/**
+ * The pieces a cow barn can have (see layout.mjs for what a catalog entry is). build(c, it) draws
+ * in the piece's own frame with the kit in props.mjs; y is up from the floor, -z is the wall side
+ * of a wall piece.
+ */
+const stallDepth = 2.3, PIPE = 0.03;
 const CATALOG = {
   stalls: {name: "Cubicles (liggbås)", mount: "wall", collision: true,
     params: [{k: "count", label: "Cubicles", min: 1, max: 24, step: 1}], defaults: {count: 6},
     size: it => [it.count * 1.2, stallDepth], height: () => 1.25,
     build(c, it) {
-      const w = it.count * 1.2, z0 = -stallDepth / 2;
-      c.paint(COLORS.rubber); c.box(-w / 2, w / 2, z0, z0 + 2.1, 0, 0.12);                 // the raised, matted bed
-      c.paint(COLORS.steel);
-      for (let i = 0; i <= it.count; i++) {
-        const x = Math.max(-w / 2 + 0.03, Math.min(w / 2 - 0.03, -w / 2 + i * 1.2));
-        bar(c, [x, 0.12, z0 + 0.3], [x, 1.15, z0 + 0.3]);                                  // post at the back
-        bar(c, [x, 1.1, z0 + 0.3], [x, 1.1, z0 + 1.7]);                                    // top rail of the loop
-        bar(c, [x, 0.45, z0 + 0.5], [x, 0.45, z0 + 1.6]);                                  // lower rail
-        bar(c, [x, 0.12, z0 + 1.7], [x, 1.1, z0 + 1.7]);                                   // front leg
+      const w = it.count * 1.2, z0 = -stallDepth / 2, zk = z0 + 2.1, bed = 0.18;
+      // the raised bed, with a steel-edged kerb at the back, towards the dung alley
+      c.paint(COLORS.kerb); c.box(-w / 2, w / 2, z0, zk, 0, bed);
+      c.paint(COLORS.galvDark); c.box(-w / 2, w / 2, zk - 0.02, zk, 0.01, bed + 0.01);
+      for (let i = 0; i < it.count; i++) {
+        const x0 = -w / 2 + i * 1.2;
+        // a rubber mat per cubicle, with grooves, and sawdust where the cow lies
+        c.paint(tone(COLORS.rubber, i)); c.box(x0 + 0.02, x0 + 1.18, z0 + 0.5, zk - 0.03, bed, bed + 0.02);
+        c.paint(shade(COLORS.rubber, 0.6));
+        for (let g = 0; g < 4; g++) { const z = z0 + 0.75 + g * 0.3; c.box(x0 + 0.05, x0 + 1.15, z, z + 0.012, bed + 0.02, bed + 0.024); }
+        c.paint(tone(COLORS.sawdust, i));
+        c.box(x0 + 0.2 + (i % 3) * 0.05, x0 + 0.85, zk - 0.75, zk - 0.2 - (i % 2) * 0.15, bed + 0.02, bed + 0.03);
+        c.box(x0 + 0.5, x0 + 1.0 - (i % 2) * 0.2, z0 + 0.85, z0 + 1.25, bed + 0.02, bed + 0.027);
       }
-      bar(c, [-w / 2, 1.15, z0 + 1.2], [w / 2, 1.15, z0 + 1.2]);                           // neck rail along the row
+      // the brisket board: where the cow's chest rests, so she lies far enough back
+      c.paint(COLORS.brisket); c.box(-w / 2 + 0.01, w / 2 - 0.01, z0 + 0.4, z0 + 0.48, bed, bed + 0.11);
+      c.paint(COLORS.galv);
+      // head rail along the wall
+      c.rod([-w / 2 + PIPE, 0.95, z0 + 0.12], [w / 2 - PIPE, 0.95, z0 + 0.12], PIPE, 8);
+      // a bent loop between each pair of cubicles (and at both ends of the row)
+      for (let i = 0; i <= it.count; i++) {
+        const x = Math.max(-w / 2 + PIPE + 0.005, Math.min(w / 2 - PIPE - 0.005, -w / 2 + i * 1.2)), at = (z, y) => [x, y, z];
+        const zp = z0 + 0.25, zt = z0 + 1.35;
+        const loop = [at(zp, bed), at(zp, 0.95), ...arc(at, zp + 0.2, 0.95, 0.2, Math.PI, Math.PI / 2, 3).slice(1),
+          at(zt, 1.15), ...arc(at, zt, 0.85, 0.3, Math.PI / 2, -Math.PI / 2, 6).slice(1), at(z0 + 0.6, 0.55), at(zp, 0.55)];
+        c.pipe(loop, PIPE, 8);
+        c.paint(COLORS.galvDark);
+        c.box(Math.max(-w / 2, x - 0.06), Math.min(w / 2, x + 0.06), zp - 0.06, zp + 0.06, bed, bed + 0.012);   // foot plate
+        c.box(Math.max(-w / 2, x - 0.035), Math.min(w / 2, x + 0.035), z0 + 1.02, z0 + 1.08, 1.15, 1.235);     // neck rail clamp
+        c.paint(COLORS.galv);
+      }
+      // the neck rail across the loops
+      c.rod([-w / 2 + 0.03, 1.205, z0 + 1.05], [w / 2 - 0.03, 1.205, z0 + 1.05], 0.025, 8);
     }},
   feedfence: {name: "Feeding fence (foderhäck)", mount: "floor", collision: true,
     params: [{k: "length", label: "Length", min: 2, max: 30, step: 0.1, unit: " m"}], defaults: {length: 6},
     size: it => [it.length, 0.5], height: () => 1.3,
     build(c, it) {
-      const L = it.length;
-      c.paint(COLORS.concrete); c.box(-L / 2, L / 2, -0.25, 0.25, 0, 0.25);                // the feed curb
-      c.paint(COLORS.steel);
-      for (let x = -L / 2 + 0.05; x < L / 2; x += 0.7) bar(c, [x, 0.25, 0], [x, 1.25, 0]);   // head bars
-      bar(c, [-L / 2, 1.25, 0], [L / 2, 1.25, 0]); bar(c, [-L / 2, 0.55, 0], [L / 2, 0.55, 0]);
+      const L = it.length, xA = -L / 2, xB = L / 2;
+      // the curb the fence stands on, the smooth feed table in front (+z) with silage pushed up to it
+      c.paint(COLORS.concrete); c.box(xA, xB, -0.2, 0.06, 0, 0.18);
+      c.paint(COLORS.table); c.box(xA, xB, 0.06, 0.25, 0, 0.03);
+      // one long heap, then overlapping lumps on it (not a row of blocks)
+      c.paint(COLORS.silage); c.box(xA + 0.04, xB - 0.04, 0.075, 0.245, 0.03, 0.1);
+      for (let x = xA + 0.06, k = 0; x < xB - 0.2; x += 0.23, k++) {
+        const x1 = Math.min(xB - 0.05, x + 0.42), h = [0.05, 0.03, 0.06, 0.035, 0.045][k % 5], z0 = 0.09 + (k % 3) * 0.02;
+        c.paint(shade(COLORS.silage, [0, -0.2, 0.15][k % 3])); c.box(x, x1, z0, 0.24 - (k % 2) * 0.02, 0.1, 0.1 + h);
+      }
+      c.paint(COLORS.hay);
+      for (let x = xA + 0.3, k = 0; x < xB - 0.3; x += 0.55, k++) c.board([x, 0.14, 0.12], [x + 0.18, 0.12 + (k % 3) * 0.02, 0.2], 0.012, 0.006);
+      // posts, rails and the self-locking yokes
+      c.paint(COLORS.galvDark);
+      const nPost = Math.max(1, Math.ceil(L / 2.4));
+      for (let k = 0; k <= nPost; k++) { const x = xA + 0.045 + k * (L - 0.09) / nPost; c.box(x - 0.04, x + 0.04, -0.04, 0.04, 0.18, 1.25); }
+      c.paint(COLORS.galv);
+      c.rod([xA + 0.01, 1.22, 0], [xB - 0.01, 1.22, 0], PIPE, 8);
+      c.rod([xA + 0.01, 0.3, 0], [xB - 0.01, 0.3, 0], PIPE, 8);
+      for (let x = xA + 0.15; x + 0.5 < xB - 0.08; x += 0.7) {
+        c.rod([x, 0.3, 0], [x, 1.22, 0], 0.021, 6);
+        c.pipe([[x + 0.22, 0.3, 0], [x + 0.22, 0.82, 0], [x + 0.42, 1.22, 0]], 0.021, 6);
+        c.box(x + 0.19, x + 0.25, -0.03, 0.03, 0.3, 0.36);             // the yoke's pivot
+      }
+      c.paint(COLORS.galvDark);
+      c.box(xA + 0.05, xB - 0.05, -0.05, -0.035, 1.12, 1.17);          // the locking bar on the cows' side
+      c.rod([xA + 0.08, 1.14, -0.05], [xA + 0.08, 0.98, -0.16], 0.012, 6);   // and its lever
     }},
   calfpen: {name: "Calf pen (kalvbox)", mount: "floor", collision: true, params: [], defaults: {},
     size: () => [2.4, 2], height: () => 1.1,
     build(c) {
-      c.paint(COLORS.straw); c.box(-1.2, 1.2, -1, 1, 0, 0.04);
-      c.paint(COLORS.wood);
-      for (const y of [0.3, 0.6, 0.9]) {
-        c.box(-1.2, 1.2, -1, -0.95, y, y + 0.12); c.box(-1.2, 1.2, 0.95, 1, y, y + 0.12);
-        c.box(-1.2, -1.15, -1, 1, y, y + 0.12); c.box(1.15, 1.2, -1, 1, y, y + 0.12);
-      }
-      for (const x of [-1.2, 1.12]) for (const z of [-1, 0.92]) c.box(x, x + 0.08, z, z + 0.08, 0, 1.1);
+      strawLitter(c, -1.15, 1.15, -0.95, 0.95, 0, COLORS.straw);
+      // posts at the corners, in the middle of the long sides and either side of the gate
+      const posts = [[-1.155, -0.955], [1.155, -0.955], [-1.155, 0.955], [1.155, 0.955], [0, -0.955], [-0.4, 0.955], [0.55, 0.955]];
+      posts.forEach(([x, z], k) => { c.paint(tone(COLORS.plank, k + 1)); c.box(x - 0.045, x + 0.045, z - 0.045, z + 0.045, 0, 1.1); });
+      // planks with gaps, each a little different
+      const ys = [0.14, 0.38, 0.62, 0.86], plank = (k, x0, x1, z0, z1, y) => { c.paint(tone(COLORS.plank, k)); c.box(x0, x1, z0, z1, y, y + 0.13); };
+      ys.forEach((y, j) => {
+        plank(j, -1.2, 1.2, -1, -0.97, y);                                             // back
+        plank(j + 1, -1.2, -1.17, -0.91, 0.91, y); plank(j + 2, 1.17, 1.2, -0.91, 0.91, y);   // ends
+        plank(j + 1, -1.2, -0.445, 0.97, 1, y); plank(j, 0.595, 1.2, 0.97, 1, y);      // front, either side of the gate
+        plank(j + 2, -0.34, 0.49, 0.94, 0.97, y);                                      // the gate
+      });
+      // the gate's brace, hinges and latch
+      c.paint(tone(COLORS.plank, 2)); c.board([-0.3, 0.2, 0.93], [0.45, 0.95, 0.93], 0.012, 0.1);
+      c.paint(COLORS.iron);
+      for (const y of [0.18, 0.9]) c.box(-0.42, -0.2, 0.935, 0.972, y, y + 0.04);
+      c.box(0.42, 0.52, 0.93, 0.972, 0.66, 0.7); c.rod([0.47, 0.68, 0.95], [0.6, 0.68, 0.95], 0.008, 6);
+      // two buckets hanging inside the front
+      [[-0.8, COLORS.bucketRed], [0.85, COLORS.bucketWhite]].forEach(([x, col]) => {
+        c.paint(COLORS.iron); c.box(x - 0.05, x + 0.05, 0.9, 0.94, 0.72, 0.8);
+        c.paint(col); c.cone(x, 0.78, 0.55, 0.095, 0.125, 0.24, 16); c.cyl(x, 0.78, 0.79, 0.13, 0.012, 16);
+        c.paint(COLORS.iron); c.pipe(arc((u, v) => [x + u, v, 0.78], 0, 0.8, 0.12, 0, Math.PI, 5), 0.005, 4);
+      });
     }},
   hayrack: {name: "Hay rack (höhäck)", mount: "wall", collision: true, params: [], defaults: {},
     size: () => [1.6, 0.6], height: () => 1.7,
     build(c) {
-      c.paint(COLORS.wood);
-      c.box(-0.8, 0.8, -0.3, 0.15, 0.6, 0.72);                                             // the trough under it
-      for (let x = -0.75; x <= 0.75; x += 0.15) c.box(x - 0.02, x + 0.02, 0.1, 0.15, 0.72, 1.6);
-      c.box(-0.8, 0.8, 0.08, 0.17, 1.58, 1.68);
-      for (const x of [-0.8, 0.74]) c.box(x, x + 0.06, -0.3, 0.17, 0, 1.68);
-      c.paint(COLORS.hay); c.box(-0.75, 0.75, -0.28, 0.09, 0.72, 1.35);
+      const xA = -0.8, xB = 0.8, zw = -0.29;
+      // the trough: bottom, a front board and end boards, on two legs
+      c.paint(tone(COLORS.plank, 0)); c.box(xA + 0.04, xB - 0.04, zw, 0.27, 0.55, 0.6);
+      c.paint(tone(COLORS.plank, 1)); c.box(xA + 0.04, xB - 0.04, 0.23, 0.27, 0.6, 0.82);
+      c.paint(tone(COLORS.plank, 2)); c.box(xA + 0.04, xB - 0.04, 0.23, 0.27, 0.82, 0.84);
+      for (const x of [xA, xB - 0.04]) { c.paint(tone(COLORS.plank, 1)); c.box(x, x + 0.04, zw, 0.27, 0.0, 0.84); }
+      // hay in the trough and packed behind the slats, higher at the wall
+      for (let k = 0; k < 5; k++) {
+        const y = 0.84 + k * 0.15, zf = -0.27 + (y + 0.075 - 0.82) / 0.85 * 0.42 - 0.05;
+        c.paint(tone(COLORS.hay, k)); c.box(xA + 0.06, xB - 0.06, zw + 0.01, Math.max(zw + 0.06, zf), y - 0.02, y + 0.13);
+      }
+      c.paint(shade(COLORS.hay, 0.3)); c.box(xA + 0.08, xB - 0.08, -0.25, 0.2, 0.6, 0.68);
+      for (let x = xA + 0.15, k = 0; x < xB - 0.1; x += 0.22, k++) c.board([x, 0.72, 0.05 + (k % 2) * 0.08], [x + 0.06, 0.62, 0.22], 0.01, 0.006);
+      // slats leaning out from the wall, framed by side boards and rails
+      c.paint(tone(COLORS.plank, 2));
+      for (let x = xA + 0.12; x < xB - 0.08; x += 0.12) c.board([x, 0.86, -0.25], [x, 1.62, 0.17], 0.028, 0.028);
+      c.paint(tone(COLORS.plank, 0));
+      for (const x of [xA + 0.03, xB - 0.03]) c.board([x, 0.86, -0.25], [x, 1.62, 0.17], 0.05, 0.08);
+      c.box(xA, xB, 0.12, 0.2, 1.6, 1.68); c.box(xA, xB, -0.29, -0.21, 0.82, 0.9);
+      c.paint(COLORS.iron); for (const x of [xA + 0.02, xB - 0.06]) c.box(x, x + 0.04, -0.3, -0.27, 1.5, 1.7);   // wall brackets
     }},
   waterbowl: {name: "Water bowl (vattenkopp)", mount: "wall", params: [], defaults: {},
     size: () => [0.4, 0.35], height: () => 0.8,
     build(c) {
-      c.paint(COLORS.steel);
-      c.box(-0.05, 0.05, -0.175, -0.1, 0.5, 0.8);                                          // bracket on the wall
-      c.cyl(0, 0.02, 0.55, 0.15, 0.13);                                                    // the bowl
+      const zc = 0.015;
+      c.paint(COLORS.galvDark);
+      c.box(-0.06, 0.06, -0.175, -0.16, 0.42, 0.72);                                 // plate on the wall
+      c.box(-0.03, 0.03, -0.16, zc - 0.05, 0.46, 0.5);                               // the arm under the bowl
+      c.paint(COLORS.galv);
+      c.rod([-0.2, 0.765, -0.145], [0.2, 0.765, -0.145], 0.015, 8);                    // the water pipe along the wall
+      c.pipe([[0, 0.765, -0.145], [0, 0.7, -0.13], [0, 0.6, -0.1]], 0.012, 6);       // down to the valve
+      c.paint(COLORS.bowl);
+      c.cone(0, zc, 0.5, 0.06, 0.13, 0.08, 20);                                       // the cast bowl
+      for (let k = 0; k < 16; k++) {                                                  // its rim
+        const a0 = k / 16 * Math.PI * 2, a1 = (k + 1) / 16 * Math.PI * 2, r = 0.138;
+        c.board([r * Math.cos(a0), 0.6, zc + r * Math.sin(a0)], [r * Math.cos(a1), 0.6, zc + r * Math.sin(a1)], 0.014, 0.05);
+      }
+      c.paint(COLORS.water); c.cyl(0, zc, 0.58, 0.128, 0.006, 20);
+      c.paint(COLORS.iron); c.board([0, 0.6, zc - 0.09], [0, 0.635, zc - 0.02], 0.06, 0.01);   // the paddle the cow presses
     }},
   bale: {name: "Straw bale", mount: "floor", collision: true, params: [], defaults: {},
     size: () => [0.9, 0.5], height: () => 0.4,
-    build(c) { c.paint(COLORS.bale); c.box(-0.45, 0.45, -0.25, 0.25, 0, 0.4); }},
+    build(c) { strawBale(c, 0, 0, 0, COLORS.bale); }},
 };
 
 /**
