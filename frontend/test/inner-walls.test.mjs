@@ -33,7 +33,7 @@ test("inner wall: every walk-in kind can have one, with choices in lists and a s
   }
   // saved choices stay as saved and are clamped
   const [it] = cleanItems([wall({length: 99, paperA: 40, paperB: -3, door: 5})], catalogFor({kind: "house"}));
-  assert.deepEqual([it.length, it.paperA, it.paperB, it.door], [12, WALLPAPERS.length - 1, 0, 1]);
+  assert.deepEqual([it.length, it.paperA, it.paperB, it.door], [20, WALLPAPERS.length - 1, 0, 1]);
   assert.deepEqual(house([wall()]).items.map(x => x.type), ["innerwall"], "kept by a save");
 });
 

@@ -34,7 +34,7 @@ export const INNER_WALL = {
   // its ends are drawn to the room's walls when it is put near them (layout.mjs snapItem)
   snapWalls: true,
   params: [
-    {k: "length", label: "Length", min: 1, max: 12, step: 0.01, unit: " m"},
+    {k: "length", label: "Length", min: 1, max: 20, step: 0.01, unit: " m"},
     {k: "door", label: "Doorway", min: 0, max: 1, step: 1, options: ["No doorway", "With a doorway"]},
     {k: "doorAt", label: "Doorway place along the wall", min: 0, max: 1, step: 0.05},
     {k: "paperA", label: "One side", min: 0, max: WALLPAPERS.length - 1, step: 1, options},

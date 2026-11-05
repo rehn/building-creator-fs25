@@ -47,7 +47,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   read in sanitize. withPasture (pasture.mjs) derives pastureWall, fenceDepth, pastureMid for the rest of the kind
   (doorway/hatch at pastureMid, troughs on [ea, eb]). House: a sleep object makes it a farmhouse (no sleepPoint
   setting). Editor: Game objects section + plan view (ob state, fitSite, drag boxes and the pasture's 3 handles).
-  Inner walls (kinds/innerwall.mjs, "innerwall" in every walk-in catalog): a floor piece of length 1-12 m, 15 cm deep,
+  Inner walls (kinds/innerwall.mjs, "innerwall" in every walk-in catalog): a floor piece of length 1-20 m, 15 cm deep,
   with a doorway (open in the collision: def.solids, which buildInside uses instead of the footprint box when a piece
   has it) and wallpaper per side from WALLPAPERS (limewash, plain, striped, flowers, painted boards; surfaces
   paperPlain/paperStripe/paperFlower in surfaces.mjs, aged by age.mjs). Piece params can be choices (params[].options:
