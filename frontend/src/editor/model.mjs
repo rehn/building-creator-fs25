@@ -711,7 +711,8 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
   if (inner) {
     const Hi = H + inner.lift, tw = WALL_T;
     const Xi = uniq([tw, L - tw, L/2, ...ops.flatMap(o => [o.s0, o.s1])]).filter(s => s > tw - 1e-6 && s < L - tw + 1e-6);
-    const Ti = uniq([0, Hi, H + gableRise, ...ops.flatMap(o => [o.t0, o.t1])]);
+    // Whitewash, greyer and grubbier along the bottom where the animals rub and muck splashes.
+    const Ti = uniq([0, GRIME_T, Hi, H + gableRise, ...ops.flatMap(o => [o.t0, o.t1])]);
     for (let i = 0; i < Xi.length - 1; i++) for (let j = 0; j < Ti.length - 1; j++) {
       const cs = (Xi[i] + Xi[i+1]) / 2, ct = (Ti[j] + Ti[j+1]) / 2;
       if (ops.some(o => cs > o.s0 && cs < o.s1 && ct > o.t0 && ct < o.t1)) continue;
@@ -721,8 +722,15 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
         const k = gableRise / (L / 2);
         c = clipPoly(clipPoly(c, -k, 1, H), k, 1, H + 2 * gableRise);
       }
-      paint(WHITEWASH);
+      paint(ct < GRIME_T ? GRIME : WHITEWASH);
       if (c.length >= 3) poly("fittings", c.map(q => WP(w, q[0], q[1], -tw)), neg(w.n));
+    }
+    // A tarred kickboard along the bottom, except across openings that come down to it.
+    paint(KICKBOARD);
+    for (let i = 0; i < Xi.length - 1; i++) {
+      const cs = (Xi[i] + Xi[i+1]) / 2;
+      if (Xi[i+1] - Xi[i] < 0.02 || ops.some(o => cs > o.s0 && cs < o.s1 && o.t0 < KICK_T)) continue;
+      wbox("fittings", w, Xi[i], Xi[i+1], 0, KICK_T, -tw - 0.025, -tw);
     }
   }
 
@@ -790,7 +798,7 @@ function addMesh(mat, m) {
 
 /* ----- Drawing helpers for walk-in insides (kinds' furnish() gets these) ----- */
 /** Inside walls of a walk-in building are whitewashed. */
-const WHITEWASH = "#E9E4D8";
+const WHITEWASH = "#E9E4D8", GRIME = "#C2B8A3", GRIME_T = 0.9, KICKBOARD = "#3F352C", KICK_T = 0.28;
 /** The color the next "fittings" faces get. */
 const paint = hex => { fitRGB = hexRGB(hex); };
 /** Vertical cylinder with closed ends, base centre c. */
@@ -808,14 +816,18 @@ function cyl(c, r, h, seg = 12) {
  * louvred on their long sides, each with its own little gable roof. In ridge coordinates through M:
  * a along the ridge, b across it. half: half the ridge's length.
  */
-function buildVentilators(Lr, ridgeY, tanP, M, half) {
-  const n = p.ventilators, reach = Math.max(0, half - 0.8), hw = 0.35;
-  const y0 = ridgeY - tanP * hw - 0.05, y1 = ridgeY + 0.75, rise = 0.3, ro = 0.5;
+/** Where the ventilators go along the ridge (a), for n of them on a ridge reaching +-half. */
+const ventSpots = (n, half) => { const reach = Math.max(0, half - 0.8); return Array.from({length: n}, (_, k) => n === 1 ? 0 : -reach + 2 * reach * k / (n - 1)); };
+function buildVentilators(Lr, ridgeY, tanP, M, half, th, F) {
+  const hw = 0.35;
+  // The box's bottom follows the roof (a low V, 5 cm under the tiles), so it stays in the roof slab
+  // and never shows under it; a walk-in barn gets a duct inside instead (ventDuct).
+  const y0 = ridgeY - tanP * hw - 0.05, yC = ridgeY - 0.05, y1 = ridgeY + 0.75, rise = 0.3, ro = 0.5;
   const mbox = (mat, a0, a1, yA, yB, b0, b1) => box(mat, (i, j, k) => M(lerp(a0, a1, i), lerp(yA, yB, j), lerp(b0, b1, k)), M(1, 0, 0), UP, M(0, 0, 1));
-  for (let k = 0; k < n; k++) {
-    const a = n === 1 ? 0 : -reach + 2 * reach * k / (n - 1);
-    mbox("walls", a - hw, a + hw, y0, y1, -hw, hw);
+  for (const a of ventSpots(p.ventilators, half)) {
+    for (const s of [-1, 1]) prism("walls", [[s * hw, y0], [0, yC], [0, y1], [s * hw, y1]], ([b, y], k) => M(k ? a + hw : a - hw, y, b));
     abox("collision", M(a - hw, y0, -hw), M(a + hw, y1 + rise, hw));
+    if (hollow) ventDuct(a, ridgeY, tanP, M, th, F);
     // louvres on the long sides, corner boards
     for (const s of [-1, 1]) for (let j = 0; j < 4; j++) {
       const y = y1 - 0.15 - j * 0.12;
@@ -832,6 +844,77 @@ function buildVentilators(Lr, ridgeY, tanP, M, half) {
       const yb = y1 + rise * (1 - hw / ro);
       poly("walls", [M(a + sa * hw, y1, -hw), M(a + sa * hw, y1, hw), M(a + sa * hw, yb, hw), M(a + sa * hw, y1 + rise, 0), M(a + sa * hw, yb, -hw)], M(sa, 0, 0));
     }
+  }
+}
+/** A beam in "fittings" from p0 to p1 (centre line), w wide and h deep, its h side as upright as it can be. */
+function beam(p0, p1, w, h) {
+  const d = norm(sub(p1, p0));
+  let side = cross(d, UP);
+  side = Math.hypot(...side) < 1e-6 ? [1, 0, 0] : norm(side);
+  const up = norm(cross(side, d));
+  prism("fittings", [[-w / 2, -h / 2], [w / 2, -h / 2], [w / 2, h / 2], [-w / 2, h / 2]],
+    ([x, y], k) => add(k ? p1 : p0, add(side.map(v => v * x), up.map(v => v * y))));
+}
+const DUCT = "#7E6E58", DUCT_DARK = "#211C17", TIMBER = "#6F5C47";
+/**
+ * Inside a walk-in barn, under a ventilator at a: the boarded duct (ventilationstrumma) hanging
+ * from the roof, open at the bottom, with a lip, a half-open damper and its pull cord.
+ */
+function ventDuct(a, ridgeY, tanP, M, th, F) {
+  const hd = 0.28, bt = 0.025, yTop = ridgeY - th, yBot = ridgeY - th - tanP * hd - 0.7;
+  const mbox = (a0, a1, yA, yB, b0, b1) => box("fittings", (i, j, k) => M(lerp(a0, a1, i), lerp(yA, yB, j), lerp(b0, b1, k)), M(1, 0, 0), UP, M(0, 0, 1));
+  paint(DUCT);
+  // boards up into the roof: where they rise past its underside they're hidden in the slab (and in the ventilator above)
+  for (const s of [-1, 1]) {
+    mbox(a - hd, a + hd, yBot, yTop, s > 0 ? hd - bt : -hd, s > 0 ? hd : -hd + bt);
+    mbox(s > 0 ? a + hd - bt : a - hd, s > 0 ? a + hd : a - hd + bt, yBot, yTop, -hd + bt, hd - bt);
+  }
+  // the lip round the bottom
+  for (const s of [-1, 1]) {
+    mbox(a - hd - 0.02, a + hd + 0.02, yBot, yBot + 0.08, s > 0 ? hd : -hd - 0.02, s > 0 ? hd + 0.02 : -hd);
+    mbox(s > 0 ? a + hd : a - hd - 0.02, s > 0 ? a + hd + 0.02 : a - hd, yBot, yBot + 0.08, -hd, hd);
+  }
+  // looking up into it: dark, below the lowest point of the roof over it
+  paint(DUCT_DARK);
+  const yd = ridgeY - th - tanP * hd - 0.08, e = hd - bt;
+  poly("fittings", [M(a - e, yd, -e), M(a + e, yd, -e), M(a + e, yd, e), M(a - e, yd, e)], neg(UP));
+  // the damper, half open, and its cord down to where it can be reached
+  paint(DUCT);
+  const lowEdge = M(a, yBot + 0.14, -hd * 0.7);
+  beam(lowEdge, M(a, yBot + 0.36, hd * 0.7), 2 * e - 0.02, 0.02);
+  paint(DUCT_DARK);
+  const reach = Math.min(yBot - 0.05, Math.max(F + 1.9, yBot - 1.6));
+  beam(lowEdge, [lowEdge[0], reach, lowEdge[2]], 0.012, 0.012);
+  abox("fittings", [lowEdge[0] - 0.03, reach - 0.12, lowEdge[2] - 0.03], [lowEdge[0] + 0.03, reach, lowEdge[2] + 0.03]);
+}
+/**
+ * A walk-in barn's roof seen from inside: rafters under both slopes, a ridge beam, and tie beams
+ * with collar ties on every other pair (gable roofs, and the straight middle of hip roofs).
+ * In ridge coordinates through M; ext: half the length the rafters run along the ridge.
+ */
+function buildRoofFrame(ext, span, top, ridgeY, tanP, M, th, vents) {
+  const inB = span / 2 - WALL_T, under = b => ridgeY - th - tanP * Math.abs(b), cosP = 1 / Math.hypot(1, tanP);
+  const rw = 0.07, rh = 0.16, dv = rh / 2 / cosP;           // a rafter's section; its centre under the roof
+  const n = Math.max(1, Math.round(2 * ext / 1.2)), step = 2 * ext / n;
+  paint(TIMBER);
+  for (let k = 0; k <= n; k++) {
+    const a = -ext + k * step;
+    // (ends cut square to the slope: starting 6 cm in keeps the lower corner out of the wall)
+    for (const s of [-1, 1]) beam(M(a, under(inB - 0.06) - dv, s * (inB - 0.06)), M(a, under(0.06) - dv, s * 0.06), rw, rh);
+    if (k % 2 === 0) {
+      // tie beam across at the wall tops, collar tie two thirds of the way up
+      beam(M(a, top - 0.1, -inB), M(a, top - 0.1, inB), 0.12, 0.18);
+      const yc = top + (ridgeY - th - top) * 0.62, bc = Math.max(0.1, (ridgeY - th - 0.17 - yc) / tanP);
+      beam(M(a, yc, -bc), M(a, yc, bc), 0.06, 0.14);
+    }
+  }
+  // the ridge beam, broken where a ventilator duct comes down
+  const cuts = vents.map(v => [v - 0.32, v + 0.32]).sort((x, y) => x[0] - y[0]);
+  let a0 = -ext - 0.05;
+  for (const [c0, c1] of [...cuts, [ext + 0.05, Infinity]]) {
+    const yr = ridgeY - th - 0.1 - tanP * 0.05;  // its top corners just under the slopes
+    if (c0 - a0 > 0.1) beam(M(a0, yr, 0), M(Math.min(c0, ext + 0.05), yr, 0), 0.1, 0.2);
+    a0 = Math.max(a0, c1);
   }
 }
 /**
@@ -1170,10 +1253,17 @@ function build() {
     abox("chimney", [c[0]-0.36, ytop, c[2]-0.36], [c[0]+0.36, ytop + 0.1, c[2]+0.36]);
     abox("collision", [c[0]-0.3, top - 0.2, c[2]-0.3], [c[0]+0.3, ytop + 0.1, c[2]+0.3]);
   }
-  if (hollow) buildInside(kind, F, H);
+  const ridgeHalf = p.roofType === "hip" ? Math.max(0, Lr/2 - span/2) : Lr/2;
+  if (p.ventilators > 0 && p.roofType !== "flat") buildVentilators(Lr, ridgeY, tanP, M, ridgeHalf, th, F);
+  if (hollow && p.roofType !== "flat") {
+    // (the tie beams at the ends are 12 cm thick: kept clear of the gable walls)
+    const ext = p.roofType === "hip" ? Math.max(0, ridgeHalf - 0.3) : Lr/2 - WALL_T - 0.08;
+    buildRoofFrame(ext, span, top, ridgeY, tanP, M, th, p.ventilators > 0 ? ventSpots(p.ventilators, ridgeHalf) : []);
+  }
   // Things the kind puts outside its walls (a cow barn's troughs), drawn in "fittings" and "collision".
   if (kind.outside) kind.outside({p, geo: {opsByWall, dims: {W, D}}, abox, cyl, paint});
-  if (p.ventilators > 0 && p.roofType !== "flat") buildVentilators(Lr, ridgeY, tanP, M, p.roofType === "hip" ? Math.max(0, Lr/2 - span/2) : Lr/2);
+  // The placed pieces last (tests find a piece's vertices after the empty barn's).
+  if (hollow) buildInside(kind, F, H);
   dims = {W, D, top, ridgeY, F};
 }
 build();

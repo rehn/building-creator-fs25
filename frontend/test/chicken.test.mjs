@@ -495,11 +495,12 @@ test("coop: everything is inside the walls, on or above the floor, and the doorw
       assert.ok(Math.abs(x) <= W / 2 - t + 1e-6 && Math.abs(z) <= D / 2 - t + 1e-6, `${id}: ${x},${z} outside the room`);
       assert.ok(y >= F - 1e-6 && y <= ridgeY, `${id}: height ${y}`);
     }
-    // nothing within 1 m inside the door, across the door's width
+    // nothing within 1 m inside the door, across the door's width, up to its top (the roof frame is above)
     const { w, o } = doorMid(geo, p);
     for (let k = 0; k < g.p.length; k += 3) {
       const q = g.p.slice(k, k + 3), s = (q[0] - w.o[0]) * w.u[0] + (q[2] - w.o[2]) * w.u[2], d = (q[0] - w.o[0]) * w.n[0] + (q[2] - w.o[2]) * w.n[2];
-      if (q[1] > F + 0.03 && d > -1.15 && d < -t - 1e-6) assert.ok(s < o.s0 - 0.3 || s > o.s1 + 0.3, `${id}: ${q} in the doorway`);
+      // (boards flat against the wall, like the kickboard beside the door, don't block it)
+      if (q[1] > F + 0.03 && q[1] < F + o.t1 && d > -1.15 && d < -t - 0.03) assert.ok(s < o.s0 - 0.3 || s > o.s1 + 0.3, `${id}: ${q} in the doorway`);
     }
   }
 });

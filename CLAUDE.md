@@ -44,7 +44,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Frontend tests: cd frontend && npm test (node --test, no browser needed)
 
 ## Status
-- Go tests (54) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (203) pass.
+- Go tests (54) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (207) pass.
 - Cow barn (kinds/cow.mjs): cowHusbandryPasture (no milk, like cowBarnSmall), automatic water, feed
   and water troughs outside on the pasture wall (kind.outside), a plain walk-through doorway for the
   cows (openings with plain: true; tall openings get a collision gap), feed pad + bale trigger
@@ -55,6 +55,9 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Hen house: pastureWall (fence + a 40 x 50 cm hen hatch, kind.openings) is never the doorWall;
   feed pad and egg pallets go on the walls without the door. No gate in the fence (user's choice).
   Canopies on walk-in buildings stay below the eaves (else they showed inside).
+  Walk-in insides: exposed roof frame (buildRoofFrame: rafters, ridge beam, tie beams, collar ties),
+  a grimy band and a tarred kickboard on the inside walls, and a duct under each ventilator (ventDuct);
+  the ventilator box's bottom follows the roof so it never shows inside (test/barn-inside.test.mjs).
 - Kinds: settings.kind "house" | "chicken" | "cow", fixed after creation. "New" and "My buildings" group by kind
   (groupByKind, kind.plural); the project list API returns each project's kind (from data.kind, read in SQL).
   Chicken barns export as chickenHusbandryPasture (modelled on data/placeables/rudolfHormann/
