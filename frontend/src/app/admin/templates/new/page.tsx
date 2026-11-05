@@ -12,7 +12,7 @@ import { shrinkPhoto } from "@/lib/photos";
 import { TopBar } from "@/components/TopBar";
 import { KINDS, PRESETS, FIELD, sanitize } from "@/editor/model.mjs";
 import { photoRequest, applyAnswer, chatPrompt, readAnswer } from "@/editor/fromPhotos.mjs";
-import { liveWing } from "@/editor/layout.mjs";
+import { liveWings } from "@/editor/layout.mjs";
 
 type Kind = { id: string; name: string };
 type Preset = { id: string; name: string; kind: string; settings: Record<string, unknown> };
@@ -242,9 +242,9 @@ const named = (k: string, v: unknown) =>
 function Summary({ kind, answer }: { kind: string; answer: unknown }) {
   const p = applyAnswer(kind, answer) as Record<string, unknown> & { windows: { type: string }[] };
   const doors = p.windows.filter(w => w.type === "door").length;
-  const wing = liveWing(p) as { ww: number; wd: number } | null;
+  const wings = liveWings(p) as { id: number; wall: string; ww: number; wd: number; floors: number }[];
   const rows: [string, string][] = [
-    ["Shape", wing ? `L or T: a ${wing.ww.toFixed(1)} × ${wing.wd.toFixed(1)} m wing on the ${named("wingWall", p.wingWall)}` : "rectangle"],
+    ["Shape", wings.length ? `${wings.length} wing${wings.length > 1 ? "s" : ""}: ${wings.map(w => `${w.ww.toFixed(1)} × ${w.wd.toFixed(1)} m on the ${named("wingWall", w.wall).replace(" side", "")}${w.floors < (p.floors as number) ? " (lower)" : ""}`).join(", ")}` : "rectangle"],
     ["Size", `${p.width} × ${p.depth} m, ${p.floors} floor${p.floors === 1 ? "" : "s"} of ${p.floorHeight} m${p.halfStorey ? " and a half floor" : ""}`],
     ["Roof", `${named("roofType", p.roofType)}, ${p.roofPitch}°, ${named("roofMaterial", p.roofMaterial)}`],
     ["Walls", named("wallCladding", p.wallCladding)],

@@ -1,7 +1,7 @@
 // A building from photos: what to tell Claude about a kind's settings (a guide and the JSON schema of
 // its answer) and how to turn the answer into the kind's settings. The server adds the photos and
 // sends it (backend/internal/vision); the admin then adjusts the result in the editor. No DOM.
-import { SCHEMA, KIND, sanitize, WALLS, WALL_NAMES, PORCH_OPTIONS, WING_WALLS } from "./model.mjs";
+import { SCHEMA, KIND, sanitize, WALLS, WALL_NAMES, PORCH_OPTIONS, WING_WALLS, MAX_WINGS } from "./model.mjs";
 
 /** Sections Claude leaves alone: the game's own places, the inside, the shop. */
 const SKIP = new Set(["Game mod", "Game places", "Inside", "Interior", "Farmhouse"]);
@@ -59,21 +59,28 @@ export function photoRequest(kindId) {
   const kind = KIND[kindId];
   if (!kind) throw new Error("unknown kind " + kindId);
   const fields = photoFields(kindId);
-  const wing = fields.some(([f]) => f.k === "wing");
+  const wing = !kind.hides.includes("Wings");
   const settings = {type: "object", additionalProperties: false, required: fields.map(([f]) => f.k), properties: {}};
   for (const [f] of fields) settings.properties[f.k] = fieldSchema(f);
+  // the wings of a house: where each is, how big, how many floors
+  const wings = wing ? {type: "array", description: "The wings, if the footprint isn't a rectangle (none for a rectangle)", items: {type: "object", additionalProperties: false, required: ["wall", "along", "width", "depth", "floors"], properties: {
+    wall: {type: "string", enum: WALLS, description: "The house's wall it stands against"},
+    along: {type: "number", description: "Middle of the wing along that wall, 0 = its left end, 1 = its right end, seen from outside"},
+    width: {type: "number", description: "metres, along the wall"}, depth: {type: "number", description: "metres, out from the wall"},
+    floors: {type: "integer", description: "0 = as many as the house, else its own number (a lower wing)"}}}} : null;
   // an animal building's pasture: the wall the animals go out on and how far out the fence goes
   const ps = kind.objects && kind.objects.pasture, pasture = ps ? {type: "object", additionalProperties: false, required: ["wall", "depth"], properties: {
     wall: {type: "string", enum: WALLS, description: "The wall the animals go out through to the pasture"},
     depth: {type: "number", description: `How far out from that wall the fence goes, ${ps.depth[0]} to ${ps.depth[1]} m`}}} : null;
   const schema = {
-    type: "object", additionalProperties: false, required: ["seen", "settings", "openings", "notes", ...(pasture ? ["pasture"] : [])],
+    type: "object", additionalProperties: false, required: ["seen", "settings", "openings", "notes", ...(pasture ? ["pasture"] : []), ...(wings ? ["wings"] : [])],
     properties: {
-      seen: {type: "string", description: "What the photos show: the footprint's shape (rectangle, L or T), which wall each photo shows, materials, how you judged the sizes"},
+      seen: {type: "string", description: "What the photos show: the footprint's shape (rectangle, L, T or U), which wall each photo shows, materials, how you judged the sizes"},
       settings,
       openings: {type: "array", items: opening(wing ? [...WALLS, ...WING_WALLS] : WALLS), description: "Every window and door on the walls"},
       notes: {type: "string", description: "For the admin: what the app can't match and what to check"},
       ...(pasture ? {pasture} : {}),
+      ...(wings ? {wings} : {}),
     },
   };
   const animals = !!pasture
@@ -85,12 +92,12 @@ Animals: the app makes the animals' own way out to the pasture (and the fence) o
   const wingText = wing
     ? `
 
-Shape: first decide from the photos whether the footprint is a rectangle, an L or a T, and say which in "seen". ` +
-      `L- and T-shaped houses are built: the longest part is the house (its long side the front), the other part a wing on one of its walls (wingWall), ` +
-      `wingPos along that wall like an opening's "along", wingWidth across it and wingDepth out from the wall. The wing has the house's ` +
-      `floors and roof pitch; on a long side its roof meets the house's in a valley, on a gable end it is a lower annex. ` +
-      `Its openings go on its own walls: wingEnd (its far end), wingLeft and wingRight (its sides, as you stand outside facing wingEnd). ` +
-      `A plain rectangular house has wing false.`
+Shape: first decide from the photos whether the footprint is a rectangle, an L, a T or a U, and say which in "seen". ` +
+      `Other shapes are built from wings: the longest part is the house (its long side the front), and every other part is a wing on one of its walls ` +
+      `(up to ${MAX_WINGS}, in "wings": wall, "along" like an opening's, width across it, depth out from the wall, and floors: 0 for as many as the house, ` +
+      `or fewer for a lower part). A wing has the house's roof pitch; on a long side its roof meets the house's in a valley, a lower one runs up to the wall under the eaves, ` +
+      `on a gable end it is a lower annex. Wing number n (in the order of "wings", from 1) has the walls wnEnd (its far end), wnLeft and wnRight (its sides, as you stand outside facing its end): ` +
+      `w1End, w1Left, w1Right, w2End ... Put its windows and doors there. A plain rectangular house has no wings.`
     : "";
   const sections = [];
   for (const [f, title] of fields) {
@@ -98,7 +105,7 @@ Shape: first decide from the photos whether the footprint is a rectangle, an L o
     if (!s) sections.push(s = {title, lines: []});
     s.lines.push(fieldLine(f));
   }
-  const guide = `The app builds a ${kind.name.toLowerCase()}: ${wing ? "a rectangular building, or an L- or T-shaped one with a wing," : "a rectangular building"} with walls, a roof, windows and doors.${wingText}
+  const guide = `The app builds a ${kind.name.toLowerCase()}: ${wing ? "a rectangular building, or an L-, T- or U-shaped one with wings," : "a rectangular building"} with walls, a roof, windows and doors.${wingText}
 
 Walls: choose the wall the photos show best, usually the long side with the main doors, as the front. ` +
 `${WALL_NAMES.left} is the wall on your left when you stand outside facing the front, ${WALL_NAMES.right.toLowerCase()} the one on your right, ` +
@@ -129,6 +136,7 @@ export function applyAnswer(kindId, answer) {
   const settings = {...s, kind: kindId};
   // the pasture: its wall and depth (the rest of the game objects go where the kind puts them)
   if (a.pasture && typeof a.pasture === "object") Object.assign(settings, {pastureWall: a.pasture.wall, fenceDepth: a.pasture.depth});
+  if (Array.isArray(a.wings)) settings.wings = a.wings.filter(w => w && typeof w === "object").map(w => ({wall: w.wall, pos: w.along, width: w.width, depth: w.depth, floors: w.floors}));
   const openings = Array.isArray(a.openings) ? a.openings.filter(o => o && typeof o === "object") : [];
   if (openings.length) {
     settings.windows = openings.map(o => {

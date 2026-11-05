@@ -58,7 +58,7 @@ test("wall zones: a drip board along the join, broken where a window crosses it"
 });
 
 test("wall zones: a wing, a walk-in barn and the export have them too", () => {
-  const w = two({wing: true, wingWall: "back", wingPos: 0.2});
+  const w = two({wings: [{wall: "back", pos: 0.2, width: 6, depth: 5}]});
   const G = buildGeometry(w).G;
   assert.ok(verts(G.wallsLow).some(([, , z]) => z < -w.depth / 2 - 1), "the wing's lower walls");
   const barn = sanitize({...PRESETS.find(x => x.id === "ladugard").settings, floors: 2, wallSplit: "floor", lowerCladding: "plaster"});

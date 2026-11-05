@@ -7,7 +7,7 @@
 // from the middle)}. The pasture: {id, type: "pasture", wall, a (m from the wall's start), b (m from its
 // end: 0 is the far corner, so a pasture snapped to the corners stays there when the building changes
 // size; less than 0 runs past the corner), depth (m out from the wall)}.
-import { wallsOf } from "./layout.mjs";
+import { wallsOf, liveWings } from "./layout.mjs";
 /** The building's own four walls (a pasture goes on one of them). */
 const WALLS = ["front", "back", "left", "right"];
 
@@ -129,11 +129,7 @@ export function snapPasture(o, kind, p) {
 /** The building's footprints on the ground: its rectangle and its wing's. */
 export function footprints(p) {
   const out = [{x0: -p.width / 2, x1: p.width / 2, z0: -p.depth / 2, z1: p.depth / 2}];
-  const walls = wallsOf(p);
-  if (walls.wingEnd) {
-    const e = walls.wingEnd, l = walls.wingLeft, pts = [e.o, [e.o[0] + e.u[0] * e.L, 0, e.o[2] + e.u[2] * e.L], l.o];
-    out.push({x0: Math.min(...pts.map(q => q[0])), x1: Math.max(...pts.map(q => q[0])), z0: Math.min(...pts.map(q => q[2])), z1: Math.max(...pts.map(q => q[2]))});
-  }
+  for (const w of liveWings(p)) out.push(w.rect);
   return out;
 }
 

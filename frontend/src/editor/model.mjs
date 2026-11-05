@@ -3,7 +3,7 @@
 // Pure functions with no DOM or three.js, so they run (and are tested) in Node.
 import { I3dDoc, tg, shape, refNode, boxMesh, splitByColor, mappingsFor, num, v3 } from "./i3d.mjs";
 import { KINDS, kindOf } from "./kinds/index.mjs";
-import { WALL_T, wallFrames, wallsOf, liveWing, WING_WALLS, openingSpan, roomOf, footprint, toWorld, cleanItems, problems } from "./layout.mjs";
+import { WALL_T, wallFrames, wallsOf, liveWings, wingsOf, wingHeight, wingFloors, wingIdOf, WING_PARTS, MAX_WINGS, WING_WALLS, wingWallKey, openingSpan, roomOf, footprint, toWorld, cleanItems, problems } from "./layout.mjs";
 import { withAssets, placement, assetFolder } from "./assets.mjs";
 import { SURFACES } from "./surfaces.mjs";
 import { agedColor } from "./age.mjs";
@@ -66,12 +66,7 @@ const SHARED_SECTIONS = [
     {k:"kneeWall", label:"Knee wall height", min:0.2, max:1.6, step:0.05, unit:" m"},
     {k:"floorHeight", label:"Floor height", min:2.3, max:4, step:0.05, unit:" m"},
     {k:"foundation", label:"Foundation height", min:0, max:1.2, step:0.05, unit:" m"}]},
-  {title:"Wing", side:"build", hint:"A wing makes an L- or T-shaped house. On a long side its roof meets the house's in a valley (at an end it's an L, in the middle a T); on a gable end it's a lower annex. It has the house's floors, roof pitch and overhang. Its windows and doors are under Windows (Wing end, Wing left and right side, as you face its end).", fields:[
-    {k:"wing", label:"Wing (an L- or T-shaped house)", type:"check"},
-    {k:"wingWall", label:"On the wall", type:"select", options:[["front","Front"],["back","Back"],["left","Left side"],["right","Right side"]]},
-    {k:"wingPos", label:"Where along the wall (0 = its left end, 1 = its right end, seen from outside)", min:0, max:1, step:0.01},
-    {k:"wingWidth", label:"Wing width", min:2.5, max:30, step:0.1, unit:" m"},
-    {k:"wingDepth", label:"Wing length, out from the wall", min:2, max:30, step:0.1, unit:" m"}]},
+  {title:"Wings", side:"build", custom:"wings", hint:"Wings make an L-, T- or U-shaped house: up to four, each on a wall with its own width, length and number of floors. On a long side a wing's roof meets the house's in a valley; a wing with fewer floors runs up to the wall under the eaves; on a gable end it is a lower annex. It has the house's roof pitch and overhang. Its windows and doors are under Windows.", fields:[]},
   {title:"Roof", side:"build", fields:[
     {k:"roofType", label:"Roof type", type:"select", options:[["gable","Gable"],["hip","Hip"],["flat","Flat"]]},
     {k:"ridge", label:"Ridge direction", type:"select", options:[["width","Parallel to the front"],["depth","Front to back"]]},
@@ -145,8 +140,29 @@ export function fieldsFor(kind) {
 export const FIELD = {};
 SCHEMA.forEach(g => g.fields.forEach(f => FIELD[f.k] = FIELD[f.k] || f));
 export const WALLS = ["front", "back", "left", "right"];
-export const WALL_NAMES = {front:"Front", back:"Back", left:"Left side", right:"Right side", wingEnd:"Wing end", wingLeft:"Wing left side", wingRight:"Wing right side"};
-export { WING_WALLS };
+export const WALL_NAMES = {front:"Front", back:"Back", left:"Left side", right:"Right side",
+  ...Object.fromEntries(Array.from({length: MAX_WINGS}, (_, i) => [[wingWallKey(i + 1, "End"), `Wing ${i + 1} end`], [wingWallKey(i + 1, "Left"), `Wing ${i + 1} left side`], [wingWallKey(i + 1, "Right"), `Wing ${i + 1} right side`]]).flat())};
+export { WING_WALLS, MAX_WINGS };
+/** A wing's sliders (the wall and floors are selects): the settings of a wing in p.wings. */
+export const WING_FIELDS = [
+  {k:"pos", label:"Where along the wall (0 = its left end, 1 = its right end, seen from outside)", min:0, max:1, step:0.01},
+  {k:"width", label:"Width", min:2.5, max:30, step:0.1, unit:" m"},
+  {k:"depth", label:"Length, out from the wall", min:2, max:30, step:0.1, unit:" m"}];
+/**
+ * The wings, cleaned: up to MAX_WINGS, each with a number 1..MAX_WINGS (its walls' names, kept as saved) and its
+ * settings in range. A save from when a house had one wing (wing, wingWall ...) makes wing 1.
+ */
+function cleanWings(obj) {
+  const list = Array.isArray(obj.wings) ? obj.wings : obj.wing === true ? [{id: 1, wall: obj.wingWall, pos: obj.wingPos, width: obj.wingWidth, depth: obj.wingDepth}] : [];
+  const used = new Set(), out = [];
+  for (const w of list.filter(x => x && typeof x === "object").slice(0, MAX_WINGS)) {
+    let id = Number.isInteger(w.id) && w.id >= 1 && w.id <= MAX_WINGS && !used.has(w.id) ? w.id : 0;
+    if (!id) for (let i = 1; i <= MAX_WINGS; i++) if (!used.has(i)) { id = i; break; }
+    used.add(id);
+    out.push({id, wall: WALLS.includes(w.wall) ? w.wall : "back", pos: clampN(w.pos, 0, 1, 0.15), width: clampN(w.width, 2.5, 30, 6), depth: clampN(w.depth, 2, 30, 5), floors: Math.round(clampN(w.floors, 0, 3, 0))});
+  }
+  return out;
+}
 export const clampN = (v, lo, hi, d) => { v = +v; return isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d; };
 export function genRow(P, list, wall, floor, n) {
   const frame = wallsOf(P)[wall];
@@ -274,13 +290,14 @@ export function sanitize(obj) {
   if (obj.curtainStyle === undefined && obj.curtains === false) out.curtainStyle = "none";
   // the windows and doors: a building always has a door (a save or preset without one gets it from
   // its old door settings)
-  // only houses have a wing (a barn's inside is one room)
-  if (kind.hides.includes("Wing")) out.wing = false;
-  // (a door on the wing only counts while there is one)
-  const walls = wallsOf(out);
-  let ws = Array.isArray(obj.windows) ? cleanWindows(obj.windows, obj) : [];
+  // the wings (houses only: a barn's inside is one room); a save from when a house had one wing names its walls wingEnd ...
+  out.wings = kind.hides.includes("Wings") ? [] : cleanWings(obj);
+  const walls = wallsOf(out), oldWing = {wingEnd: "End", wingLeft: "Left", wingRight: "Right"};
+  const src = Array.isArray(obj.windows) ? obj.windows.map(w => w && oldWing[w.wall] ? {...w, wall: wingWallKey(1, oldWing[w.wall])} : w) : obj.windows;
+  // (a door on a wing only counts while there is one)
+  let ws = Array.isArray(src) ? cleanWindows(src, obj) : [];
   if (!ws.some(w => w.type === "door" && walls[w.wall])) ws = cleanWindows([...ws, legacyDoor(obj, out, kind)]);
-  out.windows = Array.isArray(obj.windows) ? ws : genAll(out, obj, ws);
+  out.windows = Array.isArray(src) ? ws : genAll(out, obj, ws);
   out.dormers = Array.isArray(obj.dormers) ? cleanDormers(obj.dormers) : [];
   // where the player moved the game places (sleep point, feed pad ...), one entry per place of the kind
   // the game objects (sleep point, feed pad, pasture ...): the save's, or where the kind puts them to start with
@@ -658,7 +675,9 @@ function prism(mat, sec, at) {
  * there (the wing): a window or door below that is hidden.
  */
 function layoutWall(key, L, fh, topAt, cover = null) {
-  const nf = p.floors + (p.halfStorey ? 1 : 0);
+  // (a wing may have fewer floors than the house)
+  const wid = wingIdOf(key), wing = wid ? (p.wings || []).find(w => w.id === wid) : null, wf = wing ? wingFloors(p, wing) : p.floors;
+  const nf = wf + (p.halfStorey && wf === p.floors ? 1 : 0);
   const ops = [];
   // The kind's own openings (a hen hatch ...) first, then the doors, then the windows: a window over a
   // door is hidden, not the door.
@@ -670,7 +689,7 @@ function layoutWall(key, L, fh, topAt, cover = null) {
     const [s0, s1] = openingSpan(win, L), door = win.type === "door";
     // a door made from a window stands on the floor, no taller than the floor allows
     const t0 = door ? 0 : win.floor * fh + win.sill;
-    const t1 = door ? Math.min(win.h, fh - 0.25) : win.floor < p.floors ? Math.min(t0 + win.h, (win.floor + 1) * fh - 0.25) : t0 + win.h;
+    const t1 = door ? Math.min(win.h, fh - 0.25) : win.floor < wf ? Math.min(t0 + win.h, (win.floor + 1) * fh - 0.25) : t0 + win.h;
     const op = {s0, s1, t0, t1, kind: door ? "door" : "window", id: win.id, style: styleOf(p, win), ...(door ? {opens: win.opens !== false} : {})};
     if (door) op.porch = {type: win.porch || "none", w: win.porchW || PORCH_W[2], d: win.porchD || PORCH_D[2]};
     const g = 0.18;
@@ -1329,25 +1348,28 @@ function build() {
   const yRoof = b => ridgeY - tanP * b, tanS = tanP * 0.35, attic = F + p.floors * fh;
   const hAx = Lr/2 + (p.roofType === "hip" ? o : Math.min(o, 0.5)), hBx = span/2 + o, rhx = Math.max(0, Lr/2 - span/2);
   const ext = b => p.roofType === "hip" ? rhx + b * (hAx - rhx) / hBx : Lr / 2;
-  // The wing (an L or T, houses only) in the roof's terms. Its roof is built in its own axes: x out along its
+  // The wings (an L, T or U; houses only) in the roof's terms. A wing's roof is built in its own axes: x out along its
   // ridge from the house's middle, z across it from its ridge; Mw maps those to the world, Ml directions.
-  const wing = liveWing(p);
-  let WG = null;
-  if (wing && wing.type !== "flat") {
-    const m = wallFrames(W, D, F)[wing.wall], cpt = wing.at(wing.sc, 0), yR = top + wing.ww / 2 * tanP;
-    if (wing.type === "valley") {
-      // on a side of the roof: its ridge runs into the house's slope, k from the ridge line
-      const s = Math.sign(B(m.n)), aC = A(cpt), k = (ridgeY - yR) / tanP;
-      WG = {valley: true, s, aC, yR, k, x0: span / 2, Mw: (x, y, z) => M(aC + z, y, s * x), Ml: (x, y, z) => M(z, y, s * x), local: q => [s * B(q), A(q) - aC]};
+  const WINGS = liveWings(p).map(wing => {
+    const topW = F + wing.H, yR = topW + wing.ww / 2 * tanP, eW = wing.ww / 2 + o;
+    if (wing.type === "flat") return {wing, WG: null, topW};
+    const m = wallFrames(W, D, F)[wing.wall], cpt = wing.at(wing.sc, 0);
+    let WG;
+    if ((Math.abs(m.u[0]) > 0.5) === ridgeX) {
+      // on a side of the roof: its ridge runs into the house's slope (a valley, k from the ridge line) or, lower, up to the wall
+      const s = Math.sign(B(m.n)), aC = A(cpt), valley = wing.type === "valley";
+      WG = {valley, s, aC, yR, k: valley ? (ridgeY - yR) / tanP : span / 2, x0: span / 2, Mw: (x, y, z) => M(aC + z, y, s * x), Ml: (x, y, z) => M(z, y, s * x), local: q => [s * B(q), A(q) - aC]};
     } else {
       // against a gable: its ridge runs along the house's, lower, from the gable wall out
       const sA = Math.sign(A(m.n)), bC = B(cpt);
       WG = {valley: false, yR, k: Lr / 2, x0: Lr / 2, Mw: (x, y, z) => M(sA * x, y, bC + z), Ml: (x, y, z) => M(sA * x, y, z), local: q => [sA * A(q), B(q) - bC]};
     }
-    WG.eW = wing.ww / 2 + o;
+    WG.eW = eW; WG.eaveW = yR - eW * tanP;
     // where the house's roof is cut for the wing's, along its eaves (eaves, gutter and dormers stop there)
-    WG.cut = WG.valley ? [WG.aC - WG.eW, WG.aC + WG.eW] : null;
-  }
+    WG.cut = WG.valley ? [WG.aC - eW, WG.aC + eW] : null;
+    return {wing, WG, topW};
+  });
+  const sideWGs = s => WINGS.map(x => x.WG).filter(g => g && g.cut && g.s === s);
   const DORMS = {"1": [], "-1": []};
   for (const d of p.dormers) {
     d._hidden = true;
@@ -1360,20 +1382,20 @@ function build() {
     else { ye = Math.min(ye, ridgeY - (0.3 + hwr) * tanP); yrd = ye + hwr * tanP; be = (ridgeY - ye) / tanP; br = (ridgeY - yrd) / tanP; }
     if (ye - yb < 0.7 || br < 0.25 || Math.abs(ac) + hwr > ext(br) - 0.2) continue;
     if (DORMS[s].some(X => Math.abs(X.ac - ac) < X.hwr + hwr + 0.2)) continue;
-    if (WG && WG.cut && s === WG.s && ac + hwr > WG.cut[0] - 0.2 && ac - hwr < WG.cut[1] + 0.2) continue;
+    if (sideWGs(s).some(g => ac + hwr > g.cut[0] - 0.2 && ac - hwr < g.cut[1] + 0.2)) continue;
     d._hidden = false;
     DORMS[s].push({d, s, hw, hwr, ac, fr, bf, yb, ye, be, br, yrd, tanD, bfront: bf + (fr ? Math.max(0.2, Math.min(o, 0.6)) : 0.25)});
   }
   // The wing's roof takes a triangle out of the slope it meets: b > k + |a - aC| (same pitch, so 45° valleys).
-  const notch = (s, pieces) => !(WG && WG.cut && s === WG.s) ? pieces : pieces.flatMap(q => [
-    clipPoly(clipPoly(q, 1, 0, WG.aC), 1, 1, WG.k + WG.aC), clipPoly(clipPoly(q, -1, 0, -WG.aC), -1, 1, WG.k - WG.aC)]).filter(q => q.length >= 3);
+  const notch = (s, pieces) => sideWGs(s).reduce((ps, g) => ps.flatMap(q => [
+    clipPoly(clipPoly(q, 1, 0, g.aC), 1, 1, g.k + g.aC), clipPoly(clipPoly(q, -1, 0, -g.aC), -1, 1, g.k - g.aC)]).filter(q => q.length >= 3), pieces);
   const slopeRoof = (s, S, up) => {
     for (const q of notch(s, slopePieces(S, DORMS[s]))) {
       const T = q.map(([a, b]) => M(a, yRoof(b), s * b));
       poly("roof", T, up, uvSide); poly("roof", T.map(dn), neg(up), uvSide);
     }
   };
-  const cutsFor = s => [...DORMS[s].filter(X => X.fr).map(X => [X.ac - X.hw, X.ac + X.hw]), ...(WG && WG.cut && s === WG.s ? [WG.cut] : [])];
+  const cutsFor = s => [...DORMS[s].filter(X => X.fr).map(X => [X.ac - X.hw, X.ac + X.hw]), ...sideWGs(s).map(g => g.cut)];
   const segs = (a0, a1, cuts) => {
     const out = []; let x = a0;
     for (const [c0, c1] of cuts.slice().sort((u, v) => u[0] - v[0])) { if (c0 > x) out.push([x, Math.min(c0, a1)]); x = Math.max(x, c1); }
@@ -1437,66 +1459,73 @@ function build() {
     }
   };
 
-  // How high the wing stands against its wall at s0..s1 (from the floor): all of it on a long side (the
-  // wall is under its roof), up to its roof against a gable.
-  const wingCover = (a, b) => {
-    if (!wing || b < wing.s0 - 0.1 || a > wing.s1 + 0.1) return -Infinity;
-    if (wing.type !== "gable") return Infinity;
-    return WG.yR + 0.15 - F - Math.max(0, a - wing.sc, wing.sc - b) * tanP;
+  // How high a wing on wall key stands against it at a..b (from the floor): all of the wall under a valley (it is
+  // under the roof), up to the wing's roof against a gable or the eaves, up to its flat roof. null: no wing there.
+  const wingCover = key => {
+    const mine = WINGS.filter(x => x.wing.wall === key);
+    if (!mine.length) return null;
+    return (a, b) => Math.max(...mine.map(({wing, WG}) => {
+      if (b < wing.s0 - 0.1 || a > wing.s1 + 0.1) return -Infinity;
+      if (wing.type === "valley") return Infinity;
+      if (!WG) return wing.H + 0.1;
+      return WG.yR + 0.15 - F - Math.max(0, a - wing.sc, wing.sc - b) * tanP;
+    }));
   };
+  // (the walls' lower material ends at splitAt, if that is under the wall's top)
+  const splitFor = Hh => splitAt > 0.05 && splitAt < Hh - 0.05 ? splitAt : null;
   const WS = wallFrames(W, D, F);
   const entrances = [];
   opsByWall = {};
   for (const key in WS) {
     const gable = p.roofType === "gable" && (ridgeX ? (key === "left" || key === "right") : (key === "front" || key === "back"));
     const R = gable ? Math.max(0, rise - th) : 0, Lw = WS[key].L;
-    const ops = layoutWall(key, Lw, fh, sv => H + R * Math.max(0, 1 - Math.abs(sv - Lw/2) / (Lw/2)), wing && key === wing.wall ? wingCover : null);
+    const ops = layoutWall(key, Lw, fh, sv => H + R * Math.max(0, 1 - Math.abs(sv - Lw/2) / (Lw/2)), wingCover(key));
     // Eave walls' inside faces reach into the roof slab (which sits lower further in), staying below its top.
     const inner = hollow ? {lift: R > 0 || p.roofType === "flat" ? 0 : Math.min(WALL_T * tanP, th - 0.02)} : null;
     buildWall(WS[key], ops, H, R, F, {topAt: sv => H + R * Math.max(0, 1 - Math.abs(sv - Lw/2) / (Lw/2)), inner, key, split});
     opsByWall[key] = {w: WS[key], ops};
     for (const dOp of ops) if (dOp.kind === "door" && dOp.porch.type !== "none") entrances.push({w: WS[key], o: dOp, key, gable});
   }
-  // The wing's walls: its far end (a gable, unless the roof is flat) and its sides (eave walls).
-  if (wing) for (const key of WING_WALLS) {
-    const w = wing.frames[key], Lw = w.L;
-    const R = key === "wingEnd" && wing.type !== "flat" ? Math.max(0, wing.ww / 2 * tanP - th) : 0;
-    const topAt = sv => H + R * Math.max(0, 1 - Math.abs(sv - Lw/2) / (Lw/2));
+  // Each wing's walls: its far end (a gable, unless the roof is flat) and its sides (eave walls), as tall as the wing.
+  for (const {wing} of WINGS) for (const part of WING_PARTS) {
+    const key = wingWallKey(wing.id, part), w = wing.frames[key], Lw = w.L, Hw = wing.H;
+    const R = part === "End" && wing.type !== "flat" ? Math.max(0, wing.ww / 2 * tanP - th) : 0;
+    const topAt = sv => Hw + R * Math.max(0, 1 - Math.abs(sv - Lw/2) / (Lw/2));
     const ops = layoutWall(key, Lw, fh, topAt);
-    buildWall(w, ops, H, R, F, {topAt, key, split});
+    buildWall(w, ops, Hw, R, F, {topAt, key, split: splitFor(Hw)});
     opsByWall[key] = {w, ops};
-    for (const dOp of ops) if (dOp.kind === "door" && dOp.porch.type !== "none") entrances.push({w, o: dOp, key, gable: R > 0});
+    for (const dOp of ops) if (dOp.kind === "door" && dOp.porch.type !== "none") entrances.push({w, o: dOp, key, gable: R > 0, H: Hw, nf: wing.floors});
   }
   // A porch or canopy at every door that has one.
   for (const entr of entrances) {
-    const {type, w: pw, d: pd} = entr.o.porch;
+    const {type, w: pw, d: pd} = entr.o.porch, Hh = entr.H ?? H, nf = entr.nf ?? p.floors;
     let limit = 1e9;
-    if (p.roofType === "flat") limit = H - 0.05;
-    else if (!entr.gable && type === "shed") limit = H - th - Math.min(o, pd + 0.15) * tanP - 0.05;
+    if (p.roofType === "flat") limit = Hh - 0.05;
+    else if (!entr.gable && type === "shed") limit = Hh - th - Math.min(o, pd + 0.15) * tanP - 0.05;
     // A walk-in building's wall is thin, so a canopy can't tuck in under the eaves (it would show
     // inside): it stays below them instead, a little flatter if need be.
-    else if (!entr.gable && hollow) limit = H - 0.05;
+    else if (!entr.gable && hollow) limit = Hh - 0.05;
     // and under the windows of the floor above it
     const k = entr.key, cs = (entr.o.s0 + entr.o.s1) / 2, hw = Math.max(pw, entr.o.s1 - entr.o.s0 + 0.5) / 2 + 0.2;
     const above = p.windows.filter(x => x.wall === k && x.floor === 1 && x.type !== "door" && (([a, b]) => a < cs + hw && b > cs - hw)(openingSpan(x, entr.w.L)));
-    if (p.floors > 1 && above.length) limit = Math.min(limit, fh + Math.min(...above.map(x => x.sill)) - 0.1);
-    const mainEave = !entr.gable && p.roofType !== "flat" ? {H, tanP} : null;
+    if (nf > 1 && above.length) limit = Math.min(limit, fh + Math.min(...above.map(x => x.sill)) - 0.1);
+    const mainEave = !entr.gable && p.roofType !== "flat" ? {H: Hh, tanP} : null;
     buildEntrance(entr.w, entr.o, limit, F, mainEave);
   }
-  // Under the wing's roof at (x, z), where it is the roof on top (the house's and the wing's meet in valleys).
-  const wingUnder = (x, z) => {
-    if (!WG) return top;
+  // Under a wing's roof at (x, z), where it is the roof on top (the house's and the wing's meet in valleys).
+  const wingUnder = ({WG, topW}) => (x, z) => {
+    if (!WG) return topW;
     const y = WG.yR - th - Math.abs(WG.local([x, 0, z])[1]) * tanP - 0.01;
     return WG.valley ? Math.max(y, roofUnder(x, z)) : y;
   };
-  function buildWingBody() {
-    const {at, s0, s1, wd} = wing, Lm = WS[wing.wall].L, c = 0.09;
+  function buildWingBody(item) {
+    const {wing} = item, under = wingUnder(item), {at, s0, s1, wd} = wing, Lm = WS[wing.wall].L, c = 0.09;
     const post = (P, du, dn) => {
       // a corner board from P, du along the house's wall and dn out from it (both ±0.09 or 0..0.09)
       const Q = (a, b) => { const q = at(a, b); return [q[0], q[2]]; };
       const pts = [Q(P[0] + du[0], P[1] + dn[0]), Q(P[0] + du[1], P[1] + dn[1])];
       const x0 = Math.min(pts[0][0], pts[1][0]), x1 = Math.max(pts[0][0], pts[1][0]), z0 = Math.min(pts[0][1], pts[1][1]), z1 = Math.max(pts[0][1], pts[1][1]);
-      box("trim", (a, b, cc) => { const x = lerp(x0, x1, a), z = lerp(z0, z1, cc); return [x, b ? wingUnder(x, z) : F, z]; }, [1,0,0], UP, [0,0,1]);
+      box("trim", (a, b, cc) => { const x = lerp(x0, x1, a), z = lerp(z0, z1, cc); return [x, b ? under(x, z) : F, z]; }, [1,0,0], UP, [0,0,1]);
     };
     // the far corners, and the inside corners against the house (outside both walls), unless the wing is flush
     // with the house's end, where its corner board serves
@@ -1507,36 +1536,37 @@ function build() {
     // (the plinth starts where the house's ends: tops in one plane would flicker where they overlap)
     if (F > 0.01) abox("foundation", [a[0], 0, a[2]], [b[0], F, b[2]]);
     const a2 = at(s0, 0), b2 = at(s1, wd);
-    abox("collision", [a2[0], 0, a2[2]], [b2[0], top, b2[2]]);
+    abox("collision", [a2[0], 0, a2[2]], [b2[0], item.topW, b2[2]]);
   }
-  function buildWingRoof() {
+  function buildWingRoof(item) {
+    const {wing, WG, topW} = item;
     if (wing.type === "flat") {
       const oo = Math.min(o, 0.4), a = wing.at(wing.s0 - oo, oo), b = wing.at(wing.s1 + oo, wing.wd + oo);
-      abox("roof", [a[0], top, a[2]], [b[0], top + 0.3, b[2]]);
-      abox("collision", [a[0], top, a[2]], [b[0], top + 0.3, b[2]]);
+      abox("roof", [a[0], topW, a[2]], [b[0], topW + 0.3, b[2]]);
+      abox("collision", [a[0], topW, a[2]], [b[0], topW + 0.3, b[2]]);
       return;
     }
-    const {valley, yR, k, x0, eW, Mw, Ml, local} = WG;
+    const {valley, yR, k, x0, eW, eaveW, Mw, Ml, local} = WG;
     const xWall = x0 + wing.wd, xF = xWall + Math.min(o, 0.5), xE = valley ? k + eW : x0;
     const uvW = q => { const [x, z] = local(q); return [x, -Math.abs(z) / cosP]; };
     for (const sg of [1, -1]) {
-      // a slope from the valley (or the gable wall) out to the far end
+      // a slope from the valley (or the wall) out to the far end
       const S = valley ? [[k, 0], [xF, 0], [xF, sg * eW], [xE, sg * eW]] : [[x0, 0], [xF, 0], [xF, sg * eW], [x0, sg * eW]];
       const T = S.map(([x, z]) => Mw(x, yR - Math.abs(z) * tanP, z)), up = Ml(0, 1, sg * tanP);
       poly("roof", T, up, uvW); poly("roof", T.map(dn), neg(up), uvW);
       poly("trim", [T[1], T[2], dn(T[2]), dn(T[1])], Ml(1, 0, 0));
-      const E = [Mw(xE, eaveY, sg * eW), Mw(xF, eaveY, sg * eW)];
+      const E = [Mw(xE, eaveW, sg * eW), Mw(xF, eaveW, sg * eW)];
       poly("trim", [E[0], E[1], dn(E[1]), dn(E[0])], Ml(0, 0, sg));
     }
     const det = dot(Ml(1, 0, 0), cross(Ml(0, 1, 0), Ml(0, 0, 1)));
     ridgeCap(valley ? k : x0, xF, yR, tanP, Mw, det > 0, Ml);
-    prism("collision", [[-eW, eaveY], [eW, eaveY], [0, yR]], ([z, y], e) => Mw(e ? xF : (valley ? k : x0), y, z));
+    prism("collision", [[-eW, eaveW], [eW, eaveW], [0, yR]], ([z, y], e) => Mw(e ? xF : (valley ? k : x0), y, z));
     if (p.gutters) {
-      const r = 0.065, yT = eaveY - 0.06;
+      const r = 0.065, yT = eaveW - 0.06;
       for (const sg of [1, -1]) {
         const bg = sg * (eW + r - 0.02);
         // from just outside the house's gutter, which runs through the corner (crossing, their bottoms would
-        // flicker), or from the gable wall
+        // flicker), or from the wall
         gutterRun(Mw(valley ? xE + 2 * r - 0.015 : x0 + 0.01, yT, bg), Mw(xF - 0.01, yT, bg), Ml(0, 0, sg), r);
         if (!p.downpipes) continue;
         // a downpipe at the far end of each side
@@ -1559,7 +1589,7 @@ function build() {
     box("trim", (a, b, c) => { const x = lerp(x0, x1, a), z = lerp(z0, z1, c); return [x, b ? roofUnder(x, z) : F, z]; }, [1,0,0], UP, [0,0,1]);
   }
   if (F > 0.01) abox("foundation", [-W/2 - PLINTH_OUT, 0, -D/2 - PLINTH_OUT], [W/2 + PLINTH_OUT, F, D/2 + PLINTH_OUT]);
-  if (wing) buildWingBody();
+  WINGS.forEach(buildWingBody);
   if (!hollow) abox("collision", [-W/2, 0, -D/2], [W/2, top, D/2]);
   else {
     // Floor, then each wall as slabs with a gap for the door (the door leaf has its own collision)
@@ -1611,7 +1641,7 @@ function build() {
     abox("collision", [-W/2 - oo, top, -D/2 - oo], [W/2 + oo, top + 0.3, D/2 + oo]);
   }
 
-  if (wing) buildWingRoof();
+  WINGS.forEach(buildWingRoof);
   for (const s of [1, -1]) for (const X of DORMS[s]) buildDormer(X);
 
   if (p.gutters && p.roofType !== "flat") {
@@ -1622,7 +1652,7 @@ function build() {
       // (on a gable roof the gutter stops 1 cm short of the barge boards: its end in their plane would flicker)
       const gEnd = hip ? hA + r : hA - 0.01;
       // (into the wing's cut by 2 cm, its end behind the wing's eave board: in the board's plane it would flicker)
-      const gCuts = cutsFor(s).map(([c0, c1]) => WG && WG.cut && c0 === WG.cut[0] && c1 === WG.cut[1] ? [c0 + 0.02, c1 - 0.02] : [c0, c1]);
+      const gCuts = cutsFor(s).map(([c0, c1]) => sideWGs(s).some(g => c0 === g.cut[0] && c1 === g.cut[1]) ? [c0 + 0.02, c1 - 0.02] : [c0, c1]);
       for (const [x0, x1] of segs(-gEnd, gEnd, gCuts)) gutterRun(M(x0, yT, bg), M(x1, yT, bg), M(0, 0, s), r);
       // (the end gutters stop 2 cm short of the eaves' boards: their ends in the boards' plane would flicker)
       if (hip) { const ag = s * (hA + r - 0.02); gutterRun(M(ag, yT, -hB + 0.02), M(ag, yT, hB - 0.02), M(s, 0, 0), r); }
@@ -1672,7 +1702,7 @@ build();
 const {collision, ...visual} = G;
 // the doors in the window list's order (door1, door2 ...)
 doors.sort((a, b) => (a.op.id || 0) - (b.op.id || 0));
-return {G: visual, dims, opsByWall, collision, rooms, downpipes, doors, refs, wing: liveWing(p)};
+return {G: visual, dims, opsByWall, collision, rooms, downpipes, doors, refs, wings: liveWings(p)};
 }
 
 /* ---------- Materials ---------- */

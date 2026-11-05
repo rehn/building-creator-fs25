@@ -89,17 +89,19 @@ test("from photos: animal buildings are told the app makes the animals' doorway"
   assert.deepEqual([p.pastureWall, p.fenceDepth], ["left", 25], "the answer's pasture becomes the barn's");
 });
 
-test("from photos: a house's answer can have a wing, with openings on its walls", () => {
+test("from photos: a house's answer can have wings, with openings on their walls", () => {
   const {schema, guide} = photoRequest("house");
-  assert.ok(schema.properties.settings.properties.wing && schema.properties.settings.properties.wingWall);
-  assert.ok(schema.properties.openings.items.properties.wall.enum.includes("wingEnd"));
-  assert.match(guide, /L- and T-shaped houses/);
-  assert.ok(!photoRequest("cow").schema.properties.openings.items.properties.wall.enum.includes("wingEnd"), "barns have no wing");
-  const p = applyAnswer("house", {settings: {wing: true, wingWall: "back", wingPos: 0.2, wingWidth: 6, wingDepth: 5},
-    openings: [{wall: "wingEnd", type: "door", floor: 0, along: 0.5, width: 1, height: 2.1, sill: 0, porch: "porch"},
-               {wall: "wingLeft", type: "window", floor: 0, along: 0.5, width: 1, height: 1.2, sill: 0.9, porch: "none"}]});
-  assert.equal(p.wing, true);
-  assert.deepEqual(p.windows.map(w => w.wall).sort(), ["wingEnd", "wingLeft"]);
+  assert.ok(schema.properties.wings && schema.properties.wings.items.properties.floors);
+  const walls = schema.properties.openings.items.properties.wall.enum;
+  assert.ok(walls.includes("w1End") && walls.includes("w4Right"));
+  assert.match(guide, /an L, a T or a U/);
+  const cow = photoRequest("cow").schema;
+  assert.ok(!cow.properties.wings && !cow.properties.openings.items.properties.wall.enum.includes("w1End"), "barns have no wings");
+  const p = applyAnswer("house", {settings: {}, wings: [{wall: "back", along: 0.2, width: 6, depth: 5, floors: 0}, {wall: "front", along: 0.8, width: 4, depth: 3, floors: 1}],
+    openings: [{wall: "w1End", type: "door", floor: 0, along: 0.5, width: 1, height: 2.1, sill: 0, porch: "porch"},
+               {wall: "w2Left", type: "window", floor: 0, along: 0.5, width: 1, height: 1.2, sill: 0.9, porch: "none"}]});
+  assert.deepEqual(p.wings.map(w => [w.id, w.wall, w.pos, w.floors]), [[1, "back", 0.2, 0], [2, "front", 0.8, 1]]);
+  assert.deepEqual(p.windows.map(w => w.wall).sort(), ["w1End", "w2Left"]);
 });
 
 test("from photos: a prompt for a chat with Claude, and its answer pasted back", async () => {
@@ -112,7 +114,7 @@ test("from photos: a prompt for a chat with Claude, and its answer pasted back",
   assert.match(text, /photos/i);
   assert.doesNotMatch(chatPrompt("house", ""), /<admin_notes>/, "no notes, no notes block");
 
-  const a = {seen: "an L", settings: {wing: true, width: 12}, openings: [], notes: "check the wing"};
+  const a = {seen: "an L", settings: {width: 12}, openings: [], notes: "check the wing"};
   // a code block, with chat around it, or bare
   for (const pasted of ["```json\n" + JSON.stringify(a, null, 2) + "\n```", "Here you go:\n```\n" + JSON.stringify(a) + "\n```\nHope it helps!", JSON.stringify(a)])
     assert.deepEqual(readAnswer(pasted), a);

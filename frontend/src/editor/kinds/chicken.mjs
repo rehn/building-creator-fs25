@@ -442,7 +442,7 @@ export default {
     {title: "Chickens", side: "build", hint: "Hens go in and out through a small hatch in the middle of the wall the pasture encloses. The pasture (at least 12 m wide and 6 m deep: the game can't handle a smaller one), the feed pad, the egg pallets and the rest are under Game objects.", fields: [
       {k: "hens", label: "Hens", min: 1, max: MAX_HENS, step: 1}]},
   ],
-  hides: ["Interior", "Kupor (dormers)", "Wing"],
+  hides: ["Interior", "Kupor (dormers)", "Wings"],
   /**
    * Settings as this kind uses them: no sleep point, rooms or dormers; no more hens than fit; and
    * the pasture on a wall without a door if it can be (the opposite one, else another).

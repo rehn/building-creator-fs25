@@ -6,10 +6,10 @@ import {
   SCHEMA, fieldsFor, WALLS, WALL_NAMES, DTYPES, DORM_DEF, MATS, fittingTextures,
   genRow, sanitize, serialize, slugify, buildGeometry, buildI3d, placeableSnippet, gamePlaces, surfaceSpec, scaledUV, colorFor, WP
 } from "./model.mjs";
-import { WINDOW_STYLES, DOOR_STYLES, PORCH_OPTIONS, PORCH_W, PORCH_D } from "./model.mjs";
+import { WINDOW_STYLES, DOOR_STYLES, PORCH_OPTIONS, PORCH_W, PORCH_D, WING_FIELDS, MAX_WINGS } from "./model.mjs";
 import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, henYard, henCap, seeThroughGlass, kindOf } from "./model.mjs";
 import { cowYard } from "./kinds/cow.mjs";
-import { roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, History, wingOf, liveWing, wallsOf, WING_WALLS } from "./layout.mjs";
+import { roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, History, wingsOf, liveWings, wingFloors, wingIdOf, wingWallKey, WING_PARTS, wallsOf } from "./layout.mjs";
 import { OBJECT_TYPES, OBJECT_LIMITS, objectOf, pastureOf, snapBox, snapPasture, objectProblems } from "./objects.mjs";
 import { setAssets, catalogFor, usedAssets } from "./model.mjs";
 import { readObj, assetFolder, flattenI3d } from "./assets.mjs";
@@ -151,18 +151,16 @@ SCHEMA.forEach(g => {
       // Mod details don't change the house, so skip the rebuild.
       if (f.k.startsWith("mod")) { syncOutputs(); persist(); return; }
       if (f.k === "halfStorey" && v) p.windows = p.windows.filter(w => !(w.floor >= p.floors && !gableWall(w.wall)));
-      if (f.k === "wing" && v && liveWing(p) && !p.windows.some(w => WING_WALLS.includes(w.wall)))
-        for (const k of WING_WALLS) for (let fl = 0; fl < p.floors; fl++) p.windows = genRow(p, p.windows, k, fl, k === "wingEnd" ? 2 : 1);
       // Keep the kind's rules (a hen house's pasture never on the door's wall, no more hens than
       // fit ...) and show any setting they changed, so the preview, controls and export agree.
       const ruled = applyKindRules();
       if (ruled) syncControls(); else syncOutputs();
       persist(); rebuild(false);
-      if (["floors", "halfStorey", "roofType", "ridge", "interior", "curtainStyle", "curtainColor", "winStyle", "doorStyle"].includes(f.k) || f.k.startsWith("wing")) { renderWinUI(); renderDormUI(); }
+      if (["floors", "halfStorey", "roofType", "ridge", "interior", "curtainStyle", "curtainColor", "winStyle", "doorStyle"].includes(f.k)) { renderWinUI(); renderDormUI(); renderWingsUI(); }
       if (ob.sel || ob.on) renderObjectsUI();
     });
   });
-  if (g.title === "Wing") { const w = document.createElement("p"); w.className = "warn"; w.id = "wingWarn"; w.hidden = true; d.appendChild(w); }
+  if (g.custom === "wings") { const ed = document.createElement("div"); ed.id = "wingsEditor"; d.appendChild(ed); }
   if (g.custom === "dormers") { const ed = document.createElement("div"); ed.id = "dormEditor"; d.appendChild(ed); }
   if (g.custom === "inside") { const ed = document.createElement("div"); ed.id = "insideEditor"; d.appendChild(ed); }
   if (g.custom === "objects") { const ed = document.createElement("div"); ed.id = "objectsEditor"; d.appendChild(ed); }
@@ -188,6 +186,7 @@ function syncControls() {
   renderWinUI();
   renderDormUI();
   renderObjectsUI();
+  renderWingsUI();
 }
 function syncOutputs() {
   for (const k in inputs) {
@@ -211,9 +210,6 @@ function syncOutputs() {
   off("downpipes", !p.gutters || p.roofType === "flat");
   off("ventilators", p.roofType === "flat");
   off("curtainStyle", !p.interior); off("curtainColor", !p.interior);
-  for (const k of ["wingWall", "wingPos", "wingWidth", "wingDepth"]) off(k, !p.wing);
-  const ww = $("wingWarn"), wg = wingOf(p);
-  if (ww) { ww.hidden = !(wg && wg.off); ww.textContent = wg && wg.off ? wg.off : ""; }
   inputs.modDescription.placeholder = defaultModDescription(p);
 }
 
@@ -602,16 +598,20 @@ function applySurfaces() {
 /* ---------- Window editor ---------- */
 let selId = null;
 function floorName(f) { return p.halfStorey && f === p.floors ? "Attic" : `Floor ${f + 1}`; }
+/** How many floors a wall has: the house's, or its wing's. */
+function floorsOf(wall) { const id = wingIdOf(wall), w = id && (p.wings || []).find(x => x.id === id); return w ? wingFloors(p, w) : p.floors; }
 function gableWall(wall) {
-  if (wall === "wingEnd") return p.roofType !== "flat" && !!liveWing(p);
+  if (wingIdOf(wall)) return wall.endsWith("End") && p.roofType !== "flat";
   return p.roofType === "gable" && (p.ridge === "width" ? (wall === "left" || wall === "right") : (wall === "front" || wall === "back"));
 }
+/** Whether a window on floor f can be on wall k (attic windows only in a gable of a wall as tall as the house). */
+const floorOk = (f, k) => f < floorsOf(k) || (f === p.floors && floorsOf(k) === p.floors && gableWall(k));
 /** The building's walls now: the four, and the wing's when it has one. */
 const wallKeys = () => Object.keys(wallsOf(p));
 const wallLen = wall => (wallsOf(p)[wall] || {L: 1}).L;
 function sortedWindows() {
-  const order = {front:0, back:1, left:2, right:3, wingEnd:4, wingLeft:5, wingRight:6}, walls = wallsOf(p);
-  return p.windows.filter(w => walls[w.wall] && w.floor < p.floors + (p.halfStorey ? 1 : 0)).sort((a, b) => order[a.wall] - order[b.wall] || a.floor - b.floor || a.pos - b.pos);
+  const order = {front: 0, back: 1, left: 2, right: 3}, ord = k => k in order ? order[k] : 10 * wingIdOf(k) + ["End", "Left", "Right"].findIndex(s => k.endsWith(s)), walls = wallsOf(p);
+  return p.windows.filter(w => walls[w.wall] && w.floor < p.floors + (p.halfStorey ? 1 : 0)).sort((a, b) => ord(a.wall) - ord(b.wall) || a.floor - b.floor || a.pos - b.pos);
 }
 function winLabel(w) {
   const row = sortedWindows().filter(x => x.wall === w.wall && x.floor === w.floor);
@@ -667,7 +667,7 @@ function renderWinUI() {
   for (const wall of wallKeys()) {
     html += `<tr><th scope="row">${WALL_NAMES[wall]}</th>`;
     for (let f = 0; f < floors; f++) {
-      if (f === p.floors && !gableWall(wall)) { html += `<td><span aria-label="No attic windows on this wall">\u2013</span></td>`; continue; }
+      if (!floorOk(f, wall)) { html += `<td><span aria-label="No windows on this floor of this wall">\u2013</span></td>`; continue; }
       const n = p.windows.filter(w => w.wall === wall && w.floor === f && w.type !== "door").length, nm = `${WALL_NAMES[wall]}, ${floorName(f).toLowerCase()}`;
       html += `<td><div class="step"><button type="button" data-w="${wall}" data-f="${f}" data-d="-1" aria-label="Fewer windows: ${nm}" ${n ? "" : "disabled"}>\u2212</button><span>${n}</span><button type="button" data-w="${wall}" data-f="${f}" data-d="1" aria-label="More windows: ${nm}" ${n >= 8 ? "disabled" : ""}>+</button></div></td>`;
     }
@@ -691,7 +691,7 @@ function renderWinUI() {
     if (lastDoor) html += `<p class="hint">This is the building’s only door, so it stays a door. Make another window a door first to remove this one or make it a window.</p>`;
     else if (s.floor !== 0) html += `<p class="hint">Doors can only go on the ground floor.</p>`;
     // any window or door can move to another wall (attic windows only to a gable)
-    const walls = wallKeys().filter(k => s.floor < p.floors || gableWall(k));
+    const walls = wallKeys().filter(k => floorOk(s.floor, k));
     html += `<div class="field"><div class="fl"><label for="wf-wall">Wall</label></div><select id="wf-wall">${walls.map(k => opt(k, WALL_NAMES[k], s.wall)).join("")}</select></div>`;
     html += `<div class="field"><div class="fl"><label for="wf-style">Style</label></div><select id="wf-style">${opt("default", `Same as the building (${own})`, s.style)}${styles.map(x => opt(x.id, x.name, s.style)).join("")}</select></div>`;
     for (const f of WIN_FIELDS) {
@@ -745,6 +745,51 @@ function renderWinUI() {
   }
 }
 /* ---------- Game places ---------- */
+/* ---------- Wings ---------- */
+// The house's wings (an L, T or U): a list in the Wings section, each with its wall, place, size and floors.
+let wSel = null;
+const wingLabel = w => `Wing ${w.id}: ${WALL_NAMES[w.wall]}`;
+function renderWingsUI() {
+  const ed = $("wingsEditor");
+  if (!ed) return;
+  const wings = p.wings || [], live = wingsOf(p);
+  if (!wings.some(w => w.id === wSel)) wSel = null;
+  const opt = (v, label, cur) => `<option value="${v}" ${String(v) === String(cur) ? "selected" : ""}>${esc(label)}</option>`;
+  let html = wings.length ? `<ul class="objlist">${wings.map(w => { const l = live.find(x => x.id === w.id); return `<li><button type="button" data-wing="${w.id}" aria-pressed="${w.id === wSel}">${esc(wingLabel(w))}</button>${l && l.off ? ` <span class="warn">${esc(l.off)}</span>` : ""}</li>`; }).join("")}</ul>`
+    : `<p class="hint">No wings: the house is a rectangle.</p>`;
+  if (wings.length < MAX_WINGS) html += `<div class="addrow"><button type="button" id="wingAdd">+ Add a wing</button></div>`;
+  const w = wings.find(x => x.id === wSel);
+  if (w) {
+    const range = f => `<div class="field"><div class="fl"><label for="wg-${f.k}">${f.label}</label><output id="wg-${f.k}-o">${(+w[f.k]).toFixed(2)}${f.k === "pos" ? "" : " m"}</output></div><input type="range" id="wg-${f.k}" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}" value="${w[f.k]}"></div>`;
+    html += `<div class="wincard"><div class="field"><div class="fl"><label for="wg-wall">On the wall</label></div><select id="wg-wall">${["front", "back", "left", "right"].map(k => opt(k, WALL_NAMES[k], w.wall)).join("")}</select></div>`
+      + WING_FIELDS.map(range).join("")
+      + `<div class="field"><div class="fl"><label for="wg-floors">Floors</label></div><select id="wg-floors">${opt(0, `As many as the house (${p.floors})`, w.floors)}${Array.from({length: p.floors - 1}, (_, i) => opt(i + 1, `${i + 1} (lower than the house)`, w.floors)).join("")}</select></div>`
+      + `<p class="hint">A wing with fewer floors has a lower roof.</p><div class="row"><button type="button" id="wingRemove" class="danger">Remove this wing</button></div></div>`;
+  }
+  ed.innerHTML = html;
+  const changed = (renderToo = true) => { persist(); rebuild(false); if (renderToo) { renderWingsUI(); renderWinUI(); } };
+  ed.querySelectorAll("[data-wing]").forEach(b => b.onclick = () => { wSel = +b.dataset.wing; renderWingsUI(); });
+  if ($("wingAdd")) $("wingAdd").onclick = () => {
+    const id = [1, 2, 3, 4].find(i => !wings.some(x => x.id === i));
+    // on the first wall without a wing (the back first), at an end
+    const wall = ["back", "front", "right", "left"].find(k => !wings.some(x => x.wall === k)) || "back";
+    p.wings = [...wings, {id, wall, pos: wall === "back" || wall === "front" ? 0.15 : 0.5, width: 6, depth: 5, floors: 0}];
+    for (const part of WING_PARTS) for (let fl = 0; fl < p.floors; fl++) p.windows = genRow(p, p.windows, wingWallKey(id, part), fl, part === "End" ? 2 : 1);
+    wSel = id; changed();
+  };
+  if (!w) return;
+  ed.querySelectorAll(".wincard input[type=range]").forEach(inp => {
+    inp.oninput = () => { w[inp.dataset.k] = +inp.value; $(`wg-${inp.dataset.k}-o`).textContent = `${(+inp.value).toFixed(2)}${inp.dataset.k === "pos" ? "" : " m"}`; persist(); rebuild(false); };
+    inp.onchange = () => changed();
+  });
+  $("wg-wall").onchange = e => { w.wall = e.target.value; changed(); };
+  $("wg-floors").onchange = e => { w.floors = +e.target.value; changed(); };
+  $("wingRemove").onclick = () => {
+    p.wings = wings.filter(x => x.id !== w.id);
+    p.windows = p.windows.filter(x => wingIdOf(x.wall) !== w.id);
+    wSel = null; selId = null; changed(); toast(`${wingLabel(w)} removed`);
+  };
+}
 /* ---------- Game objects ---------- */
 // The game's boxes and icons and the pasture's fence (objects.mjs): a list in the Game objects section, and
 // a plan view of the yard to drag them in (ob.on).
@@ -1452,7 +1497,7 @@ function updateYardMarker(geo) {
 function rebuild(fit) {
   const geo = buildGeometry(p);
   ({G, dims, opsByWall} = geo);
-  const wingNow = geo.wing;
+  const wingsNow = geo.wings || [];
   let tris = 0;
   if (renderer) {
     MATS.forEach(m => {
@@ -1492,7 +1537,7 @@ function rebuild(fit) {
   refreshWin(); refreshDorm(); renderInsideUI();
   if ($("objPlan")) $("objPlan").disabled = !renderer;
   MATS.forEach(m => tris += G[m].i.length / 3);
-  readout.innerHTML = `<span><b>${dims.W.toFixed(1)} \u00D7 ${dims.D.toFixed(1)} m</b>${wingNow ? ` + <b>${wingNow.ww.toFixed(1)} × ${wingNow.wd.toFixed(1)} m</b> wing` : ""} footprint</span><span><b>${dims.ridgeY.toFixed(1)} m</b> to the top</span><span><b>${tris.toLocaleString()}</b> triangles</span>`;
+  readout.innerHTML = `<span><b>${dims.W.toFixed(1)} \u00D7 ${dims.D.toFixed(1)} m</b>${wingsNow.map(w => ` + <b>${w.ww.toFixed(1)} × ${w.wd.toFixed(1)} m</b> wing`).join("")} footprint</span><span><b>${dims.ridgeY.toFixed(1)} m</b> to the top</span><span><b>${tris.toLocaleString()}</b> triangles</span>`;
 }
 
 const toastEl = $("toast"); let toastT;

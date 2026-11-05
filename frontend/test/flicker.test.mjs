@@ -58,7 +58,7 @@ function hidden(t, geo, walkIn, F) {
   const {W, D, top} = geo.dims, ax = Math.abs(c[0]), az = Math.abs(c[2]);
   if (c[1] < 0) return true;
   // a house's wing is solid too (its plinth starts 6 cm out from the house's)
-  const wr = geo.wing && geo.wing.rect, inWing = (m = 0) => wr && c[0] > wr.x0 - m && c[0] < wr.x1 + m && c[2] > wr.z0 - m && c[2] < wr.z1 + m;
+  const inWing = (m = 0) => (geo.wings || []).some(({rect: wr}) => c[0] > wr.x0 - m && c[0] < wr.x1 + m && c[2] > wr.z0 - m && c[2] < wr.z1 + m);
   if (c[1] < F && inWing(0.06)) return true;
   if (c[1] < top && inWing() && !inOpening(c, geo)) return true;
   if (c[1] < F && ax < W / 2 + 0.06 && az < D / 2 + 0.06) return true;
@@ -108,18 +108,23 @@ test("no flickering faces with any window or door style, on a house and in a bar
   }
 });
 
-test("no flickering faces on a house with a wing (L, T, against a gable, hip and flat roofs)", async () => {
+test("no flickering faces on a house with wings (L, T, U, lower, against a gable, hip and flat roofs)", async () => {
   const { genRow } = await import("../src/editor/model.mjs");
+  const wing = (wall, pos, extra = {}) => ({wall, pos, width: 6, depth: 5, floors: 0, ...extra});
   const cases = [
-    {wingWall: "back", wingPos: 0.15}, {wingWall: "back", wingPos: 0.5}, {wingWall: "front", wingPos: 0.9, wingWidth: 7},
-    {wingWall: "left", wingPos: 0.5, wingWidth: 4}, {wingWall: "right", wingPos: 0.3, wingWidth: 4, ridge: "width"},
-    {wingWall: "back", roofType: "hip", width: 12}, {wingWall: "left", roofType: "flat"}, {wingWall: "back", foundation: 0.9, overhang: 0.9},
-    {wingWall: "left", ridge: "depth", wingPos: 0.2},
+    {wings: [wing("back", 0.15)]}, {wings: [wing("back", 0.5)]}, {wings: [wing("front", 0.9, {width: 7})]},
+    {wings: [wing("left", 0.5, {width: 4})]}, {wings: [wing("right", 0.3, {width: 4})]},
+    {roofType: "hip", width: 12, wings: [wing("back", 0.5)]}, {roofType: "flat", wings: [wing("left", 0.5)]}, {foundation: 0.9, overhang: 0.9, wings: [wing("back", 0.15)]},
+    {ridge: "depth", wings: [wing("left", 0.2)]},
+    // a U, a wing on each long side, a lower wing against the eaves, a lower annex on a gable end
+    {width: 14, wings: [wing("back", 0), wing("back", 1, {width: 5})]}, {width: 12, wings: [wing("back", 0.15), wing("front", 0.85)]},
+    {wings: [wing("back", 0.2, {floors: 1, width: 5})]}, {wings: [wing("back", 0.2, {floors: 1, width: 7})]}, {wings: [wing("left", 0.5, {floors: 1, width: 4})]},
+    {floors: 3, wings: [wing("back", 0.2, {floors: 1, width: 5}), wing("front", 0.8, {floors: 2})]},
   ];
   for (const c of cases) {
-    let p = sanitize({wing: true, wingWidth: 6, wingDepth: 5, ...c});
-    for (const k of ["wingEnd", "wingLeft", "wingRight"]) for (let f = 0; f < p.floors; f++) p.windows = genRow(p, p.windows, k, f, 2);
-    p.windows.push({id: 99, wall: "wingEnd", floor: 0, pos: 0.5, w: 1, h: 2.1, sill: 0, type: "door", style: "default", porch: "porch", porchW: 2.2, porchD: 1.6});
+    let p = sanitize({...c});
+    for (const w of p.wings) for (const part of ["End", "Left", "Right"]) for (let f = 0; f < p.floors; f++) p.windows = genRow(p, p.windows, `w${w.id}${part}`, f, 2);
+    p.windows.push({id: 99, wall: "w1End", floor: 0, pos: 0.5, w: 1, h: 2.1, sill: 0, type: "door", style: "default", porch: "porch", porchW: 2.2, porchD: 1.6});
     p = sanitize(p);
     const f = flickers(buildGeometry(p), SHELL, {F: p.foundation});
     assert.equal(f.length, 0, `${JSON.stringify(c)}:\n` + f.map(show).join("\n"));
@@ -137,7 +142,7 @@ test("no flickering faces with two wall materials and the drip board between the
   const barn = PRESETS.find(x => x.id === "ladugard").settings;
   const cases = [
     {floors: 2, wallSplit: "floor"}, {wallSplit: "height", splitHeight: 1.2}, {wallSplit: "height", splitHeight: 0.9, sill: 0.8},
-    {floors: 2, wallSplit: "floor", wing: true, wingWall: "back", wingPos: 0.15}, {...barn, floors: 2, floorHeight: 2.6, wallSplit: "floor"},
+    {floors: 2, wallSplit: "floor", wings: [{wall: "back", pos: 0.15, width: 6, depth: 5}]}, {...barn, floors: 2, floorHeight: 2.6, wallSplit: "floor"},
     {...barn, wallSplit: "height", splitHeight: 1.6},
   ];
   for (const c of cases) {
