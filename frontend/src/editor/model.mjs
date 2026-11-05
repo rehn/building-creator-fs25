@@ -5,7 +5,7 @@ import { I3dDoc, tg, shape, boxMesh, splitByColor, mappingsFor, num, v3 } from "
 import { KINDS, kindOf } from "./kinds/index.mjs";
 import { WALL_T, wallFrames, doorSpan, roomOf, footprint, toWorld, cleanItems, problems } from "./layout.mjs";
 export { boxMesh } from "./i3d.mjs";
-export { KINDS, KIND, kindOf, CATEGORIES } from "./kinds/index.mjs";
+export { KINDS, KIND, kindOf, groupByKind, CATEGORIES } from "./kinds/index.mjs";
 export { henYard, henCap, HENS_PER_M2, MAX_HENS } from "./kinds/chicken.mjs";
 
 /* ---------- Settings ---------- */

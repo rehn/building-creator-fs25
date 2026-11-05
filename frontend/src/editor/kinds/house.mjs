@@ -35,6 +35,7 @@ function scene(c) {
 export default {
   id: "house",
   name: "Farmhouse",
+  plural: "Farmhouses",
   category: "homes",
   walkIn: false,
   defaults: {},

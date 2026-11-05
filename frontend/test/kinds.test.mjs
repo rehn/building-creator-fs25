@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { KINDS, CATEGORIES, kindOf } from "../src/editor/kinds/index.mjs";
+import { KINDS, CATEGORIES, kindOf, groupByKind } from "../src/editor/kinds/index.mjs";
 import { PRESETS, SCHEMA, sanitize, buildI3d, placeableXml, placeableSnippet, defaultModDescription } from "../src/editor/model.mjs";
 
 // Every kind of building is a module with the same shape (see src/editor/kinds/index.mjs).
@@ -57,4 +57,16 @@ test("settings: a kind's own settings only exist on that kind", () => {
 test("settings: kinds can share a key with their own ranges (a hen house's and a cow barn's pasture depth)", () => {
   assert.equal(sanitize({ kind: "chicken", fenceDepth: 7 }).fenceDepth, 7, "a hen pasture may be 7 m deep");
   assert.equal(sanitize({ kind: "cow", fenceDepth: 7 }).fenceDepth, 10, "a cow pasture at least 10 m");
+});
+
+test("kinds: every kind has a plural name for its group heading", () => {
+  for (const k of KINDS) assert.ok(k.plural && k.plural !== k.name, `${k.id}: plural`);
+});
+
+test("groupByKind: buildings grouped under their kind, kinds in their usual order, order kept inside a group", () => {
+  const list = [{n: 1, kind: "cow"}, {n: 2, kind: ""}, {n: 3, kind: "chicken"}, {n: 4, kind: "cow"}, {n: 5, kind: "spaceship"}];
+  const groups = groupByKind(list, x => x.kind);
+  assert.deepEqual(groups.map(g => g.kind.id), ["house", "chicken", "cow"], "empty kinds are left out");
+  assert.deepEqual(groups[0].items.map(x => x.n), [2, 5], "no kind or an unknown one is a farmhouse");
+  assert.deepEqual(groups[2].items.map(x => x.n), [1, 4]);
 });

@@ -87,6 +87,12 @@ label.stack input { margin-top: 5px; }
 .preset:hover:not(:disabled), .preset:focus-visible { border-color: var(--accent, currentColor); }
 .preset b { font-size: 16px; }
 .preset span { color: var(--muted); font-size: 14px; line-height: 1.4; }
+.kind-group { margin-bottom: 28px; }
+.kind-group > h3, .kind-group > h4 { margin-bottom: 10px; }
+.kind-group > h3 { font-size: 20px; }
+.kind-group > h4 { font-size: 15px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.kind-group > h3 small { color: var(--muted); font-size: 14px; font-weight: normal; margin-left: 6px; }
+.presets .kind-group { margin-bottom: 18px; }
 table.list { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
 table.list th, table.list td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); }
 table.list th { color: var(--muted); font-weight: 500; font-size: 14px; }

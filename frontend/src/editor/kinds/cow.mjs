@@ -267,6 +267,7 @@ const swedishRed = {wallCladding: "lockpanel", wallColor: "#8E2A1E", trimColor: 
 export default {
   id: "cow",
   name: "Cow barn",
+  plural: "Cow barns",
   category: "animals",
   walkIn: true,
   defaults: {cows: 12, pastureWall: "back", fenceDepth: 15},

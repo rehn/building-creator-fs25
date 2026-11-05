@@ -13,6 +13,8 @@ export interface ProjectSummary {
   id: string;
   name: string;
   thumbnail: string;
+  /** Kind of building, only in the list ("" or missing: a farmhouse). */
+  kind?: string;
   version: number;
   createdAt: string;
   updatedAt: string;

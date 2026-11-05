@@ -521,6 +521,9 @@ type ProjectSummary struct {
 	Version   int64     `json:"version"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
+	// Kind is the kind of building (data.kind, "" when it's missing or not text);
+	// only set by ListProjects, so the list can group buildings without loading their data.
+	Kind string `json:"kind,omitempty"`
 }
 
 type Project struct {
@@ -577,7 +580,12 @@ func (s *Store) insertProject(ctx context.Context, userID int64, name string, da
 
 // ListProjects returns a user's projects, the last edited first.
 func (s *Store) ListProjects(ctx context.Context, userID int64) ([]ProjectSummary, error) {
-	rows, err := s.query(ctx, `SELECT id, name, thumbnail, version, created_at, updated_at FROM projects WHERE user_id = ? ORDER BY updated_at DESC, id`, userID)
+	// data is always a JSON object (the API checks it), stored as text in both databases.
+	kind := `CASE WHEN json_type(data, '$.kind') = 'text' THEN json_extract(data, '$.kind') ELSE '' END`
+	if s.dialect == postgres {
+		kind = `CASE WHEN jsonb_typeof(data::jsonb -> 'kind') = 'string' THEN data::jsonb ->> 'kind' ELSE '' END`
+	}
+	rows, err := s.query(ctx, `SELECT id, name, thumbnail, version, created_at, updated_at, `+kind+` FROM projects WHERE user_id = ? ORDER BY updated_at DESC, id`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -586,7 +594,7 @@ func (s *Store) ListProjects(ctx context.Context, userID int64) ([]ProjectSummar
 	for rows.Next() {
 		var p ProjectSummary
 		var created, updated int64
-		if err := rows.Scan(&p.ID, &p.Name, &p.Thumbnail, &p.Version, &created, &updated); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Thumbnail, &p.Version, &created, &updated, &p.Kind); err != nil {
 			return nil, err
 		}
 		p.CreatedAt, p.UpdatedAt = time.UnixMilli(created), time.UnixMilli(updated)

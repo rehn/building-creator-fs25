@@ -321,3 +321,25 @@ func TestListProjectsNewestFirst(t *testing.T) {
 		t.Fatalf("want the last edited project first, got %+v", list)
 	}
 }
+
+func TestListProjectsTellsTheKind(t *testing.T) {
+	s := openTest(t)
+	u := mustUser(t, s, "anna@example.se")
+	for _, d := range []string{`{"kind":"cow","width":16}`, `{"width":10}`, `{"kind":7}`} {
+		if _, err := s.CreateProject(ctx, u.ID, "X", json.RawMessage(d)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	list, err := s.ListProjects(ctx, u.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kinds := map[string]bool{}
+	for _, p := range list {
+		kinds[p.Kind] = true
+	}
+	// A save without a kind (an old farmhouse) lists as "", and so does a kind that isn't text.
+	if len(list) != 3 || !kinds["cow"] || !kinds[""] || len(kinds) != 2 {
+		t.Fatalf("kinds: %+v", list)
+	}
+}

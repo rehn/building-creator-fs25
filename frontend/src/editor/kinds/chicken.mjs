@@ -305,6 +305,7 @@ ${y.fence.map((_, i) => `                    <node node="fence1Node${i + 1}"/>`)
 export default {
   id: "chicken",
   name: "Hen house",
+  plural: "Hen houses",
   category: "animals",
   /** Walk-in: inside walls, hollow collision, a door that opens and a furnished inside. */
   walkIn: true,

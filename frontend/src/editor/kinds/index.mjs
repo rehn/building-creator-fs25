@@ -1,5 +1,6 @@
 // Building kinds. Each kind is a module with the same shape (see house.mjs and chicken.mjs):
-//   id, name, category    what it is and where "New" lists it (CATEGORIES)
+//   id, name, plural      what it is ("Hen house"), and as a heading over a group ("Hen houses")
+//   category              where "New" lists it (CATEGORIES)
 //   walkIn                inside walls, hollow collision, a door that opens and a furnished inside
 //   defaults, sections    its own settings and the editor sections for them (shown first)
 //   hides                 titles of shared editor sections it doesn't use
@@ -18,6 +19,15 @@ export const KINDS = [house, chicken, cow];
 export const KIND = Object.fromEntries(KINDS.map(k => [k.id, k]));
 /** The kind of a project's settings; saves without one are farmhouses. */
 export const kindOf = p => KIND[p && p.kind] || house;
+
+/**
+ * Items grouped under their kind ({kind, items}), kinds in KINDS order, empty kinds left out,
+ * the items' order kept. idOf(item) gives the item's kind id; missing or unknown ids are farmhouses.
+ */
+export function groupByKind(list, idOf) {
+  return KINDS.map(kind => ({kind, items: list.filter(x => kindOf({kind: idOf(x)}) === kind)}))
+    .filter(g => g.items.length);
+}
 
 /** Groups for "New", in order. Only groups with at least one kind are shown. */
 export const CATEGORIES = [

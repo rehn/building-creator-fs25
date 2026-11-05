@@ -5,12 +5,17 @@ import { useRouter } from "next/navigation";
 import { api, type ProjectSummary } from "@/lib/api";
 import { useUser } from "@/lib/useUser";
 import { TopBar } from "@/components/TopBar";
-import { PRESETS, CATEGORIES } from "@/editor/model.mjs";
+import { PRESETS, CATEGORIES, KINDS, groupByKind } from "@/editor/model.mjs";
 
-type Preset = { id: string; name: string; blurb: string; category: string; settings: Record<string, unknown> };
-type Category = { id: string; name: string; blurb: string };
+type Preset = { id: string; name: string; blurb: string; kind: string; category: string; settings: Record<string, unknown> };
+type Kind = { id: string; name: string; plural: string; category: string };
+type Group<T> = { kind: Kind; items: T[] };
 const presets = PRESETS as Preset[];
-const categories = CATEGORIES as Category[];
+const byKind = groupByKind as <T>(list: T[], idOf: (x: T) => string | undefined) => Group<T>[];
+const presetGroups = byKind(presets, x => x.kind);
+// Groups with nothing to build yet, named under the templates.
+const comingSoon = (CATEGORIES as { id: string; name: string }[])
+  .filter(c => !(KINDS as Kind[]).some(k => k.category === c.id)).map(c => c.name);
 
 const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
 function edited(iso: string) {
@@ -30,8 +35,8 @@ export default function HousesPage() {
   const [houses, setHouses] = useState<ProjectSummary[] | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  // "New": null = closed, "" = choosing a category, else the category whose presets are shown.
-  const [choosing, setChoosing] = useState<string | null>(null);
+  // "New" is open: the templates, grouped by kind of building.
+  const [choosing, setChoosing] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -50,34 +55,30 @@ export default function HousesPage() {
     const p = await api.createProject(preset.id === "farmhouse" ? "New house" : preset.name, preset.settings);
     router.push(`/projects/${p.id}`);
   });
-  const category = categories.find(c => c.id === choosing);
   const chooser = (
     <section className="presets" aria-label="New">
       <div className="presets-head">
-        <h3>{category ? category.name : "What do you want to build?"}</h3>
-        {category && <button type="button" onClick={() => setChoosing("")}>Back</button>}
-        <button type="button" onClick={() => setChoosing(null)}>Cancel</button>
+        <h3>What do you want to build?</h3>
+        <button type="button" onClick={() => setChoosing(false)}>Cancel</button>
       </div>
-      <div className="grid">
-        {category
-          ? presets.filter(x => x.category === category.id).map(x => (
-            <button type="button" className="preset" key={x.id} onClick={() => create(x)} disabled={busy}>
-              <b>{x.name}</b>
-              <span>{x.blurb}</span>
-            </button>
-          ))
-          : categories.map(c => {
-            const n = presets.filter(x => x.category === c.id).length;
-            return (
-              <button type="button" className="preset" key={c.id} onClick={() => setChoosing(c.id)} disabled={busy || !n}>
-                <b>{c.name}</b>
-                <span>{n ? c.blurb : "Coming soon"}</span>
+      {presetGroups.map(g => (
+        <div className="kind-group" key={g.kind.id}>
+          <h4>{g.kind.plural}</h4>
+          <div className="grid">
+            {g.items.map(x => (
+              <button type="button" className="preset" key={x.id} onClick={() => create(x)} disabled={busy}>
+                <b>{x.name}</b>
+                <span>{x.blurb}</span>
               </button>
-            );
-          })}
-      </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      {comingSoon.length > 0 && <p className="hint">Coming soon: {comingSoon.join(", ").toLowerCase()}.</p>}
     </section>
   );
+  // Duplicates come back with their data, not the list's kind.
+  const kindOfHouse = (h: ProjectSummary) => h.kind ?? (("data" in h ? (h as { data: { kind?: unknown } }).data.kind : "") as string);
   const duplicate = (h: ProjectSummary) => run(async () => {
     const p = await api.duplicateProject(h.id);
     setHouses(list => [p, ...(list ?? [])]);
@@ -104,40 +105,43 @@ export default function HousesPage() {
       <main className="page">
         <div className="page-head">
           <h2>My buildings</h2>
-          <button className="primary" type="button" onClick={() => setChoosing("")} disabled={!user || busy} aria-expanded={choosing !== null}>New</button>
+          <button className="primary" type="button" onClick={() => setChoosing(true)} disabled={!user || busy} aria-expanded={choosing}>New</button>
         </div>
         {(error || userError) && <p className="error" role="alert">{error || userError}</p>}
-        {choosing !== null && chooser}
+        {choosing && chooser}
         {!houses && !error && !userError && <p className="loading">Loading your buildings…</p>}
-        {houses && houses.length === 0 && choosing === null && (
+        {houses && houses.length === 0 && !choosing && (
           <div className="empty">
             <h3>Nothing built yet</h3>
-            <p className="hint">Start from a farmhouse or a hen house, set its size, roof, windows and colors, and export it for Giants Editor or as a game mod.</p>
-            <button className="primary" type="button" onClick={() => setChoosing("")} disabled={busy}>Build your first building</button>
+            <p className="hint">Start from a farmhouse, a hen house or a cow barn, set its size, roof, windows and colors, and export it for Giants Editor or as a game mod.</p>
+            <button className="primary" type="button" onClick={() => setChoosing(true)} disabled={busy}>Build your first building</button>
           </div>
         )}
-        {houses && houses.length > 0 && (
-          <div className="grid">
-            {houses.map(h => (
-              <article className="house" key={h.id}>
-                <Link className="thumb" href={`/projects/${h.id}`} aria-label={`Open ${h.name}`}>
-                  {h.thumbnail
-                    ? <img src={h.thumbnail} alt="" />
-                    : <span className="none">No preview yet</span>}
-                </Link>
-                <div className="info">
-                  <Link className="name" href={`/projects/${h.id}`}>{h.name}</Link>
-                  <small>{edited(h.updatedAt)}</small>
-                  <div className="actions">
-                    <button type="button" onClick={() => rename(h)} disabled={busy}>Rename</button>
-                    <button type="button" onClick={() => duplicate(h)} disabled={busy}>Duplicate</button>
-                    <button type="button" className="danger" onClick={() => remove(h)} disabled={busy}>Delete</button>
+        {houses && houses.length > 0 && byKind(houses, kindOfHouse).map(g => (
+          <section className="kind-group" key={g.kind.id} aria-label={g.kind.plural}>
+            <h3>{g.kind.plural} <small>{g.items.length}</small></h3>
+            <div className="grid">
+              {g.items.map(h => (
+                <article className="house" key={h.id}>
+                  <Link className="thumb" href={`/projects/${h.id}`} aria-label={`Open ${h.name}`}>
+                    {h.thumbnail
+                      ? <img src={h.thumbnail} alt="" />
+                      : <span className="none">No preview yet</span>}
+                  </Link>
+                  <div className="info">
+                    <Link className="name" href={`/projects/${h.id}`}>{h.name}</Link>
+                    <small>{edited(h.updatedAt)}</small>
+                    <div className="actions">
+                      <button type="button" onClick={() => rename(h)} disabled={busy}>Rename</button>
+                      <button type="button" onClick={() => duplicate(h)} disabled={busy}>Duplicate</button>
+                      <button type="button" className="danger" onClick={() => remove(h)} disabled={busy}>Delete</button>
+                    </div>
                   </div>
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
+                </article>
+              ))}
+            </div>
+          </section>
+        ))}
       </main>
     </>
   );
