@@ -126,12 +126,15 @@ export const api = {
   template: (id: string) => request<Template>("GET", "/admin/templates/" + encodeURIComponent(id)),
   /** Starts a template: form fields kind, name, blurb and photos. */
   createTemplate: (form: FormData) => send<Template>("POST", "/admin/templates", form),
-  updateTemplate: (id: string, patch: { name?: string; blurb?: string; settings?: Record<string, unknown>; thumbnail?: string; projectId?: string; published?: boolean }) =>
+  updateTemplate: (id: string, patch: { name?: string; blurb?: string; settings?: Record<string, unknown>; thumbnail?: string; projectId?: string; published?: boolean; suggestion?: object }) =>
     request<Template>("PATCH", "/admin/templates/" + encodeURIComponent(id), patch),
   deleteTemplate: (id: string) => request<void>("DELETE", "/admin/templates/" + encodeURIComponent(id)),
   /** Asks Claude to suggest settings from the photos (takes up to a few minutes). */
   suggestTemplate: (id: string, input: { guide: string; notes: string; schema: object }) =>
     request<Template>("POST", "/admin/templates/" + encodeURIComponent(id) + "/suggest", input),
+
+  /** Whether the server can ask Claude itself (it has an ANTHROPIC_API_KEY). */
+  visionStatus: () => request<{ enabled: boolean }>("GET", "/admin/vision"),
 
   invites: () => request<Invite[]>("GET", "/admin/invites"),
   createInvite: (email: string) => request<{ invite: Invite; link: string }>("POST", "/admin/invites", { email }),

@@ -56,7 +56,12 @@ The Google button only shows up when both are set.
 
 As the admin, open **Admin** and choose **New from photos**. Pick the kind of building, add photos of a real one and anything you know about it (its length, which photo is the front). Claude reads the photos and suggests the settings, with notes on what it wasn't sure of. You then adjust the building in the editor with the photos above it, and **Publish template**: it shows up under **New** for everyone. Unpublish, rename or delete it on the Admin page; buildings made from it stay.
 
-Claude needs an Anthropic API key: put it in `.env` as `ANTHROPIC_API_KEY` (from the [Anthropic Console](https://console.anthropic.com/)). The photos are sent to Anthropic. Without a key the wizard still works, starting from one of the built-in designs.
+Claude can read the photos two ways, and the wizard offers both:
+
+- **Ask Claude here:** the server sends the photos to the Claude API and fills in the answer. It needs an Anthropic API key in `.env` as `ANTHROPIC_API_KEY` (from the [Anthropic Console](https://console.anthropic.com/)); API use is paid per request, separately from a Claude subscription.
+- **Use Claude in a chat:** copy the prompt the wizard gives you into a chat at [claude.ai](https://claude.ai), attach the same photos, and paste Claude's answer back. No key needed; it's part of your Claude plan.
+
+Or skip Claude and start from one of the built-in designs.
 
 ## Run it on Kubernetes (Helm)
 

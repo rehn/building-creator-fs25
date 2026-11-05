@@ -98,3 +98,21 @@ test("from photos: a house's answer can have a wing, with openings on its walls"
   assert.equal(p.wing, true);
   assert.deepEqual(p.windows.map(w => w.wall).sort(), ["wingEnd", "wingLeft"]);
 });
+
+test("from photos: a prompt for a chat with Claude, and its answer pasted back", async () => {
+  const { chatPrompt, readAnswer } = await import("../src/editor/fromPhotos.mjs");
+  const text = chatPrompt("house", "About 12 m long.");
+  const {guide, schema} = photoRequest("house");
+  assert.ok(text.includes(guide), "the same guide as the API gets");
+  assert.ok(text.includes(JSON.stringify(schema, null, 1)), "and the same answer format");
+  assert.match(text, /About 12 m long\./);
+  assert.match(text, /photos/i);
+  assert.doesNotMatch(chatPrompt("house", ""), /<admin_notes>/, "no notes, no notes block");
+
+  const a = {seen: "an L", settings: {wing: true, width: 12}, openings: [], notes: "check the wing"};
+  // a code block, with chat around it, or bare
+  for (const pasted of ["```json\n" + JSON.stringify(a, null, 2) + "\n```", "Here you go:\n```\n" + JSON.stringify(a) + "\n```\nHope it helps!", JSON.stringify(a)])
+    assert.deepEqual(readAnswer(pasted), a);
+  for (const bad of ["", "no json here", "```json\n{\"settings\": [1,2\n```", "[1, 2]", "{\"hello\": 1}"])
+    assert.throws(() => readAnswer(bad), /answer|settings|JSON/i, bad);
+});

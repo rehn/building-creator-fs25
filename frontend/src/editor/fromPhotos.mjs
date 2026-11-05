@@ -133,3 +133,52 @@ export function applyAnswer(kindId, answer) {
   }
   return sanitize(settings);
 }
+
+/**
+ * The same request as a prompt for a chat with Claude (claude.ai), for when the server has no API key
+ * or the admin would rather use their subscription: the admin attaches the photos and pastes the
+ * answer back (readAnswer). The task is the one the server gives the API (backend/internal/vision).
+ */
+export function chatPrompt(kindId, notes = "") {
+  const {guide, schema} = photoRequest(kindId), kind = KIND[kindId];
+  const n = String(notes || "").trim();
+  return `I'm making a ${kind.name.toLowerCase()} for Farming Simulator 25 in "House to i3d", a web app that builds buildings ` +
+`from settings, and I've attached photos of a real one. Look carefully at every photo, work out the building's shape, proportions, ` +
+`roof, cladding, colours, and where its windows and doors are, and answer with settings for the app that make the closest match it can build.
+
+Judge sizes from things of known size: a door is about 2 m tall, a person about 1.8 m, a window about 1 m, a wall board about ` +
+`15-20 cm wide, a car about 4.5 m long. Use my notes over your own estimates. Colours are hex codes of the paint as it would look new ` +
+`and in daylight, not in shadow.
+
+The app can't build everything a real building has. Pick the nearest option it has, and say in "notes" what doesn't match, and ` +
+`what you weren't sure of, so I know what to check. If a wall can't be seen in any photo, give it what such buildings usually have and say so.
+
+<settings_guide>
+${guide}
+</settings_guide>
+${n ? `\n<admin_notes>\n${n}\n</admin_notes>\n` : ""}
+Answer with one JSON code block and nothing else, matching this JSON schema (every field is required):
+
+\`\`\`json
+${JSON.stringify(schema, null, 1)}
+\`\`\``;
+}
+
+/**
+ * Claude's answer as pasted from a chat: the JSON object in it (in a code block or not, with or
+ * without words around it). Throws an Error saying what's wrong when there isn't one.
+ */
+export function readAnswer(text) {
+  const t = String(text || "").trim();
+  if (!t) throw new Error("Paste Claude’s answer first.");
+  const fence = t.match(/```(?:json)?\s*\n?([\s\S]*?)```/), body = fence ? fence[1] : t;
+  const a = body.indexOf("{"), b = body.lastIndexOf("}");
+  if (a < 0 || b < a) throw new Error("That isn’t Claude’s answer: there’s no JSON in it. Copy the whole code block.");
+  let v;
+  try { v = JSON.parse(body.slice(a, b + 1)); } catch {
+    throw new Error("The JSON in that answer is broken or cut off. Copy the whole code block, or ask Claude to write it again.");
+  }
+  if (!v || typeof v !== "object" || Array.isArray(v) || (typeof v.settings !== "object" && !Array.isArray(v.openings)))
+    throw new Error("That JSON doesn’t have the settings in it. Ask Claude to answer in the format the prompt asks for.");
+  return v;
+}

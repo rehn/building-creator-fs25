@@ -167,3 +167,25 @@ func TestTemplateValidation(t *testing.T) {
 	expect(t, admin.do("GET", "/api/templates/"+tp.ID+"/photos/9", nil), 404)
 	expect(t, admin.do("GET", "/api/templates/"+tp.ID+"/photos/x", nil), 404)
 }
+
+func TestTemplatePastedAnswer(t *testing.T) {
+	srv := newTestServer(t)
+	admin := signupAdmin(t, srv)
+	if decode[map[string]bool](t, admin.do("GET", "/api/admin/vision", nil))["enabled"] {
+		t.Fatal("no key: the API option is off")
+	}
+	tp := decode[store.Template](t, admin.newTemplate(barn()))
+	rec := admin.do("PATCH", "/api/admin/templates/"+tp.ID, map[string]any{"suggestion": map[string]any{"seen": "an L", "settings": map[string]any{"wing": true}}})
+	expect(t, rec, 200)
+	if got := decode[store.Template](t, rec); !strings.Contains(string(got.Suggestion), `"an L"`) {
+		t.Fatalf("an answer pasted from a chat is kept like Claude's: %s", got.Suggestion)
+	}
+	expectError(t, admin.do("PATCH", "/api/admin/templates/"+tp.ID, map[string]any{"suggestion": "text"}), 400, "invalid_suggestion")
+	friend := signupFriend(t, srv, admin, "van@example.se")
+	expectError(t, friend.do("GET", "/api/admin/vision", nil), 403, "forbidden")
+
+	on := newTestServer(t, func(c *Config) { c.Vision = &fakeVision{} })
+	if !decode[map[string]bool](t, signupAdmin(t, on).do("GET", "/api/admin/vision", nil))["enabled"] {
+		t.Fatal("with a key: the API option is on")
+	}
+}

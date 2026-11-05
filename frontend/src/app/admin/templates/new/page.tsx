@@ -1,15 +1,18 @@
 "use client";
 // The admin's wizard for a template from photos: 1. what it is, 2. photos and notes, 3. Claude's
-// suggestion, then on to the editor to adjust it (the project page shows the photos and "Publish").
+// suggestion, from the API (needs ANTHROPIC_API_KEY on the server) or from a chat on claude.ai (copy
+// the prompt, attach the photos, paste the answer back); then on to the editor to adjust it (the
+// project page shows the photos and "Publish").
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { api, ApiError, templatePhotoUrl, type Template } from "@/lib/api";
+import { api, templatePhotoUrl, type Template } from "@/lib/api";
 import { useUser } from "@/lib/useUser";
 import { shrinkPhoto } from "@/lib/photos";
 import { TopBar } from "@/components/TopBar";
 import { KINDS, PRESETS, FIELD, sanitize } from "@/editor/model.mjs";
-import { photoRequest, applyAnswer } from "@/editor/fromPhotos.mjs";
+import { photoRequest, applyAnswer, chatPrompt, readAnswer } from "@/editor/fromPhotos.mjs";
+import { liveWing } from "@/editor/layout.mjs";
 
 type Kind = { id: string; name: string };
 type Preset = { id: string; name: string; kind: string; settings: Record<string, unknown> };
@@ -29,25 +32,28 @@ export default function NewTemplatePage() {
   const [tpl, setTpl] = useState<Template | null>(null);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
-  const [visionOff, setVisionOff] = useState(false);
+  // whether the server can ask Claude itself (it has an API key); null until known
+  const [apiOn, setApiOn] = useState<boolean | null>(null);
+  // the chat way: shown, the prompt copied, the pasted answer
+  const [chat, setChat] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [pasted, setPasted] = useState("");
   const previews = useMemo(() => files.map(f => URL.createObjectURL(f)), [files]);
   useEffect(() => () => previews.forEach(u => URL.revokeObjectURL(u)), [previews]);
 
-  // ?id=...: carry on with a draft (from the admin page)
   useEffect(() => {
+    if (!user?.isAdmin) return;
+    api.visionStatus().then(v => setApiOn(v.enabled)).catch(() => setApiOn(false));
+    // ?id=...: carry on with a draft (from the admin page)
     const id = new URLSearchParams(window.location.search).get("id");
-    if (!id || !user?.isAdmin) return;
-    api.template(id).then(t => {
+    if (id) api.template(id).then(t => {
       setTpl(t); setKind(t.kind); setName(t.name); setBlurb(t.blurb); setStep(2);
     }).catch(e => setError(e.message));
   }, [user]);
 
   async function run(label: string, action: () => Promise<void>) {
     setBusy(label); setError("");
-    try { await action(); } catch (e) {
-      if (e instanceof ApiError && e.code === "vision_off") setVisionOff(true);
-      setError(e instanceof Error ? e.message : "Something went wrong.");
-    }
+    try { await action(); } catch (e) { setError(e instanceof Error ? e.message : "Something went wrong."); }
     setBusy("");
   }
 
@@ -59,22 +65,31 @@ export default function NewTemplatePage() {
   const ask = (t: Template) => run("Claude is looking at the photos. This takes a minute or two…", async () => {
     const { guide, schema } = photoRequest(t.kind);
     setTpl(await api.suggestTemplate(t.id, { guide, schema, notes }));
+    setChat(false);
   });
 
-  // Step 2 done: send the photos (made smaller first), then ask Claude.
+  // Step 2 done: send the photos (made smaller first). Claude is asked on the next step, either way.
   const upload = () => run("Sending the photos…", async () => {
-    let t = tpl;
-    if (!t) {
+    if (!tpl) {
       const form = new FormData();
       form.set("kind", kind); form.set("name", name.trim()); form.set("blurb", blurb.trim());
       for (const f of files) form.append("photos", await shrinkPhoto(f), f.name.replace(/\.\w+$/, "") + ".jpg");
-      t = await api.createTemplate(form);
-      setTpl(t);
+      setTpl(await api.createTemplate(form));
     }
     setStep(2);
-    const { guide, schema } = photoRequest(t.kind);
-    setBusy("Claude is looking at the photos. This takes a minute or two…");
-    setTpl(await api.suggestTemplate(t.id, { guide, schema, notes }));
+  });
+
+  async function copyPrompt() {
+    if (!tpl) return;
+    try { await navigator.clipboard.writeText(chatPrompt(tpl.kind, notes)); setCopied(true); }
+    catch { setError("Couldn’t copy. Try again, or allow the clipboard for this site."); }
+  }
+  // The answer pasted from the chat is kept with the template, like one from the API.
+  const usePasted = () => run("Reading the answer…", async () => {
+    if (!tpl) return;
+    const answer = readAnswer(pasted);
+    setTpl(await api.updateTemplate(tpl.id, { suggestion: answer }));
+    setChat(false); setPasted(""); setCopied(false);
   });
 
   // On to the editor: a project of the admin's with the suggested (or a preset's) settings.
@@ -143,45 +158,70 @@ export default function NewTemplatePage() {
                   <textarea rows={3} maxLength={2000} value={notes} onChange={e => setNotes(e.target.value)}
                     placeholder="About 30 m long and 12 m wide. Photo 1 is the front, the cows go out at the back. Corrugated metal roof." />
                 </label>
-                <p className="hint">The photos are sent to Claude (Anthropic) to read; they’re kept with the template so you can look at them while adjusting.</p>
+                <p className="hint">The photos are kept with the template, so you can look at them while adjusting. On the next step Claude reads them, here or in a chat.</p>
                 <div className="wizard-nav">
                   <button type="button" onClick={() => setStep(0)} disabled={!!busy}>Back</button>
-                  <button className="primary" type="button" onClick={upload} disabled={!files.length || !!busy}>Next: ask Claude</button>
+                  <button className="primary" type="button" onClick={upload} disabled={!files.length || !!busy}>Next: Claude’s suggestion</button>
                 </div>
               </div>
             )}
 
-            {step === 2 && (
+            {step === 2 && tpl && (
               <div className="wizard-card">
-                {tpl && tpl.photos > 0 && (
+                {tpl.photos > 0 && (
                   <ul className="photo-grid small">
                     {Array.from({ length: tpl.photos }, (_, i) => <li key={i}><img src={templatePhotoUrl(tpl.id, i)} alt={`Photo ${i + 1}`} /><span>Photo {i + 1}</span></li>)}
                   </ul>
                 )}
                 {busy && <p className="loading" role="status">{busy}</p>}
-                {!busy && suggestion && (
+                {!busy && suggestion && !chat && (
                   <>
                     {suggestion.seen && <><h3>What Claude saw</h3><p className="says">{suggestion.seen}</p></>}
                     {suggestion.notes && <><h3>Worth checking</h3><p className="says">{suggestion.notes}</p></>}
-                    <Summary kind={tpl!.kind} answer={suggestion} />
+                    <Summary kind={tpl.kind} answer={suggestion} />
                     <label className="stack">Notes for another try (optional)
                       <textarea rows={2} maxLength={2000} value={notes} onChange={e => setNotes(e.target.value)} placeholder="The barn is 40 m long; photo 2 is the back." />
                     </label>
                     <div className="wizard-nav">
-                      <button type="button" onClick={() => ask(tpl!)}>Ask again</button>
-                      <button className="primary" type="button" onClick={() => adjust(applyAnswer(tpl!.kind, suggestion) as Record<string, unknown>)}>Adjust in the editor</button>
+                      {apiOn && <button type="button" onClick={() => ask(tpl)}>Ask again</button>}
+                      <button type="button" onClick={() => setChat(true)}>{apiOn ? "Try in a chat instead" : "Paste another answer"}</button>
+                      <button className="primary" type="button" onClick={() => adjust(applyAnswer(tpl.kind, suggestion) as Record<string, unknown>)}>Adjust in the editor</button>
                     </div>
                   </>
                 )}
-                {!busy && !suggestion && tpl && !visionOff && (
-                  <div className="wizard-nav"><button className="primary" type="button" onClick={() => ask(tpl)}>Ask Claude</button></div>
-                )}
-                {!busy && tpl && (visionOff || (!suggestion && error)) && presets.length > 0 && (
+                {!busy && (!suggestion || chat) && (
                   <>
-                    <p className="hint">{visionOff ? "Without Claude, start" : "Or start"} from one of the designs and match the photos by hand:</p>
-                    <div className="wizard-nav left">
-                      {presets.map(x => <button key={x.id} type="button" onClick={() => adjust(sanitize(x.settings) as Record<string, unknown>)}>{x.name}</button>)}
+                    <p className="hint">Let Claude read the photos and suggest the settings, one of two ways:</p>
+                    <div className="ways">
+                      <section className="way">
+                        <h3>Ask Claude here</h3>
+                        <p className="hint">The server sends the photos to Claude and fills in the answer. It uses the Anthropic API, paid per use (about $0.10 to $0.30 a try).</p>
+                        {apiOn
+                          ? <button className="primary" type="button" onClick={() => ask(tpl)}>Ask Claude</button>
+                          : <p className="hint"><b>Not set up:</b> {apiOn === null ? "checking…" : "the server needs an ANTHROPIC_API_KEY. Use a chat instead."}</p>}
+                      </section>
+                      <section className="way">
+                        <h3>Use Claude in a chat</h3>
+                        <p className="hint">Included in your Claude subscription. Copy a prompt to claude.ai and paste the answer back.</p>
+                        <ol className="chat-steps">
+                          <li><button type="button" onClick={copyPrompt}>{copied ? "Copied ✓" : "Copy the prompt"}</button></li>
+                          <li>Start a new chat at claude.ai, paste the prompt and attach the same photos{tpl.photos ? ` (${tpl.photos})` : ""}.</li>
+                          <li>Copy Claude’s whole answer (the code block) and paste it here:
+                            <textarea rows={5} value={pasted} onChange={e => setPasted(e.target.value)} placeholder={"```json\n{ \"seen\": \"...\", \"settings\": { ... }, \"openings\": [ ... ], \"notes\": \"...\" }\n```"} aria-label="Claude’s answer" />
+                          </li>
+                        </ol>
+                        <button className="primary" type="button" onClick={usePasted} disabled={!pasted.trim()}>Use this answer</button>
+                      </section>
                     </div>
+                    {suggestion && <div className="wizard-nav left"><button type="button" onClick={() => setChat(false)}>Back to the last answer</button></div>}
+                    {presets.length > 0 && (
+                      <>
+                        <p className="hint">Or skip Claude and start from one of the designs, matching the photos by hand:</p>
+                        <div className="wizard-nav left">
+                          {presets.map(x => <button key={x.id} type="button" onClick={() => adjust(sanitize(x.settings) as Record<string, unknown>)}>{x.name}</button>)}
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
               </div>
@@ -202,7 +242,9 @@ const named = (k: string, v: unknown) =>
 function Summary({ kind, answer }: { kind: string; answer: unknown }) {
   const p = applyAnswer(kind, answer) as Record<string, unknown> & { windows: { type: string }[] };
   const doors = p.windows.filter(w => w.type === "door").length;
+  const wing = liveWing(p) as { ww: number; wd: number } | null;
   const rows: [string, string][] = [
+    ["Shape", wing ? `L or T: a ${wing.ww.toFixed(1)} × ${wing.wd.toFixed(1)} m wing on the ${named("wingWall", p.wingWall)}` : "rectangle"],
     ["Size", `${p.width} × ${p.depth} m, ${p.floors} floor${p.floors === 1 ? "" : "s"} of ${p.floorHeight} m${p.halfStorey ? " and a half floor" : ""}`],
     ["Roof", `${named("roofType", p.roofType)}, ${p.roofPitch}°, ${named("roofMaterial", p.roofMaterial)}`],
     ["Walls", named("wallCladding", p.wallCladding)],

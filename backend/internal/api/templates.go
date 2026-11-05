@@ -43,6 +43,11 @@ func templateError(w http.ResponseWriter, err error) {
 	internalError(w, err)
 }
 
+// visionStatus: whether the API can ask Claude (it has an ANTHROPIC_API_KEY); else the wizard offers only the chat.
+func (s *Server) visionStatus(w http.ResponseWriter, r *http.Request, u store.User) {
+	writeJSON(w, http.StatusOK, map[string]bool{"enabled": s.cfg.Vision != nil})
+}
+
 // listTemplates: the published templates, for everyone's "New".
 func (s *Server) listTemplates(w http.ResponseWriter, r *http.Request, u store.User) {
 	list, err := s.st.ListTemplates(r.Context(), false)
@@ -188,6 +193,8 @@ type templatePatch struct {
 	Thumbnail *string         `json:"thumbnail"`
 	ProjectID *string         `json:"projectId"`
 	Published *bool           `json:"published"`
+	// an answer pasted from a chat with Claude, kept like one from the API
+	Suggestion json.RawMessage `json:"suggestion"`
 }
 
 func (s *Server) updateTemplate(w http.ResponseWriter, r *http.Request, u store.User) {
@@ -219,6 +226,11 @@ func (s *Server) updateTemplate(w http.ResponseWriter, r *http.Request, u store.
 		writeError(w, http.StatusBadRequest, "invalid_thumbnail", "The preview must be a small JPEG or PNG.")
 		return
 	}
+	sg := bytes.TrimSpace(in.Suggestion)
+	if present(in.Suggestion) && (len(sg) > maxSchemaBytes || sg[0] != '{' || !json.Valid(sg)) {
+		writeError(w, http.StatusBadRequest, "invalid_suggestion", "The answer must be a JSON object.")
+		return
+	}
 	if in.ProjectID != nil && len(*in.ProjectID) > 40 {
 		writeError(w, http.StatusBadRequest, "invalid_project", "That isn't a project.")
 		return
@@ -237,6 +249,9 @@ func (s *Server) updateTemplate(w http.ResponseWriter, r *http.Request, u store.
 	upd := store.TemplateUpdate{Name: in.Name, Blurb: in.Blurb, Thumbnail: in.Thumbnail, ProjectID: in.ProjectID, Published: in.Published}
 	if present(in.Settings) {
 		upd.Settings = in.Settings
+	}
+	if present(in.Suggestion) {
+		upd.Suggestion = json.RawMessage(sg)
 	}
 	t, err := s.st.UpdateTemplate(r.Context(), r.PathValue("id"), upd)
 	if err != nil {

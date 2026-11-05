@@ -67,7 +67,8 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   Templates from photos (admin only, for everyone's "New"): /admin/templates/new is a wizard (kind + name, photos
   shrunk to 1568 px in the browser + notes, Claude's suggestion); store templates + template_photos, /api/templates
   (published, all users), /api/admin/templates (+ /{id}/suggest, needs ANTHROPIC_API_KEY, else 503 vision_off and the
-  wizard offers the kind's presets). src/editor/fromPhotos.mjs builds the guide + JSON schema per kind (photoRequest)
+  wizard offers the kind's presets); or the chat way: chatPrompt(kind, notes) to copy into claude.ai, readAnswer(pasted) -> PATCH
+  suggestion; GET /api/admin/vision says whether the API way is on. src/editor/fromPhotos.mjs builds the guide + JSON schema per kind (photoRequest)
   and turns the answer {seen, settings, openings, notes} into settings (applyAnswer -> sanitize). The admin adjusts
   in an ordinary project opened with ?template=ID (photo strip, Claude's notes, Publish template = settings +
   snapshot). Chart: claude.apiKey / claude.existingSecret. Not yet tried with a real key.

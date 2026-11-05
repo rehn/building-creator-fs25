@@ -110,6 +110,7 @@ func (s *Server) routes() {
 
 	m.HandleFunc("GET /api/templates", s.requireUser(s.listTemplates))
 	m.HandleFunc("GET /api/templates/{id}/photos/{n}", s.requireUser(s.templatePhoto))
+	m.HandleFunc("GET /api/admin/vision", s.requireAdmin(s.visionStatus))
 	m.HandleFunc("GET /api/admin/templates", s.requireAdmin(s.listAllTemplates))
 	m.HandleFunc("POST /api/admin/templates", s.requireAdmin(s.createTemplate))
 	m.HandleFunc("GET /api/admin/templates/{id}", s.requireAdmin(s.getTemplate))
