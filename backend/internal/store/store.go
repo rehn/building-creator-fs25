@@ -92,6 +92,27 @@ CREATE TABLE IF NOT EXISTS asset_files (
 	data     BLOB    NOT NULL,
 	PRIMARY KEY (asset_id, name)
 );
+CREATE TABLE IF NOT EXISTS templates (
+	id         TEXT    PRIMARY KEY,
+	kind       TEXT    NOT NULL,
+	name       TEXT    NOT NULL,
+	blurb      TEXT    NOT NULL DEFAULT '',
+	settings   TEXT    NOT NULL DEFAULT '{}',
+	thumbnail  TEXT    NOT NULL DEFAULT '',
+	suggestion TEXT,
+	project_id TEXT    NOT NULL DEFAULT '',
+	published  INTEGER NOT NULL DEFAULT 0,
+	created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+	created_at INTEGER NOT NULL,
+	updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS template_photos (
+	template_id TEXT    NOT NULL REFERENCES templates(id) ON DELETE CASCADE,
+	pos         INTEGER NOT NULL,
+	type        TEXT    NOT NULL,
+	data        BLOB    NOT NULL,
+	PRIMARY KEY (template_id, pos)
+);
 `
 
 // Same tables for Postgres. Emails are unique and looked up case-insensitively through lower(email),
@@ -151,6 +172,27 @@ CREATE TABLE IF NOT EXISTS asset_files (
 	size     BIGINT NOT NULL,
 	data     BYTEA  NOT NULL,
 	PRIMARY KEY (asset_id, name)
+);
+CREATE TABLE IF NOT EXISTS templates (
+	id         TEXT    PRIMARY KEY,
+	kind       TEXT    NOT NULL,
+	name       TEXT    NOT NULL,
+	blurb      TEXT    NOT NULL DEFAULT '',
+	settings   TEXT    NOT NULL DEFAULT '{}',
+	thumbnail  TEXT    NOT NULL DEFAULT '',
+	suggestion TEXT,
+	project_id TEXT    NOT NULL DEFAULT '',
+	published  BOOLEAN NOT NULL DEFAULT FALSE,
+	created_by BIGINT  REFERENCES users(id) ON DELETE SET NULL,
+	created_at BIGINT  NOT NULL,
+	updated_at BIGINT  NOT NULL
+);
+CREATE TABLE IF NOT EXISTS template_photos (
+	template_id TEXT    NOT NULL REFERENCES templates(id) ON DELETE CASCADE,
+	pos         INTEGER NOT NULL,
+	type        TEXT    NOT NULL,
+	data        BYTEA   NOT NULL,
+	PRIMARY KEY (template_id, pos)
 );
 `
 

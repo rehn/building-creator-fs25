@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { api, type Invite } from "@/lib/api";
 import { useUser } from "@/lib/useUser";
 import { TopBar } from "@/components/TopBar";
+import { Templates } from "./Templates";
 
 const date = (iso: string) => new Date(iso).toLocaleDateString("sv-SE");
 
@@ -95,6 +96,7 @@ export default function AdminPage() {
                 </tbody>
               </table>
             </div>
+            <Templates />
           </>
         )}
       </main>

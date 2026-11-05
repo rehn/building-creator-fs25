@@ -62,6 +62,15 @@ has "$(doc Deployment hus-house-to-i3d-api)" "key: GOOGLE_CLIENT_SECRET" "API re
 out=$(render --set publicUrl=https://hus.example.se --set google.existingSecret=gsec); renders "google existing secret"
 has "$(doc Deployment hus-house-to-i3d-api)" "name: gsec" "API reads Google from the existing secret"
 
+echo "Claude reads photos for the admin's templates"
+out=$(render --set publicUrl=https://hus.example.se); hasnt "$out" "ANTHROPIC_API_KEY" "no key, no Claude"
+out=$(render --set publicUrl=https://hus.example.se --set claude.apiKey=sk-test); renders "claude"
+has "$(doc Secret hus-house-to-i3d)" "ANTHROPIC_API_KEY: $(printf sk-test | base64)" "secret holds the API key"
+has "$(doc Deployment hus-house-to-i3d-api)" "key: ANTHROPIC_API_KEY" "API reads it from the secret"
+out=$(render --set publicUrl=https://hus.example.se --set claude.existingSecret=csec); renders "claude existing secret"
+has "$(doc Deployment hus-house-to-i3d-api)" "name: csec" "API reads the key from the existing secret"
+hasnt "$(doc Secret hus-house-to-i3d)" "ANTHROPIC_API_KEY" "no key copied into the chart's secret"
+
 echo "Postgres in the release"
 out=$(render --set publicUrl=https://hus.example.se --set database.type=postgres --set api.replicas=2); renders "bundled postgres"
 sts=$(doc StatefulSet hus-house-to-i3d-postgres)

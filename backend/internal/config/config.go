@@ -10,6 +10,7 @@ import (
 	"house-to-i3d/backend/internal/api"
 	"house-to-i3d/backend/internal/auth"
 	"house-to-i3d/backend/internal/store"
+	"house-to-i3d/backend/internal/vision"
 )
 
 type Config struct {
@@ -37,6 +38,7 @@ func (c Config) Database() string {
 //	DATABASE_PATH         SQLite file, default /data/house-to-i3d.db
 //	DATABASE_URL          postgres://user:pass@host:5432/db, use Postgres instead of SQLite
 //	TRUST_PROXY           "true" when the API is only reachable through the web app
+//	ANTHROPIC_API_KEY     lets the admin's template wizard ask Claude to read photos of a building
 func Load(getenv func(string) string) (Config, error) {
 	c := Config{
 		Addr:         or(getenv("LISTEN_ADDR"), ":8080"),
@@ -58,6 +60,9 @@ func Load(getenv func(string) string) (Config, error) {
 		GoogleClientSecret: strings.TrimSpace(getenv("GOOGLE_CLIENT_SECRET")),
 		TrustProxy:         strings.EqualFold(strings.TrimSpace(getenv("TRUST_PROXY")), "true"),
 		SessionTTL:         30 * 24 * time.Hour,
+	}
+	if key := strings.TrimSpace(getenv("ANTHROPIC_API_KEY")); key != "" {
+		c.API.Vision = vision.New(key)
 	}
 	if a := strings.TrimSpace(getenv("ADMIN_EMAIL")); a != "" {
 		email, err := auth.NormalizeEmail(a)

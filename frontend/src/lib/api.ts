@@ -37,6 +37,25 @@ export interface Asset {
   updatedAt: string;
 }
 
+/** A starting design the admin made for everyone, usually from photos (Claude suggests, the admin adjusts). */
+export interface Template {
+  id: string;
+  kind: string;
+  name: string;
+  blurb: string;
+  settings: Record<string, unknown>;
+  thumbnail: string;
+  /** Claude's last answer for the photos ({seen, settings, openings, notes}), or null. */
+  suggestion: { seen?: string; notes?: string; [k: string]: unknown } | null;
+  /** The admin's project it is adjusted in. */
+  projectId: string;
+  published: boolean;
+  /** How many photos it has. */
+  photos: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Invite {
   id: number;
   email: string;
@@ -71,6 +90,9 @@ async function send<T>(method: string, path: string, body?: BodyInit, headers?: 
   return json as T;
 }
 
+/** Where photo n of a template is (an <img> src). */
+export const templatePhotoUrl = (id: string, n: number) => `/api/templates/${encodeURIComponent(id)}/photos/${n}`;
+
 export const api = {
   authConfig: () => request<{ google: boolean }>("GET", "/auth/config"),
   me: () => request<User>("GET", "/auth/me"),
@@ -98,6 +120,18 @@ export const api = {
     if (!res.ok) throw new ApiError(res.status, "file", `Couldn't load ${name} (${res.status}).`);
     return res.arrayBuffer();
   },
+
+  templates: () => request<Template[]>("GET", "/templates"),
+  allTemplates: () => request<Template[]>("GET", "/admin/templates"),
+  template: (id: string) => request<Template>("GET", "/admin/templates/" + encodeURIComponent(id)),
+  /** Starts a template: form fields kind, name, blurb and photos. */
+  createTemplate: (form: FormData) => send<Template>("POST", "/admin/templates", form),
+  updateTemplate: (id: string, patch: { name?: string; blurb?: string; settings?: Record<string, unknown>; thumbnail?: string; projectId?: string; published?: boolean }) =>
+    request<Template>("PATCH", "/admin/templates/" + encodeURIComponent(id), patch),
+  deleteTemplate: (id: string) => request<void>("DELETE", "/admin/templates/" + encodeURIComponent(id)),
+  /** Asks Claude to suggest settings from the photos (takes up to a few minutes). */
+  suggestTemplate: (id: string, input: { guide: string; notes: string; schema: object }) =>
+    request<Template>("POST", "/admin/templates/" + encodeURIComponent(id) + "/suggest", input),
 
   invites: () => request<Invite[]>("GET", "/admin/invites"),
   createInvite: (email: string) => request<{ invite: Invite; link: string }>("POST", "/admin/invites", { email }),

@@ -2,17 +2,17 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { api, type ProjectSummary } from "@/lib/api";
+import { api, type ProjectSummary, type Template } from "@/lib/api";
 import { useUser } from "@/lib/useUser";
 import { TopBar } from "@/components/TopBar";
 import { PRESETS, CATEGORIES, KINDS, groupByKind } from "@/editor/model.mjs";
 
-type Preset = { id: string; name: string; blurb: string; kind: string; category: string; settings: Record<string, unknown> };
+// A built-in design or a template the admin published (with its preview).
+type Preset = { id: string; name: string; blurb: string; kind: string; category: string; settings: Record<string, unknown>; thumbnail?: string };
 type Kind = { id: string; name: string; plural: string; category: string };
 type Group<T> = { kind: Kind; items: T[] };
 const presets = PRESETS as Preset[];
 const byKind = groupByKind as <T>(list: T[], idOf: (x: T) => string | undefined) => Group<T>[];
-const presetGroups = byKind(presets, x => x.kind);
 // Groups with nothing to build yet, named under the templates.
 const comingSoon = (CATEGORIES as { id: string; name: string }[])
   .filter(c => !(KINDS as Kind[]).some(k => k.category === c.id)).map(c => c.name);
@@ -37,10 +37,15 @@ export default function HousesPage() {
   const [busy, setBusy] = useState(false);
   // "New" is open: the templates, grouped by kind of building.
   const [choosing, setChoosing] = useState(false);
+  const [templates, setTemplates] = useState<Preset[]>([]);
 
   useEffect(() => {
     if (!user) return;
     api.projects().then(setHouses).catch(e => setError(e.message));
+    // templates are extras: "New" works without them
+    api.templates().then(list => setTemplates(list.map((t: Template) => ({
+      id: "template:" + t.id, name: t.name, blurb: t.blurb, kind: t.kind, category: "", settings: t.settings, thumbnail: t.thumbnail,
+    })))).catch(() => setTemplates([]));
   }, [user]);
 
   async function run(action: () => Promise<void>) {
@@ -51,6 +56,7 @@ export default function HousesPage() {
   }
 
   // A preset is the settings the new project starts with; everything stays editable.
+  const presetGroups = byKind([...presets, ...templates], x => x.kind);
   const create = (preset: Preset) => run(async () => {
     const p = await api.createProject(preset.id === "farmhouse" ? "New house" : preset.name, preset.settings);
     router.push(`/projects/${p.id}`);
@@ -67,6 +73,7 @@ export default function HousesPage() {
           <div className="grid">
             {g.items.map(x => (
               <button type="button" className="preset" key={x.id} onClick={() => create(x)} disabled={busy}>
+                {x.thumbnail && <img src={x.thumbnail} alt="" />}
                 <b>{x.name}</b>
                 <span>{x.blurb}</span>
               </button>

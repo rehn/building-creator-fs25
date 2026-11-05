@@ -2,6 +2,7 @@
 {{- $sqlite := eq .Values.database.type "sqlite" -}}
 {{- $g := .Values.google -}}
 {{- $google := or $g.existingSecret (and $g.clientId $g.clientSecret) -}}
+{{- $c := .Values.claude -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -68,6 +69,13 @@ spec:
                 secretKeyRef:
                   name: {{ default (include "hx.fullname" .) $g.existingSecret }}
                   key: GOOGLE_CLIENT_SECRET
+            {{- end }}
+            {{- if or $c.existingSecret $c.apiKey }}
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (include "hx.fullname" .) $c.existingSecret }}
+                  key: ANTHROPIC_API_KEY
             {{- end }}
             {{- if $sqlite }}
             - name: DATABASE_PATH

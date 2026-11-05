@@ -7,7 +7,8 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - backend/  Go 1.25 API, stdlib net/http + SQLite (modernc.org/sqlite, no cgo) by default,
   Postgres (pgx) when DATABASE_URL is set.
   internal/auth (PBKDF2 passwords, tokens), internal/store (SQLite/Postgres),
-  internal/api (handlers), internal/config (env vars), cmd/server.
+  internal/api (handlers), internal/config (env vars), internal/vision (Claude reads photos, anthropic-sdk-go/v2
+  v2.1.0, claude-opus-5-5 with structured output and server-side fallbacks; tests use a fake API), cmd/server.
 - frontend/ Next.js 16 (App Router, TypeScript). /api/* is proxied to the Go API
   by src/app/api/[...path]/route.ts.
   src/editor/model.mjs = the core every building shares (settings, geometry, export, game-mod XML), no DOM.
@@ -57,6 +58,13 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   the item files in items/<name>_<id>/ (not the .obj). src/editor/itemView.mjs = the page's 3D view.
   The admin can share an item with everyone (assets.shared, added by a migration on open): listed
   and usable by all, changed or deleted only by its owner; API sends shared and mine.
+  Templates from photos (admin only, for everyone's "New"): /admin/templates/new is a wizard (kind + name, photos
+  shrunk to 1568 px in the browser + notes, Claude's suggestion); store templates + template_photos, /api/templates
+  (published, all users), /api/admin/templates (+ /{id}/suggest, needs ANTHROPIC_API_KEY, else 503 vision_off and the
+  wizard offers the kind's presets). src/editor/fromPhotos.mjs builds the guide + JSON schema per kind (photoRequest)
+  and turns the answer {seen, settings, openings, notes} into settings (applyAnswer -> sanitize). The admin adjusts
+  in an ordinary project opened with ?template=ID (photo strip, Claude's notes, Publish template = settings +
+  snapshot). Chart: claude.apiKey / claude.existingSecret. Not yet tried with a real key.
 - charts/house-to-i3d = Helm chart (SQLite on a PVC, or Postgres in-release/external);
   charts/test.sh renders and checks every setup.
 - docker-compose.yml runs api + web; CI in .github/workflows/ci.yml pushes
@@ -71,7 +79,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Frontend tests: cd frontend && npm test (node --test, no browser needed)
 
 ## Status
-- Go tests (54) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (340) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
+- Go tests (60) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (344) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
 - Cow barn (kinds/cow.mjs): cowHusbandryPasture (no milk, like cowBarnSmall), automatic water, feed
   and water troughs outside on the pasture wall (kind.outside), a plain walk-through doorway for the
   cows (openings with plain: true; tall openings get a collision gap), feed pad + bale trigger

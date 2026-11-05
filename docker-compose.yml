@@ -8,6 +8,8 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL:?Set ADMIN_EMAIL in .env}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      # Optional: the admin's template wizard asks Claude to read photos of a building.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       # Empty: SQLite in the data volume. postgres://... : use that Postgres instead.
       DATABASE_URL: ${DATABASE_URL:-}
       TRUST_PROXY: "true"

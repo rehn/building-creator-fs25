@@ -234,3 +234,47 @@ table.list th { color: var(--muted); font-weight: 500; font-size: 14px; }
 .item-list .actions { display: flex; gap: 6px; }
 #insideEditor .palette-head { margin: 10px 0 0; font-size: 14px; }
 .item-group { margin: 26px 0 0; font-size: 20px; }
+
+/* ---------- Templates: "New" cards, the admin's list and the photo wizard ---------- */
+.preset img { width: calc(100% + 32px); margin: -14px -16px 4px; aspect-ratio: 16 / 10; object-fit: cover; border-radius: 10px 10px 0 0; background: var(--stage); }
+.badge.ok { color: var(--ok); border-color: var(--ok); }
+.admin-templates { margin-top: 40px; }
+.wizard select, .wizard textarea { font: inherit; width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--field); color: var(--ink); margin-top: 5px; }
+.wizard textarea { resize: vertical; }
+.steps { display: flex; gap: 8px; list-style: none; padding: 0; margin: 0 0 16px; counter-reset: step; flex-wrap: wrap; }
+.steps li { counter-increment: step; color: var(--muted); font-size: 14px; display: flex; align-items: center; gap: 6px; }
+.steps li::before { content: counter(step); width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; font-size: 13px; background: var(--field); }
+.steps li + li::after { order: -1; content: ""; width: 20px; border-top: 1px solid var(--line); }
+.steps li[aria-current="step"] { color: var(--ink); font-weight: 600; }
+.steps li[aria-current="step"]::before { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.steps li.done::before { content: "\2713"; color: var(--ok); border-color: var(--ok); }
+.wizard-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px 20px; max-width: 760px; }
+.wizard-card h3 { font-size: 19px; margin: 18px 0 4px; }
+.wizard-card .says { margin: 0; white-space: pre-line; }
+.wizard-nav { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; flex-wrap: wrap; }
+.wizard-nav.left { justify-content: flex-start; margin-top: 8px; }
+.drop { display: grid; place-items: center; min-height: 120px; border: 2px dashed var(--line); border-radius: 10px; background: var(--field); color: var(--muted); cursor: pointer; margin-top: 10px; text-align: center; padding: 16px; }
+.drop:hover { border-color: var(--muted); }
+.photo-grid { list-style: none; padding: 0; margin: 14px 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.photo-grid.small { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); margin: 0 0 8px; }
+.photo-grid li { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.photo-grid img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 6px; background: var(--stage); }
+.photo-grid button { padding: 2px 8px; font-size: 13px; align-self: flex-start; }
+.summary { display: grid; gap: 4px; margin: 16px 0 0; padding: 12px 14px; background: var(--field); border: 1px solid var(--line); border-radius: 8px; }
+.summary div { display: flex; gap: 12px; }
+.summary dt { width: 90px; flex: none; color: var(--muted); }
+.summary dd { margin: 0; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.swatch { width: 22px; height: 22px; border-radius: 4px; border: 1px solid var(--line); display: inline-block; }
+
+/* While adjusting a template in the editor: its photos, Claude's notes and Publish. */
+.ref-strip { position: relative; display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+.ref-label { font-size: 12.5px; color: var(--muted); line-height: 1.25; }
+.ref-label b { color: var(--ink); font-weight: 600; }
+.ref-strip ul { list-style: none; display: flex; gap: 6px; padding: 0; margin: 0 auto 0 0; overflow-x: auto; max-width: 100%; }
+.ref-strip ul button { padding: 0; border-radius: 4px; overflow: hidden; }
+.ref-strip ul img { height: 52px; width: auto; display: block; }
+.ref-strip .status { color: var(--muted); font-size: 13.5px; }
+.ref-notes { position: absolute; z-index: 5; top: 100%; left: 12px; right: 12px; max-width: 720px; max-height: 50vh; overflow-y: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px 14px; box-shadow: 0 6px 18px rgb(0 0 0 / .18); white-space: pre-line; }
+.ref-big { position: fixed; inset: 0; z-index: 50; background: rgb(0 0 0 / .82); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 16px; padding-top: max(16px, env(safe-area-inset-top, 0px)); padding-bottom: max(16px, env(safe-area-inset-bottom, 0px)); }
+.ref-big img { max-width: 100%; max-height: calc(100% - 60px); object-fit: contain; }
+.ref-big-nav { display: flex; gap: 8px; align-items: center; color: #fff; flex-wrap: wrap; justify-content: center; }

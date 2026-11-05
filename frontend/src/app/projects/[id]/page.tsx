@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { api, ApiError, type Project } from "@/lib/api";
+import { api, ApiError, templatePhotoUrl, type Project, type Template } from "@/lib/api";
 import { useUser } from "@/lib/useUser";
 import type { EditorHandle, Settings } from "@/editor/editor.mjs";
 import { authorName } from "@/editor/model.mjs";
@@ -32,6 +32,9 @@ export default function ProjectPage() {
   const [status, setStatus] = useState<Status>("saved");
   const editor = useRef<EditorHandle | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  // ?template=...: the admin is adjusting a template made from photos (see /admin/templates/new)
+  const [template, setTemplate] = useState<Template | null>(null);
+  const [publishing, setPublishing] = useState("");
 
   // Autosave state lives in refs so the timer always sees the latest values.
   const version = useRef(0);
@@ -52,6 +55,25 @@ export default function ProjectPage() {
       version.current = p.version;
     }).catch(e => setLoadError(e instanceof ApiError && e.status === 404 ? "This house doesn\u2019t exist, or it isn\u2019t yours." : e.message));
   }, [user, id]);
+
+  useEffect(() => {
+    const tid = new URLSearchParams(window.location.search).get("template");
+    if (tid && user?.isAdmin) api.template(tid).then(setTemplate).catch(() => setTemplate(null));
+  }, [user]);
+
+  async function publishTemplate() {
+    if (!template || !editor.current) return;
+    setPublishing("Publishing…");
+    try {
+      const t = await api.updateTemplate(template.id, {
+        settings: editor.current.getSettings(), thumbnail: editor.current.snapshot() ?? undefined, projectId: id, published: true,
+      });
+      setTemplate(t);
+      setPublishing(t.published ? "Published: everyone can pick it under New" : "");
+    } catch (e) {
+      setPublishing(e instanceof Error ? e.message : "Couldn2019t publish.");
+    }
+  }
 
   const flush = useCallback(async () => {
     clearTimeout(timer.current);
@@ -148,6 +170,7 @@ export default function ProjectPage() {
         <button type="button" disabled={!project} onClick={() => editor.current?.exportModel(name)}>Export model</button>
         <button type="button" className="primary" disabled={!project} onClick={() => editor.current?.exportMod(name)}>Export game mod</button>
       </div>
+      {template && <TemplateBar template={template} status={publishing} onPublish={publishTemplate} />}
       {status === "conflict" && (
         <div className="editor-bar" role="alert">
           <span className="status bad">This house was changed in another tab or browser.</span>
@@ -162,6 +185,43 @@ export default function ProjectPage() {
             if (ed && !project.thumbnail) queue({ data: ed.getSettings() }, 1500);
           }} />
         : <p className="loading">Loading…</p>}
+    </div>
+  );
+}
+
+/** While adjusting a template: its photos to compare with (click for a big one), Claude's notes and "Publish". */
+function TemplateBar({ template, status, onPublish }: { template: Template; status: string; onPublish: () => void }) {
+  const [big, setBig] = useState<number | null>(null);
+  const [notes, setNotes] = useState(false);
+  const s = template.suggestion;
+  return (
+    <div className="ref-strip" aria-label="Template photos">
+      <span className="ref-label">Template<br /><b>{template.name}</b></span>
+      <ul>
+        {Array.from({ length: template.photos }, (_, i) => (
+          <li key={i}><button type="button" onClick={() => setBig(i)} aria-label={`Show photo ${i + 1}`}><img src={templatePhotoUrl(template.id, i)} alt="" /></button></li>
+        ))}
+      </ul>
+      {(s?.notes || s?.seen) && <button type="button" onClick={() => setNotes(n => !n)} aria-expanded={notes}>Claude’s notes</button>}
+      <span className="status" role="status">{status}</span>
+      <button type="button" className="primary" onClick={onPublish}>{template.published ? "Update template" : "Publish template"}</button>
+      {notes && (
+        <div className="ref-notes">
+          {s?.seen && <p><b>Saw:</b> {s.seen}</p>}
+          {s?.notes && <p><b>Check:</b> {s.notes}</p>}
+        </div>
+      )}
+      {big !== null && (
+        <div className="ref-big" role="dialog" aria-label={`Photo ${big + 1}`} onClick={() => setBig(null)}>
+          <img src={templatePhotoUrl(template.id, big)} alt={`Photo ${big + 1}`} />
+          <div className="ref-big-nav" onClick={e => e.stopPropagation()}>
+            <button type="button" disabled={big === 0} onClick={() => setBig(big - 1)}>‹ Previous</button>
+            <span>Photo {big + 1} of {template.photos}</span>
+            <button type="button" disabled={big === template.photos - 1} onClick={() => setBig(big + 1)}>Next ›</button>
+            <button type="button" onClick={() => setBig(null)}>Close</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
