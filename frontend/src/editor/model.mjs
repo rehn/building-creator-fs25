@@ -20,7 +20,8 @@ export const DEFAULTS = {
   width:10, depth:7, floors:2, floorHeight:2.7, foundation:0.4, halfStorey:false, kneeWall:0.9,
   roofType:"gable", ridge:"width", roofPitch:38, overhang:0.5, chimney:true,
   winFront:2, winBack:3, winLeft:1, winRight:1, winW:1.0, winH:1.25, sill:0.85, winStyle:"casement",
-  doorWall:"front", doorPos:0, doorW:1.0, doorH:2.1, doorStyle:"panel",
+  // the main door's wall and size: copies of its entry in the window list (syncDoor), read by kinds
+  doorWall:"front", doorW:1.0, doorH:2.1, doorStyle:"panel",
   wallCladding:"lockpanel", panelSpacing:0.2, battenWidth:0.06, roofMaterial:"tiles", chimneyStyle:"brick", chimneyColor:"#8A3B2C",
   entrance:"porch", entranceWidth:2.2, entranceDepth:1.6, gutters:true, downpipes:2, gutterColor:"#3B3F42",
   wallColor:"#8E2A1E", trimColor:"#F2EFE8", roofColor:"#2B2D2F", doorColor:"#3E5A4A", foundationColor:"#6E6E6A",
@@ -71,17 +72,13 @@ const SHARED_SECTIONS = [
     {k:"downpipes", label:"Downpipes per long side", min:0, max:2, step:1},
     {k:"ventilators", label:"Roof ventilators (lanterns on the ridge)", min:0, max:4, step:1}]},
   {title:"Kupor (dormers)", side:"build", custom:"dormers", fields:[]},
-  {title:"Windows", side:"build", custom:"windows", hint:"Set how many windows each floor has. To change one window, or turn it into a door, choose it below or tap it in the preview.", fields:[
+  {title:"Windows", side:"build", custom:"windows", hint:"Set how many windows each floor has. To change one window or door, move it to another wall, turn it into a door or make it the main door, choose it below or tap it in the preview.", fields:[
     {k:"winStyle", label:"Style", type:"select", options:WINDOW_STYLES.map(s => [s.id, s.name])},
     {k:"winW", label:"Width", min:0.4, max:2.5, step:0.05, unit:" m"},
     {k:"winH", label:"Height", min:0.4, max:2.2, step:0.05, unit:" m"},
     {k:"sill", label:"Sill height", min:0.2, max:1.5, step:0.05, unit:" m"}]},
-  {title:"Door", side:"build", fields:[
-    {k:"doorWall", label:"Wall", type:"select", options:[["front","Front"],["back","Back"],["left","Left side"],["right","Right side"]]},
-    {k:"doorPos", label:"Position, left to right", min:-1, max:1, step:0.05},
-    {k:"doorW", label:"Width", min:0.7, max:2.5, step:0.05, unit:" m"},
-    {k:"doorH", label:"Height", min:1.8, max:2.6, step:0.05, unit:" m"},
-    {k:"doorStyle", label:"Style (also for doors made from windows)", type:"select", options:DOOR_STYLES.map(s => [s.id, s.name])}]},
+  {title:"Door", side:"build", hint:"The style of every door. The main door is in the list under Windows: choose it there (or tap it in the preview) to move it or change its size.", fields:[
+    {k:"doorStyle", label:"Style", type:"select", options:DOOR_STYLES.map(s => [s.id, s.name])}]},
   {title:"Entrance", side:"build", fields:[
     {k:"entrance", label:"Canopy", type:"select", options:[["none","None"],["shed","Shed canopy on brackets"],["gable","Gable canopy on brackets"],["porch","Porch with posts (förstukvist)"]]},
     {k:"entranceWidth", label:"Width", min:1.2, max:5, step:0.05, unit:" m"},
@@ -147,10 +144,10 @@ export function genRow(P, list, wall, floor, n) {
   let id = list.reduce((m, w) => Math.max(m, w.id), 0);
   // (doors made from windows stay: the count is of windows)
   const keep = list.filter(w => !(w.wall === wall && w.floor === floor && w.type !== "door"));
-  const pos = [];
+  const pos = [], main = list.find(w => w.main);
   if (n > 0) {
-    if (P.doorWall === wall && floor === 0) {
-      const half = Math.max(0, L/2 - P.doorW/2 - 0.3), dc = L/2 + P.doorPos * half;
+    if (main && main.wall === wall && floor === 0) {
+      const [d0, d1] = doorSpan({windows: [main]}, L), dc = (d0 + d1) / 2;
       const slots = Array.from({length: n + 1}, (_, i) => (i + 0.5) / (n + 1) * L);
       let bi = 0; slots.forEach((s, i) => { if (Math.abs(s - dc) < Math.abs(slots[bi] - dc)) bi = i; });
       slots.splice(bi, 1); pos.push(...slots);
@@ -159,8 +156,8 @@ export function genRow(P, list, wall, floor, n) {
   for (const s of pos) keep.push({id: ++id, wall, floor, pos: s / L, w: P.winW, h: P.winH, sill: P.sill, type: "window", style: "default", room: "auto", curtain: "default", curtainColor: "default"});
   return keep;
 }
-export function genAll(P, src) {
-  let list = [];
+export function genAll(P, src, start = []) {
+  let list = start;
   for (const wall of WALLS) {
     const key = "win" + wall[0].toUpperCase() + wall.slice(1);
     const n = Math.round(clampN(src[key], 0, 8, DEFAULTS[key]));
@@ -174,14 +171,54 @@ function openingKind(w) {
   const ids = type === "door" ? DOOR_STYLE_IDS : WINDOW_STYLE_IDS;
   return {type, style: ids.includes(w.style) ? w.style : "default"};
 }
+/** The main door's size limits: [min, max] width and height. */
+const MAIN_W = [0.7, 2.5], MAIN_H = [1.8, 2.6];
 function cleanWindows(arr) {
-  return arr.filter(w => w && WALLS.includes(w.wall)).slice(0, 80).map((w, i) => ({
-    id: i + 1, wall: w.wall, floor: Math.round(clampN(w.floor, 0, 2, 0)), pos: clampN(w.pos, 0, 1, 0.5),
-    w: clampN(w.w, 0.3, 3, 1), h: clampN(w.h, 0.3, 2.4, 1.25), sill: clampN(w.sill, 0, 2, 0.85),
-    // a door: only on the ground floor; its style a door style, a window's a window style
-    ...openingKind(w),
-    room: pickRoom(w.room), curtain: pickCurtain(w.curtain), curtainColor: pickColor(w.curtainColor)
-  }));
+  let main = false;
+  return arr.filter(w => w && WALLS.includes(w.wall)).slice(0, 80).map((w, i) => {
+    // the main door (the first entry marked so): a door on the ground floor, a door's size
+    const isMain = !main && !!w.main && (main = true);
+    const o = isMain ? {...w, type: "door", floor: 0} : w;
+    return {
+      id: i + 1, wall: o.wall, floor: Math.round(clampN(o.floor, 0, 2, 0)), pos: clampN(o.pos, 0, 1, 0.5),
+      w: isMain ? clampN(o.w, ...MAIN_W, 1) : clampN(o.w, 0.3, 3, 1), h: isMain ? clampN(o.h, ...MAIN_H, 2.1) : clampN(o.h, 0.3, 2.4, 1.25),
+      sill: clampN(o.sill, 0, 2, 0.85),
+      // a door: only on the ground floor; its style a door style, a window's a window style
+      ...openingKind(o), ...(isMain ? {main: true} : {}),
+      room: pickRoom(o.room), curtain: pickCurtain(o.curtain), curtainColor: pickColor(o.curtainColor)
+    };
+  });
+}
+/**
+ * The main door (the building's entrance: the porch, the sleep point and the kind's yard go by it) from
+ * the settings of before it was in the window list (doorWall, doorPos -1..1, doorW, doorH): presets use them.
+ */
+function legacyMainDoor(obj, P) {
+  const wall = WALLS.includes(obj.doorWall) ? obj.doorWall : P.doorWall, L = (wall === "front" || wall === "back") ? P.width : P.depth;
+  const w = clampN(obj.doorW, ...MAIN_W, P.doorW), h = clampN(obj.doorH, ...MAIN_H, P.doorH);
+  const c = L/2 + clampN(obj.doorPos, -1, 1, 0) * Math.max(0, L/2 - w/2 - 0.3);
+  return {wall, floor: 0, pos: c / L, w, h, sill: 0, type: "door", style: "default", main: true, room: "auto", curtain: "default", curtainColor: "default"};
+}
+/** The building's main door: its entry in the window list. */
+export const mainDoor = p => (p.windows || []).find(w => w.main);
+/** Copies the main door's wall and size to the settings kinds read (doorWall, doorW, doorH). Changes p. */
+export function syncDoor(p) {
+  const d = mainDoor(p);
+  if (d) Object.assign(p, {doorWall: d.wall, doorW: d.w, doorH: d.h});
+  return p;
+}
+/**
+ * Makes the ground-floor window or door id the main door. A window takes the old main door's size and
+ * style; the old main door becomes a window of the building's size. Changes p.
+ */
+export function setMainDoor(p, id) {
+  const w = p.windows.find(x => x.id === id), old = mainDoor(p);
+  if (!w || w.main || w.floor !== 0) return p;
+  if (w.type === "door") Object.assign(w, {w: clampN(w.w, ...MAIN_W, 1), h: clampN(w.h, ...MAIN_H, 2.1)});
+  else Object.assign(w, {type: "door", w: old ? old.w : p.doorW, h: old ? old.h : p.doorH, style: old ? old.style : "default"});
+  w.main = true;
+  if (old) { delete old.main; Object.assign(old, {type: "window", style: "default", w: p.winW, h: p.winH, sill: p.sill}); }
+  return syncDoor(p);
 }
 export const DTYPES = ["frontespis", "gable", "shed"];
 export const DORM_DEF = {
@@ -223,7 +260,11 @@ export function sanitize(obj) {
   }
   // Saves from before curtain styles had a curtains on/off switch.
   if (obj.curtainStyle === undefined && obj.curtains === false) out.curtainStyle = "none";
-  out.windows = Array.isArray(obj.windows) ? cleanWindows(obj.windows) : genAll(out, obj);
+  // the windows and doors; a save or preset without a main door gets one from its old door settings
+  let ws = Array.isArray(obj.windows) ? cleanWindows(obj.windows) : [];
+  if (!ws.some(w => w.main)) ws = cleanWindows([...ws, legacyMainDoor(obj, out)]);
+  out.windows = Array.isArray(obj.windows) ? ws : genAll(out, obj, ws);
+  syncDoor(out);
   out.dormers = Array.isArray(obj.dormers) ? cleanDormers(obj.dormers) : [];
   const q = kind.normalize(out);
   // The inside of a walk-in building: the saved pieces, or filled automatically for a new one.
@@ -593,16 +634,17 @@ function prism(mat, sec, at) {
 function layoutWall(key, L, fh, topAt) {
   const nf = p.floors + (p.halfStorey ? 1 : 0);
   const ops = [];
-  if (p.doorWall === key) {
-    const [s0, s1] = doorSpan(p, L), dh = Math.min(p.doorH, fh - 0.25);
-    ops.push({s0, s1, t0: 0, t1: dh, kind: "door", main: true, style: p.doorStyle});
+  const main = mainDoor(p);
+  if (main && main.wall === key) {
+    const [s0, s1] = doorSpan(p, L), dh = Math.min(main.h, fh - 0.25);
+    ops.push({s0, s1, t0: 0, t1: dh, kind: "door", main: true, id: main.id, style: styleOf(p, main)});
   }
   // The kind's own openings (a hen hatch ...), before the windows so a window over one is hidden.
   for (const h of openings) if (h.wall === key) ops.push({s0: h.s0, s1: h.s1, t0: 0, t1: h.t1, kind: "hatch", plain: !!h.plain});
   for (const win of p.windows) {
     if (win.wall !== key) continue;
     win._hidden = false;
-    if (win.floor >= nf) continue;
+    if (win.main || win.floor >= nf) continue;
     const [s0, s1] = openingSpan(win, L), door = win.type === "door";
     // a door made from a window stands on the floor, no taller than the floor allows
     const t0 = door ? 0 : win.floor * fh + win.sill;

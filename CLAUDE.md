@@ -28,7 +28,9 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   hatch; DOOR_STYLES: plain, plank, zbrace, xbrace, panel, sliding), drawn with a kit in wall coordinates
   (box/slab, skip leaves out a face lying on another). p.winStyle / p.doorStyle per building; each entry of
   p.windows has type "window" | "door" (doors only on floor 0, made from a window in the editor) and style
-  ("default" = the building's). The main door (doorWall ...) stays the entrance. Doors over 1.4 m are a pair.
+  ("default" = the building's). The main door (the entrance: porch, sleep point, yard) is the entry with main: true (mainDoor, setMainDoor;
+  old saves get one from doorWall/doorPos/doorW/doorH); syncDoor copies its wall and size to p.doorWall/doorW/doorH,
+  which kinds read. Any window or door can move to another wall in the editor. Doors over 1.4 m are a pair.
   Walk-in buildings: geo.doors [{wall, op, slide, leaves: [{hinge, motion {rotation} | {translation}, parts
   {mat: [from, to]}, box}]}]; export: door{n}Leaf{k}Hinge > door{n}Leaf{k} (moved) > meshes + collision,
   one animatedObject + trigger per door; the static parts leave out what leaves carry (exceptRanges).
@@ -63,7 +65,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Frontend tests: cd frontend && npm test (node --test, no browser needed)
 
 ## Status
-- Go tests (54) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (326) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
+- Go tests (54) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (331) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
 - Cow barn (kinds/cow.mjs): cowHusbandryPasture (no milk, like cowBarnSmall), automatic water, feed
   and water troughs outside on the pasture wall (kind.outside), a plain walk-through doorway for the
   cows (openings with plain: true; tall openings get a collision gap), feed pad + bale trigger

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { DEFAULTS, SCHEMA, sanitize, buildGeometry, buildI3d, serialize, MATS, placementAreas, placeableSnippet, sleepPoint, boxMesh, WP, ROOM_TYPES, CURTAIN_STYLES, rgb, pipeMesh, gutterMesh, surfaceSpec, scaledUV, ridgeCapMesh } from "../src/editor/model.mjs";
 
 const cross3 = (a, b) => [a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0]];
-const countOn = (p, wall, floor) => p.windows.filter(w => w.wall === wall && w.floor === floor).length;
+const countOn = (p, wall, floor) => p.windows.filter(w => w.wall === wall && w.floor === floor && !w.main).length;
 
 test("sanitize: empty input gives the defaults plus generated windows", () => {
   const p = sanitize({});
@@ -45,8 +45,8 @@ test("sanitize: window list is cleaned and ids renumbered", () => {
     { wall: "roof", floor: 0, pos: 0.5 },
     { wall: "back", floor: 9, pos: 2, w: 99, h: 0, sill: -1 },
   ] });
-  assert.equal(p.windows.length, 2);
-  assert.deepEqual(p.windows.map(w => w.id), [1, 2]);
+  assert.equal(p.windows.filter(w => !w.main).length, 2, "and the main door");
+  assert.deepEqual(p.windows.map(w => w.id), [1, 2, 3]);
   const b = p.windows[1];
   assert.equal(b.floor, 2); assert.equal(b.pos, 1); assert.equal(b.w, 3); assert.equal(b.h, 0.3); assert.equal(b.sill, 0);
 });
@@ -63,7 +63,7 @@ test("window generation: the door's slot on the ground floor is skipped", () => 
   assert.equal(countOn(p, "front", 0), 3);
   assert.equal(countOn(p, "back", 0), 2);
   const doorCenter = p.width / 2;
-  assert.ok(p.windows.filter(w => w.wall === "front" && w.floor === 0).every(w => Math.abs(w.pos * p.width - doorCenter) > 0.5));
+  assert.ok(p.windows.filter(w => w.wall === "front" && w.floor === 0 && !w.main).every(w => Math.abs(w.pos * p.width - doorCenter) > 0.5));
 });
 
 function assertMeshValid(g, name) {
@@ -742,7 +742,7 @@ test("sanitize: each window and kupa keeps its own room and curtains, or falls b
     ],
     dormers: [{ type: "gable", side: 1, pos: 0.5, room: "bedroom", curtain: "valance" }, { type: "shed", side: -1, pos: 0.5 }],
   });
-  assert.deepEqual(p.windows.map(w => [w.room, w.curtain]), [["kitchen", "cafe"], ["auto", "default"], ["auto", "default"]]);
+  assert.deepEqual(p.windows.filter(w => !w.main).map(w => [w.room, w.curtain]), [["kitchen", "cafe"], ["auto", "default"], ["auto", "default"]]);
   assert.deepEqual(p.dormers.map(d => [d.room, d.curtain]), [["bedroom", "valance"], ["auto", "default"]]);
   assert.ok(sanitize({}).windows.every(w => w.room === "auto" && w.curtain === "default"), "generated windows");
 });
@@ -794,10 +794,10 @@ test("interior: windows on the house default follow the house's curtain style", 
   const p = sanitize({ curtainStyle: "valance" });
   const { rooms } = buildGeometry(p);
   assert.ok(rooms.length > 0 && rooms.every(r => r.curtain === "valance"));
-  const q = sanitize({ ...p, windows: p.windows.map((w, i) => i ? w : { ...w, curtain: "cafe" }) });
+  const first = p.windows.findIndex(w => !w.main), q = sanitize({ ...p, windows: p.windows.map((w, i) => i !== first ? w : { ...w, curtain: "cafe" }) });
   const r2 = buildGeometry(q).rooms;
-  assert.equal(r2.find(r => r.op.id === q.windows[0].id).curtain, "cafe");
-  assert.ok(r2.filter(r => r.op.id !== q.windows[0].id).every(r => r.curtain === "valance"));
+  assert.equal(r2.find(r => r.op.id === q.windows[first].id).curtain, "cafe");
+  assert.ok(r2.filter(r => r.op.id !== q.windows[first].id).every(r => r.curtain === "valance"));
 });
 
 test("sanitize: windows and kupor keep their own curtain color, or follow the house", () => {
@@ -805,7 +805,7 @@ test("sanitize: windows and kupor keep their own curtain color, or follow the ho
     windows: [{ wall: "front", pos: 0.3, curtainColor: "#AA2233" }, { wall: "front", pos: 0.7, curtainColor: "red" }, { wall: "back" }],
     dormers: [{ type: "gable", side: 1, curtainColor: "#112233" }, { type: "shed", side: -1, curtainColor: 5 }],
   });
-  assert.deepEqual(p.windows.map(w => w.curtainColor), ["#AA2233", "default", "default"]);
+  assert.deepEqual(p.windows.filter(w => !w.main).map(w => w.curtainColor), ["#AA2233", "default", "default"]);
   assert.deepEqual(p.dormers.map(d => d.curtainColor), ["#112233", "default"]);
   assert.ok(sanitize({}).windows.every(w => w.curtainColor === "default"), "generated windows");
 });

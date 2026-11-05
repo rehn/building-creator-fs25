@@ -85,7 +85,7 @@ test("presets: a farmhouse and chicken barns, the biggest for 360 hens", () => {
     // window counts (winFront ...) only seed the window list
     for (const wall of ["Front", "Back", "Left", "Right"]) {
       const n = x.settings["win" + wall];
-      if (n !== undefined) assert.equal(p.windows.filter(w => w.wall === wall.toLowerCase() && w.floor === 0).length, n, `${x.id} win${wall}`);
+      if (n !== undefined) assert.equal(p.windows.filter(w => w.wall === wall.toLowerCase() && w.floor === 0 && !w.main).length, n, `${x.id} win${wall}`);
     }
   }
   const hens = PRESETS.filter(x => x.settings.kind === "chicken").map(x => sanitize(x.settings).hens);
