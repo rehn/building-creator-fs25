@@ -37,6 +37,8 @@ const LEAF_T = 0.05;
  * turned about y, so the same angle swings the leaf outwards on every wall.
  */
 const DOOR_OPEN = -100;
+/** How far the plinth stands out from the walls. */
+const PLINTH_OUT = 0.06;
 /** Doors wider than this are a pair of doors (a walk-in building's are two leaves that open together). */
 export const DOUBLE_DOOR_FROM = 1.4;
 /**
@@ -482,7 +484,8 @@ export function gutterMesh(c0, c1, out, r, {seg = 12} = {}) {
     }
   }
   // Rolled lip on the outer rim.
-  const lip = pipeMesh([pt(c0, 0), pt(c1, 0)], 0.012, {seg: 10});
+  // (its ends 3 mm past the end plates, so its caps aren't in their plane)
+  const lip = pipeMesh([add(pt(c0, 0), scl(dir, -0.003)), add(pt(c1, 0), scl(dir, 0.003))], 0.012, {seg: 10});
   const base = m.p.length / 3;
   m.p.push(...lip.p); m.n.push(...lip.n); m.uv.push(...lip.uv); m.i.push(...lip.i.map(k => k + base));
   delete m.v; delete m.add;
@@ -725,7 +728,7 @@ function buildHatch(w, o, F, fr, out) {
     box("trim", (a, b, c) => WP(w, lerp(rA, rB, a), lerp(0, -F, c) - 0.03 + b * 0.03, lerp(0.02, run, c)), w.u, UP, w.n);
     for (let c = 0.12; c < 0.95; c += 0.15 / run) {
       const d = lerp(0.02, run, c), t = lerp(0, -F, c);
-      wbox("trim", w, rA, rB, t, t + 0.02, d - 0.012, d + 0.012);
+      wbox("trim", w, rA + 0.01, rB - 0.01, t, t + 0.02, d - 0.012, d + 0.012);   // cleats, a little in from the edges
     }
   }
 }
@@ -822,8 +825,9 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
     wbox("trim", w, o.s0, o.s1, o.t1, o.t1 + fr, 0, out);
     if (isDoor) {
       if (F > 0.05 && p.entrance !== "porch") {
-        wbox("foundation", w, o.s0 - 0.3, o.s1 + 0.3, -F, 0, 0, 0.7);
-        wbox("collision", w, o.s0 - 0.3, o.s1 + 0.3, -F, 0, 0, 0.7);
+        // the doorstep, from where the plinth ends (its top in the same plane would flicker)
+        wbox("foundation", w, o.s0 - 0.3, o.s1 + 0.3, -F, 0, PLINTH_OUT, 0.7);
+        wbox("collision", w, o.s0 - 0.3, o.s1 + 0.3, -F, 0, PLINTH_OUT, 0.7);
       }
       // the handle, near the free edge; on a pair of doors one either side of the stile
       const pair = o.s1 - o.s0 > DOUBLE_DOOR_FROM, mid = (o.s0 + o.s1) / 2;
@@ -884,7 +888,9 @@ function buildVentilators(Lr, ridgeY, tanP, M, half, th, F) {
   // The box's bottom follows the roof (a low V, 5 cm under the tiles), so it stays in the roof slab
   // and never shows under it; a walk-in barn gets a duct inside instead (ventDuct).
   const y0 = ridgeY - tanP * hw - 0.05, yC = ridgeY - 0.05, y1 = ridgeY + 0.75, rise = 0.3, ro = 0.5;
-  const mbox = (mat, a0, a1, yA, yB, b0, b1) => box(mat, (i, j, k) => M(lerp(a0, a1, i), lerp(yA, yB, j), lerp(b0, b1, k)), M(1, 0, 0), UP, M(0, 0, 1));
+  // (ranges sorted: a box given back to front would come out inside-out)
+  const mbox = (mat, a0, a1, yA, yB, b0, b1) => { [a0, a1] = [Math.min(a0, a1), Math.max(a0, a1)]; [b0, b1] = [Math.min(b0, b1), Math.max(b0, b1)];
+    box(mat, (i, j, k) => M(lerp(a0, a1, i), lerp(yA, yB, j), lerp(b0, b1, k)), M(1, 0, 0), UP, M(0, 0, 1)); };
   for (const a of ventSpots(p.ventilators, half)) {
     for (const s of [-1, 1]) prism("walls", [[s * hw, y0], [0, yC], [0, y1], [s * hw, y1]], ([b, y], k) => M(k ? a + hw : a - hw, y, b));
     abox("collision", M(a - hw, y0, -hw), M(a + hw, y1 + rise, hw));
@@ -894,7 +900,9 @@ function buildVentilators(Lr, ridgeY, tanP, M, half, th, F) {
       const y = y1 - 0.15 - j * 0.12;
       mbox("trim", a - hw + 0.06, a + hw - 0.06, y - 0.03, y, s * hw, s * (hw + 0.05));
     }
-    for (const sa of [-1, 1]) for (const sb of [-1, 1]) mbox("trim", a + sa * hw - (sa > 0 ? 0.05 : 0), a + sa * hw + (sa < 0 ? 0.05 : 0), y0, y1, sb * hw - (sb > 0 ? 0.05 : 0), sb * hw + (sb < 0 ? 0.05 : 0));
+    // (standing 1 cm proud of the boxing and stopping just under its top: flush faces would flicker)
+    const cb = (c, sg) => [c + sg * (hw - 0.04), c + sg * (hw + 0.01)];
+    for (const sa of [-1, 1]) for (const sb of [-1, 1]) mbox("trim", ...cb(a, sa), y0, y1 - 0.005, ...cb(0, sb));
     // the little roof: two slopes from the eaves at b = +-ro up to a ridge over the middle
     for (const s of [-1, 1]) {
       const q = [M(a - hw - 0.1, y1, s * ro), M(a + hw + 0.1, y1, s * ro), M(a + hw + 0.1, y1 + rise, 0), M(a - hw - 0.1, y1 + rise, 0)];
@@ -1100,7 +1108,7 @@ function buildEntrance(w, o, limit, F, mainEave) {
   wbox("trim", w, sL, sR, ta - 0.16, ta, cd - 0.1, cd);
   for (const sg of [-1, 1]) {
     const sb = cs + sg * (hw - 0.08);
-    wbox("trim", w, sb - 0.05, sb + 0.05, ta - 0.16, ta, 0, cd);
+    wbox("trim", w, sb - 0.05, sb + 0.05, ta - 0.16, ta, 0, cd - 0.1);   // (up to the front beam, not through it)
     if (type === "porch") {
       wbox("trim", w, sb - 0.06, sb + 0.06, 0, ta - 0.16, cd - 0.14, cd - 0.02);
       wbox("collision", w, sb - 0.06, sb + 0.06, 0, ta - 0.16, cd - 0.14, cd - 0.02);
@@ -1108,12 +1116,14 @@ function buildEntrance(w, o, limit, F, mainEave) {
     else sbox("trim", w, sb, 0.08, [0.02, ta - 0.9], [cd * 0.7, ta - 0.16]);
   }
   if (type === "porch") {
-    wbox("foundation", w, sL, sR, -Math.max(F, 0.06), 0, 0, cd);
-    wbox("collision", w, sL, sR, -Math.max(F, 0.06), 0, 0, cd);
+    const d0 = F > 0.01 ? PLINTH_OUT : 0;   // the deck from where the plinth ends
+    wbox("foundation", w, sL, sR, -Math.max(F, 0.06), 0, d0, cd);
+    wbox("collision", w, sL, sR, -Math.max(F, 0.06), 0, d0, cd);
     const n = F > 0.1 ? Math.max(1, Math.round(F / 0.18)) : 0, rh = n ? F / n : 0, stw = Math.min(cw - 0.3, 1.4);
     for (let k = 1; k < n; k++) {
-      wbox("foundation", w, cs - stw/2, cs + stw/2, -F, -k * rh, cd, cd + k * 0.28);
-      wbox("collision", w, cs - stw/2, cs + stw/2, -F, -k * rh, cd, cd + k * 0.28);
+      // each step its own slab, next to the one above (blocks inside each other share faces and flicker)
+      wbox("foundation", w, cs - stw/2, cs + stw/2, -F, -k * rh, cd + (k - 1) * 0.28, cd + k * 0.28);
+      wbox("collision", w, cs - stw/2, cs + stw/2, -F, -k * rh, cd + (k - 1) * 0.28, cd + k * 0.28);
     }
     for (const sg of [-1, 1]) {
       const sr = cs + sg * (hw - 0.08);
@@ -1269,7 +1279,7 @@ function build() {
     const x0 = sx*W/2 - 0.09, x1 = sx*W/2 + 0.09, z0 = sz*D/2 - 0.09, z1 = sz*D/2 + 0.09;
     box("trim", (a, b, c) => { const x = lerp(x0, x1, a), z = lerp(z0, z1, c); return [x, b ? roofUnder(x, z) : F, z]; }, [1,0,0], UP, [0,0,1]);
   }
-  if (F > 0.01) abox("foundation", [-W/2 - 0.06, 0, -D/2 - 0.06], [W/2 + 0.06, F, D/2 + 0.06]);
+  if (F > 0.01) abox("foundation", [-W/2 - PLINTH_OUT, 0, -D/2 - PLINTH_OUT], [W/2 + PLINTH_OUT, F, D/2 + PLINTH_OUT]);
   if (!hollow) abox("collision", [-W/2, 0, -D/2], [W/2, top, D/2]);
   else {
     // Floor, then each wall as slabs with a gap for the door (the door leaf has its own collision)
@@ -1328,7 +1338,9 @@ function build() {
     const hA = Lr/2 + (hip ? o : Math.min(o, 0.5)), hB = span/2 + o, yT = eaveY - 0.06;
     for (const s of [1, -1]) {
       const bg = s * (hB + r - 0.02);
-      for (const [x0, x1] of segs(-hA - (hip ? r : 0), hA + (hip ? r : 0), cutsFor(s))) gutterRun(M(x0, yT, bg), M(x1, yT, bg), M(0, 0, s), r);
+      // (on a gable roof the gutter stops 1 cm short of the barge boards: its end in their plane would flicker)
+      const gEnd = hip ? hA + r : hA - 0.01;
+      for (const [x0, x1] of segs(-gEnd, gEnd, cutsFor(s))) gutterRun(M(x0, yT, bg), M(x1, yT, bg), M(0, 0, s), r);
       if (hip) { const ag = s * (hA + r - 0.02); gutterRun(M(ag, yT, -hB), M(ag, yT, hB), M(s, 0, 0), r); }
       const bw = s * (span/2 + 0.09), yb = yT - r;
       const ends = p.downpipes === 2 ? [-1, 1] : p.downpipes === 1 ? [s] : [];
