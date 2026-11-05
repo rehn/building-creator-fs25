@@ -381,7 +381,8 @@ const turn = (q, h, deg) => {
 };
 test("door: a chicken barn's door leaf swings outward about its hinge", () => {
   for (const doorWall of ["front", "back", "left", "right"]) {
-    const p = hen({ doorWall, doorW: 1.2 }), geo = buildGeometry(p), leaf = geo.doorLeaf, { w } = doorMid(geo, p);
+    const p = hen({ doorWall, doorW: 1.2 }), geo = buildGeometry(p), leaf = geo.doorLeaves[0], { w } = doorMid(geo, p);
+    assert.equal(geo.doorLeaves.length, 1, "a 1.2 m door is one leaf");
     assert.ok(leaf, doorWall);
     const out = q => (q[0] - w.o[0]) * w.n[0] + (q[2] - w.o[2]) * w.n[2];
     const pts = []; for (let k = 0; k < geo.G.door.p.length; k += 3) pts.push(geo.G.door.p.slice(k, k + 3));
@@ -400,7 +401,7 @@ test("mod: the door opens and closes with the game's door prompt", () => {
   assert.match(xml, /template="woodDoorOpen"/);
   const map = mappings(xml), tree = sceneTree(i3d);
   const door = resolve(tree, map.door1);
-  near(door.pos, geo.doorLeaf.hinge, "door at its hinge");
+  near(door.pos, geo.doorLeaves[0].hinge, "door at its hinge");
   assert.equal(door.node.children.length, 1);
   assert.match(door.node.children[0].attrs, /kinematic="true"/);
   assert.match(door.node.children[0].attrs, /collisionFilterGroup="0x1034"/);
@@ -413,8 +414,62 @@ test("mod: the door opens and closes with the game's door prompt", () => {
   // its mesh is relative to the hinge: first vertex + hinge = the closed door's first vertex
   const sid = door.node.attrs.match(/shapeId="(\d+)"/)[1];
   const set = i3d.match(new RegExp(`<IndexedTriangleSet name="[^"]*" shapeId="${sid}"[^>]*>[\\s\\S]*?<v p="([^"]+)"`));
-  near(set[1].split(" ").map(Number).map((v, k) => v + geo.doorLeaf.hinge[k]), geo.G.door.p.slice(0, 3), "door mesh");
+  near(set[1].split(" ").map(Number).map((v, k) => v + geo.doorLeaves[0].hinge[k]), geo.G.door.p.slice(0, 3), "door mesh");
   assert.doesNotMatch(buildI3d(sanitize({})) + placeableXml(sanitize({}), "x"), /door1|animatedObject/, "houses keep a fixed door");
+});
+
+test("door: a wide door is a pair of leaves, hinged at either side, both swinging out", () => {
+  for (const doorWall of ["front", "back", "left", "right"]) {
+    const p = hen({ doorWall, doorW: 2.4 }), geo = buildGeometry(p), { w, o } = doorMid(geo, p), leaves = geo.doorLeaves;
+    assert.equal(leaves.length, 2, doorWall);
+    const along = q => (q[0] - w.o[0]) * w.u[0] + (q[2] - w.o[2]) * w.u[2], out = q => (q[0] - w.o[0]) * w.n[0] + (q[2] - w.o[2]) * w.n[2];
+    // one hinge at each side of the opening
+    assert.ok(Math.abs(along(leaves[0].hinge) - o.s0) < 0.03 && Math.abs(along(leaves[1].hinge) - o.s1) < 0.03, `${doorWall}: hinges`);
+    assert.equal(leaves[0].openAngle, -leaves[1].openAngle);
+    const pts = []; for (let k = 0; k < geo.G.door.p.length; k += 3) pts.push(geo.G.door.p.slice(k, k + 3));
+    let v0 = 0;
+    for (const leaf of leaves) {
+      // each leaf's vertices are its own run of G.door, about half the opening wide
+      assert.equal(leaf.from, v0); v0 = leaf.to;
+      const mine = pts.slice(leaf.from, leaf.to), s = mine.map(along);
+      assert.ok(Math.max(...s) - Math.min(...s) < (o.s1 - o.s0) / 2 + 0.05, `${doorWall}: leaf ${(Math.max(...s) - Math.min(...s)).toFixed(2)} m wide`);
+      const open = mine.map(q => turn(q, leaf.hinge, leaf.openAngle));
+      assert.ok(open.reduce((a, q) => a + out(q), 0) / open.length > 0.4, `${doorWall}: leaf not out when open`);
+      assert.ok(Math.min(...open.map(out)) >= Math.min(...mine.map(out)) - 1e-6, `${doorWall}: swings into the barn`);
+    }
+    assert.equal(v0, pts.length, "every door vertex is in a leaf");
+  }
+});
+
+test("mod: a pair of doors opens together, each leaf about its own hinge with its own collision", () => {
+  const p = hen({ doorW: 2.4 }), xml = placeableXml(p, "x"), i3d = buildI3d(p), geo = buildGeometry(p);
+  assert.equal((xml.match(/<animatedObject /g) || []).length, 1);
+  assert.match(xml, /<part node="door1">\s*<keyFrame time="0" rotation="0 0 0"\/>\s*<keyFrame time="1" rotation="0 -100 0"\/>/);
+  assert.match(xml, /<part node="door2">\s*<keyFrame time="0" rotation="0 0 0"\/>\s*<keyFrame time="1" rotation="0 100 0"\/>/);
+  const map = mappings(xml), tree = sceneTree(i3d);
+  geo.doorLeaves.forEach((leaf, k) => {
+    const door = resolve(tree, map[`door${k + 1}`]);
+    near(door.pos, leaf.hinge, `door${k + 1} at its hinge`);
+    assert.match(door.node.children[0].attrs, /kinematic="true"/);
+    const sid = door.node.attrs.match(/shapeId="(\d+)"/)[1];
+    const set = i3d.match(new RegExp(`<IndexedTriangleSet name="[^"]*" shapeId="${sid}"[^>]*>[\\s\\S]*?<v p="([^"]+)"`));
+    near(set[1].split(" ").map(Number).map((v, i) => v + leaf.hinge[i]), geo.G.door.p.slice(leaf.from * 3, leaf.from * 3 + 3), `door${k + 1} mesh`);
+  });
+  assert.doesNotMatch(placeableXml(hen({ doorW: 1.2 }), "x"), /door2/, "a narrow door is one leaf");
+});
+
+test("a wide house door shows as a pair: a meeting stile down the middle", () => {
+  const stile = p => {
+    const geo = buildGeometry(p), { w, ops } = geo.opsByWall[p.doorWall], o = ops.find(q => q.kind === "door"), mid = (o.s0 + o.s1) / 2;
+    let n = 0;
+    for (let k = 0; k < geo.G.door.p.length; k += 3) {
+      const q = geo.G.door.p.slice(k, k + 3), s = (q[0] - w.o[0]) * w.u[0] + (q[2] - w.o[2]) * w.u[2], d = (q[0] - w.o[0]) * w.n[0] + (q[2] - w.o[2]) * w.n[2];
+      if (Math.abs(s - mid) < 0.05 && d > -0.15 + 0.005) n++;
+    }
+    return n;
+  };
+  assert.ok(stile(sanitize({ doorW: 2 })) > 0);
+  assert.equal(stile(sanitize({ doorW: 1 })), 0);
 });
 
 /* ---------- Windows and coop interior ---------- */

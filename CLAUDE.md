@@ -51,7 +51,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Frontend tests: cd frontend && npm test (node --test, no browser needed)
 
 ## Status
-- Go tests (54) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (257) pass.
+- Go tests (54) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (260) pass.
 - Cow barn (kinds/cow.mjs): cowHusbandryPasture (no milk, like cowBarnSmall), automatic water, feed
   and water troughs outside on the pasture wall (kind.outside), a plain walk-through doorway for the
   cows (openings with plain: true; tall openings get a collision gap), feed pad + bale trigger
@@ -73,7 +73,8 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   (groupByKind, kind.plural); the project list API returns each project's kind (from data.kind, read in SQL).
   Chicken barns export as chickenHusbandryPasture (modelled on data/placeables/rudolfHormann/
   chickenBarnBig, 360 hens). Walk-in kinds (kind.walkIn): inside wall faces, hollow collision, a door
-  leaf exported as node door1 at its hinge with an animatedObject, see-through windows, and an inside
+  leaf exported as node door1 at its hinge with an animatedObject (doors over DOUBLE_DOOR_FROM = 1.4 m are a
+  pair: door1 + door2, hinged at both sides, one animatedObject), see-through windows, and an inside
   from kind.furnish(). Confirmed in-game: hens show, door opens, walk-in collision.
   Not yet confirmed: feeding, fence joining the corners, warning stripes, see-through windows, coop interior.
 - Agreed plan with the user (old saves may break; aim: a good, user-friendly app):
