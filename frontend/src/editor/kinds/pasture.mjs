@@ -24,7 +24,8 @@ export function pastureWallFor(p) {
  *             the fence runs back along the wall line to the barn's corners, as in the base game's cow barn.
  *   past:     the pasture wall's frame {o, u, n, L}
  *   feed, other: the frames of the two walls (not the pasture's; walls without a door first) the outside places go
- *             on: the wall opposite the pasture for feed if it's free, else a side wall
+ *             on: the wall opposite the pasture for feed if it's free, else a side wall; feedKey, otherKey: their keys
+ *   frames:   every wall's frame by key; mid(w): the middle of the stretch of wall w clear of the fence, and its length
  *   at(w, s, d, y), boxAt(w, s, d, along, out, h), rectOf(box): points and world-axis boxes by a wall
  *   clear(w): along wall w, the stretch [a, b] at least 1 m behind the pasture wall (the fence line)
  */
@@ -50,5 +51,8 @@ export function yardFrame(geo, p, minWidth) {
     const a0 = ahead(0), a1 = ahead(w.L);
     return Math.abs(a0 - a1) < 1e-6 ? [0, w.L] : Math.abs(a0) < Math.abs(a1) ? [1, w.L] : [0, w.L - 1];
   };
-  return {fence, past, feed: walls[feedSide].w, other: walls[otherSide].w, at, boxAt, rectOf, clear};
+  const frames = Object.fromEntries(Object.entries(walls).map(([k, e]) => [k, e.w]));
+  return {fence, past, feed: walls[feedSide].w, other: walls[otherSide].w, feedKey: feedSide, otherKey: otherSide, frames, at, boxAt, rectOf, clear,
+    // the middle of the stretch clear of the fence on wall w, and its length
+    mid: w => { const [a, b] = clear(w); return [(a + b) / 2, b - a]; }};
 }

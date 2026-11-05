@@ -4,12 +4,13 @@ import * as THREE from "three";
 import JSZip from "jszip";
 import {
   SCHEMA, fieldsFor, WALLS, WALL_NAMES, DTYPES, DORM_DEF, MATS, fittingTextures,
-  genRow, sanitize, serialize, slugify, buildGeometry, buildI3d, placeableSnippet, sleepPoint, surfaceSpec, scaledUV, colorFor, WP
+  genRow, sanitize, serialize, slugify, buildGeometry, buildI3d, placeableSnippet, gamePlaces, surfaceSpec, scaledUV, colorFor, WP
 } from "./model.mjs";
 import { WINDOW_STYLES, DOOR_STYLES, PORCH_OPTIONS, PORCH_W, PORCH_D } from "./model.mjs";
 import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, henYard, henCap, seeThroughGlass, kindOf } from "./model.mjs";
 import { cowYard } from "./kinds/cow.mjs";
 import { roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, History } from "./layout.mjs";
+import { PLACE_DEFAULT, PLACE_LIMITS } from "./places.mjs";
 import { setAssets, catalogFor, usedAssets } from "./model.mjs";
 import { readObj, assetFolder, flattenI3d } from "./assets.mjs";
 import { paintInterior, paintGlass } from "./interior.mjs";
@@ -156,10 +157,12 @@ SCHEMA.forEach(g => {
       if (ruled) syncControls(); else syncOutputs();
       persist(); rebuild(false);
       if (["floors", "halfStorey", "roofType", "ridge", "interior", "curtainStyle", "curtainColor", "winStyle", "doorStyle"].includes(f.k)) { renderWinUI(); renderDormUI(); }
+      if (f.k === "sleepPoint" || placeSel) renderPlacesUI();
     });
   });
   if (g.custom === "dormers") { const ed = document.createElement("div"); ed.id = "dormEditor"; d.appendChild(ed); }
   if (g.custom === "inside") { const ed = document.createElement("div"); ed.id = "insideEditor"; d.appendChild(ed); }
+  if (g.custom === "places") { const ed = document.createElement("div"); ed.id = "placesEditor"; d.appendChild(ed); }
   if (g.custom === "windows") {
     const ed = document.createElement("div"); ed.id = "winEditor"; d.appendChild(ed);
     const sub = document.createElement("p"); sub.className = "sub"; sub.textContent = "Size for new windows"; d.appendChild(sub);
@@ -181,6 +184,7 @@ function syncControls() {
   syncKind();
   renderWinUI();
   renderDormUI();
+  renderPlacesUI();
 }
 function syncOutputs() {
   for (const k in inputs) {
@@ -327,7 +331,7 @@ const stage = $("stage");
 const readout = $("readout");
 let interiorTex = null, interiorCv = null, groundObj = null, gridObj = null;
 const interiorCanvas = () => interiorCv || (interiorCv = paintInterior(document));
-let renderer, scene, camera, groundMat, selMesh = null, sleepObj = null, yardObj = null, meshes = {}, matObjs = {}, needs = true, sunLight = null;
+let renderer, scene, camera, groundMat, selMesh = null, placesObj = null, yardObj = null, meshes = {}, matObjs = {}, needs = true, sunLight = null;
 
 function initThree() {
   renderer = new THREE.WebGLRenderer({canvas, antialias:true});
@@ -364,7 +368,7 @@ function initThree() {
   });
   selMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({transparent:true, opacity:0.45, depthWrite:false, side:THREE.DoubleSide}));
   selMesh.visible = false; scene.add(selMesh);
-  sleepObj = makeSleepMarker(); scene.add(sleepObj.group);
+  placesObj = makePlacesMarker(); scene.add(placesObj.group);
   yardObj = makeYardMarker(); scene.add(yardObj.group);
   itemsGroup = new THREE.Group(); scene.add(itemsGroup);
   itemMat = new THREE.MeshStandardMaterial({color: 0x9aa3a8, roughness: 0.7, metalness: 0.15});
@@ -688,6 +692,57 @@ function renderWinUI() {
     if ($("winRemove")) $("winRemove").onclick = () => { p.windows = p.windows.filter(w => w.id !== selId); selId = null; winChanged(); renderWinUI(); };
   }
 }
+/* ---------- Game places ---------- */
+let placeSel = null;
+/** A place's sliders: [key, label on a wall, label in the building's axes, unit text]. */
+const PLACE_SLIDERS = [
+  ["along", "Along the wall (+ to the right)", "Left / right (+ to the right)", 0.05],
+  ["out", "Out from the wall", "Back / front (+ to the front)", 0.05],
+  ["width", "Width (along the wall)", "Width (left to right)", 0.05],
+  ["depth", "Depth (out from the wall)", "Depth (back to front)", 0.05],
+  ["height", "Height", "Height", 0.05],
+  ["iconAlong", "Icon along the wall", null, 0.05],
+  ["iconOut", "Icon out from the wall", null, 0.05]];
+const SIZE_KEYS = {width: 0, depth: 1, height: 2};
+/** The slider's value: a size the player set, or the size the place has now (its kind's). */
+const placeValue = (a, k, x) => k in SIZE_KEYS ? (a[k] || +x.dims[SIZE_KEYS[k]].toFixed(2)) : a[k];
+const placeOut = (a, k, x) => k in SIZE_KEYS ? `${placeValue(a, k, x).toFixed(2)} m${a[k] ? "" : " (automatic)"}` : `${a[k] >= 0 ? "+" : ""}${a[k].toFixed(2)} m`;
+function renderPlacesUI() {
+  const ed = $("placesEditor");
+  if (!ed) return;
+  const kind = kindOf(p), defs = kind.places || [], list = gamePlaces(p, buildGeometry(p));
+  if (!defs.length) { ed.innerHTML = `<p class="hint">This building has no game places.</p>`; return; }
+  if (!list.length) { ed.innerHTML = `<p class="hint">Turn on the sleep point under Farmhouse to place it.</p>`; return; }
+  if (!list.some(x => x.id === placeSel)) placeSel = null;
+  const opt = (v, label, cur) => `<option value="${v}" ${v === cur ? "selected" : ""}>${esc(label)}</option>`;
+  let html = `<div class="field"><div class="fl"><label for="placeSel">Edit a place</label></div><select id="placeSel">${opt("", "Choose one", placeSel || "")}${list.map(x => opt(x.id, x.name, placeSel)).join("")}</select></div>`;
+  const x = list.find(q => q.id === placeSel), def = defs.find(q => q.id === placeSel);
+  if (x && def) {
+    const a = p.places[x.id], onWall = !!def.wall;
+    html += `<div class="wincard"><p class="hint">${esc(def.hint)}</p>`;
+    if (onWall) html += `<div class="field"><div class="fl"><label for="pl-wall">Wall</label></div><select id="pl-wall">${opt("auto", `Automatic${a.wall === "auto" && WALL_NAMES[x.wall] ? ` (${WALL_NAMES[x.wall].toLowerCase()})` : ""}`, a.wall)}${WALLS.map(k => opt(k, WALL_NAMES[k], a.wall)).join("")}</select></div>`;
+    for (const [k, wallLabel, bldLabel, step] of PLACE_SLIDERS) {
+      const label = onWall ? wallLabel : bldLabel;
+      if (!label || (k.startsWith("icon") && !x.icon)) continue;
+      const [lo, hi] = PLACE_LIMITS[k];
+      html += `<div class="field"><div class="fl"><label for="pl-${k}">${label}</label><output id="pl-${k}-o">${placeOut(a, k, x)}</output></div><input type="range" id="pl-${k}" data-k="${k}" min="${lo}" max="${hi}" step="${step}" value="${placeValue(a, k, x)}"></div>`;
+    }
+    html += `<button type="button" id="placeReset">Back to automatic</button></div>`;
+  }
+  ed.innerHTML = html;
+  $("placeSel").onchange = e => { placeSel = e.target.value || null; renderPlacesUI(); updatePlacesMarker(buildGeometry(p)); };
+  if (!x || !def) return;
+  const a = p.places[x.id];
+  if ($("pl-wall")) $("pl-wall").onchange = e => { a.wall = e.target.value; persist(); rebuild(false); renderPlacesUI(); };
+  ed.querySelectorAll(".wincard input[type=range]").forEach(inp => inp.oninput = () => {
+    const k = inp.dataset.k;
+    a[k] = +inp.value;
+    persist(); rebuild(false);
+    const now = gamePlaces(p, buildGeometry(p)).find(q => q.id === x.id) || x;
+    $(`pl-${k}-o`).textContent = placeOut(a, k, now);
+  });
+  $("placeReset").onclick = () => { p.places[x.id] = {...PLACE_DEFAULT}; persist(); rebuild(false); renderPlacesUI(); toast(`${x.name}: back where it goes automatically`); };
+}
 let dSel = null;
 const TYPE_NAMES = {frontespis:"Frontespis", gable:"Gable kupa", shed:"Shed kupa"};
 const DFIELDS = [
@@ -794,7 +849,7 @@ function enterInside() {
   ins.on = true; ins.sel = null; ins.drag = null; ins.pan = [0, 0];
   ins.hist = new History(p.items || []);
   ins.saved = {...view, target: [...view.target]};
-  sleepObj.group.visible = false; yardObj.group.visible = false;
+  placesObj.group.visible = false; yardObj.group.visible = false;
   // The shadow pass isn't clipped, so the roof would still shade the floor: no shadows while arranging.
   sunLight.castShadow = false;
   $("insideBar").hidden = false; $("orbitHint").textContent = "Drag a piece to move it · R turns · Delete removes";
@@ -1070,38 +1125,89 @@ function pick(e) {
   }
 }
 
-/** Preview of the sleep point: the trigger as a faint box and the floating bed icon. */
-function makeSleepMarker() {
-  const group = new THREE.Group();
-  const box = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({color:0x3d7bd9, transparent:true, opacity:0.12, depthWrite:false}));
-  const c = document.createElement("canvas"); c.width = c.height = 128;
-  const x = c.getContext("2d");
-  x.fillStyle = "#2f6fd0"; x.beginPath(); x.arc(64, 64, 60, 0, Math.PI * 2); x.fill();
-  x.fillStyle = "#fff";
+/**
+ * Preview of the game places (gamePlaces): each FS25 box as a faint coloured box with its edges, and
+ * its icon floating over where the game shows it. The place being edited is shown stronger.
+ */
+const PLACE_COLORS = {sleep: 0x3d7bd9, food: 0xe08a2c, bales: 0xd9a92a, loading: 0x4caf50, pallets: 0xe0c22c, info: 0x8a8f98};
+function makePlacesMarker() {
+  const group = new THREE.Group(), boxGeo = new THREE.BoxGeometry(1, 1, 1), edgeGeo = new THREE.EdgesGeometry(boxGeo);
+  const boxes = {}, icons = {}, textures = {};
+  // one canvas texture per glyph, drawn in white on a coloured circle
+  const GLYPHS = {sleep: ["#2f6fd0", drawBed], food: ["#d07a1f", drawFeed], bales: ["#c0901a", drawBale], hen: ["#3f9a43", drawHen], cow: ["#3f9a43", drawCow], pallet: ["#c9a514", drawPallet]};
+  const texture = glyph => {
+    if (!textures[glyph]) {
+      const c = document.createElement("canvas"); c.width = c.height = 128;
+      const x = c.getContext("2d"), [bg, draw] = GLYPHS[glyph];
+      x.fillStyle = bg; x.beginPath(); x.arc(64, 64, 60, 0, Math.PI * 2); x.fill();
+      x.fillStyle = x.strokeStyle = "#fff"; x.lineWidth = 6; x.lineCap = x.lineJoin = "round";
+      draw(x, bg);
+      textures[glyph] = new THREE.CanvasTexture(c);
+    }
+    return textures[glyph];
+  };
+  const boxFor = id => {
+    if (!boxes[id]) {
+      const color = PLACE_COLORS[id] || 0x888888;
+      const mesh = new THREE.Mesh(boxGeo, new THREE.MeshBasicMaterial({color, transparent: true, opacity: 0.14, depthWrite: false}));
+      const edges = new THREE.LineSegments(edgeGeo, new THREE.LineBasicMaterial({color, transparent: true, opacity: 0.35}));
+      mesh.add(edges);
+      group.add(mesh);
+      boxes[id] = {mesh, edges};
+    }
+    return boxes[id];
+  };
+  const iconFor = (id, glyph) => {
+    if (!icons[id]) {
+      icons[id] = new THREE.Sprite(new THREE.SpriteMaterial({map: texture(glyph), transparent: true, depthWrite: false}));
+      icons[id].scale.set(0.85, 0.85, 1); icons[id].renderOrder = 10;
+      group.add(icons[id]);
+    }
+    return icons[id];
+  };
+  const dispose = () => {
+    boxGeo.dispose(); edgeGeo.dispose();
+    Object.values(boxes).forEach(b => { b.mesh.material.dispose(); b.edges.material.dispose(); });
+    Object.values(icons).forEach(s => s.material.dispose());
+    Object.values(textures).forEach(t => t.dispose());
+  };
+  return {group, boxes, icons, boxFor, iconFor, dispose};
+}
+function updatePlacesMarker(geo) {
+  if (!placesObj) return;
+  placesObj.group.visible = true;
+  const list = gamePlaces(p, geo), shown = new Set(list.map(x => x.id));
+  for (const [id, b] of Object.entries(placesObj.boxes)) b.mesh.visible = shown.has(id);
+  for (const [id, s] of Object.entries(placesObj.icons)) s.visible = shown.has(id);
+  for (const x of list) {
+    const b = placesObj.boxFor(x.id), on = x.id === placeSel;
+    b.mesh.position.set(...x.box.center); b.mesh.scale.set(...x.box.size);
+    b.mesh.material.opacity = on ? 0.32 : x.id === "info" ? 0.05 : 0.14;
+    b.edges.material.opacity = on ? 1 : 0.35;
+    // the icon over its spot in the game, or a preview-only one over the middle of an icon-less place
+    if (!x.glyph) continue;
+    const at = x.icon || [x.box.center[0], 0, x.box.center[2]], s = placesObj.iconFor(x.id, x.glyph);
+    s.position.set(at[0], at[1] + 1.3, at[2]);
+  }
+  needs = true;
+}
+function drawBed(x) {
   x.fillRect(26, 40, 10, 54);            // headboard
   x.fillRect(26, 74, 78, 10);            // frame
   x.fillRect(96, 74, 8, 20);             // foot
   x.beginPath(); x.arc(50, 64, 9, 0, Math.PI * 2); x.fill();  // pillow / head
   x.fillRect(62, 56, 42, 16);            // blanket
-  const tex = new THREE.CanvasTexture(c);
-  const icon = new THREE.Sprite(new THREE.SpriteMaterial({map:tex, transparent:true, depthWrite:false}));
-  icon.scale.set(0.8, 0.8, 1); icon.renderOrder = 10;
-  group.add(box, icon);
-  const dispose = () => { box.geometry.dispose(); box.material.dispose(); tex.dispose(); icon.material.dispose(); };
-  return {group, box, icon, dispose};
 }
-function updateSleepMarker(geo) {
-  if (!sleepObj) return;
-  sleepObj.group.visible = !!p.sleepPoint;
-  if (!p.sleepPoint) return;
-  const sp = sleepPoint(geo);
-  sleepObj.box.position.set(...sp.trigger.center); sleepObj.box.scale.set(...sp.trigger.size);
-  sleepObj.icon.position.set(sp.marker[0], sp.marker[1] + 1.3, sp.marker[2]);
+function drawBale(x, bg) {
+  // A square bale: front face, top and side, with two strings.
+  x.beginPath(); x.moveTo(26, 52); x.lineTo(44, 36); x.lineTo(104, 36); x.lineTo(104, 80); x.lineTo(86, 96); x.lineTo(26, 96); x.closePath(); x.fill();
+  x.strokeStyle = bg; x.lineWidth = 4;
+  x.beginPath(); x.moveTo(26, 52); x.lineTo(86, 52); x.lineTo(104, 36); x.moveTo(86, 52); x.lineTo(86, 96);
+  x.moveTo(46, 52); x.lineTo(46, 96); x.moveTo(66, 52); x.lineTo(66, 96); x.stroke();
 }
-
 /**
- * Preview of a chicken barn's yard: the starting fence as a see-through net, and faint boxes for
- * the feed (orange), egg pallet (yellow) and animal trailer (green) places.
+ * Preview of an animal building's yard: the starting fence as a see-through net with posts and wires
+ * (the places outside are drawn with the other game places).
  */
 function makeYardMarker() {
   const group = new THREE.Group();
@@ -1113,33 +1219,9 @@ function makeYardMarker() {
   posts.castShadow = true;
   const wireMat = new THREE.LineBasicMaterial({color:0x2f3a2a});
   const wires = new THREE.LineSegments(new THREE.BufferGeometry(), wireMat);
-  group.add(posts, wires);
-  const boxGeo = new THREE.BoxGeometry(1, 1, 1);
-  const boxes = {};
-  for (const [k, color] of [["food", 0xe08a2c], ["pallet", 0xe0c22c], ["loading", 0x4caf50]]) {
-    boxes[k] = new THREE.Mesh(boxGeo, new THREE.MeshBasicMaterial({color, transparent:true, opacity:0.18, depthWrite:false}));
-    group.add(boxes[k]);
-  }
-  group.add(net);
-  // A floating icon over the middle of each place, like the bed icon of a sleep point.
-  const icons = {};
-  for (const [k, bg, glyph] of [["food", "#d07a1f", drawFeed], ["pallet", "#c9a514", drawPallet], ["loading", "#3f9a43", drawHen], ["loadingCow", "#3f9a43", drawCow]]) {
-    const c = document.createElement("canvas"); c.width = c.height = 128;
-    const x = c.getContext("2d");
-    x.fillStyle = bg; x.beginPath(); x.arc(64, 64, 60, 0, Math.PI * 2); x.fill();
-    x.fillStyle = x.strokeStyle = "#fff"; x.lineWidth = 6; x.lineCap = x.lineJoin = "round";
-    glyph(x, bg);
-    const tex = new THREE.CanvasTexture(c);
-    icons[k] = new THREE.Sprite(new THREE.SpriteMaterial({map: tex, transparent: true, depthWrite: false}));
-    icons[k].scale.set(0.9, 0.9, 1); icons[k].renderOrder = 10;
-    group.add(icons[k]);
-  }
-  const dispose = () => {
-    for (const m of [net, posts, wires]) { m.geometry.dispose(); m.material.dispose(); }
-    boxGeo.dispose(); Object.values(boxes).forEach(b => b.material.dispose());
-    Object.values(icons).forEach(s => { s.material.map.dispose(); s.material.dispose(); });
-  };
-  return {group, net, posts, wires, boxes, icons, dispose};
+  group.add(posts, wires, net);
+  const dispose = () => { for (const m of [net, posts, wires]) { m.geometry.dispose(); m.material.dispose(); } };
+  return {group, net, posts, wires, dispose};
 }
 /* Icon glyphs, drawn in white on a 128 px circle. */
 function drawFeed(x) {
@@ -1198,19 +1280,17 @@ function updateYardMarker(geo) {
   if (!yardObj) return;
   yardObj.group.visible = p.kind === "chicken" || p.kind === "cow";
   if (!yardObj.group.visible) return;
-  // The places to show: feed and the trailer spot for any animal; egg pallets for hens only.
-  const hy = p.kind === "chicken" ? henYard(geo, p) : null, cy = p.kind === "cow" ? cowYard(geo, p) : null;
-  const y = {fence: (hy || cy).fence, food: (hy || cy).food, loading: (hy || cy).loading, pallet: hy ? hy.pallet.trigger : null};
+  const fence = (p.kind === "chicken" ? henYard(geo, p) : cowYard(geo, p)).fence;
   const h = 1.1, pos = [], wire = [], postAt = [];
-  for (let i = 0; i + 1 < y.fence.length; i++) {
-    const a = y.fence[i], b = y.fence[i + 1];
+  for (let i = 0; i + 1 < fence.length; i++) {
+    const a = fence[i], b = fence[i + 1];
     pos.push(a[0], 0, a[2], b[0], 0, b[2], b[0], h, b[2], a[0], 0, a[2], b[0], h, b[2], a[0], h, a[2]);
     for (const t of [0.05, h]) wire.push(a[0], t, a[2], b[0], t, b[2]);
     // a post at each corner and at most 2 m apart in between
     const n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[2] - a[2]) / 2));
     for (let k = 0; k < n; k++) postAt.push([a[0] + (b[0] - a[0]) * k / n, 0, a[2] + (b[2] - a[2]) * k / n]);
   }
-  postAt.push(y.fence[y.fence.length - 1]);
+  postAt.push(fence[fence.length - 1]);
   const set = (mesh, g) => { mesh.geometry.dispose(); mesh.geometry = g; };
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
@@ -1219,18 +1299,6 @@ function updateYardMarker(geo) {
   wg.setAttribute("position", new THREE.Float32BufferAttribute(wire, 3));
   set(yardObj.wires, wg);
   set(yardObj.posts, postsGeometry(postAt, h + 0.1));
-  yardObj.icons.loading.visible = yardObj.icons.loadingCow.visible = false;
-  const animal = p.kind === "cow" ? "loadingCow" : "loading";
-  yardObj.icons[animal].visible = true;
-  yardObj.icons[animal].position.set(y.loading.center[0], Math.max(y.loading.size[1], 1.6) + 0.6, y.loading.center[2]);
-  for (const [k, b] of [["food", y.food], ["pallet", y.pallet], ["loading", y.loading]]) {
-    yardObj.boxes[k].visible = !!b;
-    if (k !== "loading") yardObj.icons[k].visible = !!b;
-    if (!b) continue;
-    yardObj.boxes[k].position.set(...b.center); yardObj.boxes[k].scale.set(...b.size);
-    // the icon floats over the middle of the place, above head height
-    if (k !== "loading") yardObj.icons[k].position.set(b.center[0], Math.max(b.size[1], 1.6) + 0.6, b.center[2]);
-  }
 }
 function rebuild(fit) {
   const geo = buildGeometry(p);
@@ -1266,7 +1334,7 @@ function rebuild(fit) {
       if (fit) view.r = Math.max(dims.W, dims.D, dims.ridgeY) * 2.3 + 6;
       updateCam();
       updateHighlight();
-      updateSleepMarker(geo);
+      updatePlacesMarker(geo);
       updateYardMarker(geo);
     }
     updateInsideOverlay();
@@ -1334,7 +1402,7 @@ function renderStoreImage(size) {
     const radius = 0.5 * Math.hypot(dims.W + 2, dims.D + 2, dims.ridgeY);
     cam.position.copy(target).addScaledVector(new THREE.Vector3(0.8, 0.5, 1).normalize(), radius / Math.sin(15 * Math.PI / 180));
     cam.lookAt(target);
-    const hide = [groundObj, gridObj, selMesh, sleepObj && sleepObj.group, yardObj && yardObj.group].filter(Boolean), was = hide.map(o => o.visible);
+    const hide = [groundObj, gridObj, selMesh, placesObj && placesObj.group, yardObj && yardObj.group].filter(Boolean), was = hide.map(o => o.visible);
     const bg = scene.background, fog = scene.fog;
     hide.forEach(o => o.visible = false); scene.background = null; scene.fog = null;
     r2.render(scene, cam);
@@ -1386,9 +1454,9 @@ function setSettings(obj) { p = sanitize({...obj, kind: p.kind}); selId = null; 
 function snapshot() {
   if (!renderer) return null;
   // The project list's picture is always the whole building, even while arranging the inside.
-  const wasVisible = selMesh.visible, sleepVisible = sleepObj.group.visible, yardVisible = yardObj.group.visible;
+  const wasVisible = selMesh.visible, placesVisible = placesObj.group.visible, yardVisible = yardObj.group.visible;
   const over = [ghost, marks, planLines].map(o => o.visible), clip = renderer.clippingPlanes;
-  selMesh.visible = false; sleepObj.group.visible = false; yardObj.group.visible = false;
+  selMesh.visible = false; placesObj.group.visible = false; yardObj.group.visible = false;
   [ghost, marks, planLines].forEach(o => o.visible = false); renderer.clippingPlanes = [];
   renderer.render(scene, camera);
   [ghost, marks, planLines].forEach((o, i) => o.visible = over[i]); renderer.clippingPlanes = clip;
@@ -1396,7 +1464,7 @@ function snapshot() {
   const c = document.createElement("canvas"); c.width = W; c.height = H;
   const k = Math.max(W / src.width, H / src.height), sw = W / k, sh = H / k;
   c.getContext("2d").drawImage(src, (src.width - sw) / 2, (src.height - sh) / 2, sw, sh, 0, 0, W, H);
-  selMesh.visible = wasVisible; sleepObj.group.visible = sleepVisible; yardObj.group.visible = yardVisible; needs = true;
+  selMesh.visible = wasVisible; placesObj.group.visible = placesVisible; yardObj.group.visible = yardVisible; needs = true;
   return c.toDataURL("image/jpeg", 0.8);
 }
 
@@ -1406,7 +1474,7 @@ function destroy() {
   cleanups.forEach(f => f());
   for (const m of MATS) { if (meshes[m]) meshes[m].geometry.dispose(); const mat = matObjs[m]; if (mat) { if (mat.map) mat.map.dispose(); if (mat.normalMap) mat.normalMap.dispose(); mat.dispose(); } }
   for (const o of Object.values(fitMeshes)) { o.geometry.dispose(); o.material.map.dispose(); o.material.normalMap.dispose(); o.material.dispose(); }
-  if (sleepObj) sleepObj.dispose();
+  if (placesObj) placesObj.dispose();
   if (yardObj) yardObj.dispose();
   if (interiorTex) interiorTex.dispose();
   for (const g of itemGeos.values()) if (g) g.dispose();

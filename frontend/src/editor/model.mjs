@@ -7,6 +7,7 @@ import { WALL_T, wallFrames, openingSpan, roomOf, footprint, toWorld, cleanItems
 import { withAssets, placement, assetFolder } from "./assets.mjs";
 import { SURFACES } from "./surfaces.mjs";
 import { agedColor } from "./age.mjs";
+import { cleanPlaces, placeOnWall } from "./places.mjs";
 import { WINDOW_STYLES, DOOR_STYLES, WINDOW_STYLE_IDS, DOOR_STYLE_IDS, DOUBLE_DOOR_FROM, isPair, styleOf, drawSash, drawLeaf } from "./openings.mjs";
 export { WINDOW_STYLES, DOOR_STYLES, DOUBLE_DOOR_FROM } from "./openings.mjs";
 export { boxMesh } from "./i3d.mjs";
@@ -98,8 +99,9 @@ const SHARED_SECTIONS = [
   {title:"Interior", side:"finish", hint:"A small furnished room behind each window, seen through the glass. To pick the room or curtains for one window, choose it under Windows (or a kupa under Kupor).", fields:[
     {k:"interior", label:"Rooms behind the windows", type:"check"},
     {k:"curtainStyle", label:"Curtains", type:"select", options:CURTAIN_OPTIONS}]},
-  {title:"Farmhouse", side:"finish", hint:"Players sleep outside the door, where the bed icon floats. With this on, the export is a farmhouse placeable with a sleep trigger, spawn point and farm map icon.", fields:[
+  {title:"Farmhouse", side:"finish", hint:"Players sleep at the first door, where the bed icon floats (move it under Game places). With this on, the export is a farmhouse placeable with a sleep trigger, spawn point and farm map icon.", fields:[
     {k:"sleepPoint", label:"Sleep point with bed icon", type:"check"}]},
+  {title:"Game places", side:"finish", custom:"places", hint:"The boxes and icons the game uses: where you sleep, tip feed, drop bales, load animals and so on. They're shown in the preview; choose one to move it, change its size or put it on another wall.", fields:[]},
   {title:"Game mod", side:"finish", hint:"Used by \u201CExport game mod\u201D: what the house costs in the shop and who made it. The project name is the name in the shop.", fields:[
     {k:"modPrice", label:"Price", min:0, max:2000000, step:500, money:true},
     {k:"modUpkeep", label:"Daily upkeep", min:0, max:5000, step:5, money:true},
@@ -262,6 +264,8 @@ export function sanitize(obj) {
   if (!ws.some(w => w.type === "door")) ws = cleanWindows([...ws, legacyDoor(obj, out, kind)]);
   out.windows = Array.isArray(obj.windows) ? ws : genAll(out, obj, ws);
   out.dormers = Array.isArray(obj.dormers) ? cleanDormers(obj.dormers) : [];
+  // where the player moved the game places (sleep point, feed pad ...), one entry per place of the kind
+  out.places = cleanPlaces(obj.places, kind.places);
   const q = kind.normalize(out);
   // The inside of a walk-in building: the saved pieces, or filled automatically for a new one.
   if (kind.catalog) q.items = Array.isArray(obj.items) ? cleanItems(obj.items, catalogFor({kind: kind.id, items: obj.items})) : kind.autoFurnish(q).items;
@@ -1574,21 +1578,25 @@ export function placementAreas(geo, extra = []) {
  *   marker:  where the floating bed icon sits (on the floor at the door)
  *   spawn:   on the ground outside the cleared area, facing the house
  *   camera:  view while sleeping, above and in front of the house; rot = [pitch, yaw, 0] degrees
+ * It starts at the first door (the window list's first); the player can move it, size it or put it
+ * on another wall, at that wall's first door or else its middle (p.places.sleep, places.mjs).
  */
-export function sleepPoint(geo) {
+export function sleepPoint(geo, p = {}) {
   const {dims} = geo;
-  // at the first door (the window list's first)
-  const doors = Object.values(geo.opsByWall).flatMap(e => e.ops.filter(o => o.kind === "door").map(o => ({w: e.w, o})));
-  const {w, o: door} = doors.sort((a, b) => (a.o.id || 0) - (b.o.id || 0))[0], sc = (door.s0 + door.s1) / 2;
+  const doors = Object.entries(geo.opsByWall).flatMap(([key, e]) => e.ops.filter(o => o.kind === "door").map(o => ({key, o})))
+    .sort((a, b) => (a.o.id || 0) - (b.o.id || 0));
+  const frames = Object.fromEntries(Object.entries(geo.opsByWall).map(([k, e]) => [k, e.w]));
+  const pl = placeOnWall(p, "sleep", frames, doors.length ? doors[0].key : "front", (w, key) => {
+    const d = doors.find(x => x.key === key), s = d ? (d.o.s0 + d.o.s1) / 2 : w.L / 2;
+    return {s, d: 0.9, along: 1.8, out: 1.8, h: dims.F + 2.2, icon: [s, 0.9]};
+  }, dims.F);
+  const {w, s: sc} = pl;
   const at = (d, y) => [w.o[0] + w.u[0]*sc + w.n[0]*d, y, w.o[2] + w.u[2]*sc + w.n[2]*d];
   const toward = (from, to) => {
     const dx = to[0] - from[0], dy = to[1] - from[1], dz = to[2] - from[2], deg = 180 / Math.PI;
     return [Math.atan2(dy, Math.hypot(dx, dz)) * deg, Math.atan2(-dx, -dz) * deg, 0];
   };
-  const along = 1.8, out = 1.8, h = dims.F + 2.2;
-  const ax = Math.abs(w.u[0]) > 0.5;
-  const trigger = {center: at(out / 2, h / 2), size: ax ? [along, h, out] : [out, h, along]};
-  const marker = at(out / 2, dims.F);
+  const trigger = pl.box, marker = pl.icon;
   // Distance from the wall to the far side of the cleared area, then one metre more.
   const {clear} = placementAreas(geo);
   const reach = Math.max(...[[clear.x0, clear.z0], [clear.x1, clear.z0], [clear.x0, clear.z1], [clear.x1, clear.z1]]
@@ -1597,7 +1605,16 @@ export function sleepPoint(geo) {
   const sp = at(reach + 1, 0);
   const dist = Math.max(dims.W, dims.D) * 1.2 + 6;
   const cam = [w.o[0] + w.u[0]*sc + (w.n[0] + w.u[0]*0.6) * dist, dims.ridgeY + dist * 0.4, w.o[2] + w.u[2]*sc + (w.n[2] + w.u[2]*0.6) * dist];
-  return {trigger, marker, spawn: {pos: sp, rot: [0, toward(sp, target)[1], 0]}, camera: {pos: cam, rot: toward(cam, target)}};
+  return {trigger, marker, place: pl, spawn: {pos: sp, rot: [0, toward(sp, target)[1], 0]}, camera: {pos: cam, rot: toward(cam, target)}};
+}
+
+/**
+ * The building's game places as the preview shows them: [{id, name, glyph, box {center, size}, icon |
+ * null}], the same boxes and icons the export writes (see places.mjs and each kind's places).
+ */
+export function gamePlaces(p, geo = buildGeometry(p)) {
+  const kind = kindOf(p);
+  return kind.gamePlaces ? kind.gamePlaces({p: normalize(p), geo, sleepPoint}) : [];
 }
 
 /* ---------- Export ---------- */

@@ -21,6 +21,10 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   A walk-in kind has a catalog of pieces and autoFurnish(p); buildGeometry draws p.items.
   src/editor/editor.mjs = controls + three.js r128 preview, mounted by Editor.tsx.
   src/editor/interior.mjs = paints the room atlas (layout: ATLAS in model.mjs) and glass texture.
+  src/editor/places.mjs = game places: the FS25 boxes and icons (sleep trigger + bed icon, feed pad, bale drop, trailer
+  spot + teleport, egg pallets, info area). kind.places lists them; p.places[id] = {wall auto|key, along, out, width,
+  depth, height (0 = the kind's), iconAlong, iconOut} (cleanPlaces); kinds place them with placeOnWall/placeOnBuilding;
+  gamePlaces(p) gives the preview the same boxes and icons the export writes. Editor: "Game places" section.
   src/editor/age.mjs = p.age (0-60 years): agedColor (via colorFor) and weather() on texture shade/height/marks
   (Mk codes coloured by MASK_RGB: mortar, bare wood, moss, rust, lichen, white rust); tiling, so no
   position-dependent dirt (e.g. a band at the wall bottom) yet.
@@ -67,7 +71,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Frontend tests: cd frontend && npm test (node --test, no browser needed)
 
 ## Status
-- Go tests (54) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (332) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
+- Go tests (54) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (340) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
 - Cow barn (kinds/cow.mjs): cowHusbandryPasture (no milk, like cowBarnSmall), automatic water, feed
   and water troughs outside on the pasture wall (kind.outside), a plain walk-through doorway for the
   cows (openings with plain: true; tall openings get a collision gap), feed pad + bale trigger

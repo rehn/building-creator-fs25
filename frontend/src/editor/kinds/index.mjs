@@ -9,8 +9,11 @@
 //   description(p)        default text for the mod list
 //   furnish(c)            walk-in kinds: builds the inside (c: drawing context from the core)
 //   scene(c)              extra i3d nodes, placeable XML and ground areas (c: export context)
+//   places, gamePlaces(c) its game places (FS25 boxes and icons the player can move and size, see
+//                         places.mjs): [{id, name, hint, wall, glyph}], and where they are for the preview
 //   presets               starting points for "New"
-// Kinds import only the i3d writer, never the core, so there are no import cycles.
+// Kinds import only the i3d writer and the core's pure helpers (layout.mjs, places.mjs), never model.mjs,
+// so there are no import cycles.
 import house from "./house.mjs";
 import chicken from "./chicken.mjs";
 import cow from "./cow.mjs";

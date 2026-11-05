@@ -6,6 +6,7 @@
 import { tg, shape } from "../i3d.mjs";
 import { roomOf, furnisher } from "../layout.mjs";
 import { wallLength, yardFrame, pastureWallFor } from "./pasture.mjs";
+import { placeOnWall, placeOnBuilding } from "../places.mjs";
 import { tone, shade, arc, strawBale, strawLitter } from "./props.mjs";
 
 /** About one cow per 6 m² of floor; at most 100 (the base game's biggest pasture barn takes 99). */
@@ -35,9 +36,10 @@ const TROUGH = {d0: 0.25, d1: 0.95, wall: 0.08, food: {top: 0.75, bottom: 0.45, 
  *   food:         the feed pad (tip feed onto it) outside the fence; bales: where bales are dropped
  *   loading:      animal trailer spot further out on the feed side; info; blockers: kept out of the walking area
  *   markers:      {food, bales, animals, teleport}; areas: ground leveled for the troughs and the pad
+ *   places:       where the feed pad, bale drop and trailer spot went (placeOnWall)
  */
 export function cowYard(geo, p) {
-  const {fence, past, feed: fw, at, boxAt, rectOf, clear} = yardFrame(geo, p, MIN_PASTURE_WIDTH);
+  const {fence, past, feedKey, frames, at, boxAt, rectOf, mid} = yardFrame(geo, p, MIN_PASTURE_WIDTH);
   const L = past.L, [o0, o1] = [L / 2 - 0.8, L / 2 + 0.8];
   const sides = [[0.4, o0 - 0.5], [o1 + 0.5, L - 0.4]].sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]));
   const n = cowsOf(p);
@@ -54,19 +56,36 @@ export function cowYard(geo, p) {
   const along = t => { const k = Math.max(1, Math.floor((t.s1 - t.s0) / 1.4)); return Array.from({length: k}, (_, i) => t.s0 + (i + 0.5) * (t.s1 - t.s0) / k); };
   const foodPlaces = along(feedTrough).map(s => ({pos: at(past, s, 1.7), rot: facing}));
   const waterPlaces = along(waterTrough).map(s => ({pos: at(past, s, 1.6), rot: facing}));
-  // Feed pad and bales outside the fence on the feed side; the trailer spot further out.
-  const [fa, fb] = clear(fw), fc = (fa + fb) / 2;
-  const food = boxAt(fw, fc, 1.75, Math.max(2.5, Math.min(4, fb - fa)), 3, 0.3);
-  const bales = boxAt(fw, fc, 1.75, Math.max(2.5, Math.min(4, fb - fa)), 3, 2.5);
-  const loading = boxAt(fw, fc, 5.5, Math.min(4, fb - fa), 4, 3);
+  // Feed pad and bales outside the fence on the feed side; the trailer spot further out. Each can be
+  // moved, sized or put on another wall by the player (places.mjs).
+  const pad = (h, icon) => w => { const [c, len] = mid(w); return {s: c, d: 1.75, along: Math.max(2.5, Math.min(4, len)), out: 3, h, icon: [c + icon, 1.75]}; };
+  const food = placeOnWall(p, "food", frames, feedKey, pad(0.3, -0.8));
+  const bales = placeOnWall(p, "bales", frames, feedKey, pad(2.5, 0.8));
+  const loading = placeOnWall(p, "loading", frames, feedKey, w => { const [c, len] = mid(w); return {s: c, d: 5.5, along: Math.min(4, len), out: 4, h: 3, icon: [c, 5.5]}; });
   const {W, D} = geo.dims;
   return {
-    fence, feedTrough, waterTrough, foodPlaces, waterPlaces, food, bales, loading,
-    info: {center: [0, 1.5, 0], size: [W + 2, 3, D + 2]},
+    fence, feedTrough, waterTrough, foodPlaces, waterPlaces, food: food.box, bales: bales.box, loading: loading.box,
+    info: placeOnBuilding(p, "info", {center: [0, 1.5, 0], size: [W + 2, 3, D + 2]}),
     blockers: [{center: [0, 1, 0], size: [W, 2, D]}, feedTrough.box, waterTrough.box],
-    markers: {food: at(fw, fc - 0.8, 1.75), bales: at(fw, fc + 0.8, 1.75), animals: at(fw, fc, 5.5), teleport: at(fw, fc, 8.5)},
-    areas: [food, feedTrough.box, waterTrough.box].map(rectOf),
+    markers: {food: food.icon, bales: bales.icon, animals: loading.icon, teleport: loading.at(loading.s, loading.d + 3, 0)},
+    areas: [food.box, bales.box, feedTrough.box, waterTrough.box].map(rectOf),
+    places: {food, bales, loading},
   };
+}
+/** The cow barn's game places, for the editor (places.mjs). */
+const PLACES = [
+  {id: "food", name: "Feed pad", hint: "Tip loose feed onto it (grass, hay, silage, mixed ration) from a trailer, shovel or mixer. Its icon shows in the game.", wall: true, glyph: "food"},
+  {id: "bales", name: "Bale drop", hint: "Drop bales here; the game unpacks them into the feed. Its icon shows in the game.", wall: true, glyph: "bales"},
+  {id: "loading", name: "Animal trailer spot", hint: "Where a livestock trailer loads and unloads cows. The map's teleport point is 3 m further out.", wall: true, glyph: "cow"},
+  {id: "info", name: "Info area", hint: "Standing in it shows the barn's info box. Moved left/right and front/back, sized in the building's axes.", wall: false, glyph: null},
+];
+/** What the preview shows of the game places: [{id, name, box, icon, glyph}]. */
+function gamePlaces({geo, p}) {
+  const y = cowYard(geo, p), box = b => ({center: b.center, size: b.size});
+  const at = {food: [box(y.food), y.markers.food], bales: [box(y.bales), y.markers.bales], loading: [box(y.loading), y.markers.animals], info: [box(y.info), null]};
+  // wall: the wall it went on (null: placed in the building's axes); dims: [width, depth, height] as the player sets them
+  const on = id => y.places[id] ? {wall: y.places[id].wall, dims: [y.places[id].along, y.places[id].out, y.places[id].h]} : {wall: null, dims: [y.info.size[0], y.info.size[2], y.info.size[1]]};
+  return PLACES.map(pl => ({id: pl.id, name: pl.name, glyph: pl.glyph, box: at[pl.id][0], icon: at[pl.id][1], ...on(pl.id)}));
 }
 
 /** The troughs, drawn outside the walls (c: {p, geo, abox, paint} from the core). The fill planes are separate i3d nodes. */
@@ -395,6 +414,8 @@ export default {
   catalog: CATALOG,
   autoFurnish,
   scene,
+  places: PLACES,
+  gamePlaces,
   presets: [
     {id: "ladugard", name: "Röd ladugård", blurb: "16 × 9 m red Swedish barn for 20 cows: falu red boards, white trim, a fieldstone base and lanterns on the ridge.", settings: {
       cows: 20, pastureWall: "back", fenceDepth: 18, ...swedishRed,
