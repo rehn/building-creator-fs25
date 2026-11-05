@@ -80,3 +80,40 @@ test("inner wall: it follows the ceiling in a house and the walls' top in a barn
   assert.equal(problems(h.items, cat, room).size, 0);
   assert.equal(problems([wall({x: 30})], cat, room).size, 1, "outside");
 });
+
+import { snapItem, placeNew } from "../src/editor/layout.mjs";
+test("inner wall: its ends are drawn to the walls of the room, and both ends fill it", () => {
+  const p = house([]), room = roomOf(p), cat = catalogFor(p), def = cat.innerwall;
+  // along z (turned a quarter), near the left wall? no: its ends are at the back and front walls
+  const wallZ = z => wall({rot: 90, x: 1, z, length: 3, door: 0});
+  // one end near the back wall (z0 = -3.35): the wall moves up against it
+  const a = snapItem(wallZ(-1.75), def, room);
+  assert.ok(Math.abs(a.z - (room.z0 + 1.5)) < 1e-9 && a.length === 3, `${a.z}`);
+  // both ends near walls: as long as the room is deep there
+  const b = snapItem(wall({rot: 90, x: 1, z: 0, length: 6.5, door: 0}), def, room);
+  assert.ok(Math.abs(b.length - Math.floor((room.z1 - room.z0) * 100) / 100) < 1e-9 && Math.abs(b.z) < 1e-9, `${b.length}`);
+  // far from the walls: left as put (on the grid)
+  const c = snapItem(wall({rot: 90, x: 1, z: 0, length: 3, door: 0}), def, room);
+  assert.deepEqual([c.z, c.length], [0, 3]);
+  // along x the same, against the left and right walls
+  const d = snapItem(wall({x: 0.2, z: 1, length: 9.4, door: 0}), def, room);
+  assert.ok(Math.abs(d.length - Math.floor((room.x1 - room.x0) * 100) / 100) < 1e-9, `${d.length}`);
+  // the snapped wall fits the room
+  assert.equal(problems([d], cat, room).size, 0);
+  assert.equal(problems([b], cat, room).size, 0);
+  // not drawn to a wall further than half a metre away
+  const e = snapItem(wall({x: 0, z: 1, length: 3, door: 0}), def, room);
+  assert.equal(e.x, 0);
+});
+
+test("inner wall: it is drawn to a wing's walls too, and other pieces don't snap", () => {
+  const p = sanitize({wings: [{wall: "back", pos: 0.5, width: 5, depth: 5, floors: 0}], items: []}), room = roomOf(p), cat = catalogFor(p), w = room.rects[1];
+  // across the wing, between its side walls
+  const q = snapItem(wall({x: (w.x0 + w.x1) / 2, z: w.z0 - 2, length: 4.6, door: 1}), cat.innerwall, room);
+  assert.ok(Math.abs(q.length - Math.floor((w.x1 - w.x0) * 100) / 100) < 1e-9, `${q.length} vs ${w.x1 - w.x0}`);
+  // a table keeps where it is put
+  const t = snapItem({id: 1, type: "table", x: 0.1, z: 0.1, rot: 0}, cat.table, room);
+  assert.deepEqual([t.x, t.z], [0, 0]);
+  // a new wall lands somewhere free
+  assert.equal(problems([placeNew("innerwall", [], cat, room)], cat, room).size, 0);
+});

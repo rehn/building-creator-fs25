@@ -238,7 +238,29 @@ export function snapItem(item, def, room) {
   const f = footprint({...item, x: 0, z: 0}, def), at = r => ({...item, x: clamp(snap(item.x), r.x0 - f.x0, r.x1 - f.x1), z: clamp(snap(item.z), r.z0 - f.z0, r.z1 - f.z1)});
   const tries = (room.rects || [room]).map(at), fits = tries.filter(q => inRoom(room, footprint(q, def)));
   const far = q => Math.hypot(q.x - item.x, q.z - item.z);
-  return (fits.length ? fits : tries).reduce((best, q) => far(q) < far(best) ? q : best);
+  const placed = (fits.length ? fits : tries).reduce((best, q) => far(q) < far(best) ? q : best);
+  return def.snapWalls ? endsToWalls(placed, def, room) : placed;
+}
+
+/** How near (m) an end of an inner wall must come to a wall of the room to be drawn to it. */
+const SNAP_END = 0.5;
+/**
+ * An inner wall (def.snapWalls) with its ends drawn to the walls of the room: an end within SNAP_END of a wall
+ * that crosses its direction is moved up against it; with both ends near walls it is made exactly as long as
+ * the room is there. Walls are those the wall's own line meets (a wing's too).
+ */
+function endsToWalls(it, def, room) {
+  const alongX = it.rot % 180 === 0, half = it.length / 2, c = alongX ? it.x : it.z, cross = alongX ? it.z : it.x;
+  const lines = room.walls.filter(w => alongX ? w.x0 === w.x1 && cross >= w.z0 - 0.01 && cross <= w.z1 + 0.01 : w.z0 === w.z1 && cross >= w.x0 - 0.01 && cross <= w.x1 + 0.01)
+    .map(w => alongX ? w.x0 : w.z0);
+  const near = (v, side) => lines.filter(l => (side < 0 ? l <= c : l >= c) && Math.abs(l - v) < SNAP_END).sort((a, b) => Math.abs(a - v) - Math.abs(b - v))[0];
+  const lo = near(c - half, -1), hi = near(c + half, 1), len = def.params.find(f => f.k === "length");
+  let length = it.length, mid = c;
+  if (lo !== undefined && hi !== undefined && Math.floor((hi - lo) * 100) / 100 <= len.max && hi - lo >= len.min) { length = Math.floor((hi - lo) * 100) / 100; mid = (lo + hi) / 2; }
+  else if (lo !== undefined) mid = lo + half;
+  else if (hi !== undefined) mid = hi - half;
+  else return it;
+  return {...it, length: +length.toFixed(2), [alongX ? "x" : "z"]: +mid.toFixed(3)};
 }
 
 const overlap = (a, b, eps = 1e-6) => a.x0 < b.x1 - eps && b.x0 < a.x1 - eps && a.z0 < b.z1 - eps && b.z0 < a.z1 - eps;
