@@ -1015,37 +1015,54 @@ function beam(p0, p1, w, h) {
   prism("fittings", [[-w / 2, -h / 2], [w / 2, -h / 2], [w / 2, h / 2], [-w / 2, h / 2]],
     ([x, y], k) => add(k ? p1 : p0, add(side.map(v => v * x), up.map(v => v * y))));
 }
-const DUCT = "#7E6E58", DUCT_DARK = "#211C17", TIMBER = "#6F5C47";
+const GALV = "#AEB4B7", GALV_IN = "#666B6D", DUCT_DARK = "#211C17", TIMBER = "#6F5C47";
 /**
  * Inside a walk-in barn, under a ventilator at a: the boarded duct (ventilationstrumma) hanging
  * from the roof, open at the bottom, with a lip, a half-open damper and its pull cord.
  */
 function ventDuct(a, ridgeY, tanP, M, th, F) {
-  const hd = 0.28, bt = 0.025, yTop = ridgeY - th, yBot = ridgeY - th - tanP * hd - 0.7;
-  const mbox = (a0, a1, yA, yB, b0, b1) => box("fittings", (i, j, k) => M(lerp(a0, a1, i), lerp(yA, yB, j), lerp(b0, b1, k)), M(1, 0, 0), UP, M(0, 0, 1));
-  paint(DUCT, "boards");
-  // boards up into the roof: where they rise past its underside they're hidden in the slab (and in the ventilator above)
-  for (const s of [-1, 1]) {
-    mbox(a - hd, a + hd, yBot, yTop, s > 0 ? hd - bt : -hd, s > 0 ? hd : -hd + bt);
-    mbox(s > 0 ? a + hd - bt : a - hd, s > 0 ? a + hd : a - hd + bt, yBot, yTop, -hd + bt, hd - bt);
+  // A round galvanised sheet-steel duct (frånluftstrumma) up into the ventilator: its top is hidden in
+  // the roof slab and the box above. Open at the bottom, with a flared bell mouth, rolled seams and a
+  // round damper you set with a cord.
+  const R = 0.24, seg = 20, c = M(a, 0, 0), yTop = ridgeY - th, yBot = ridgeY - th - tanP * R - 0.7, yBell = yBot + 0.12;
+  const at = (r, y, k) => { const t = k / seg * 2 * Math.PI; return [c[0] + r * Math.cos(t), y, c[2] + r * Math.sin(t)]; };
+  // a band of sheet between (r0, y0) and (r1, y1), its outside (out) or inside facing
+  const band = (r0, y0, r1, y1, out) => {
+    for (let k = 0; k < seg; k++) {
+      const q = [at(r0, y0, k), at(r0, y0, k + 1), at(r1, y1, k + 1), at(r1, y1, k)], m = mid(q), n = [m[0] - c[0], 0, m[2] - c[2]];
+      poly("fittings", q, out ? n : neg(n));
+    }
+  };
+  paint(GALV, "galv");
+  band(R, yBell, R, yTop, true);                          // the pipe
+  band(R + 0.07, yBot, R, yBell, true);                   // the bell mouth, flaring out
+  for (const y of [yBell + 0.35, yBell + 0.75]) if (y + 0.03 < yTop - tanP * R) {   // rolled seams
+    band(R + 0.008, y, R + 0.008, y + 0.03, true);
+    poly("fittings", Array.from({length: seg}, (_, k) => at(R + 0.008, y, k)), neg(UP));
   }
-  // the lip round the bottom
-  for (const s of [-1, 1]) {
-    mbox(a - hd - 0.02, a + hd + 0.02, yBot, yBot + 0.08, s > 0 ? hd : -hd - 0.02, s > 0 ? hd + 0.02 : -hd);
-    mbox(s > 0 ? a + hd : a - hd - 0.02, s > 0 ? a + hd + 0.02 : a - hd, yBot, yBot + 0.08, -hd, hd);
-  }
+  paint(GALV_IN, "galv");                                 // the inside, darker
+  band(R - 0.002, yBell, R - 0.002, yTop, false);
+  band(R + 0.068, yBot, R - 0.002, yBell, false);
+  poly("fittings", Array.from({length: seg}, (_, k) => at(R + 0.07, yBot, k)), neg(UP));   // (the bell's rim, a thin ring seen as a face)
   // looking up into it: dark, below the lowest point of the roof over it
   paint(DUCT_DARK);
-  const yd = ridgeY - th - tanP * hd - 0.08, e = hd - bt;
-  poly("fittings", [M(a - e, yd, -e), M(a + e, yd, -e), M(a + e, yd, e), M(a - e, yd, e)], neg(UP));
-  // the damper, half open, and its cord down to where it can be reached
-  paint(DUCT, "boards");
-  const lowEdge = M(a, yBot + 0.14, -hd * 0.7);
-  beam(lowEdge, M(a, yBot + 0.36, hd * 0.7), 2 * e - 0.02, 0.02);
+  poly("fittings", Array.from({length: seg}, (_, k) => at(R - 0.003, ridgeY - th - tanP * R - 0.06, k)), neg(UP));
+  // the damper: a round plate on an axle across the pipe, half open
+  const yD = yBell + 0.2, tilt = 0.6, rd = R - 0.012;
+  paint(GALV, "galv");
+  const disc = (dy) => Array.from({length: seg}, (_, k) => { const t = k / seg * 2 * Math.PI, u = rd * Math.cos(t), v = rd * Math.sin(t);
+    return M(a + u, yD + dy + v * Math.sin(tilt), v * Math.cos(tilt)); });
+  const top = disc(0.005), bot = disc(-0.005);
+  poly("fittings", top, UP); poly("fittings", bot, neg(UP));
+  for (let k = 0; k < seg; k++) { const j = (k + 1) % seg; poly("fittings", [bot[k], bot[j], top[j], top[k]], sub(mid([top[k], top[j]]), M(a, yD, 0))); }
   paint(DUCT_DARK);
+  rod(M(a - R - 0.03, yD, 0), M(a + R + 0.03, yD, 0), 0.008, 6);
+  // the lever on the axle and its cord down to where it can be reached
+  const lever = M(a + R + 0.03, yD - 0.12, 0);
+  beam(M(a + R + 0.03, yD, 0), lever, 0.012, 0.012);
   const reach = Math.min(yBot - 0.05, Math.max(F + 1.9, yBot - 1.6));
-  beam(lowEdge, [lowEdge[0], reach, lowEdge[2]], 0.012, 0.012);
-  abox("fittings", [lowEdge[0] - 0.03, reach - 0.12, lowEdge[2] - 0.03], [lowEdge[0] + 0.03, reach, lowEdge[2] + 0.03]);
+  beam(lever, [lever[0], reach, lever[2]], 0.006, 0.006);
+  abox("fittings", [lever[0] - 0.03, reach - 0.12, lever[2] - 0.03], [lever[0] + 0.03, reach, lever[2] + 0.03]);
 }
 /**
  * A walk-in barn's roof seen from inside: rafters under both slopes, a ridge beam, and tie beams

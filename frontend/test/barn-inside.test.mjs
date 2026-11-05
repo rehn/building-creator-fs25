@@ -39,6 +39,17 @@ test("ventilators: a walk-in barn has a duct under each, down from the ridge", (
   assert.ok(verts(none.geo.G.fittings).filter(q => Math.abs(none.b(q)) < 0.4 && q[1] < none.ridgeY - TH - 0.6 && q[1] > none.ridgeY - 2.2).length < low.length);
 });
 
+test("ventilators: the duct inside is galvanised steel, not boards", () => {
+  const p = preset("ladugard"), f = frame(p), g = f.geo.G.fittings;
+  const duct = [];
+  for (let k = 0; k < g.p.length; k += 3) {
+    const q = g.p.slice(k, k + 3);
+    if (Math.abs(f.b(q)) < 0.4 && q[1] < f.under(q) - 0.05 && q[1] > f.ridgeY - 2.2) duct.push(g.s[k / 3]);
+  }
+  assert.ok(duct.filter(s => s === "galv").length > 50, "a steel duct");
+  assert.ok(!duct.includes("boards") && !duct.includes("wood"), "no boards under the roof");
+});
+
 test("roof frame: a walk-in barn shows rafters and beams under its roof, a farmhouse doesn't", () => {
   const p = preset("ladugard"), f = frame({...p, ventilators: 0});
   const top = p.foundation + p.floors * p.floorHeight;
