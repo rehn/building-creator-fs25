@@ -11,7 +11,7 @@ import { useUser } from "@/lib/useUser";
 import { shrinkPhoto } from "@/lib/photos";
 import { TopBar } from "@/components/TopBar";
 import { KINDS, PRESETS, FIELD, sanitize } from "@/editor/model.mjs";
-import { photoRequest, applyAnswer, chatPrompt, readAnswer } from "@/editor/fromPhotos.mjs";
+import { photoRequest, applyAnswer, answerProblems, chatPrompt, readAnswer } from "@/editor/fromPhotos.mjs";
 import { liveWings } from "@/editor/layout.mjs";
 
 type Kind = { id: string; name: string };
@@ -179,6 +179,17 @@ export default function NewTemplatePage() {
                     {suggestion.seen && <><h3>What Claude saw</h3><p className="says">{suggestion.seen}</p></>}
                     {suggestion.notes && <><h3>Worth checking</h3><p className="says">{suggestion.notes}</p></>}
                     <Summary kind={tpl.kind} answer={suggestion} />
+                    {(() => {
+                      const found = answerProblems(tpl.kind, suggestion) as string[];
+                      if (!found.length) return null;
+                      return (
+                        <div className="checks" role="status">
+                          <h3>Check these</h3>
+                          <ul>{found.map(m => <li key={m}>{m}</li>)}</ul>
+                          <button type="button" onClick={() => setNotes(n => (n.trim() ? n.trim() + " " : "") + "Fix this from the last try: " + found.join(" "))}>Add them to the notes for another try</button>
+                        </div>
+                      );
+                    })()}
                     <label className="stack">Notes for another try (optional)
                       <textarea rows={2} maxLength={2000} value={notes} onChange={e => setNotes(e.target.value)} placeholder="The barn is 40 m long; photo 2 is the back." />
                     </label>
@@ -247,7 +258,7 @@ function Summary({ kind, answer }: { kind: string; answer: unknown }) {
     ["Shape", wings.length ? `${wings.length} wing${wings.length > 1 ? "s" : ""}: ${wings.map(w => `${w.ww.toFixed(1)} × ${w.wd.toFixed(1)} m on the ${named("wingWall", w.wall).replace(" side", "")}${w.floors < (p.floors as number) ? " (lower)" : ""}`).join(", ")}` : "rectangle"],
     ["Size", `${p.width} × ${p.depth} m, ${p.floors} floor${p.floors === 1 ? "" : "s"} of ${p.floorHeight} m${p.halfStorey ? " and a half floor" : ""}`],
     ["Roof", `${named("roofType", p.roofType)}, ${p.roofPitch}°, ${named("roofMaterial", p.roofMaterial)}`],
-    ["Walls", named("wallCladding", p.wallCladding)],
+    ["Walls", p.wallSplit === "one" ? named("wallCladding", p.wallCladding) : `${named("lowerCladding", p.lowerCladding)} below, ${named("wallCladding", p.wallCladding)} above`],
     ["Openings", `${p.windows.length - doors} windows, ${doors} door${doors === 1 ? "" : "s"}`],
   ];
   const colors = ["wallColor", "trimColor", "roofColor", "doorColor", "foundationColor"].map(k => p[k] as string);

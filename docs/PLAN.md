@@ -110,7 +110,7 @@ Varje steg ska vara färdigt, testat (TDD) och kontrollerat i webbläsaren innan
 2. **Spelobjekt som objekt, hagen också.** Klart (november 2026): sektionen "Game objects" och planvyn "Move them in the plan view".
 3. **Insida för alla byggnader och val av öppningsbar dörr.** Klart (november 2026): bostadshusets bottenvåning går att gå in i, med innertak och möbler; varje dörr har "Opens".
 4. **Flera delar.** Klart (november 2026): upp till fyra flyglar per byggnad (L, T, U, Z), egen vägg, plats, storlek, våningar, 1½-plan och taklutning (4a), och insidan är ett sammanhängande rum över alla delar, med gångväg genom husväggen, golv, väggar, kollision, dörrar och möblering i flyglarna (4b). Tillbyggnader med eget tak mot en vägg och flyglar på flyglar återstår.
-5. **Claude-guiden** (`fromPhotos.mjs`) uppdateras till den nya modellen, så att foton blir delar, zoner, öppningar och objekt.
+5. **Claude-guiden** (`fromPhotos.mjs`) är uppdaterad till den nya modellen (klart november 2026): delar, väggmaterial, dörrar som öppnas och spelobjekt, med en kontroll av svaret i wizarden.
 
 ## Senare
 

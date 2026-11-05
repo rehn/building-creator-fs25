@@ -97,6 +97,12 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   the item files in items/<name>_<id>/ (not the .obj). src/editor/itemView.mjs = the page's 3D view.
   The admin can share an item with everyone (assets.shared, added by a migration on open): listed
   and usable by all, changed or deleted only by its owner; API sends shared and mine.
+  Photo guide (PLAN step 5, done): fromPhotos.mjs photoRequest(kind) -> {guide, schema}; the answer is {seen, settings,
+  openings (each with opens), notes, pasture, wings (parts: wall, along, width, depth, floors, half, pitch), objects
+  (game boxes beside a wall: type, wall, along, out)}; guide paragraphs for shape and parts, wall materials (wallSplit),
+  doors that open, game objects. applyAnswer turns it into settings (objects placed beside the wall, the kind's other
+  objects stay); answerProblems(kind, answer) lists what is wrong (wings left out, objects in the building or pasture,
+  hidden windows, too many animals), shown under the summary in the wizard with a button that adds them to the notes.
   Templates from photos (admin only, for everyone's "New"): /admin/templates/new is a wizard (kind + name, photos
   shrunk to 1568 px in the browser + notes, Claude's suggestion); store templates + template_photos, /api/templates
   (published, all users), /api/admin/templates (+ /{id}/suggest, needs ANTHROPIC_API_KEY, else 503 vision_off and the

@@ -94,7 +94,7 @@ test("from photos: a house's answer can have wings, with openings on their walls
   assert.ok(schema.properties.wings && schema.properties.wings.items.properties.floors);
   const walls = schema.properties.openings.items.properties.wall.enum;
   assert.ok(walls.includes("w1End") && walls.includes("w4Right"));
-  assert.match(guide, /an L, a T or a U/);
+  assert.match(guide, /arm of an L, T or U/);
   const cow = photoRequest("cow").schema;
   assert.ok(cow.properties.wings && cow.properties.openings.items.properties.wall.enum.includes("w1End"), "barns have wings too");
   const p = applyAnswer("house", {settings: {}, wings: [{wall: "back", along: 0.2, width: 6, depth: 5, floors: 0}, {wall: "front", along: 0.8, width: 4, depth: 3, floors: 1}],
@@ -120,4 +120,68 @@ test("from photos: a prompt for a chat with Claude, and its answer pasted back",
     assert.deepEqual(readAnswer(pasted), a);
   for (const bad of ["", "no json here", "```json\n{\"settings\": [1,2\n```", "[1, 2]", "{\"hello\": 1}"])
     assert.throws(() => readAnswer(bad), /answer|settings|JSON/i, bad);
+});
+
+// Claude's answer for a long red barn with an L arm and a small lower annex against the long wall (the plan's example).
+const longBarn = {
+  seen: "An L-shaped barn: a 40 m stable, an arm at its right end, and a milk room annex.",
+  settings: {width: 40, depth: 12, floors: 2, floorHeight: 2.6, roofPitch: 40, roofType: "gable", ridge: "width", cows: 40, wallSplit: "floor", lowerCladding: "plaster", lowerColor: "#F2F0EA", wallCladding: "lockpanel", wallColor: "#8B2A1E", roofMaterial: "metal"},
+  openings: [
+    {wall: "front", type: "door", floor: 0, along: 0.5, width: 2.4, height: 2.5, sill: 0, porch: "none", opens: true},
+    {wall: "front", type: "door", floor: 0, along: 0.65, width: 1, height: 2.1, sill: 0, porch: "none", opens: false},
+    {wall: "front", type: "window", floor: 0, along: 0.1, width: 1.2, height: 0.8, sill: 1.1, porch: "none", opens: true},
+    {wall: "w2End", type: "door", floor: 0, along: 0.5, width: 1, height: 2.1, sill: 0, porch: "none", opens: true},
+  ],
+  notes: "",
+  pasture: {wall: "back", depth: 25},
+  wings: [
+    {wall: "front", along: 0.95, width: 12, depth: 20, floors: 0, half: false, pitch: 0},
+    {wall: "front", along: 0.2, width: 5, depth: 4, floors: 1, half: false, pitch: 30},
+  ],
+  objects: [{type: "food", wall: "right", along: 0.1, out: 6}],
+};
+
+test("from photos: a long barn with an arm and an annex becomes parts, wall materials, doors and objects", () => {
+  const p = applyAnswer("cow", longBarn);
+  assert.equal(p.wings.length, 2);
+  assert.deepEqual(p.wings.map(w => [w.wall, w.floors, w.pitch]), [["front", 0, 0], ["front", 1, 30]]);
+  assert.deepEqual([p.wallSplit, p.lowerCladding, p.lowerColor], ["floor", "plaster", "#F2F0EA"]);
+  const doors = p.windows.filter(w => w.type === "door");
+  assert.deepEqual(doors.map(d => d.opens).sort(), [false, true, true], "a door shut for good doesn't open");
+  assert.deepEqual(p.windows.filter(w => w.type === "window").map(w => w.opens), [undefined], "windows have no such setting");
+  // the feed pad where Claude put it: beside the right wall, 6 m out, 1.2 m from its left end ... and the rest where the barn puts them
+  const food = p.objects.find(o => o.type === "food");
+  assert.ok(Math.abs(food.x - (20 + 6)) < 1e-6 && Math.abs(food.z - (6 - 1.2)) < 1e-6, `${food.x}, ${food.z}`);   // (a right wall runs from the front corner back)
+  assert.deepEqual(p.objects.map(o => o.type).sort(), ["bales", "food", "info", "loading", "pasture"]);
+  assert.equal(p.pastureWall, "back");
+});
+
+test("from photos: the guide explains wall materials, doors that open, parts and game objects", () => {
+  const cow = photoRequest("cow"), house = photoRequest("house");
+  assert.match(cow.guide, /plastered/);
+  assert.match(cow.guide, /wallSplit to "floor"/);
+  assert.match(cow.guide, /"opens"/);
+  assert.match(cow.guide, /milk room or porch/);
+  assert.match(cow.guide, /food \(Feed pad/);
+  assert.ok(cow.schema.properties.objects.items.properties.type.enum.every(t => t !== "pasture" && t !== "info"));
+  assert.deepEqual(house.schema.properties.objects.items.properties.type.enum, ["sleep"]);
+  assert.ok(cow.schema.properties.openings.items.properties.opens);
+  assert.ok(cow.schema.properties.openings.items.required.includes("opens"));
+});
+
+test("from photos: what is wrong with an answer is listed for the admin", async () => {
+  const { answerProblems } = await import("../src/editor/fromPhotos.mjs");
+  assert.deepEqual(answerProblems("cow", longBarn), [], "the plan's barn has nothing wrong");
+  // a wing in the pasture, one too close to another, and a feed pad inside the building
+  const bad = {...longBarn, pasture: {wall: "back", depth: 25}, wings: [{...longBarn.wings[0], wall: "back"}, {...longBarn.wings[0], wall: "back", along: 0.9}], objects: [{type: "food", wall: "back", along: 0.5, out: 0.5}]};
+  const msgs = answerProblems("cow", bad).join(" | ");
+  assert.match(msgs, /Wing 2 was left out: It is too close/);
+  assert.match(msgs, /wing stands in the pasture/i);
+  assert.match(msgs, /Feed pad: It.s in the building/);
+  // too many cows for the floor
+  assert.match(answerProblems("cow", {...longBarn, settings: {...longBarn.settings, width: 10, depth: 8, cows: 90}, wings: []}).join(" "), /cows are limited to/);
+  // windows over a wing are hidden
+  const over = {...longBarn, openings: [...longBarn.openings, {wall: "front", type: "window", floor: 0, along: 0.2, width: 1, height: 1, sill: 1, porch: "none", opens: true}]};
+  assert.match(answerProblems("cow", over).join(" "), /hidden/);
+  assert.deepEqual(answerProblems("house", {settings: {}, openings: []}), [], "a plain house");
 });
