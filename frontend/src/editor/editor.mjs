@@ -14,6 +14,7 @@ import { setAssets, catalogFor, usedAssets } from "./model.mjs";
 import { readObj, assetFolder, flattenI3d } from "./assets.mjs";
 import { paintInterior, paintGlass } from "./interior.mjs";
 import { SURFACES, paintSurface, normalFromHeight } from "./surfaces.mjs";
+import { weather, MASK_RGB } from "./age.mjs";
 import { splitBySurface } from "./i3d.mjs";
 export { slugify };
 
@@ -220,19 +221,24 @@ function vnoise(x, y, px, py, s) {
   return lerp(lerp(hash(x0,y0,s), hash(x1,y0,s), ux), lerp(hash(x0,y1,s), hash(x1,y1,s), ux), uy);
 }
 
-/** A surface of surfaces.mjs, ready to draw: its shade map, a grey map of it (for the preview, x1.5) and its normal map. */
+/**
+ * A surface of surfaces.mjs, ready to draw: its shade map and marks, weathered by age (age.mjs), a grey map
+ * of it (for the preview, x1.5; marks darker) and its normal map. outdoor: out in the weather (the plinth).
+ */
 const fitBases = {};
-function fitBase(kind) {
-  if (fitBases[kind]) return fitBases[kind];
-  const {N, S, H} = paintSurface(kind), nrm = normalFromHeight(H, N, SURFACES[kind].bump);
+function fitBase(kind, age = 0, outdoor = false) {
+  const key = `${kind}|${age}|${outdoor}`;
+  if (fitBases[key]) return fitBases[key];
+  const fresh = paintSurface(kind), {N, S, H, Mk} = age ? weather({...fresh, Mk: null}, kind, age, {outdoor}) : {...fresh, Mk: null};
+  const nrm = normalFromHeight(H, N, SURFACES[kind].bump);
   const canvasOf = fill => { const c = document.createElement("canvas"); c.width = c.height = N; const ctx = c.getContext("2d"), img = ctx.createImageData(N, N); fill(img.data); ctx.putImageData(img, 0, 0); return c; };
   const normal = canvasOf(D => { for (let i = 0, j = 0; i < N * N; i++, j += 4) { D[j] = (nrm[i*3]*0.5 + 0.5) * 255; D[j+1] = (nrm[i*3+1]*0.5 + 0.5) * 255; D[j+2] = (nrm[i*3+2]*0.5 + 0.5) * 255; D[j+3] = 255; } });
-  const grey = canvasOf(D => { for (let i = 0, j = 0; i < N * N; i++, j += 4) { D[j] = D[j+1] = D[j+2] = Math.min(255, S[i] / 1.5 * 255); D[j+3] = 255; } });
-  return fitBases[kind] = {N, S, Mk: null, normal, grey};
+  const grey = canvasOf(D => { for (let i = 0, j = 0; i < N * N; i++, j += 4) { D[j] = D[j+1] = D[j+2] = Math.min(255, S[i] * (Mk && Mk[i] ? 0.7 : 1) / 1.5 * 255); D[j+3] = 255; } });
+  return fitBases[key] = {N, S, Mk, normal, grey};
 }
 function genBase(s) {
-  if (SURFACES[s.kind]) return fitBase(s.kind);
-  const N = TEX, H = new Float32Array(N*N), S = new Float32Array(N*N), Mk = s.kind === "brick" ? new Uint8Array(N*N) : null;
+  if (SURFACES[s.kind]) return fitBase(s.kind, s.age, true);
+  let N = TEX, H = new Float32Array(N*N), S = new Float32Array(N*N), Mk = s.kind === "brick" ? new Uint8Array(N*N) : null;
   const strength = {lockpanel:10, horizontal:40, plaster:1.5, felt:1.2, tiles:60, metal:4.5, brick:3, paintedwood:0.6}[s.kind];
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
     let h = 0, sh = 1;
@@ -285,6 +291,8 @@ function genBase(s) {
     }
     H[y*N + x] = h; S[y*N + x] = sh;
   }
+  // the building's age: dirt, peeling paint, moss, rust (age.mjs)
+  if (s.age) ({S, H, Mk} = weather({S, H, Mk, N}, s.kind, s.age, {outdoor: true}));
   const nc = document.createElement("canvas"); nc.width = nc.height = N;
   const ctx = nc.getContext("2d"), img = ctx.createImageData(N, N), D = img.data;
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
@@ -300,7 +308,7 @@ function compose(S, hex, Mk, N = TEX) {
   const c = document.createElement("canvas"); c.width = c.height = N;
   const ctx = c.getContext("2d"), img = ctx.createImageData(N, N), D = img.data;
   const n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
-  for (let i = 0, j = 0; i < S.length; i++, j += 4) { const k = S[i], mo = Mk && Mk[i]; D[j] = Math.min(255, (mo ? 184 : r)*k); D[j+1] = Math.min(255, (mo ? 178 : g)*k); D[j+2] = Math.min(255, (mo ? 168 : b)*k); D[j+3] = 255; }
+  for (let i = 0, j = 0; i < S.length; i++, j += 4) { const k = S[i], mo = Mk && MASK_RGB[Mk[i]], [cr, cg, cb] = mo || [r, g, b]; D[j] = Math.min(255, cr*k); D[j+1] = Math.min(255, cg*k); D[j+2] = Math.min(255, cb*k); D[j+3] = 255; }
   ctx.putImageData(img, 0, 0);
   return c;
 }
@@ -510,13 +518,19 @@ function drawFittingSurfaces() {
     if (!surf) continue;
     let o = fitMeshes[surf];
     if (!o) {
-      const base = fitBase(surf);
       const mat = new THREE.MeshStandardMaterial({roughness: ["galv", "steel", "plastic"].includes(surf) ? 0.6 : 0.95,
-        metalness: surf === "galv" ? 0.3 : 0, vertexColors: true, map: mkTex(base.grey), normalMap: mkTex(base.normal)});
+        metalness: surf === "galv" ? 0.3 : 0, vertexColors: true});
       mat.color.setScalar(1.5);   // the grey map holds shade / 1.5
       o = fitMeshes[surf] = new THREE.Mesh(new THREE.BufferGeometry(), mat);
       o.castShadow = o.receiveShadow = true;
       host.add(o);
+    }
+    // the surface as weathered by the building's age
+    if (o.userData.age !== p.age) {
+      const base = fitBase(surf, p.age), mat = o.material;
+      if (mat.map) mat.map.dispose(); if (mat.normalMap) mat.normalMap.dispose();
+      mat.map = mkTex(base.grey); mat.normalMap = mkTex(base.normal); mat.needsUpdate = true;
+      o.userData.age = p.age;
     }
     o.geometry.dispose(); o.geometry = bufferOf(g); o.visible = true;
   }
@@ -1276,8 +1290,8 @@ async function addTextures(dir) {
   }
   // The inside: each colour of a surface its own diffuse, one normal map per surface.
   for (const t of fittingTextures(p, G)) {
-    const base = fitBase(t.surf);
-    dir.file(t.diffuse, await canvasBlob(compose(base.S, t.color, null, base.N)));
+    const base = fitBase(t.surf, p.age);
+    dir.file(t.diffuse, await canvasBlob(compose(base.S, t.color, base.Mk, base.N)));
     dir.file(t.normal, await canvasBlob(base.normal));
   }
   if (p.interior) dir.file("textures/interior_diffuse.png", await canvasBlob(interiorCanvas()));

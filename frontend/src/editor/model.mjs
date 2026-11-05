@@ -6,6 +6,7 @@ import { KINDS, kindOf } from "./kinds/index.mjs";
 import { WALL_T, wallFrames, doorSpan, openingSpan, roomOf, footprint, toWorld, cleanItems, problems } from "./layout.mjs";
 import { withAssets, placement, assetFolder } from "./assets.mjs";
 import { SURFACES } from "./surfaces.mjs";
+import { agedColor } from "./age.mjs";
 import { WINDOW_STYLES, DOOR_STYLES, WINDOW_STYLE_IDS, DOOR_STYLE_IDS, DOUBLE_DOOR_FROM, isPair, styleOf, drawSash, drawLeaf } from "./openings.mjs";
 export { WINDOW_STYLES, DOOR_STYLES, DOUBLE_DOOR_FROM } from "./openings.mjs";
 export { boxMesh } from "./i3d.mjs";
@@ -23,7 +24,7 @@ export const DEFAULTS = {
   wallCladding:"lockpanel", panelSpacing:0.2, battenWidth:0.06, roofMaterial:"tiles", chimneyStyle:"brick", chimneyColor:"#8A3B2C",
   entrance:"porch", entranceWidth:2.2, entranceDepth:1.6, gutters:true, downpipes:2, gutterColor:"#3B3F42",
   wallColor:"#8E2A1E", trimColor:"#F2EFE8", roofColor:"#2B2D2F", doorColor:"#3E5A4A", foundationColor:"#6E6E6A",
-  sleepPoint:true, interior:true, curtainStyle:"sides", curtainColor:"#EFE9DC", ventilators:0,
+  sleepPoint:true, interior:true, curtainStyle:"sides", curtainColor:"#EFE9DC", ventilators:0, age:0,
   modPrice:75000, modUpkeep:75, modAuthor:"", modDescription:""
 };
 /** Curtain layouts: [id, name]. Windows can pick one or follow the house's choice ("default"). */
@@ -91,7 +92,8 @@ const SHARED_SECTIONS = [
     {k:"panelSpacing", label:"Board width", min:0.12, max:0.4, step:0.005, cm:true},
     {k:"battenWidth", label:"Batten width", min:0.03, max:0.1, step:0.005, cm:true},
     {k:"roofMaterial", label:"Roof covering", type:"select", options:[["tiles","Concrete tiles"],["metal","Standing seam metal"],["plain","Plain color"]]},
-    {k:"chimneyStyle", label:"Chimney", type:"select", options:[["brick","Brick"],["plain","Plain color"]]}]},
+    {k:"chimneyStyle", label:"Chimney", type:"select", options:[["brick","Brick"],["plain","Plain color"]]},
+    {k:"age", label:"Age (paint fades, moss, rust, dirt)", min:0, max:60, step:1, unit:" years"}]},
   {title:"Colors", side:"finish", colors:true, fields:[
     {k:"wallColor", label:"Walls", type:"color"},
     {k:"trimColor", label:"Trim", type:"color"},
@@ -1463,10 +1465,19 @@ return {G: visual, dims, opsByWall, collision, rooms, downpipes, doors, refs};
 }
 
 /* ---------- Materials ---------- */
+/** The colour of material m: the chosen one, aged by the building's years (age.mjs). */
 export function colorFor(p, m) {
+  return agedColor(chosenColor(p, m), p.age || 0, m);
+}
+function chosenColor(p, m) {
   return {walls:p.wallColor, trim:p.trimColor, roof:p.roofColor, glass:"#2E3B44", door:p.doorColor, foundation:p.foundationColor, chimney:p.chimneyColor, gutter:p.gutterColor, iron:"#2C2D2F", interior:"#B8AE9C", curtain:p.curtainColor, fittings:"#E9E4D8"}[m];
 }
+/** The texture of material m (null: plain colour): its kind, the metres one copy covers (w, h) and the building's age. */
 export function surfaceSpec(p, m) {
+  const s = baseSpec(p, m);
+  return s && {...s, age: p.age || 0};
+}
+function baseSpec(p, m) {
   const kind = m === "walls" ? p.wallCladding
     : m === "roof" ? (p.roofType === "flat" ? "felt" : p.roofMaterial === "plain" ? null : p.roofMaterial)
     : m === "chimney" ? (p.chimneyStyle === "brick" ? "brick" : null)

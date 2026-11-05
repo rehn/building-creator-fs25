@@ -22,7 +22,7 @@ export const SURFACES = {
 };
 
 /* ---------- Tileable noise ---------- */
-function hash(i, j, s) {
+export function hash(i, j, s) {
   let h = (Math.imul(i, 374761393) + Math.imul(j, 668265263) + Math.imul(s, 982451653)) | 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
@@ -30,14 +30,14 @@ function hash(i, j, s) {
 const smooth = t => t * t * (3 - 2 * t);
 const wrap = (a, n) => ((a % n) + n) % n;
 /** Value noise over an N px tile with cx x cy cells (integers, so it tiles), 0..1. */
-function noise(x, y, N, cx, cy, s) {
+export function noise(x, y, N, cx, cy, s) {
   const X = x * cx / N, Y = y * cy / N, xi = Math.floor(X), yi = Math.floor(Y), u = smooth(X - xi), v = smooth(Y - yi);
   const x0 = wrap(xi, cx), x1 = wrap(xi + 1, cx), y0 = wrap(yi, cy), y1 = wrap(yi + 1, cy);
   const a = hash(x0, y0, s), b = hash(x1, y0, s), c = hash(x0, y1, s), d = hash(x1, y1, s);
   return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
 }
 /** A few octaves of noise starting at c cells, 0..1. */
-function fbm(x, y, N, c, s, oct = 3) {
+export function fbm(x, y, N, c, s, oct = 3) {
   let t = 0, a = 1, n = 0;
   for (let o = 0; o < oct; o++) { t += a * noise(x, y, N, c << o, c << o, s + o * 101); n += a; a /= 2; }
   return t / n;
