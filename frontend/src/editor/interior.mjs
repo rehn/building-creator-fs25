@@ -138,7 +138,7 @@ export function paintInterior(doc = document) {
 export function paintGlass(doc = document) {
   const c = doc.createElement("canvas"); c.width = c.height = 64;
   const x = c.getContext("2d");
-  x.fillStyle = `rgba(46,59,68,${GLASS_ALPHA})`; x.fillRect(0, 0, 64, 64);
+  x.fillStyle = `rgba(115,150,171,${GLASS_ALPHA})`; x.fillRect(0, 0, 64, 64);
   const g = x.createLinearGradient(0, 0, 64, 64);
   g.addColorStop(0.35, "rgba(255,255,255,0)"); g.addColorStop(0.5, "rgba(255,255,255,0.12)"); g.addColorStop(0.65, "rgba(255,255,255,0)");
   x.fillStyle = g; x.fillRect(0, 0, 64, 64);

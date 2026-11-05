@@ -1713,7 +1713,7 @@ export function colorFor(p, m) {
   return agedColor(chosenColor(p, m), p.age || 0, m);
 }
 function chosenColor(p, m) {
-  return {walls:p.wallColor, wallsLow:p.lowerColor, trim:p.trimColor, roof:p.roofColor, glass:"#2E3B44", door:p.doorColor, foundation:p.foundationColor, chimney:p.chimneyColor, gutter:p.gutterColor, iron:"#2C2D2F", interior:"#B8AE9C", curtain:p.curtainColor, fittings:"#E9E4D8"}[m];
+  return {walls:p.wallColor, wallsLow:p.lowerColor, trim:p.trimColor, roof:p.roofColor, glass:"#7396AB", door:p.doorColor, foundation:p.foundationColor, chimney:p.chimneyColor, gutter:p.gutterColor, iron:"#2C2D2F", interior:"#B8AE9C", curtain:p.curtainColor, fittings:"#E9E4D8"}[m];
 }
 /** The texture of material m (null: plain colour): its kind, the metres one copy covers (w, h) and the building's age. */
 export function surfaceSpec(p, m) {
@@ -1823,7 +1823,7 @@ export function gamePlaces(p) {
 /** Whether the windows are see-through: with rooms behind them, or into a walk-in building. */
 export const seeThroughGlass = p => !!p.interior || kindOf(p).walkIn;
 /** Opacity of the window glass when it is see-through. */
-export const GLASS_ALPHA = 0.22;
+export const GLASS_ALPHA = 0.35;
 const NO_SHADOW = ["glass", "interior", "curtain"];
 export function rgb(hex) { const n = parseInt(hex.slice(1), 16); return [(n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255].map(v => num(v)).join(" ") + " 1"; }
 

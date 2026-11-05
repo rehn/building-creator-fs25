@@ -367,7 +367,7 @@ function initThree() {
   MATS.forEach(m => {
     // The rooms are unlit and a little dark, so they read as indoors behind the glass.
     matObjs[m] = m === "interior" ? new THREE.MeshBasicMaterial({map: interiorTex, color: 0xc8c8c8})
-      : new THREE.MeshStandardMaterial(m === "glass" ? {roughness:0.12, metalness:0.4} : m === "gutter" || m === "iron" ? {roughness:0.45, metalness:0.35} : m === "curtain" || m === "fittings" ? {roughness:0.95, metalness:0, vertexColors:true} : {roughness:0.85, metalness:0});
+      : new THREE.MeshStandardMaterial(m === "glass" ? {roughness:0.05, metalness:0.1} : m === "gutter" || m === "iron" ? {roughness:0.45, metalness:0.35} : m === "curtain" || m === "fittings" ? {roughness:0.95, metalness:0, vertexColors:true} : {roughness:0.85, metalness:0});
     const mesh = new THREE.Mesh(new THREE.BufferGeometry(), matObjs[m]);
     mesh.castShadow = !["glass", "interior", "curtain"].includes(m); mesh.receiveShadow = m !== "interior";
     meshes[m] = mesh; scene.add(mesh);
