@@ -497,7 +497,7 @@ function setupOrbit() {
       const q = floorPoint(e);
       if (q) {
         const it = p.items.find(x => x.id === ins.drag.id);
-        ins.drag.cand = snapItem({...it, x: q[0] - ins.drag.off[0], z: q[1] - ins.drag.off[1]}, catalogNow()[it.type], roomNow());
+        ins.drag.cand = snapItem({...it, x: q[0] - ins.drag.off[0], z: q[1] - ins.drag.off[1]}, catalogNow()[it.type], roomNow(), p.items, catalogNow());
         ins.drag.moved = true; updateInsideOverlay();
       }
       return;
@@ -1161,7 +1161,7 @@ function addPiece(type) {
 }
 function turnSelected() {
   const it = selected(); if (!it) return;
-  const t = rotateItem(it, catalogNow()[it.type], roomNow());
+  const t = rotateItem(it, catalogNow()[it.type], roomNow(), p.items, catalogNow());
   if (t !== it) commitItems(p.items.map(x => x.id === it.id ? t : x));
 }
 function removeSelected() {
@@ -1270,7 +1270,7 @@ function renderInsideUI() {
         const f = def.params.find(x => x.k === inp.dataset.k);
         // While sliding, rebuild without redrawing this panel; remember the edit when the slider is let go.
         inp.oninput = () => {
-          const cur = selected(), next = snapItem({...cur, [f.k]: +inp.value}, def, roomNow());
+          const cur = selected(), next = snapItem({...cur, [f.k]: +inp.value}, def, roomNow(), p.items, catalogNow());
           p.items = p.items.map(x => x.id === cur.id ? next : x);
           if ($(`pc-${f.k}-o`)) $(`pc-${f.k}-o`).textContent = fmtP(f, inp.value);
           ins.keep = true; rebuild(false); ins.keep = false;

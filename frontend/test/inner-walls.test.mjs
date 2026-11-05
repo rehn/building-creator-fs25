@@ -117,3 +117,22 @@ test("inner wall: it is drawn to a wing's walls too, and other pieces don't snap
   // a new wall lands somewhere free
   assert.equal(problems([placeNew("innerwall", [], cat, room)], cat, room).size, 0);
 });
+
+test("inner wall: its end is drawn to the side of another inner wall (a T-junction), and fills between walls", () => {
+  const p = house([]), room = roomOf(p), cat = catalogFor(p), def = cat.innerwall;
+  const across = wall({id: 1, rot: 90, x: 0, z: 0, length: 4, door: 0});          // along z at x = 0, thickness 0.15
+  // along x at z = 1, 2 m long, its right end 0.3 m short of the wall's face (x = -0.075): it moves up against it
+  const a = snapItem(wall({id: 2, x: -1.4, z: 1, length: 2, door: 0}), def, room, [across], cat);
+  assert.ok(Math.abs(a.x - (-0.075 - 1)) < 1e-9 && a.length === 2, `${a.x}`);
+  // the same wall without others stays where it is
+  assert.equal(snapItem(wall({id: 2, x: -1.4, z: 1, length: 2, door: 0}), def, room).x, -1.5); // (only the grid)
+  // the other side: left end drawn to the face at x = +0.075
+  const b = snapItem(wall({id: 2, x: 1.3, z: 1, length: 2, door: 0}), def, room, [across], cat);
+  assert.ok(Math.abs(b.x - (0.075 + 1)) < 1e-9, `${b.x}`);
+  // a wall at z = 3 doesn't meet it (the other ends at z = 2)
+  assert.equal(snapItem(wall({id: 2, x: -1.4, z: 3, length: 2, door: 0}), def, room, [across], cat).x, -1.5);
+  // between the room's left wall and the inner wall: as long as the gap, touching both
+  const d = snapItem(wall({id: 2, x: -2.3, z: 1, length: 4.6, door: 0}), def, room, [across], cat);
+  assert.ok(Math.abs(d.length - Math.floor((-0.075 - room.x0) * 100) / 100) < 1e-9, `${d.length}`);
+  assert.equal(problems([across, d], cat, room).size, 0);
+});

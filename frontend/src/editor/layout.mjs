@@ -221,7 +221,7 @@ const clamp = (v, lo, hi) => lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo,
  * Where an item ends up when dropped: a wall item against the nearest inside wall, facing the room,
  * slid along it to the grid; a floor item on the grid. Both kept inside the room.
  */
-export function snapItem(item, def, room) {
+export function snapItem(item, def, room, others = [], catalog = {}) {
   const [w, d] = def.size(item);
   if (def.mount === "wall") {
     // the nearest stretch of wall (its distance from the point to the stretch, not to its line)
@@ -239,7 +239,7 @@ export function snapItem(item, def, room) {
   const tries = (room.rects || [room]).map(at), fits = tries.filter(q => inRoom(room, footprint(q, def)));
   const far = q => Math.hypot(q.x - item.x, q.z - item.z);
   const placed = (fits.length ? fits : tries).reduce((best, q) => far(q) < far(best) ? q : best);
-  return def.snapWalls ? endsToWalls(placed, def, room) : placed;
+  return def.snapWalls ? endsToWalls(placed, def, room, others, catalog) : placed;
 }
 
 /** How near (m) an end of an inner wall must come to a wall of the room to be drawn to it. */
@@ -249,10 +249,17 @@ const SNAP_END = 0.5;
  * that crosses its direction is moved up against it; with both ends near walls it is made exactly as long as
  * the room is there. Walls are those the wall's own line meets (a wing's too).
  */
-function endsToWalls(it, def, room) {
+function endsToWalls(it, def, room, others = [], catalog = {}) {
   const alongX = it.rot % 180 === 0, half = it.length / 2, c = alongX ? it.x : it.z, cross = alongX ? it.z : it.x;
   const lines = room.walls.filter(w => alongX ? w.x0 === w.x1 && cross >= w.z0 - 0.01 && cross <= w.z1 + 0.01 : w.z0 === w.z1 && cross >= w.x0 - 0.01 && cross <= w.x1 + 0.01)
     .map(w => alongX ? w.x0 : w.z0);
+  // other inner walls across this one that its line meets: the end stops at the face turned towards it (a T-junction)
+  for (const o of others) {
+    if (o.id === it.id || !catalog[o.type] || !catalog[o.type].snapWalls || (o.rot % 180 === 0) === alongX) continue;
+    const oc = alongX ? o.x : o.z, ocross = alongX ? o.z : o.x, oh = o.length / 2, t = catalog[o.type].size(o)[1] / 2;
+    if (cross < ocross - oh - 0.01 || cross > ocross + oh + 0.01) continue;
+    lines.push(oc <= c ? oc + t : oc - t);
+  }
   const near = (v, side) => lines.filter(l => (side < 0 ? l <= c : l >= c) && Math.abs(l - v) < SNAP_END).sort((a, b) => Math.abs(a - v) - Math.abs(b - v))[0];
   const lo = near(c - half, -1), hi = near(c + half, 1), len = def.params.find(f => f.k === "length");
   let length = it.length, mid = c;
@@ -317,16 +324,16 @@ export function placeNew(type, items, catalog, room) {
   for (let x = bx.x0; x <= bx.x1 + 1e-9; x += GRID) for (let z = bx.z0; z <= bx.z1 + 1e-9; z += GRID) spots.push([x, z]);
   spots.sort((a, b) => Math.hypot(a[0] - cx, a[1] - cz) - Math.hypot(b[0] - cx, b[1] - cz));
   for (const [x, z] of spots) {
-    const it = snapItem({...base, x, z}, def, room);
+    const it = snapItem({...base, x, z}, def, room, items, catalog);
     if (!problems([...items, it], catalog, room).has(id)) return it;
   }
-  return snapItem({...base, x: cx, z: cz}, def, room);
+  return snapItem({...base, x: cx, z: cz}, def, room, items, catalog);
 }
 
 /** A floor piece turned a quarter (and kept inside); a wall piece always faces the room, so stays as is. */
-export function rotateItem(item, def, room) {
+export function rotateItem(item, def, room, others = [], catalog = {}) {
   if (def.mount === "wall") return item;
-  return snapItem({...item, rot: (item.rot + 90) % 360}, def, room);
+  return snapItem({...item, rot: (item.rot + 90) % 360}, def, room, others, catalog);
 }
 
 /** Undo and redo over copies of a state (the pieces list). */
