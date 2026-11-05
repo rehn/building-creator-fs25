@@ -3,6 +3,7 @@
 // piece), and a first arrangement for a new house. Pure; imports only the pure helpers.
 import { roomOf, furnisher } from "../layout.mjs";
 import { tone, shade } from "./props.mjs";
+import { INNER_WALL } from "./innerwall.mjs";
 
 const C = {
   pine: "#B88B5A", oak: "#8A6440", paint: "#E8E2D2", green: "#5E7A62", blue: "#4E6A86", iron: "#2B2B2D", brass: "#B08A3E",
@@ -11,6 +12,7 @@ const C = {
 const wood = (c, hex, i = 0) => c.paint(tone(hex, i), "wood");
 
 export const CATALOG = {
+  innerwall: INNER_WALL,
   kitchen: {name: "Kitchen counter (köksbänk)", mount: "wall", collision: true,
     params: [{k: "count", label: "Cupboards (60 cm each)", min: 2, max: 6, step: 1}], defaults: {count: 4},
     size: it => [it.count * 0.6, 0.62], height: () => 0.92,

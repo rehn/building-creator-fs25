@@ -9,6 +9,7 @@ import { wallLength, yardFrame, shellOf, teleportFor, withPasture, pastureWallFo
 import { objectOf, boxOf, iconOf, boxFrom, pastureOf } from "../objects.mjs";
 import { placeOnWall, placeOnBuilding } from "../places.mjs";
 import { tone, shade, arc, strawBale, strawLitter } from "./props.mjs";
+import { INNER_WALL } from "./innerwall.mjs";
 
 /** About one cow per 6 m² of floor; at most 100 (the base game's biggest pasture barn takes 99). */
 export const M2_PER_COW = 6;
@@ -126,6 +127,7 @@ function furnish(c) { c.floor(COLORS.floor, "concrete"); }
  */
 const stallDepth = 2.3, PIPE = 0.03;
 const CATALOG = {
+  innerwall: INNER_WALL,
   stalls: {name: "Cubicles (liggbås)", mount: "wall", collision: true,
     params: [{k: "count", label: "Cubicles", min: 1, max: 24, step: 1}], defaults: {count: 6},
     size: it => [it.count * 1.2, stallDepth], height: () => 1.25,

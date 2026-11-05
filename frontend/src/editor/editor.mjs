@@ -1255,7 +1255,10 @@ function renderInsideUI() {
       + (shared.length ? `<h4 class="palette-head">Shared items</h4><div class="palette">${shared.map(addBtn).join("")}</div>` : "")
       + `<p class="hint"><a href="/items" target="_blank" rel="noopener">Import an item…</a></p>`
       + (it ? `<div class="piece"><h4>${esc(def.name)}</h4>${def.missing ? `<p class="warn">This item isn’t in My items any more, so it’s left out. Remove it, or import it again.</p>` : ""}${pr.has(it.id) ? `<p class="warn">${pr.get(it.id)}.</p>` : ""}`
-          + def.params.map(f => `<div class="field"><div class="fl"><label for="pc-${f.k}">${f.label}</label><output id="pc-${f.k}-o">${fmtP(f, it[f.k])}</output></div><input type="range" id="pc-${f.k}" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}" value="${it[f.k]}"></div>`).join("")
+          + def.params.map(f => f.options
+            // a choice (wallpaper, a doorway or not): a list
+            ? `<div class="field"><div class="fl"><label for="pc-${f.k}">${f.label}</label></div><select id="pc-${f.k}" data-k="${f.k}">${f.options.map((nm, i) => `<option value="${i}" ${i === Math.round(it[f.k]) ? "selected" : ""}>${esc(nm)}</option>`).join("")}</select></div>`
+            : `<div class="field"><div class="fl"><label for="pc-${f.k}">${f.label}</label><output id="pc-${f.k}-o">${fmtP(f, it[f.k])}</output></div><input type="range" id="pc-${f.k}" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}" value="${it[f.k]}"></div>`).join("")
           + `<div class="row"><button type="button" id="pcTurn" ${def.mount === "wall" ? "disabled title=\"Wall pieces always face the room\"" : ""}>Turn</button><button type="button" id="pcRemove" class="danger">Remove</button></div></div>`
         : `<p class="hint">Click a piece in the building to change or move it.</p>`)
       + (pr.size ? `<p class="warn">${pr.size} piece${pr.size > 1 ? "s have" : " has"} a problem (red).</p>` : "")
@@ -1263,13 +1266,13 @@ function renderInsideUI() {
     ed.querySelectorAll("[data-add]").forEach(b => b.onclick = () => addPiece(b.dataset.add));
     if (it) {
       $("pcTurn").onclick = turnSelected; $("pcRemove").onclick = removeSelected;
-      ed.querySelectorAll("input[data-k]").forEach(inp => {
+      ed.querySelectorAll("[data-k]").forEach(inp => {
         const f = def.params.find(x => x.k === inp.dataset.k);
         // While sliding, rebuild without redrawing this panel; remember the edit when the slider is let go.
         inp.oninput = () => {
           const cur = selected(), next = snapItem({...cur, [f.k]: +inp.value}, def, roomNow());
           p.items = p.items.map(x => x.id === cur.id ? next : x);
-          $(`pc-${f.k}-o`).textContent = fmtP(f, inp.value);
+          if ($(`pc-${f.k}-o`)) $(`pc-${f.k}-o`).textContent = fmtP(f, inp.value);
           ins.keep = true; rebuild(false); ins.keep = false;
         };
         inp.onchange = () => { ins.hist.push(p.items); persist(); rebuild(false); };

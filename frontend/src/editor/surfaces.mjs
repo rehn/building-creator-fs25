@@ -19,6 +19,9 @@ export const SURFACES = {
   rubber:    {w: 0.4, h: 0.4, px: 256, bump: 3},              // cow mats (studded), hoses
   straw:     {w: 0.6, h: 0.6, px: 256, bump: 3},              // straw, hay, silage
   litter:    {w: 0.8, h: 0.8, px: 256, bump: 2},              // wood shavings, sawdust, feed, droppings
+  paperPlain:  {w: 0.6, h: 0.6, px: 256, bump: 0.5},          // wallpaper (tapet): plain, with a woven grain
+  paperStripe: {w: 0.6, h: 0.6, px: 256, bump: 0.5},          // wallpaper: stripes 15 cm apart
+  paperFlower: {w: 0.5, h: 0.5, px: 256, bump: 0.6},          // wallpaper: small flowers in rows, every other one half a step down
 };
 
 /* ---------- Tileable noise ---------- */
@@ -102,6 +105,29 @@ const grain = (x, y, N, rings, s) =>
   0.5 + 0.5 * Math.sin(2 * Math.PI * (x / N * rings + 1.2 * noise(x, y, N, 4, 2, s) + 0.15 * noise(x, y, N, 16, 4, s + 1)));
 
 const PAINT = {
+  paperPlain(x, y, N) {
+    // a woven grain: fine threads both ways, and a little cloudiness
+    const thread = (Math.sin(x * Math.PI * 2 / 4) * 0.5 + Math.sin(y * Math.PI * 2 / 4) * 0.5) * 0.02, cloud = fbm(x, y, N, 4, 61), fuzz = hash(x, y, 62);
+    return [1 + thread + 0.04 * (cloud - 0.5) + 0.03 * (fuzz - 0.5), 0.5 + thread * 6 + 0.2 * fuzz];
+  },
+  paperStripe(x, y, N) {
+    // a wide stripe, a narrow gap and a pinstripe every 64 px (15 cm)
+    const u = x % 64, fuzz = hash(x, y, 63), cloud = fbm(x, y, N, 4, 64);
+    let s = 1.02, h = 0.55;
+    if (u >= 40 && u < 47) { s = 0.86; h = 0.3; } else if (u >= 47) s = 0.96;
+    if (u === 53 || u === 54) { s = 0.78; h = 0.4; }
+    return [s + 0.03 * (cloud - 0.5) + 0.02 * (fuzz - 0.5), h + 0.1 * fuzz];
+  },
+  paperFlower(x, y, N) {
+    // a bud with five petals, and two leaves, in cells of 64 px (12 cm); odd columns half a cell down
+    const col = Math.floor(x / 64), u = (x % 64) - 32, v = ((((y - (col % 2) * 32) % 64) + 64) % 64) - 32;
+    const r = Math.hypot(u, v), ang = Math.atan2(v, u), fuzz = hash(x, y, 65), cloud = fbm(x, y, N, 4, 66);
+    let s = 1.04, h = 0.5;
+    if (r < 5) { s = 0.7; h = 0.8; }
+    else if (r < 10 && Math.cos(ang * 5) > 0.1) { s = 0.86; h = 0.7; }
+    else if (Math.hypot(Math.abs(u) - 1, Math.abs(v) - 19) < 3.5) { s = 0.9; h = 0.65; }
+    return [s + 0.03 * (cloud - 0.5) + 0.02 * (fuzz - 0.5), h + 0.1 * fuzz];
+  },
   concrete(x, y, N) {
     const big = fbm(x, y, N, 4, 1), fine = fbm(x, y, N, 32, 2, 2), stain = fbm(x, y, N, 2, 3, 3), dot = hash(x, y, 4);
     let s = 0.97 + 0.12 * (big - 0.5) + 0.07 * (fine - 0.5) + (dot - 0.5) * 0.07;

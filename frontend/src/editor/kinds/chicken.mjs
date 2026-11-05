@@ -6,6 +6,7 @@ import { roomOf, furnisher } from "../layout.mjs";
 import { OPPOSITE, wallLength, yardFrame, shellOf, teleportFor, withPasture, pastureWallFor } from "./pasture.mjs";
 import { objectOf, boxOf, iconOf, boxFrom, pastureOf } from "../objects.mjs";
 import { tone, shade, strawBale } from "./props.mjs";
+import { INNER_WALL } from "./innerwall.mjs";
 import { placeOnWall, placeOnBuilding } from "../places.mjs";
 
 /** Floor space per hen, as in the base game's 360-hen barn (about 2.2 per m², rounded up). */
@@ -129,6 +130,7 @@ const hanger = (c, x, z, y) => { c.paint(COOP.wire, "steel"); c.rod([x, y, z], [
  */
 const nestDepth = 0.6, perchReach = tiers => 0.25 + 0.3 * (tiers - 1) + 0.05;
 const CATALOG = {
+  innerwall: INNER_WALL,
   nests: {name: "Nest boxes", mount: "wall", collision: true,
     params: [{k: "count", label: "Boxes per row", min: 1, max: 60, step: 1}, {k: "tiers", label: "Rows", min: 1, max: 3, step: 1}],
     defaults: {count: 6, tiers: 1},

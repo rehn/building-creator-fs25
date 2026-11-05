@@ -1230,13 +1230,18 @@ function buildInside(kind, F, H) {
     const round = (x, z, y, r, h, seg) => { const q = toWorld(it, x, z); cyl([q[0], F + y, q[1]], r, h, seg); };
     // points of the piece's frame ([x, y, z], y up from the floor) in the world
     const at = ([x, y, z]) => { const q = toWorld(it, x, z); return [q[0], F + y, q[1]]; };
-    const pieceKit = {H, paint, box, cyl: round,
+    // (ceil: how high an inner wall goes: the ceiling of a house, the walls' top in a barn)
+    const ceil = kind.ceiling ? p.floorHeight : H;
+    const pieceKit = {H, ceil, paint, box, cyl: round,
       cone: (x, z, y, r0, r1, h, seg) => { const q = toWorld(it, x, z); cone([q[0], F + y, q[1]], r0, r1, h, seg); },
       rod: (a, b, r, seg) => rod(at(a), at(b), r, seg),
       pipe: (pts, r, seg) => tube(pts.map(at), r, seg),
       board: (a, b, w, h) => beam(at(a), at(b), w, h)};
     def.build(pieceKit, it);
-    if (def.collision) { const f = footprint(it, def); abox("collision", [f.x0, F, f.z0], [f.x1, F + def.height(it), f.z1]); }
+    if (def.solids) {
+      // a piece with its own solids (an inner wall: open at its doorway), in its frame
+      for (const [x0, x1, z0, z1, y0, y1] of def.solids(it, {ceil})) { const a = toWorld(it, x0, z0), b = toWorld(it, x1, z1); abox("collision", [Math.min(a[0], b[0]), F + y0, Math.min(a[1], b[1])], [Math.max(a[0], b[0]), F + y1, Math.max(a[1], b[1])]); }
+    } else if (def.collision) { const f = footprint(it, def); abox("collision", [f.x0, F, f.z0], [f.x1, F + def.height(it), f.z1]); }
   }
 }
 /** The ridge cap along the ridge from a0 to a1 (ridge coordinates), placed with M. */
