@@ -87,7 +87,7 @@ function flickers(geo, mats, {walkIn = false, F = 0, max = 5} = {}) {
 const show = ({a, b}) => `${a.m} and ${b.m} at ${a.pts[0].map(v => v.toFixed(2))} facing ${a.n.map(v => v.toFixed(2))}`;
 
 // The building's shell (the inside pieces are drawn by the kinds and have their own tests).
-const SHELL = ["walls", "trim", "roof", "door", "foundation", "chimney", "gutter", "iron", "glass"];
+const SHELL = ["walls", "wallsLow", "trim", "roof", "door", "foundation", "chimney", "gutter", "iron", "glass"];
 
 for (const pr of PRESETS) test(`no flickering faces on the outside of ${pr.id}`, () => {
   const p = sanitize(pr.settings), f = flickers(buildGeometry(p), SHELL, {walkIn: !!kindOf(p).walkIn, F: p.foundation});
@@ -130,5 +130,18 @@ test("no flickering faces on a hip roof (its end gutters meet the eaves)", () =>
   for (const s of [{roofType: "hip"}, {roofType: "hip", width: 12, downpipes: 1}, {roofType: "hip", ridge: "depth", depth: 12}]) {
     const p = sanitize(s), f = flickers(buildGeometry(p), SHELL, {F: p.foundation});
     assert.equal(f.length, 0, `${JSON.stringify(s)}:\n` + f.map(show).join("\n"));
+  }
+});
+
+test("no flickering faces with two wall materials and the drip board between them", () => {
+  const barn = PRESETS.find(x => x.id === "ladugard").settings;
+  const cases = [
+    {floors: 2, wallSplit: "floor"}, {wallSplit: "height", splitHeight: 1.2}, {wallSplit: "height", splitHeight: 0.9, sill: 0.8},
+    {floors: 2, wallSplit: "floor", wing: true, wingWall: "back", wingPos: 0.15}, {...barn, floors: 2, floorHeight: 2.6, wallSplit: "floor"},
+    {...barn, wallSplit: "height", splitHeight: 1.6},
+  ];
+  for (const c of cases) {
+    const p = sanitize({lowerCladding: "plaster", ...c}), f = flickers(buildGeometry(p), SHELL, {walkIn: !!kindOf(p).walkIn, F: p.foundation});
+    assert.equal(f.length, 0, `${JSON.stringify(c).slice(0, 120)}:\n` + f.map(show).join("\n"));
   }
 });

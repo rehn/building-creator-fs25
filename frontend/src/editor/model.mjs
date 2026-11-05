@@ -23,6 +23,7 @@ export const DEFAULTS = {
   roofType:"gable", ridge:"width", roofPitch:38, overhang:0.5, chimney:true,
   winFront:2, winBack:3, winLeft:1, winRight:1, winW:1.0, winH:1.25, sill:0.85, winStyle:"casement",
   doorStyle:"panel",
+  wallSplit:"one", splitHeight:2.7, lowerCladding:"plaster", lowerColor:"#EAE6DC",
   wallCladding:"lockpanel", panelSpacing:0.2, battenWidth:0.06, roofMaterial:"tiles", chimneyStyle:"brick", chimneyColor:"#8A3B2C",
   gutters:true, downpipes:2, gutterColor:"#3B3F42",
   wallColor:"#8E2A1E", trimColor:"#F2EFE8", roofColor:"#2B2D2F", doorColor:"#3E5A4A", foundationColor:"#6E6E6A",
@@ -52,6 +53,8 @@ const normalize = p => { const k = kindOf(p); return k.normalize({...k.defaults,
 const pickRoom = v => ROOM_TYPES.includes(v) ? v : "auto";
 const pickCurtain = v => CURTAIN_STYLES.includes(v) ? v : "default";
 const pickColor = v => typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v) ? v : "default";
+/** What the walls can be clad in: [id, name]. */
+const CLADDING = [["lockpanel","Board and batten (lockpanel)"],["horizontal","Horizontal boards"],["plaster","Plaster"]];
 /** Editor sections every building shares (kinds hide the ones they don't use, see kind.hides). */
 const SHARED_SECTIONS = [
   // side: where the editor shows the section, "build" (left / first tab) or "finish" (right / second tab).
@@ -88,7 +91,10 @@ const SHARED_SECTIONS = [
     {k:"doorStyle", label:"Style", type:"select", options:DOOR_STYLES.map(s => [s.id, s.name])}]},
   {title:"Inside", side:"build", custom:"inside", hint:"The pieces inside the building. Fill it automatically to match its size, then change it as you like.", fields:[]},
   {title:"Surfaces", side:"finish", fields:[
-    {k:"wallCladding", label:"Wall cladding", type:"select", options:[["lockpanel","Board and batten (lockpanel)"],["horizontal","Horizontal boards"],["plaster","Plaster"]]},
+    {k:"wallCladding", label:"Wall cladding (the upper part when split)", type:"select", options:CLADDING},
+    {k:"wallSplit", label:"Two materials on the walls", type:"select", options:[["one","No, one material"],["floor","Yes, split at the top of the ground floor"],["height","Yes, split at a height"]]},
+    {k:"splitHeight", label:"Split height, above the ground floor's floor", min:0.5, max:10, step:0.05, unit:" m"},
+    {k:"lowerCladding", label:"Lower part's cladding", type:"select", options:CLADDING},
     {k:"panelSpacing", label:"Board width", min:0.12, max:0.4, step:0.005, cm:true},
     {k:"battenWidth", label:"Batten width", min:0.03, max:0.1, step:0.005, cm:true},
     {k:"roofMaterial", label:"Roof covering", type:"select", options:[["tiles","Concrete tiles"],["metal","Standing seam metal"],["plain","Plain color"]]},
@@ -96,6 +102,7 @@ const SHARED_SECTIONS = [
     {k:"age", label:"Age (paint fades, moss, rust, dirt)", min:0, max:60, step:1, unit:" years"}]},
   {title:"Colors", side:"finish", colors:true, fields:[
     {k:"wallColor", label:"Walls", type:"color"},
+    {k:"lowerColor", label:"Lower walls", type:"color"},
     {k:"trimColor", label:"Trim", type:"color"},
     {k:"roofColor", label:"Roof", type:"color"},
     {k:"doorColor", label:"Door", type:"color"},
@@ -338,7 +345,7 @@ export function slugify(name) {
 export const WP = (w,s,t,d) => [w.o[0] + w.u[0]*s + w.n[0]*d, w.o[1] + t, w.o[2] + w.u[2]*s + w.n[2]*d];
 // fittings: a walk-in barn's inside (whitewashed walls, litter, nests, perches, feeders), vertex
 // colored like the curtains and exported as one plain part per color.
-export const MATS = ["walls","trim","roof","glass","door","foundation","chimney","gutter","iron","interior","curtain","fittings"];
+export const MATS = ["walls","wallsLow","trim","roof","glass","door","foundation","chimney","gutter","iron","interior","curtain","fittings"];
 /**
  * Texture atlas for the rooms behind the windows (u, v from the bottom left, as [u0, v0, u1, v1]).
  * Four room types (living room, bedroom, kitchen, study), each with its own back wall,
@@ -873,8 +880,13 @@ function buildDoor(w, o, kit, inner, r, out, key) {
  * reveals end), facing in. inner.lift raises an eave wall's inside face into the roof slab so no
  * gap shows under the roof. key: the wall's name, for its doors (see buildDoor).
  */
-function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inner = null, key = null} = {}) {
+/**
+ * split: the height (from the wall's foot) where the walls' lower material ends (two zones, see
+ * wallSplitAt); below it the face is "wallsLow", above it "walls", with a drip board along the join.
+ */
+function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inner = null, key = null, split = null} = {}) {
   const L = w.L, xs = [0, L, L/2], ts = [0, H, H + gableRise];
+  if (split) ts.push(split);
   ops.forEach(o => { xs.push(o.s0, o.s1); ts.push(o.t0, o.t1); });
   const uniq = a => [...new Set(a.map(v => +v.toFixed(5)))].sort((a,b) => a - b);
   const X = uniq(xs), T = uniq(ts);
@@ -887,7 +899,15 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
       const k = gableRise / (L / 2);
       c = clipPoly(clipPoly(c, -k, 1, H), k, 1, H + 2 * gableRise);
     }
-    if (c.length >= 3) poly("walls", c.map(q => WP(w, q[0], q[1], 0)), w.n);
+    if (c.length >= 3) poly(split && ct < split ? "wallsLow" : "walls", c.map(q => WP(w, q[0], q[1], 0)), w.n);
+  }
+  if (split) {
+    // the drip board along the join (vattbräda), broken where an opening (with its frame) crosses it
+    const bh = 0.1, cuts = ops.filter(o => o.t0 - 0.2 < split + bh && o.t1 + 0.15 > split).map(o => [o.s0 - 0.15, o.s1 + 0.15]).sort((a, b) => a[0] - b[0]);
+    // (from 9 cm in from the wall's ends, under the corner boards: where two walls meet their ends would
+    // cross in one plane and flicker)
+    let s = 0.09;
+    for (const [a, b] of [...cuts, [L - 0.09, L]]) { if (Math.min(a, L - 0.09) - s > 0.05) wbox("trim", w, s, Math.min(a, L - 0.09), split, split + bh, 0, 0.03); s = Math.max(s, b); }
   }
   if (inner) {
     const Hi = H + inner.lift, tw = WALL_T;
@@ -1279,6 +1299,9 @@ function build() {
   G = {}; [...MATS, "collision"].forEach(m => G[m] = {p:[], n:[], uv:[], i:[]});
   G.curtain.c = []; G.fittings.c = []; G.fittings.s = []; fitSurf = undefined;
   const W = p.width, D = p.depth, F = p.foundation, fh = p.floorHeight, H = p.floors * fh + (p.halfStorey ? p.kneeWall : 0), top = F + H;
+  // two materials on the walls: where the lower one ends (none at the walls' top or above: the gables are the upper's)
+  const splitAt = p.wallSplit === "floor" ? fh : p.wallSplit === "height" ? p.splitHeight : 0;
+  const split = splitAt > 0.05 && splitAt < H - 0.05 ? splitAt : null;
   boardsFrom = hollow ? top + 0.05 : Infinity;
   const tanP = Math.tan(p.roofPitch * Math.PI / 180), o = p.overhang, th = 0.16;
   const ridgeX = p.roofType === "hip" ? W >= D : p.ridge === "width";
@@ -1419,7 +1442,7 @@ function build() {
     const ops = layoutWall(key, Lw, fh, sv => H + R * Math.max(0, 1 - Math.abs(sv - Lw/2) / (Lw/2)), wing && key === wing.wall ? wingCover : null);
     // Eave walls' inside faces reach into the roof slab (which sits lower further in), staying below its top.
     const inner = hollow ? {lift: R > 0 || p.roofType === "flat" ? 0 : Math.min(WALL_T * tanP, th - 0.02)} : null;
-    buildWall(WS[key], ops, H, R, F, {topAt: sv => H + R * Math.max(0, 1 - Math.abs(sv - Lw/2) / (Lw/2)), inner, key});
+    buildWall(WS[key], ops, H, R, F, {topAt: sv => H + R * Math.max(0, 1 - Math.abs(sv - Lw/2) / (Lw/2)), inner, key, split});
     opsByWall[key] = {w: WS[key], ops};
     for (const dOp of ops) if (dOp.kind === "door" && dOp.porch.type !== "none") entrances.push({w: WS[key], o: dOp, key, gable});
   }
@@ -1429,7 +1452,7 @@ function build() {
     const R = key === "wingEnd" && wing.type !== "flat" ? Math.max(0, wing.ww / 2 * tanP - th) : 0;
     const topAt = sv => H + R * Math.max(0, 1 - Math.abs(sv - Lw/2) / (Lw/2));
     const ops = layoutWall(key, Lw, fh, topAt);
-    buildWall(w, ops, H, R, F, {topAt, key});
+    buildWall(w, ops, H, R, F, {topAt, key, split});
     opsByWall[key] = {w, ops};
     for (const dOp of ops) if (dOp.kind === "door" && dOp.porch.type !== "none") entrances.push({w, o: dOp, key, gable: R > 0});
   }
@@ -1642,7 +1665,7 @@ export function colorFor(p, m) {
   return agedColor(chosenColor(p, m), p.age || 0, m);
 }
 function chosenColor(p, m) {
-  return {walls:p.wallColor, trim:p.trimColor, roof:p.roofColor, glass:"#2E3B44", door:p.doorColor, foundation:p.foundationColor, chimney:p.chimneyColor, gutter:p.gutterColor, iron:"#2C2D2F", interior:"#B8AE9C", curtain:p.curtainColor, fittings:"#E9E4D8"}[m];
+  return {walls:p.wallColor, wallsLow:p.lowerColor, trim:p.trimColor, roof:p.roofColor, glass:"#2E3B44", door:p.doorColor, foundation:p.foundationColor, chimney:p.chimneyColor, gutter:p.gutterColor, iron:"#2C2D2F", interior:"#B8AE9C", curtain:p.curtainColor, fittings:"#E9E4D8"}[m];
 }
 /** The texture of material m (null: plain colour): its kind, the metres one copy covers (w, h) and the building's age. */
 export function surfaceSpec(p, m) {
@@ -1651,6 +1674,7 @@ export function surfaceSpec(p, m) {
 }
 function baseSpec(p, m) {
   const kind = m === "walls" ? p.wallCladding
+    : m === "wallsLow" ? p.lowerCladding
     : m === "roof" ? (p.roofType === "flat" ? "felt" : p.roofMaterial === "plain" ? null : p.roofMaterial)
     : m === "chimney" ? (p.chimneyStyle === "brick" ? "brick" : null)
     : m === "trim" || m === "door" ? "paintedwood"

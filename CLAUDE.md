@@ -23,6 +23,9 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   so eaves line up: a valley wing cuts a 45° triangle out of the slope (notch), the house's eave/gutter/dormers stop at
   WG.cut; a gable-end wing is a lower annex under the gable overhang. Wing roof built in its own axes (WG.Mw/Ml).
   Windows under the wing are hidden (layoutWall cover). geo.wing; test/wing.test.mjs, flicker test covers wings.
+  Wall zones (PLAN step 1, done): wallSplit one|floor|height, splitHeight, lowerCladding, lowerColor; material
+  "wallsLow" (in MATS, its own colour/texture/age) below the split, "walls" above (gables, dormers and porch gables
+  are always "walls"); buildWall({split}) adds a drip board (trim) 9 cm in from the ends, broken at openings.
   src/editor/layout.mjs = a walk-in building's inside: roomOf, wall frames, doorSpan, placed pieces
   (p.items: {id, type, x, z, rot, ...params} in building coordinates), snapItem, problems, cleanItems.
   A walk-in kind has a catalog of pieces and autoFurnish(p); buildGeometry draws p.items.
@@ -86,7 +89,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Frontend tests: cd frontend && npm test (node --test, no browser needed)
 
 ## Status
-- Go tests (60) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (355) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
+- Go tests (60) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (362) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
 - Cow barn (kinds/cow.mjs): cowHusbandryPasture (no milk, like cowBarnSmall), automatic water, feed
   and water troughs outside on the pasture wall (kind.outside), a plain walk-through doorway for the
   cows (openings with plain: true; tall openings get a collision gap), feed pad + bale trigger

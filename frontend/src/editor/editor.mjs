@@ -198,8 +198,12 @@ function syncOutputs() {
   // Controls that don't apply right now are greyed out (a kind may not have some of them at all).
   const off = (k, v) => { if (inputs[k]) inputs[k].disabled = v; };
   off("ridge", p.roofType !== "gable");
-  off("panelSpacing", p.wallCladding === "plaster");
-  off("battenWidth", p.wallCladding !== "lockpanel");
+  // the walls' zones: board settings apply when either zone has boards
+  const clads = p.wallSplit === "one" ? [p.wallCladding] : [p.wallCladding, p.lowerCladding];
+  off("panelSpacing", clads.every(c => c === "plaster"));
+  off("battenWidth", !clads.includes("lockpanel"));
+  off("splitHeight", p.wallSplit !== "height");
+  off("lowerCladding", p.wallSplit === "one"); off("lowerColor", p.wallSplit === "one");
   off("roofMaterial", p.roofType === "flat");
   off("chimneyStyle", !p.chimney);
   off("kneeWall", !p.halfStorey);
@@ -215,7 +219,7 @@ function syncOutputs() {
 
 const TEX = 1024;
 /** The materials with a surface texture (surfaceSpec), when their settings give them one. */
-const TEXTURED = ["walls", "roof", "chimney", "trim", "foundation", "door"];
+const TEXTURED = ["walls", "wallsLow", "roof", "chimney", "trim", "foundation", "door"];
 function hash(i, j, s) {
   let h = (Math.imul(i, 374761393) + Math.imul(j, 668265263) + Math.imul(s, 982451653)) | 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177);

@@ -106,7 +106,7 @@ Gamla sparningar konverteras där det går.
 
 Varje steg ska vara färdigt, testat (TDD) och kontrollerat i webbläsaren innan nästa börjar.
 
-1. **Väggmaterial i zoner.** Fristående och snabbt, och syns mest. Ger ladan puts och panel direkt.
+1. **Väggmaterial i zoner.** Klart (november 2026): "Two materials on the walls" under Surfaces, delat vid bottenvåningens överkant eller på en vald höjd, med vattbräda i skarven.
 2. **Spelobjekt som objekt, hagen också.** Fristående från formen. Ersätter "Game places" och hagens inställningar.
 3. **Insida för alla byggnader och val av öppningsbar dörr.** Bostadshuset blir en byggnad man kan gå in i, bottenvåningen.
 4. **Flera delar.** Flygeln blir en del i listan, plus tillbyggnader, och insidan sträcker sig över alla delar.
