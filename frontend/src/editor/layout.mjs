@@ -226,7 +226,8 @@ export function snapItem(item, def, room, others = [], catalog = {}) {
   if (def.mount === "wall") {
     // the nearest stretch of wall (its distance from the point to the stretch, not to its line)
     const dist = wl => Math.hypot(Math.max(wl.x0 - item.x, 0, item.x - wl.x1), Math.max(wl.z0 - item.z, 0, item.z - wl.z1));
-    const wl = room.walls.reduce((best, x) => dist(x) < dist(best) ? x : best);
+    const all = [...room.walls, ...innerFaces(room, others, catalog)];
+    const wl = all.reduce((best, x) => dist(x) < dist(best) ? x : best);
     if (wl.x0 === wl.x1) {
       const z = clamp(snap(item.z), wl.z0 + w/2, wl.z1 - w/2);
       return {...item, rot: wl.rot, x: wl.x0 + wl.into[0] * d/2, z};
@@ -240,6 +241,25 @@ export function snapItem(item, def, room, others = [], catalog = {}) {
   const far = q => Math.hypot(q.x - item.x, q.z - item.z);
   const placed = (fits.length ? fits : tries).reduce((best, q) => far(q) < far(best) ? q : best);
   return def.snapWalls ? endsToWalls(placed, def, room, others, catalog) : placed;
+}
+
+/** The two faces of every inner wall (def.snapWalls, with def.runs: the solid stretches along it) as wall stretches like room.walls'. */
+function innerFaces(room, others, catalog) {
+  const out = [], rotOf = ([i, j]) => (room.walls.find(w => w.into[0] === i && w.into[1] === j) || {}).rot;
+  for (const o of others) {
+    const def = catalog[o.type];
+    if (!def || !def.snapWalls || !def.runs) continue;
+    const t = def.size(o)[1] / 2;
+    for (const s of [-1, 1]) {
+      const c = toWorld(o, 0, 0), n = toWorld(o, 0, s), into = [Math.round(n[0] - c[0]), Math.round(n[1] - c[1])], rot = rotOf(into);
+      if (rot === undefined) continue;
+      for (const [a, b] of def.runs(o)) {
+        const p = toWorld(o, a, s * t), q = toWorld(o, b, s * t);
+        out.push({name: "inner" + o.id, x0: Math.min(p[0], q[0]), x1: Math.max(p[0], q[0]), z0: Math.min(p[1], q[1]), z1: Math.max(p[1], q[1]), into, rot});
+      }
+    }
+  }
+  return out;
 }
 
 /** How near (m) an end of an inner wall must come to a wall of the room to be drawn to it. */

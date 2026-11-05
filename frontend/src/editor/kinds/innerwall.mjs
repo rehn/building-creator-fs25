@@ -41,6 +41,8 @@ export const INNER_WALL = {
     {k: "paperB", label: "Other side", min: 0, max: WALLPAPERS.length - 1, step: 1, options}],
   defaults: {length: 3, door: 1, doorAt: 0.5, paperA: 2, paperB: 4},
   size: it => [it.length, 0.15], height: () => 2.6,
+  /** The stretches along the wall [x0, x1] that things can stand against: all of it, or each side of the doorway. */
+  runs: it => { const d = doorwayOf(it); return d ? [[-it.length / 2, d[0]], [d[1], it.length / 2]] : [[-it.length / 2, it.length / 2]]; },
   /** Collision boxes in the piece's frame [x0, x1, z0, z1, y0, y1], up to ceiling height; the doorway is open. */
   solids: (it, {ceil = 2.6} = {}) => stretches(it, ceil).map(([x0, x1, y0, y1]) => [x0, x1, -CORE_T - SHEET, CORE_T + SHEET, y0, y1]),
   build(c, it) {

@@ -136,3 +136,19 @@ test("inner wall: its end is drawn to the side of another inner wall (a T-juncti
   assert.ok(Math.abs(d.length - Math.floor((-0.075 - room.x0) * 100) / 100) < 1e-9, `${d.length}`);
   assert.equal(problems([across, d], cat, room).size, 0);
 });
+
+test("a wall piece is drawn to an inner wall's face too, not through its doorway", () => {
+  const p = house([]), room = roomOf(p), cat = catalogFor(p);
+  const w = wall({id: 1, x: 0, z: 0, length: 4, door: 0}); // along x at z = 0, faces at z = +-0.075
+  const sofa = at => snapItem({id: 2, type: "sofa", x: at[0], z: at[1], rot: 0}, cat.sofa, room, [w], cat);
+  const [sw, sd] = cat.sofa.size({}); void sw;
+  const a = sofa([0, 0.6]);   // near the +z face: back to it, facing +z
+  assert.ok(Math.abs(a.z - (0.075 + sd / 2)) < 1e-9 && a.rot === 0, JSON.stringify(a));
+  const b = sofa([0, -0.6]);  // the other face, turned round
+  assert.ok(Math.abs(b.z - (-0.075 - sd / 2)) < 1e-9 && b.rot === 180, JSON.stringify(b));
+  // a doorway: nothing to snap to in it, so a spot in the middle goes to a side of it
+  const dw = wall({id: 1, x: 0, z: 0, length: 8, door: 1, doorAt: 0.5}), r = doorwayOf(dw);
+  const c = snapItem({id: 2, type: "sofa", x: (r[0] + r[1]) / 2, z: 0.4, rot: 0}, cat.sofa, room, [dw], cat);
+  assert.ok(c.x + cat.sofa.size({})[0] / 2 <= r[0] + 1e-9 || c.x - cat.sofa.size({})[0] / 2 >= r[1] - 1e-9 || Math.abs(c.z) > 1, JSON.stringify(c));
+  assert.equal(problems([dw, a], cat, room).has(2), false);
+});
