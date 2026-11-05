@@ -17,12 +17,17 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   Kinds import only i3d.mjs, never model.mjs (no import cycles); the core passes them helpers.
   src/editor/i3d.mjs = i3d writer: scene tree (tg/shape), I3dDoc; i3dMappings are looked up by
   node name (mappingsFor), never numbered by hand.
-  Wings (L/T houses, houses only; barns hide "Wing"): p.wing, wingWall, wingPos, wingWidth, wingDepth. layout.mjs wingOf(p)
-  -> {type valley|gable|flat, s0, s1, ww, wd, frames {wingEnd, wingLeft, wingRight}, rect} or {off: why} (hip ends), clamped
-  to fit; wallsOf(p) = every wall incl. the wing's (window list walls, genRow). Same floors/pitch/overhang as the house,
-  so eaves line up: a valley wing cuts a 45° triangle out of the slope (notch), the house's eave/gutter/dormers stop at
-  WG.cut; a gable-end wing is a lower annex under the gable overhang. Wing roof built in its own axes (WG.Mw/Ml).
-  Windows under the wing are hidden (layoutWall cover). geo.wing; test/wing.test.mjs, flicker test covers wings.
+  Wings (PLAN step 4a, done; houses only, barns hide "Wings"): p.wings = [{id 1..4, wall (of the house), pos, width,
+  depth, floors (0 = the house's)}], up to MAX_WINGS=4: L, T, U, Z. layout.mjs wingsOf(p) -> per wing {type
+  valley|eave|gable|flat, s0, s1, ww, wd, floors, H, frames {w1End, w1Left, w1Right}, rect} or {off: why} (hip ends,
+  no room, overlaps an earlier wing); liveWings; wallsOf(p) = every wall (window-list walls are "w{id}End|Left|Right").
+  Same pitch/overhang as the house, own floors: a wing whose ridge reaches the house's eaves meets the slope in a
+  valley (45 deg triangle cut by notch(); eave/gutter/dormers stop at WG.cut), a lower one ("eave") runs up to the
+  wall under the eaves (width clamped to stay under their overhang), on a gable end an annex. model.mjs build():
+  WINGS = [{wing, WG, topW}], buildWingBody/Roof per wing, wing walls built with their own height. Old saves (wing,
+  wingWall ...; walls wingEnd...) migrate to wing 1 in sanitize. Windows under a wing are hidden (layoutWall cover).
+  Editor: Wings section (list, add, per-wing sliders, floors, remove). The wings' insides are still closed (4b: one
+  room across all parts is next); geo.wings; test/wing.test.mjs, flicker test covers wings.
   Game objects (PLAN step 2, done): src/editor/objects.mjs; p.objects = boxes {id, type, x, z, w, d, h, ix, iz} (sleep,
   food, bales, loading, pallets, info) and the pasture {type: "pasture", wall, a (m from the wall's start), b (m from its
   END: 0 = corner, so it stays at the corners when the building is resized; < 0 runs past), depth}. kind.objects =
@@ -103,7 +108,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Frontend tests: cd frontend && npm test (node --test, no browser needed)
 
 ## Status
-- Go tests (60) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (383) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
+- Go tests (60) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (386) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
 - Cow barn (kinds/cow.mjs): cowHusbandryPasture (no milk, like cowBarnSmall), automatic water, feed
   and water troughs outside on the pasture wall (kind.outside), a plain walk-through doorway for the
   cows (openings with plain: true; tall openings get a collision gap), feed pad + bale trigger
