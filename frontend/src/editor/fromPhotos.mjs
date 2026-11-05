@@ -65,7 +65,7 @@ export function photoRequest(kindId) {
   const schema = {
     type: "object", additionalProperties: false, required: ["seen", "settings", "openings", "notes"],
     properties: {
-      seen: {type: "string", description: "What the photos show: which wall each photo shows, materials, how you judged the sizes"},
+      seen: {type: "string", description: "What the photos show: the footprint's shape (rectangle, L or T), which wall each photo shows, materials, how you judged the sizes"},
       settings,
       openings: {type: "array", items: opening(wing ? [...WALLS, ...WING_WALLS] : WALLS), description: "Every window and door on the walls"},
       notes: {type: "string", description: "For the admin: what the app can't match and what to check"},
@@ -80,7 +80,8 @@ Animals: the app makes the animals' own way out to the pasture (and the fence) o
   const wingText = wing
     ? `
 
-L- and T-shaped houses: the part along the front is the house, the other part a wing on one of its walls (wingWall), ` +
+Shape: first decide from the photos whether the footprint is a rectangle, an L or a T, and say which in "seen". ` +
+      `L- and T-shaped houses are built: the longest part is the house (its long side the front), the other part a wing on one of its walls (wingWall), ` +
       `wingPos along that wall like an opening's "along", wingWidth across it and wingDepth out from the wall. The wing has the house's ` +
       `floors and roof pitch; on a long side its roof meets the house's in a valley, on a gable end it is a lower annex. ` +
       `Its openings go on its own walls: wingEnd (its far end), wingLeft and wingRight (its sides, as you stand outside facing wingEnd). ` +
@@ -92,7 +93,7 @@ L- and T-shaped houses: the part along the front is the house, the other part a 
     if (!s) sections.push(s = {title, lines: []});
     s.lines.push(fieldLine(f));
   }
-  const guide = `The app builds a ${kind.name.toLowerCase()}: a rectangular building with walls, a roof, windows and doors.
+  const guide = `The app builds a ${kind.name.toLowerCase()}: ${wing ? "a rectangular building, or an L- or T-shaped one with a wing," : "a rectangular building"} with walls, a roof, windows and doors.${wingText}
 
 Walls: choose the wall the photos show best, usually the long side with the main doors, as the front. ` +
 `${WALL_NAMES.left} is the wall on your left when you stand outside facing the front, ${WALL_NAMES.right.toLowerCase()} the one on your right, ` +
@@ -104,7 +105,7 @@ Heights: "floorHeight" is one full floor's height, so the walls are floors x flo
 Openings: list every window and door you can see, on the wall it is on. "along" is where its middle is along that wall, ` +
 `from 0 at the left end to 1 at the right end, as you see the wall from outside. Doors stand on the ground floor (floor 0, sill 0); ` +
 `a pair of doors or a wide barn door is one door up to 3 m wide and 2.6 m tall. A loft door or hatch up in a gable can't be built: ` +
-`leave it out and mention it in notes. Window sills are measured from their own floor's floor. A building needs at least one door.${animals}${wingText}
+`leave it out and mention it in notes. Window sills are measured from their own floor's floor. A building needs at least one door.${animals}
 
 Settings, by the editor's sections:
 ${sections.map(s => `${s.title}:\n${s.lines.join("\n")}`).join("\n\n")}`;
