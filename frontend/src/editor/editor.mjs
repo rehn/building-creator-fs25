@@ -9,7 +9,7 @@ import {
 import { WINDOW_STYLES, DOOR_STYLES, PORCH_OPTIONS, PORCH_W, PORCH_D, WING_FIELDS, MAX_WINGS } from "./model.mjs";
 import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, henYard, henCap, seeThroughGlass, kindOf } from "./model.mjs";
 import { cowYard } from "./kinds/cow.mjs";
-import { roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, History, wingsOf, liveWings, wingFloors, wingIdOf, wingWallKey, WING_PARTS, wallsOf } from "./layout.mjs";
+import { roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, History, wingsOf, liveWings, wingFloors, wingHalf, wingIdOf, wingWallKey, WING_PARTS, wallsOf } from "./layout.mjs";
 import { OBJECT_TYPES, OBJECT_LIMITS, objectOf, pastureOf, snapBox, snapPasture, objectProblems } from "./objects.mjs";
 import { setAssets, catalogFor, usedAssets } from "./model.mjs";
 import { readObj, assetFolder, flattenI3d } from "./assets.mjs";
@@ -600,12 +600,14 @@ let selId = null;
 function floorName(f) { return p.halfStorey && f === p.floors ? "Attic" : `Floor ${f + 1}`; }
 /** How many floors a wall has: the house's, or its wing's. */
 function floorsOf(wall) { const id = wingIdOf(wall), w = id && (p.wings || []).find(x => x.id === id); return w ? wingFloors(p, w) : p.floors; }
+/** Whether a wall has a half floor in the roof (1½-plan): the house's, or its wing's. */
+function halfOf(wall) { const id = wingIdOf(wall), w = id && (p.wings || []).find(x => x.id === id); return w ? wingHalf(p, w) : p.halfStorey; }
 function gableWall(wall) {
   if (wingIdOf(wall)) return wall.endsWith("End") && p.roofType !== "flat";
   return p.roofType === "gable" && (p.ridge === "width" ? (wall === "left" || wall === "right") : (wall === "front" || wall === "back"));
 }
 /** Whether a window on floor f can be on wall k (attic windows only in a gable of a wall as tall as the house). */
-const floorOk = (f, k) => f < floorsOf(k) || (f === p.floors && floorsOf(k) === p.floors && gableWall(k));
+const floorOk = (f, k) => f < floorsOf(k) || (f === floorsOf(k) && halfOf(k) && gableWall(k));
 /** The building's walls now: the four, and the wing's when it has one. */
 const wallKeys = () => Object.keys(wallsOf(p));
 const wallLen = wall => (wallsOf(p)[wall] || {L: 1}).L;
@@ -662,7 +664,7 @@ function bindChoices(prefix, obj) {
 function renderWinUI() {
   const ed = $("winEditor");
   if (!ed) return;
-  const floors = p.floors + (p.halfStorey ? 1 : 0);
+  const floors = p.floors + (p.halfStorey || (p.wings || []).some(w => wingHalf(p, w)) ? 1 : 0);
   let html = `<table class="wgrid"><thead><tr><th scope="col"><span class="sr">Wall</span></th>${Array.from({length: floors}, (_, f) => `<th scope="col">${floorName(f)}</th>`).join("")}</tr></thead><tbody>`;
   for (const wall of wallKeys()) {
     html += `<tr><th scope="row">${WALL_NAMES[wall]}</th>`;
@@ -763,8 +765,10 @@ function renderWingsUI() {
     const range = f => `<div class="field"><div class="fl"><label for="wg-${f.k}">${f.label}</label><output id="wg-${f.k}-o">${(+w[f.k]).toFixed(2)}${f.k === "pos" ? "" : " m"}</output></div><input type="range" id="wg-${f.k}" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}" value="${w[f.k]}"></div>`;
     html += `<div class="wincard"><div class="field"><div class="fl"><label for="wg-wall">On the wall</label></div><select id="wg-wall">${["front", "back", "left", "right"].map(k => opt(k, WALL_NAMES[k], w.wall)).join("")}</select></div>`
       + WING_FIELDS.map(range).join("")
-      + `<div class="field"><div class="fl"><label for="wg-floors">Floors</label></div><select id="wg-floors">${opt(0, `As many as the house (${p.floors})`, w.floors)}${Array.from({length: p.floors - 1}, (_, i) => opt(i + 1, `${i + 1} (lower than the house)`, w.floors)).join("")}</select></div>`
-      + `<p class="hint">A wing with fewer floors has a lower roof.</p><div class="row"><button type="button" id="wingRemove" class="danger">Remove this wing</button></div></div>`;
+      + `<div class="field"><div class="fl"><label for="wg-floors">Floors</label></div><select id="wg-floors">${opt(0, `As the house (${p.floors}${p.halfStorey ? "½" : ""})`, w.floors)}${[1, 2, 3].map(n => opt(n, `${n}${n < p.floors ? " (lower than the house)" : n > p.floors ? " (taller than the house)" : ""}`, w.floors)).join("")}</select></div>`
+      + `<label class="check"><input type="checkbox" id="wg-half" ${wingHalf(p, w) ? "checked" : ""} ${w.floors ? "" : "disabled"}> Half floor in the roof (1½-plan)</label>`
+      + `<div class="field"><div class="fl"><label for="wg-pitch">Roof angle</label><output id="wg-pitch-o">${w.pitch ? w.pitch + "°" : "as the house (" + p.roofPitch + "°)"}</output></div><input type="range" id="wg-pitch" min="0" max="60" step="1" value="${w.pitch}"></div>`
+      + `<p class="hint">A wing with fewer floors, or a flatter roof, has a lower roof. Roof angle 0 follows the house.</p><div class="row"><button type="button" id="wingRemove" class="danger">Remove this wing</button></div></div>`;
   }
   ed.innerHTML = html;
   const changed = (renderToo = true) => { persist(); rebuild(false); if (renderToo) { renderWingsUI(); renderWinUI(); } };
@@ -783,7 +787,10 @@ function renderWingsUI() {
     inp.onchange = () => changed();
   });
   $("wg-wall").onchange = e => { w.wall = e.target.value; changed(); };
-  $("wg-floors").onchange = e => { w.floors = +e.target.value; changed(); };
+  $("wg-floors").onchange = e => { w.floors = +e.target.value; if (!w.floors) w.half = false; else if (w.half === undefined) w.half = p.halfStorey; changed(); };
+  $("wg-half").onchange = e => { w.half = e.target.checked; changed(); };
+  $("wg-pitch").oninput = e => { w.pitch = +e.target.value; $("wg-pitch-o").textContent = w.pitch ? w.pitch + "°" : `as the house (${p.roofPitch}°)`; persist(); rebuild(false); };
+  $("wg-pitch").onchange = () => changed();
   $("wingRemove").onclick = () => {
     p.wings = wings.filter(x => x.id !== w.id);
     p.windows = p.windows.filter(x => wingIdOf(x.wall) !== w.id);

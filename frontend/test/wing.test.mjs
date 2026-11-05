@@ -67,7 +67,7 @@ test("wings: several, each with its walls; two that overlap leave the later one 
   assert.equal(geo.wings.length, 3);
   const clash = house({wings: [W1, {...W1, id: 2, pos: 0.2}]});
   assert.equal(liveWings(clash).length, 1);
-  assert.match(wingsOf(clash)[1].off, /overlaps/);
+  assert.match(wingsOf(clash)[1].off, /too close/);
   assert.equal(Object.keys(buildGeometry(clash).opsByWall).filter(k => k.startsWith("w2")).length, 0);
 });
 
@@ -126,5 +126,36 @@ test("wings: only houses have them", () => {
     assert.deepEqual(p.wings, [], kind);
     assert.ok(!buildGeometry(p).opsByWall.w1End, kind);
     assert.ok(KIND[kind].hides.includes("Wings"), kind);
+  }
+});
+
+test("wings: their own roof angle and a half floor", () => {
+  const same = wingsOf(house({wings: [W1]}))[0], steep = wingsOf(house({wings: [{...W1, pitch: 55}]}))[0];
+  assert.equal(same.pitch, 38, "0 follows the house");
+  assert.equal(steep.pitch, 55);
+  assert.equal(wingsOf(house({wings: [{...W1, pitch: 2}]}))[0].pitch, 5, "at least 5");
+  // a half floor: a knee wall on top of the full floors (its own setting once it has its own floors)
+  const half = wingsOf(house({wings: [{...W1, floors: 1, half: true}]}))[0], plain = wingsOf(house({wings: [{...W1, floors: 1}]}))[0];
+  assert.ok(Math.abs(half.H - plain.H - 0.9) < 1e-9 && half.half && !plain.half);
+  assert.equal(wingsOf(house({halfStorey: true, wings: [W1]}))[0].half, true, "floors 0 follows the house's half floor");
+  // an attic window on a half-floor wing's gable end, none without
+  const attic = {wall: "w1End", floor: 1, pos: 0.5, w: 0.8, h: 0.8, sill: 0.3};
+  const q = sanitize({wings: [{...W1, floors: 1, half: true, width: 7, depth: 6}], windows: [attic]}), op = buildGeometry(q).opsByWall.w1End.ops;
+  assert.ok(op.some(o => o.kind === "window" && o.t0 >= 2.7 - 1e-6), "an attic window");
+  const r = sanitize({wings: [{...W1, floors: 1, width: 7, depth: 6}], windows: [attic]});
+  assert.ok(buildGeometry(r).opsByWall.w1End.ops.every(o => o.kind !== "window"), "none on a wing without a half floor");
+  // the valley follows a steeper or flatter wing roof
+  for (const pitch of [20, 38, 55]) {
+    const p = house({roofPitch: 38, wings: [{...W1, pitch, width: 5}], chimney: false, dormers: []}), geo = buildGeometry(p);
+    const tanP = Math.tan(38 * Math.PI / 180), tanW = Math.tan(pitch * Math.PI / 180), top = p.foundation + p.floors * p.floorHeight, ridgeY = top + 3.5 * tanP;
+    const w = liveWings(p)[0], yR = top + 2.5 * tanW, k = (ridgeY - yR) / tanP, G = geo.G.roof;
+    let bad = 0;
+    for (let t = 0; t < G.i.length; t += 3) {
+      const v = [0, 1, 2].map(j => G.i[t + j]), c = [0, 1, 2].map(i => v.reduce((s, q2) => s + G.p[q2 * 3 + i], 0) / 3);
+      if (G.n[v[0] * 3 + 1] < 0.3) continue;
+      const b = -c[2], ac = Math.abs(c[0] - w.at(w.sc, 0)[0]);
+      if (Math.abs(c[1] - (ridgeY - b * tanP)) < 0.02 && ac < 2.3 && b > k + ac * tanW / tanP + 0.2 && b < 3.5 + p.overhang - 0.05) bad++;
+    }
+    assert.equal(bad, 0, `pitch ${pitch}: no house roof under the wing's roof`);
   }
 });

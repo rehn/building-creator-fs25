@@ -63,11 +63,13 @@ export function photoRequest(kindId) {
   const settings = {type: "object", additionalProperties: false, required: fields.map(([f]) => f.k), properties: {}};
   for (const [f] of fields) settings.properties[f.k] = fieldSchema(f);
   // the wings of a house: where each is, how big, how many floors
-  const wings = wing ? {type: "array", description: "The wings, if the footprint isn't a rectangle (none for a rectangle)", items: {type: "object", additionalProperties: false, required: ["wall", "along", "width", "depth", "floors"], properties: {
+  const wings = wing ? {type: "array", description: "The wings, if the footprint isn't a rectangle (none for a rectangle)", items: {type: "object", additionalProperties: false, required: ["wall", "along", "width", "depth", "floors", "half", "pitch"], properties: {
     wall: {type: "string", enum: WALLS, description: "The house's wall it stands against"},
     along: {type: "number", description: "Middle of the wing along that wall, 0 = its left end, 1 = its right end, seen from outside"},
     width: {type: "number", description: "metres, along the wall"}, depth: {type: "number", description: "metres, out from the wall"},
-    floors: {type: "integer", description: "0 = as many as the house, else its own number (a lower wing)"}}}} : null;
+    floors: {type: "integer", description: "0 = as many full floors as the house (and its half floor, if any), else its own number (1 to 3)"},
+    half: {type: "boolean", description: "A half floor in the roof (1½-plan) on a wing with its own floors; false when floors is 0"},
+    pitch: {type: "integer", description: "Roof angle in degrees (5 to 60), or 0 for the house's"}}}} : null;
   // an animal building's pasture: the wall the animals go out on and how far out the fence goes
   const ps = kind.objects && kind.objects.pasture, pasture = ps ? {type: "object", additionalProperties: false, required: ["wall", "depth"], properties: {
     wall: {type: "string", enum: WALLS, description: "The wall the animals go out through to the pasture"},
@@ -95,7 +97,7 @@ Animals: the app makes the animals' own way out to the pasture (and the fence) o
 Shape: first decide from the photos whether the footprint is a rectangle, an L, a T or a U, and say which in "seen". ` +
       `Other shapes are built from wings: the longest part is the house (its long side the front), and every other part is a wing on one of its walls ` +
       `(up to ${MAX_WINGS}, in "wings": wall, "along" like an opening's, width across it, depth out from the wall, and floors: 0 for as many as the house, ` +
-      `or fewer for a lower part). A wing has the house's roof pitch; on a long side its roof meets the house's in a valley, a lower one runs up to the wall under the eaves, ` +
+      `or fewer for a lower part; half for 1½-plan; pitch its roof angle, 0 for the house's). On a long side its roof meets the house's in a valley, a lower one runs up to the wall under the eaves, ` +
       `on a gable end it is a lower annex. Wing number n (in the order of "wings", from 1) has the walls wnEnd (its far end), wnLeft and wnRight (its sides, as you stand outside facing its end): ` +
       `w1End, w1Left, w1Right, w2End ... Put its windows and doors there. A plain rectangular house has no wings.`
     : "";
@@ -136,7 +138,7 @@ export function applyAnswer(kindId, answer) {
   const settings = {...s, kind: kindId};
   // the pasture: its wall and depth (the rest of the game objects go where the kind puts them)
   if (a.pasture && typeof a.pasture === "object") Object.assign(settings, {pastureWall: a.pasture.wall, fenceDepth: a.pasture.depth});
-  if (Array.isArray(a.wings)) settings.wings = a.wings.filter(w => w && typeof w === "object").map(w => ({wall: w.wall, pos: w.along, width: w.width, depth: w.depth, floors: w.floors}));
+  if (Array.isArray(a.wings)) settings.wings = a.wings.filter(w => w && typeof w === "object").map(w => ({wall: w.wall, pos: w.along, width: w.width, depth: w.depth, floors: w.floors, half: w.half, pitch: w.pitch}));
   const openings = Array.isArray(a.openings) ? a.openings.filter(o => o && typeof o === "object") : [];
   if (openings.length) {
     settings.windows = openings.map(o => {

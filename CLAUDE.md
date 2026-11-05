@@ -26,7 +26,8 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   wall under the eaves (width clamped to stay under their overhang), on a gable end an annex. model.mjs build():
   WINGS = [{wing, WG, topW}], buildWingBody/Roof per wing, wing walls built with their own height. Old saves (wing,
   wingWall ...; walls wingEnd...) migrate to wing 1 in sanitize. Windows under a wing are hidden (layoutWall cover).
-  Editor: Wings section (list, add, per-wing sliders, floors, remove). The wings' insides are still closed (4b: one
+  Per wing also pitch (0 = the house's; the valley is b = k + |a| tanW/tanP) and half (1½-plan, own setting once floors != 0).
+  Editor: Wings section (list, add, per-wing sliders, floors, half floor, roof angle, remove). The wings' insides are still closed (4b: one
   room across all parts is next); geo.wings; test/wing.test.mjs, flicker test covers wings.
   Game objects (PLAN step 2, done): src/editor/objects.mjs; p.objects = boxes {id, type, x, z, w, d, h, ix, iz} (sleep,
   food, bales, loading, pallets, info) and the pasture {type: "pasture", wall, a (m from the wall's start), b (m from its

@@ -41,11 +41,16 @@ const ROOF_T = 0.16;
 /** A wing's own number of floors: the house's, or fewer (a lower wing). */
 export const wingFloors = (P, w) => Math.max(1, Math.min(P.floors, Math.round(+w.floors || P.floors)));
 /** A wing's wall height (the house's own floors' and knee wall when it is as tall as the house). */
-export const wingHeight = (P, w) => { const n = wingFloors(P, w); return n * P.floorHeight + (P.halfStorey && n === P.floors ? P.kneeWall : 0); };
+/** Whether a wing has a half floor in its roof (1½-plan): its own setting, or the house's when it follows the house (floors 0). */
+export const wingHalf = (P, w) => !!(+w.floors ? w.half : P.halfStorey);
+/** A wing's roof pitch in degrees: its own (5 to 60), or the house's when 0. */
+export const wingPitch = (P, w) => +w.pitch > 0 ? Math.min(60, Math.max(5, +w.pitch)) : P.roofPitch;
+/** A wing's wall height: its floors, and the knee wall when it has a half floor. */
+export const wingHeight = (P, w) => wingFloors(P, w) * P.floorHeight + (wingHalf(P, w) ? P.kneeWall : 0);
 /**
  * The house's wings (P.wings: {id, wall, pos, width, depth, floors}), each as {id, ...} or {id, off: why}.
  * A wing that fits has: type, wall, s0, s1 (along that wall), sc, ww (width), wd (length out), floors,
- * H (wall height), frames {w1End, w1Left, w1Right}, rect {x0, x1, z0, z1}, at(s, d).
+ * half (1½-plan), pitch, tanW (its own roof pitch), H (wall height), frames {w1End, w1Left, w1Right}, rect {x0, x1, z0, z1}, at(s, d).
  * type: "valley" on a wall along the ridge when its roof reaches the house's slope (it meets it in a valley),
  * "eave" when it is lower than that (its roof runs up to the wall under the eaves), "gable" on a gable end
  * (a lower annex under the gable), "flat" under a flat roof. A wing has the house's roof pitch and overhang,
@@ -60,6 +65,7 @@ export function wingsOf(P) {
   const top = F + P.floors * P.floorHeight + (P.halfStorey ? P.kneeWall : 0), eaveY = top - o * tanP;
   for (const w of P.wings.slice(0, MAX_WINGS)) {
     const key = main[w.wall] ? w.wall : "back", m = main[key], floors = wingFloors(P, w), Hw = wingHeight(P, w), topW = F + Hw;
+    const pitch = wingPitch(P, w), tanW = Math.tan(pitch * Math.PI / 180);
     const alongRidge = (Math.abs(m.u[0]) > 0.5) === ridgeX;
     let type, half, maxW = Infinity;
     if (P.roofType === "flat") { type = "flat"; half = m.L / 2; }
@@ -67,7 +73,7 @@ export function wingsOf(P) {
       half = (P.roofType === "hip" ? Lr / 2 + o : Lr / 2 + Math.min(o, 0.5)) - o;
       // as wide as it is, its ridge is at topW + ww/2 tan: at the house's eaves or above it meets the slope (valley);
       // a lower wing runs up to the wall under the eaves, and stays under their overhang
-      const wMin = 2 * (eaveY - topW) / tanP, wEave = 2 * (eaveY - ROOF_T - 0.1 - topW) / tanP;
+      const wMin = 2 * (eaveY - topW) / tanW, wEave = 2 * (eaveY - ROOF_T - 0.1 - topW) / tanW;
       if (w.width < wMin) { type = "eave"; maxW = wEave; } else { type = "valley"; maxW = span; }
     } else if (P.roofType === "gable") {
       type = "gable";
@@ -87,10 +93,10 @@ export function wingsOf(P) {
     };
     const a = at(s0, 0), b = at(s1, wd);
     const rect = {x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]), z0: Math.min(a[2], b[2]), z1: Math.max(a[2], b[2])};
-    // one that overlaps an earlier wing (two on one wall, or two meeting at a corner) isn't built
-    const clash = out.find(q => q.rect && q.rect.x0 < rect.x1 - 0.05 && rect.x0 < q.rect.x1 - 0.05 && q.rect.z0 < rect.z1 - 0.05 && rect.z0 < q.rect.z1 - 0.05);
-    if (clash) { out.push({id, off: "It overlaps another wing: move it along the wall or onto another wall."}); continue; }
-    out.push({id, type, wall: key, s0, s1, sc, ww, wd, floors, H: Hw, frames, rect, at});
+    // one that overlaps an earlier wing, eaves and all (two on one wall too close, or two meeting at a corner), isn't built
+    const g = o - 0.05, clash = out.find(q => q.rect && q.rect.x0 - o < rect.x1 + g && rect.x0 - o < q.rect.x1 + g && q.rect.z0 - o < rect.z1 + g && rect.z0 - o < q.rect.z1 + g);
+    if (clash) { out.push({id, off: "It is too close to another wing (their eaves would touch): move it along the wall or onto another wall."}); continue; }
+    out.push({id, type, wall: key, s0, s1, sc, ww, wd, floors, half: wingHalf(P, w), pitch, tanW, H: Hw, frames, rect, at});
   }
   return out;
 }

@@ -120,6 +120,9 @@ test("no flickering faces on a house with wings (L, T, U, lower, against a gable
     {width: 14, wings: [wing("back", 0), wing("back", 1, {width: 5})]}, {width: 12, wings: [wing("back", 0.15), wing("front", 0.85)]},
     {wings: [wing("back", 0.2, {floors: 1, width: 5})]}, {wings: [wing("back", 0.2, {floors: 1, width: 7})]}, {wings: [wing("left", 0.5, {floors: 1, width: 4})]},
     {floors: 3, wings: [wing("back", 0.2, {floors: 1, width: 5}), wing("front", 0.8, {floors: 2})]},
+    // their own roof angle and a half floor
+    {wings: [wing("back", 0.15, {pitch: 25}), wing("front", 0.85, {pitch: 50, width: 5})]}, {wings: [wing("back", 0.5, {floors: 1, half: true, pitch: 45, width: 5})]},
+    {wings: [wing("left", 0.5, {floors: 1, half: true, pitch: 30, width: 4})]}, {width: 12, wings: [wing("back", 0.05, {pitch: 55, width: 4}), wing("back", 0.95, {pitch: 20, width: 5})]},
   ];
   for (const c of cases) {
     let p = sanitize({...c});
