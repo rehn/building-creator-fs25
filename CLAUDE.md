@@ -27,6 +27,9 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   WINGS = [{wing, WG, topW}], buildWingBody/Roof per wing, wing walls built with their own height. Old saves (wing,
   wingWall ...; walls wingEnd...) migrate to wing 1 in sanitize. Windows under a wing are hidden (layoutWall cover).
   Per wing also pitch (0 = the house's; the valley is b = k + |a| tanW/tanP) and half (1½-plan, own setting once floors != 0).
+  Downpipes: p.pipes = [{id, wall, pos 0..1 along the wall}] on walls with a gutter (layout.mjs eaveWalls: a gable roof's two
+  eave walls, all four under hip, each wing's sides); autoPipes(p) from the downpipes count when a save has none; skipped where
+  a wing stands against the wall; Downpipes section (count per wall, move one, place again).
   Editor: Wings section (list, add, per-wing sliders, floors, half floor, roof angle, remove). The wings' insides are still closed (4b: one
   room across all parts is next); geo.wings; test/wing.test.mjs, flicker test covers wings.
   Game objects (PLAN step 2, done): src/editor/objects.mjs; p.objects = boxes {id, type, x, z, w, d, h, ix, iz} (sleep,

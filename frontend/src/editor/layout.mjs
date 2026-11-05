@@ -318,3 +318,41 @@ export function furnisher(room, catalog) {
   };
   return {items, add, freeAlong, longest, onWall, onFloor, freeLine};
 }
+
+/* ---------- Downpipes ---------- */
+/** Most downpipes a house can have in all. */
+export const MAX_PIPES = 24;
+/** The walls with a gutter along them (a downpipe goes on one): a gable roof's two eave walls, all four under a hip roof, and each wing's two sides. */
+export function eaveWalls(P) {
+  if (P.roofType === "flat") return [];
+  const ridgeX = P.roofType === "hip" ? P.width >= P.depth : P.ridge === "width";
+  const main = P.roofType === "hip" ? ["front", "back", "left", "right"] : ridgeX ? ["front", "back"] : ["left", "right"];
+  return [...main, ...liveWings(P).filter(w => w.type !== "flat").flatMap(w => [wingWallKey(w.id, "Left"), wingWallKey(w.id, "Right")])];
+}
+/** n downpipes spread along a wall of length L as fractions 0..1: at the ends (30 cm in), then evenly between; one goes at the right end. */
+export function pipePositions(L, n) {
+  const e = Math.min(0.4, 0.3 / Math.max(L, 0.5));
+  return n <= 0 ? [] : n === 1 ? [1 - e] : Array.from({length: n}, (_, i) => e + (1 - 2 * e) * i / (n - 1));
+}
+/**
+ * The downpipes a new house starts with, [{id, wall, pos}]: P.downpipes (0 to 2) on each eave wall of the house (one is at
+ * the right end of the first wall and the left end of the second), and one at the far end of each wing's sides.
+ */
+export function autoPipes(P) {
+  if (!P.gutters || !P.downpipes) return [];
+  const walls = wallsOf(P), out = [];
+  const add = (wall, pos) => out.push({id: out.length + 1, wall, pos: +pos.toFixed(3)});
+  eaveWalls(P).forEach((key, i) => {
+    const L = walls[key].L, wid = wingIdOf(key);
+    if (wid) { const [e] = pipePositions(L, 1); add(key, key.endsWith("Left") ? e : 1 - e); return; }
+    const ps = pipePositions(L, P.downpipes);
+    (P.downpipes === 1 && i % 2 ? [1 - ps[0]] : ps).forEach(pos => add(key, pos));
+  });
+  return out;
+}
+/** A list of downpipes cleaned: on a wall with a gutter, a place 0..1 along it, at most MAX_PIPES. */
+export function cleanPipes(arr, P) {
+  const ok = new Set(eaveWalls(P));
+  return (Array.isArray(arr) ? arr : []).filter(x => x && ok.has(x.wall)).slice(0, MAX_PIPES)
+    .map((x, i) => ({id: i + 1, wall: x.wall, pos: +Math.min(1, Math.max(0, Number.isFinite(+x.pos) ? +x.pos : 0.5)).toFixed(3)}));
+}

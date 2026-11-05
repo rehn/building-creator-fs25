@@ -3,7 +3,7 @@
 // Pure functions with no DOM or three.js, so they run (and are tested) in Node.
 import { I3dDoc, tg, shape, refNode, boxMesh, splitByColor, mappingsFor, num, v3 } from "./i3d.mjs";
 import { KINDS, kindOf } from "./kinds/index.mjs";
-import { WALL_T, wallFrames, wallsOf, liveWings, wingsOf, wingHeight, wingFloors, wingHalf, wingIdOf, WING_PARTS, MAX_WINGS, WING_WALLS, wingWallKey, openingSpan, roomOf, footprint, toWorld, cleanItems, problems } from "./layout.mjs";
+import { WALL_T, wallFrames, wallsOf, liveWings, wingsOf, wingHeight, wingFloors, wingHalf, wingIdOf, eaveWalls, autoPipes, cleanPipes, WING_PARTS, MAX_WINGS, WING_WALLS, wingWallKey, openingSpan, roomOf, footprint, toWorld, cleanItems, problems } from "./layout.mjs";
 import { withAssets, placement, assetFolder } from "./assets.mjs";
 import { SURFACES } from "./surfaces.mjs";
 import { agedColor } from "./age.mjs";
@@ -74,8 +74,9 @@ const SHARED_SECTIONS = [
     {k:"overhang", label:"Overhang", min:0, max:1.2, step:0.05, unit:" m"},
     {k:"chimney", label:"Chimney", type:"check"},
     {k:"gutters", label:"Rain gutters", type:"check"},
-    {k:"downpipes", label:"Downpipes per long side", min:0, max:2, step:1},
+    {k:"downpipes", label:"Downpipes per long side (a new house starts with this; place them one by one under Downpipes)", min:0, max:2, step:1},
     {k:"ventilators", label:"Roof ventilators (lanterns on the ridge)", min:0, max:4, step:1}]},
+  {title:"Downpipes", side:"build", custom:"pipes", hint:"Where the downpipes go: how many on each wall with a gutter, and where along it. Change \"Downpipes per long side\" under Roof to place them again.", fields:[]},
   {title:"Kupor (dormers)", side:"build", custom:"dormers", fields:[]},
   {title:"Windows", side:"build", custom:"windows", hint:"Set how many windows each floor has. To change one window or door, move it to another wall, turn a window into a door or give a door a porch, choose it below or tap it in the preview.", fields:[
     {k:"winStyle", label:"Style", type:"select", options:WINDOW_STYLES.map(s => [s.id, s.name])},
@@ -299,6 +300,8 @@ export function sanitize(obj) {
   if (!ws.some(w => w.type === "door" && walls[w.wall])) ws = cleanWindows([...ws, legacyDoor(obj, out, kind)]);
   out.windows = Array.isArray(src) ? ws : genAll(out, obj, ws);
   out.dormers = Array.isArray(obj.dormers) ? cleanDormers(obj.dormers) : [];
+  // the downpipes: the save's, or placed from the house's count per side (saves from before they were a list)
+  out.pipes = Array.isArray(obj.pipes) ? cleanPipes(obj.pipes, out) : autoPipes(out);
   // where the player moved the game places (sleep point, feed pad ...), one entry per place of the kind
   // the game objects (sleep point, feed pad, pasture ...): the save's, or where the kind puts them to start with
   // (from the settings of before they were objects: the pasture's wall and depth, the sleep point on or off)
@@ -1570,13 +1573,6 @@ function build() {
         // from just outside the house's gutter, which runs through the corner (crossing, their bottoms would
         // flicker), or from the wall
         gutterRun(Mw(valley ? xE + 2 * r - 0.015 : x0 + 0.01, yT, bg), Mw(xF - 0.01, yT, bg), Ml(0, 0, sg), r);
-        if (!p.downpipes) continue;
-        // a downpipe at the far end of each side
-        const ap = xWall - 0.3, bw = sg * (wing.ww / 2 + 0.09), yb = yT - r;
-        const route = [Mw(ap, yb + 0.03, bg), Mw(ap, yb - 0.12, bg), Mw(ap, yb - 0.12 - Math.abs(bg - bw) * 0.9, bw), Mw(ap, 0.3, bw), Mw(ap, 0.1, sg * (wing.ww / 2 + 0.28))];
-        downpipes.push({path: route, r: 0.045});
-        addMesh("gutter", pipeMesh(route, 0.045));
-        for (let y = 1.0; y < route[2][1] - 0.4; y += 1.6) abox("gutter", Mw(ap - 0.015, y, sg * wing.ww / 2), Mw(ap + 0.015, y + 0.04, bw));
       }
     }
   }
@@ -1658,20 +1654,29 @@ function build() {
       for (const [x0, x1] of segs(-gEnd, gEnd, gCuts)) gutterRun(M(x0, yT, bg), M(x1, yT, bg), M(0, 0, s), r);
       // (the end gutters stop 2 cm short of the eaves' boards: their ends in the boards' plane would flicker)
       if (hip) { const ag = s * (hA + r - 0.02); gutterRun(M(ag, yT, -hB + 0.02), M(ag, yT, hB - 0.02), M(s, 0, 0), r); }
-      const bw = s * (span/2 + 0.09), yb = yT - r;
-      const ends = p.downpipes === 2 ? [-1, 1] : p.downpipes === 1 ? [s] : [];
-      for (const e of ends) {
-        const ap = e * (Lr/2 - 0.3);
-        if (cutsFor(s).some(([c0, c1]) => ap > c0 - 0.2 && ap < c1 + 0.2)) continue;
-        const q0 = M(ap, yb + 0.03, bg), q1 = M(ap, yb - 0.12, bg);
-        const q2 = M(ap, yb - 0.12 - Math.abs(bg - bw) * 0.9, bw);
-        const q3 = M(ap, 0.3, bw), q4 = M(ap, 0.1, s * (span/2 + 0.28));
-        // One pipe with rounded elbows: out of the gutter, in to the wall, down, and out at the foot.
-        const route = [q0, q1, q2, q3, q4];
-        downpipes.push({path: route, r: 0.045});
-        addMesh("gutter", pipeMesh(route, 0.045));
-        for (let y = 1.0; y < q2[1] - 0.4; y += 1.6) abox("gutter", M(ap - 0.015, y, s * span/2), M(ap + 0.015, y + 0.04, bw));
-      }
+    }
+  }
+
+  // The downpipes (p.pipes): each on a wall with a gutter, at its place along the wall. One pipe with rounded elbows: out of the
+  // gutter, in to the wall, down, and out at the foot. Not where a wing stands against the wall, or under its valley.
+  if (p.gutters && p.roofType !== "flat") {
+    const r = 0.065, eave = new Set(eaveWalls(p));
+    for (const pp of p.pipes || []) {
+      const f = eave.has(pp.wall) && opsByWall[pp.wall] && opsByWall[pp.wall].w;
+      if (!f) continue;
+      const wid = wingIdOf(pp.wall), item = wid ? WINGS.find(x => x.wing.id === wid) : null;
+      let s = Math.min(f.L - 0.15, Math.max(0.15, pp.pos * f.L));
+      if (item) {
+        // on a wing's side: beyond its valley, wherever along the side it stands
+        const {WG} = item, minS = (WG && WG.valley ? WG.k + WG.eW * WG.r - WG.x0 : 0) + 0.3;
+        s = pp.wall.endsWith("Left") ? Math.max(s, minS) : Math.min(s, f.L - minS);
+      } else if (liveWings(p).some(w => w.wall === pp.wall && s > w.s0 - 0.2 && s < w.s1 + 0.2)) continue;
+      const yT = (item && item.WG ? item.WG.eaveW : eaveY) - 0.06, yb = yT - r, dg = o + r - 0.02, dw = 0.09, df = 0.28;
+      const P = (y, d) => [f.o[0] + f.u[0] * s + f.n[0] * d, y, f.o[2] + f.u[2] * s + f.n[2] * d];
+      const route = [P(yb + 0.03, dg), P(yb - 0.12, dg), P(yb - 0.12 - Math.abs(dg - dw) * 0.9, dw), P(0.3, dw), P(0.1, df)];
+      downpipes.push({path: route, r: 0.045});
+      addMesh("gutter", pipeMesh(route, 0.045));
+      for (let y = 1.0; y < route[2][1] - 0.4; y += 1.6) wbox("gutter", f, s - 0.015, s + 0.015, y - F, y - F + 0.04, 0, dw);
     }
   }
 

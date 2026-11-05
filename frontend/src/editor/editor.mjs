@@ -9,7 +9,7 @@ import {
 import { WINDOW_STYLES, DOOR_STYLES, PORCH_OPTIONS, PORCH_W, PORCH_D, WING_FIELDS, MAX_WINGS } from "./model.mjs";
 import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, henYard, henCap, seeThroughGlass, kindOf } from "./model.mjs";
 import { cowYard } from "./kinds/cow.mjs";
-import { roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, History, wingsOf, liveWings, wingFloors, wingHalf, wingIdOf, wingWallKey, WING_PARTS, wallsOf } from "./layout.mjs";
+import { roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, History, wingsOf, liveWings, wingFloors, wingHalf, wingIdOf, wingWallKey, WING_PARTS, wallsOf, eaveWalls, autoPipes, pipePositions } from "./layout.mjs";
 import { OBJECT_TYPES, OBJECT_LIMITS, objectOf, pastureOf, snapBox, snapPasture, objectProblems } from "./objects.mjs";
 import { setAssets, catalogFor, usedAssets } from "./model.mjs";
 import { readObj, assetFolder, flattenI3d } from "./assets.mjs";
@@ -148,6 +148,8 @@ SCHEMA.forEach(g => {
     input.addEventListener("input", () => {
       let v = f.type === "check" ? input.checked : (f.type === "select" || f.type === "color" || f.type === "text") ? input.value : +input.value;
       p[f.k] = v;
+      // the downpipes are placed again when their count per side or the gutters change
+      if (f.k === "downpipes" || f.k === "gutters") p.pipes = autoPipes(p);
       // Mod details don't change the house, so skip the rebuild.
       if (f.k.startsWith("mod")) { syncOutputs(); persist(); return; }
       if (f.k === "halfStorey" && v) p.windows = p.windows.filter(w => !(w.floor >= p.floors && !gableWall(w.wall)));
@@ -157,9 +159,11 @@ SCHEMA.forEach(g => {
       if (ruled) syncControls(); else syncOutputs();
       persist(); rebuild(false);
       if (["floors", "halfStorey", "roofType", "ridge", "interior", "curtainStyle", "curtainColor", "winStyle", "doorStyle"].includes(f.k)) { renderWinUI(); renderDormUI(); renderWingsUI(); }
+      renderPipesUI();
       if (ob.sel || ob.on) renderObjectsUI();
     });
   });
+  if (g.custom === "pipes") { const ed = document.createElement("div"); ed.id = "pipesEditor"; d.appendChild(ed); }
   if (g.custom === "wings") { const ed = document.createElement("div"); ed.id = "wingsEditor"; d.appendChild(ed); }
   if (g.custom === "dormers") { const ed = document.createElement("div"); ed.id = "dormEditor"; d.appendChild(ed); }
   if (g.custom === "inside") { const ed = document.createElement("div"); ed.id = "insideEditor"; d.appendChild(ed); }
@@ -187,6 +191,7 @@ function syncControls() {
   renderDormUI();
   renderObjectsUI();
   renderWingsUI();
+  renderPipesUI();
 }
 function syncOutputs() {
   for (const k in inputs) {
@@ -747,6 +752,49 @@ function renderWinUI() {
   }
 }
 /* ---------- Game places ---------- */
+/* ---------- Downpipes ---------- */
+// The downpipes (p.pipes): how many on each wall with a gutter, and where along it.
+let pipeSel = null;
+const renumber = list => list.map((x, i) => ({...x, id: i + 1}));
+const pipeLabel = (x, list) => `${WALL_NAMES[x.wall]}, ${list.filter(y => y.wall === x.wall).sort((a, b) => a.pos - b.pos).indexOf(x) + 1}`;
+function renderPipesUI() {
+  const ed = $("pipesEditor");
+  if (!ed) return;
+  if (!p.gutters || p.roofType === "flat") { ed.innerHTML = `<p class="hint">${p.roofType === "flat" ? "A flat roof has no gutters or downpipes." : "Turn on Rain gutters under Roof to place downpipes."}</p>`; return; }
+  const keys = eaveWalls(p), walls = wallsOf(p), pipes = (p.pipes || []).filter(x => keys.includes(x.wall));
+  let out = null;
+  if (!pipes.some(x => x.id === pipeSel)) pipeSel = null;
+  let html = `<table class="wgrid"><thead><tr><th scope="col"><span class="sr">Wall</span></th><th scope="col">Downpipes</th></tr></thead><tbody>`;
+  for (const k of keys) {
+    const n = pipes.filter(x => x.wall === k).length, nm = WALL_NAMES[k];
+    html += `<tr><th scope="row">${nm}</th><td><div class="step"><button type="button" data-pw="${k}" data-d="-1" aria-label="Fewer downpipes: ${nm}" ${n ? "" : "disabled"}>\u2212</button><span>${n}</span><button type="button" data-pw="${k}" data-d="1" aria-label="More downpipes: ${nm}" ${n >= 6 ? "disabled" : ""}>+</button></div></td></tr>`;
+  }
+  html += `</tbody></table>`;
+  const list = [...pipes].sort((a, b) => keys.indexOf(a.wall) - keys.indexOf(b.wall) || a.pos - b.pos);
+  html += `<div class="field"><div class="fl"><label for="pipeSel">Move a downpipe</label></div><select id="pipeSel"><option value="">Choose one</option>${list.map(x => `<option value="${x.id}" ${x.id === pipeSel ? "selected" : ""}>${esc(pipeLabel(x, pipes))}</option>`).join("")}</select></div>`;
+  const s = pipes.find(x => x.id === pipeSel);
+  if (s) {
+    const L = walls[s.wall].L;
+    out = v => `${(v * L).toFixed(2)} m from the left`;
+    html += `<div class="wincard"><div class="field"><div class="fl"><label for="pipePos">Place along the wall</label><output id="pipePos-o">${out(s.pos)}</output></div><input type="range" id="pipePos" min="0" max="1" step="0.005" value="${s.pos}"></div>`
+      + `<p class="hint">Seen from outside, from the wall’s left end. A pipe can’t stand where a wing meets the wall.</p><div class="row"><button type="button" id="pipeRemove" class="danger">Remove this downpipe</button></div></div>`;
+  }
+  html += `<button type="button" id="pipeAuto">Place them again from “Downpipes per long side”</button>`;
+  ed.innerHTML = html;
+  const save = () => { persist(); rebuild(false); renderPipesUI(); };
+  ed.querySelectorAll("[data-pw]").forEach(b => b.onclick = () => {
+    const k = b.dataset.pw, n = pipes.filter(x => x.wall === k).length + (+b.dataset.d);
+    p.pipes = renumber([...(p.pipes || []).filter(x => x.wall !== k), ...pipePositions(walls[k].L, n).map(pos => ({wall: k, pos: +pos.toFixed(3)}))]);
+    pipeSel = null; save();
+  });
+  $("pipeSel").onchange = e => { pipeSel = +e.target.value || null; renderPipesUI(); };
+  $("pipeAuto").onclick = () => { p.pipes = autoPipes(p); pipeSel = null; save(); toast("Downpipes placed again"); };
+  if (!s) return;
+  const mine = () => (p.pipes || []).find(x => x.id === pipeSel);
+  $("pipePos").oninput = e => { const x = mine(); x.pos = +e.target.value; $("pipePos-o").textContent = out(x.pos); persist(); rebuild(false); };
+  $("pipePos").onchange = () => save();
+  $("pipeRemove").onclick = () => { p.pipes = renumber((p.pipes || []).filter(x => x.id !== pipeSel)); pipeSel = null; save(); };
+}
 /* ---------- Wings ---------- */
 // The house's wings (an L, T or U): a list in the Wings section, each with its wall, place, size and floors.
 let wSel = null;
@@ -771,7 +819,12 @@ function renderWingsUI() {
       + `<p class="hint">A wing with fewer floors, or a flatter roof, has a lower roof. Roof angle 0 follows the house.</p><div class="row"><button type="button" id="wingRemove" class="danger">Remove this wing</button></div></div>`;
   }
   ed.innerHTML = html;
-  const changed = (renderToo = true) => { persist(); rebuild(false); if (renderToo) { renderWingsUI(); renderWinUI(); } };
+  const changed = (renderToo = true) => {
+    // (a removed wing takes its downpipes with it)
+    const ids = new Set(liveWings(p).map(x => x.id));
+    p.pipes = (p.pipes || []).filter(x => !wingIdOf(x.wall) || ids.has(wingIdOf(x.wall)));
+    persist(); rebuild(false); if (renderToo) { renderWingsUI(); renderWinUI(); renderPipesUI(); }
+  };
   ed.querySelectorAll("[data-wing]").forEach(b => b.onclick = () => { wSel = +b.dataset.wing; renderWingsUI(); });
   if ($("wingAdd")) $("wingAdd").onclick = () => {
     const id = [1, 2, 3, 4].find(i => !wings.some(x => x.id === i));
