@@ -119,7 +119,7 @@ const hanger = (c, x, z, y) => { c.paint(COOP.wire, "steel"); c.rod([x, y, z], [
 const nestDepth = 0.6, perchReach = tiers => 0.25 + 0.3 * (tiers - 1) + 0.05;
 const CATALOG = {
   nests: {name: "Nest boxes", mount: "wall", collision: true,
-    params: [{k: "count", label: "Boxes per row", min: 1, max: 30, step: 1}, {k: "tiers", label: "Rows", min: 1, max: 3, step: 1}],
+    params: [{k: "count", label: "Boxes per row", min: 1, max: 60, step: 1}, {k: "tiers", label: "Rows", min: 1, max: 3, step: 1}],
     defaults: {count: 6, tiers: 1},
     size: it => [it.count * 0.35, nestDepth], height: it => 0.5 + it.tiers * 0.42,
     build(c, it) {
@@ -229,7 +229,7 @@ const CATALOG = {
       hanger(c, -0.01, 0, 0.46);
     }},
   trough: {name: "Feeder trough", mount: "floor",
-    params: [{k: "length", label: "Length", min: 1, max: 30, step: 0.1, unit: " m"}], defaults: {length: 4},
+    params: [{k: "length", label: "Length", min: 1, max: 60, step: 0.1, unit: " m"}], defaults: {length: 4},
     size: it => [it.length, 0.2], height: () => 0.4,
     build(c, it) {
       const L = it.length, xA = -L / 2 + 0.01, xB = L / 2 - 0.01;
@@ -252,7 +252,7 @@ const CATALOG = {
       for (let x = xA + 0.25; x < xB; x += 1.5) { c.box(x - 0.01, x + 0.01, -0.085, 0.085, 0.36, 0.37); hanger(c, x, 0, 0.37); }
     }},
   nipples: {name: "Nipple drinker line", mount: "floor",
-    params: [{k: "length", label: "Length", min: 1, max: 30, step: 0.1, unit: " m"}], defaults: {length: 4},
+    params: [{k: "length", label: "Length", min: 1, max: 60, step: 0.1, unit: " m"}], defaults: {length: 4},
     size: it => [it.length, 0.1], height: () => 0.55,
     build(c, it) {
       const L = it.length, xA = -L / 2 + 0.01, xB = L / 2 - 0.01;

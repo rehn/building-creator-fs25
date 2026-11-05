@@ -27,7 +27,7 @@ test("places: every kind lists its game places; each building keeps an adjustmen
   // cleaned: unknown places and values dropped, numbers in range
   const q = hen({places: {food: {wall: "roof", along: 99, out: "x", width: -3, depth: 0.1, height: 50, iconAlong: 3}, evil: {}}});
   assert.deepEqual(Object.keys(q.places), ids.chicken);
-  assert.deepEqual(q.places.food, {...PLACE_DEFAULT, along: 20, width: 0, depth: 0.5, height: 8, iconAlong: 3});
+  assert.deepEqual(q.places.food, {...PLACE_DEFAULT, along: 35, width: 0, depth: 0.5, height: 8, iconAlong: 3});
 });
 
 test("places: the hen house's feed pad moves along and out from its wall, takes a size, and its icon follows", () => {

@@ -14,8 +14,9 @@ test("sanitize: empty input gives the defaults plus generated windows", () => {
 
 test("sanitize: numbers are clamped to their range and snapped to the step", () => {
   const p = sanitize({ width: 999, depth: -5, roofPitch: 37.4 });
-  assert.equal(p.width, 30);
+  assert.equal(p.width, 60, "a long barn can be 60 m");
   assert.equal(p.depth, 2.5);
+  assert.equal(sanitize({ depth: 999 }).depth, 30);
   assert.equal(p.roofPitch, 37);
 });
 

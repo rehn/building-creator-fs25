@@ -175,3 +175,22 @@ test("roof: ventilators stand on the ridge, a Swedish barn's lantern", () => {
 
 /** The wall of the building's first door. */
 function firstDoorWall(p) { return p.windows.find(w => w.type === "door" && w.floor === 0).wall; }
+
+test("cows: a 60 m barn builds, fills and exports, and its places can move along the whole wall", async () => {
+  const { PLACE_LIMITS } = await import("../src/editor/places.mjs");
+  const p = sanitize({ ...PRESETS.find(x => x.id === "ladugard").settings, width: 60, depth: 14, cows: 100 });
+  assert.equal(p.width, 60);
+  const geo = buildGeometry(p);
+  assert.equal(problems(p.items, KIND.cow.catalog, roomOf(p, KIND.cow.openings(p))).size, 0, "the inside fits");
+  assert.ok(p.items.length > 0);
+  // the troughs along a 60 m wall are long pieces; they stay within the room
+  const room = roomOf(p);
+  for (const it of p.items) assert.ok(it.x >= room.x0 - 0.01 && it.x <= room.x1 + 0.01 && it.z >= room.z0 - 0.01 && it.z <= room.z1 + 0.01, it.type);
+  const troughs = p.items.filter(it => it.length);
+  assert.ok(troughs.some(it => it.length > 20), "the troughs run along the long wall: " + troughs.map(t => t.type + " " + t.length).join(", "));
+  const xml = buildI3d(p, {});
+  assert.ok(xml.length > 1000);
+  assert.ok(PLACE_LIMITS.along[1] >= 30, "a place can go to the end of a 60 m wall");
+  assert.ok(PLACE_LIMITS.width[1] >= 64, "the info area can cover a 60 m barn");
+  assert.ok(geo);
+});

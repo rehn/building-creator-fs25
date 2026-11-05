@@ -161,7 +161,7 @@ const CATALOG = {
       c.rod([-w / 2 + 0.03, 1.205, z0 + 1.05], [w / 2 - 0.03, 1.205, z0 + 1.05], 0.025, 8);
     }},
   feedfence: {name: "Feeding fence (foderhäck)", mount: "floor", collision: true,
-    params: [{k: "length", label: "Length", min: 2, max: 30, step: 0.1, unit: " m"}], defaults: {length: 6},
+    params: [{k: "length", label: "Length", min: 2, max: 60, step: 0.1, unit: " m"}], defaults: {length: 6},
     size: it => [it.length, 0.5], height: () => 1.3,
     build(c, it) {
       const L = it.length, xA = -L / 2, xB = L / 2;

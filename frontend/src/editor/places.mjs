@@ -11,7 +11,7 @@
  */
 export const PLACE_DEFAULT = {wall: "auto", along: 0, out: 0, width: 0, depth: 0, height: 0, iconAlong: 0, iconOut: 0};
 /** Limits: [min, max]. A size of 0 is "the kind's own". */
-export const PLACE_LIMITS = {along: [-20, 20], out: [-20, 20], width: [0.5, 30], depth: [0.5, 30], height: [0.2, 8], iconAlong: [-10, 10], iconOut: [-10, 10]};
+export const PLACE_LIMITS = {along: [-35, 35], out: [-20, 20], width: [0.5, 70], depth: [0.5, 70], height: [0.2, 8], iconAlong: [-10, 10], iconOut: [-10, 10]};
 const WALL_KEYS = ["front", "back", "left", "right"];
 
 const num = (v, d) => { v = +v; return isFinite(v) ? v : d; };

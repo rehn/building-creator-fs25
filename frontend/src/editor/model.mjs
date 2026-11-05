@@ -55,8 +55,8 @@ const pickColor = v => typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v) ? v : 
 const SHARED_SECTIONS = [
   // side: where the editor shows the section, "build" (left / first tab) or "finish" (right / second tab).
   {title:"Size", side:"build", fields:[
-    {k:"width", label:"Front wall length", min:2.5, max:30, step:0.1, unit:" m"},
-    {k:"depth", label:"Side wall length", min:2.5, max:25, step:0.1, unit:" m"},
+    {k:"width", label:"Front wall length", min:2.5, max:60, step:0.1, unit:" m"},
+    {k:"depth", label:"Side wall length", min:2.5, max:30, step:0.1, unit:" m"},
     {k:"floors", label:"Full floors", min:1, max:3, step:1},
     {k:"halfStorey", label:"Half floor in the roof (1\u00BD-plan)", type:"check"},
     {k:"kneeWall", label:"Knee wall height", min:0.2, max:1.6, step:0.05, unit:" m"},
@@ -1561,7 +1561,8 @@ export function placementAreas(geo, extra = []) {
     }
   }
   for (const r of extra) for (const x of [r.x0, r.x1]) for (const z of [r.z0, r.z1]) { ground.push([x, 0, z]); all.push([x, 0, z]); }
-  const lo = (pts, k) => Math.min(...pts.map(v => v[k])), hi = (pts, k) => Math.max(...pts.map(v => v[k]));
+  // a loop, not Math.min(...pts): a big building has more vertices than a call takes arguments
+  const lo = (pts, k) => pts.reduce((a, v) => Math.min(a, v[k]), Infinity), hi = (pts, k) => pts.reduce((a, v) => Math.max(a, v[k]), -Infinity);
   const clear = {x0: lo(ground, 0), x1: hi(ground, 0), z0: lo(ground, 2), z1: hi(ground, 2)};
   const m = LEVEL_MARGIN;
   return {
