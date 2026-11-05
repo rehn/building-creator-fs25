@@ -58,7 +58,7 @@ func (s *Server) createAsset(w http.ResponseWriter, r *http.Request, u store.Use
 		writeError(w, http.StatusBadRequest, "invalid_form", "Send the files as a form.")
 		return
 	}
-	var name, meta string
+	var name, meta, shared string
 	var files []store.AssetFileData
 	total := 0
 	for {
@@ -71,16 +71,19 @@ func (s *Server) createAsset(w http.ResponseWriter, r *http.Request, u store.Use
 			return
 		}
 		switch part.FormName() {
-		case "name", "meta":
+		case "name", "meta", "shared":
 			b, err := io.ReadAll(io.LimitReader(part, maxMetaBytes+1))
 			if err != nil {
 				tooBig(w, err)
 				return
 			}
-			if part.FormName() == "name" {
+			switch part.FormName() {
+			case "name":
 				name = string(b)
-			} else {
+			case "meta":
 				meta = string(b)
+			default:
+				shared = string(b)
 			}
 		case "files":
 			data, err := io.ReadAll(io.LimitReader(part, int64(maxAssetBytes-total+1)))
@@ -114,7 +117,14 @@ func (s *Server) createAsset(w http.ResponseWriter, r *http.Request, u store.Use
 		writeError(w, http.StatusBadRequest, "invalid_files", msg)
 		return
 	}
+	share := shared == "true"
+	if share && !canShare(w, u) {
+		return
+	}
 	a, err := s.st.CreateAsset(r.Context(), u.ID, name, json.RawMessage(meta), files)
+	if err == nil && share {
+		a, err = s.st.SetAssetShared(r.Context(), u.ID, a.ID, true)
+	}
 	if err != nil {
 		internalError(w, err)
 		return
@@ -167,9 +177,18 @@ func (s *Server) assetFile(w http.ResponseWriter, r *http.Request, u store.User)
 	w.Write(data)
 }
 
+// canShare: only the admin shares items with everyone. Writes the error and returns false otherwise.
+func canShare(w http.ResponseWriter, u store.User) bool {
+	if !u.IsAdmin {
+		writeError(w, http.StatusForbidden, "forbidden", "Only the admin can share items with everyone.")
+	}
+	return u.IsAdmin
+}
+
 type assetInput struct {
-	Name *string         `json:"name"`
-	Meta json.RawMessage `json:"meta"`
+	Name   *string         `json:"name"`
+	Meta   json.RawMessage `json:"meta"`
+	Shared *bool           `json:"shared"`
 }
 
 func (s *Server) updateAsset(w http.ResponseWriter, r *http.Request, u store.User) {
@@ -193,7 +212,13 @@ func (s *Server) updateAsset(w http.ResponseWriter, r *http.Request, u store.Use
 		}
 		meta = in.Meta
 	}
+	if in.Shared != nil && *in.Shared && !canShare(w, u) {
+		return
+	}
 	a, err := s.st.UpdateAsset(r.Context(), u.ID, r.PathValue("id"), in.Name, meta)
+	if err == nil && in.Shared != nil && *in.Shared != a.Shared {
+		a, err = s.st.SetAssetShared(r.Context(), u.ID, a.ID, *in.Shared)
+	}
 	if err != nil {
 		assetError(w, err)
 		return

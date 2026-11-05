@@ -11,11 +11,15 @@ import (
 // An Asset is an item a user imported to place in their buildings (a feeder made in Giants
 // Editor ...): its files (the i3d, its .shapes, an .obj for the preview, textures) and
 // settings the editor keeps in Meta (how it mounts, its size ...). The server only stores them.
+// A shared asset (the admin shares them) is listed for everyone, who can use its files; only
+// its owner can change or delete it.
 type Asset struct {
 	ID        string          `json:"id"`
 	Name      string          `json:"name"`
 	Meta      json.RawMessage `json:"meta"`
 	Files     []AssetFile     `json:"files"`
+	Shared    bool            `json:"shared"`
+	Mine      bool            `json:"mine"` // the user asking owns it
 	CreatedAt time.Time       `json:"createdAt"`
 	UpdatedAt time.Time       `json:"updatedAt"`
 }
@@ -56,7 +60,7 @@ func (s *Store) CreateAsset(ctx context.Context, userID int64, name string, meta
 
 // GetAsset returns an asset (without file contents) if it belongs to userID, else ErrNotFound.
 func (s *Store) GetAsset(ctx context.Context, userID int64, id string) (Asset, error) {
-	list, err := s.assets(ctx, `a.user_id = ? AND a.id = ?`, userID, id)
+	list, err := s.assets(ctx, userID, `a.user_id = ? AND a.id = ?`, userID, id)
 	if err != nil {
 		return Asset{}, err
 	}
@@ -66,13 +70,26 @@ func (s *Store) GetAsset(ctx context.Context, userID int64, id string) (Asset, e
 	return list[0], nil
 }
 
-// ListAssets returns a user's assets, the last changed first.
+// ListAssets returns a user's own assets and the shared ones, the last changed first.
 func (s *Store) ListAssets(ctx context.Context, userID int64) ([]Asset, error) {
-	return s.assets(ctx, `a.user_id = ?`, userID)
+	return s.assets(ctx, userID, `(a.user_id = ? OR a.shared)`, userID)
 }
 
-func (s *Store) assets(ctx context.Context, where string, args ...any) ([]Asset, error) {
-	rows, err := s.query(ctx, `SELECT a.id, a.name, a.meta, a.created_at, a.updated_at, f.name, f.size
+// SetAssetShared shares (or stops sharing) one of the user's assets. Who may share is the API's call.
+func (s *Store) SetAssetShared(ctx context.Context, userID int64, id string, shared bool) (Asset, error) {
+	res, err := s.exec(ctx, `UPDATE assets SET shared = ?, updated_at = ? WHERE id = ? AND user_id = ?`, shared, s.ms(), id, userID)
+	if err != nil {
+		return Asset{}, err
+	}
+	if n, _ := res.RowsAffected(); n != 1 {
+		return Asset{}, ErrNotFound
+	}
+	return s.GetAsset(ctx, userID, id)
+}
+
+// assets lists assets matching where, as seen by userID (Mine).
+func (s *Store) assets(ctx context.Context, userID int64, where string, args ...any) ([]Asset, error) {
+	rows, err := s.query(ctx, `SELECT a.id, a.name, a.meta, a.shared, a.user_id, a.created_at, a.updated_at, f.name, f.size
 		FROM assets a LEFT JOIN asset_files f ON f.asset_id = a.id
 		WHERE `+where+` ORDER BY a.updated_at DESC, a.id, f.pos`, args...)
 	if err != nil {
@@ -83,12 +100,13 @@ func (s *Store) assets(ctx context.Context, where string, args ...any) ([]Asset,
 	for rows.Next() {
 		var a Asset
 		var meta string
-		var created, updated int64
+		var created, updated, owner int64
 		var fname sql.NullString
 		var fsize sql.NullInt64
-		if err := rows.Scan(&a.ID, &a.Name, &meta, &created, &updated, &fname, &fsize); err != nil {
+		if err := rows.Scan(&a.ID, &a.Name, &meta, &a.Shared, &owner, &created, &updated, &fname, &fsize); err != nil {
 			return nil, err
 		}
+		a.Mine = owner == userID
 		if n := len(list); n == 0 || list[n-1].ID != a.ID {
 			a.Meta, a.Files = json.RawMessage(meta), []AssetFile{}
 			a.CreatedAt, a.UpdatedAt = time.UnixMilli(created), time.UnixMilli(updated)
@@ -140,11 +158,11 @@ func (s *Store) DeleteAsset(ctx context.Context, userID int64, id string) error 
 	})
 }
 
-// AssetFile returns the contents of one of a user's asset files, or ErrNotFound.
+// AssetFile returns the contents of a file of one of a user's assets or a shared one, or ErrNotFound.
 func (s *Store) AssetFile(ctx context.Context, userID int64, id, name string) ([]byte, error) {
 	var data []byte
 	err := s.queryRow(ctx, `SELECT f.data FROM asset_files f JOIN assets a ON a.id = f.asset_id
-		WHERE a.id = ? AND a.user_id = ? AND f.name = ?`, id, userID, name).Scan(&data)
+		WHERE a.id = ? AND (a.user_id = ? OR a.shared) AND f.name = ?`, id, userID, name).Scan(&data)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}

@@ -30,6 +30,9 @@ export interface Asset {
   name: string;
   meta: Record<string, unknown>;
   files: { name: string; size: number }[];
+  /** Shared with everyone (only the admin shares); only the owner (mine) can change it. */
+  shared: boolean;
+  mine: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -87,7 +90,7 @@ export const api = {
   assets: () => request<Asset[]>("GET", "/assets"),
   /** Imports an item: form fields name, meta (JSON) and files. */
   importAsset: (form: FormData) => send<Asset>("POST", "/assets", form),
-  updateAsset: (id: string, patch: { name?: string; meta?: Record<string, unknown> }) =>
+  updateAsset: (id: string, patch: { name?: string; meta?: Record<string, unknown>; shared?: boolean }) =>
     request<Asset>("PATCH", "/assets/" + encodeURIComponent(id), patch),
   deleteAsset: (id: string) => request<void>("DELETE", "/assets/" + encodeURIComponent(id)),
   assetFile: async (id: string, name: string) => {

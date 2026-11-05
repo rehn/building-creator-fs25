@@ -28,6 +28,8 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   (pure: readI3d, readObj, placement, withAssets ...), item types "asset:<id>"; model.mjs setAssets/
   catalogFor/usedAssets (items of unknown assets are kept as stand-ins, never dropped); exports pack
   the item files in items/<name>_<id>/ (not the .obj). src/editor/itemView.mjs = the page's 3D view.
+  The admin can share an item with everyone (assets.shared, added by a migration on open): listed
+  and usable by all, changed or deleted only by its owner; API sends shared and mine.
 - charts/house-to-i3d = Helm chart (SQLite on a PVC, or Postgres in-release/external);
   charts/test.sh renders and checks every setup.
 - docker-compose.yml runs api + web; CI in .github/workflows/ci.yml pushes
@@ -42,7 +44,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Frontend tests: cd frontend && npm test (node --test, no browser needed)
 
 ## Status
-- Go tests (51) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (203) pass.
+- Go tests (54) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (203) pass.
 - Cow barn (kinds/cow.mjs): cowHusbandryPasture (no milk, like cowBarnSmall), automatic water, feed
   and water troughs outside on the pasture wall (kind.outside), a plain walk-through doorway for the
   cows (openings with plain: true; tall openings get a collision gap), feed pad + bale trigger

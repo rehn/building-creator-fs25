@@ -182,7 +182,11 @@ func openPostgres(url string) (*Store, error) {
 		if _, err := tx.exec(context.Background(), `SELECT pg_advisory_xact_lock(7340211)`); err != nil {
 			return err
 		}
-		return execAll(context.Background(), tx.Tx, schemaPostgres)
+		if err := execAll(context.Background(), tx.Tx, schemaPostgres); err != nil {
+			return err
+		}
+		_, err := tx.exec(context.Background(), `ALTER TABLE assets ADD COLUMN IF NOT EXISTS shared BOOLEAN NOT NULL DEFAULT FALSE`)
+		return err
 	})
 	if err != nil {
 		db.Close()
@@ -223,7 +227,21 @@ func openSQLite(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("creating schema: %w", err)
 	}
+	if err := addColumnSQLite(db, "assets", "shared", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("updating schema: %w", err)
+	}
 	return &Store{db: db, dialect: sqlite, Now: time.Now}, nil
+}
+
+// addColumnSQLite adds a column to a table that doesn't have it yet (SQLite has no ADD COLUMN IF NOT EXISTS).
+func addColumnSQLite(db *sql.DB, table, column, def string) error {
+	var n int
+	if err := db.QueryRow(`SELECT count(*) FROM pragma_table_info(?) WHERE name = ?`, table, column).Scan(&n); err != nil || n > 0 {
+		return err
+	}
+	_, err := db.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + column + ` ` + def)
+	return err
 }
 
 // rebind turns ? placeholders (outside quoted strings) into $1, $2, ... for Postgres.

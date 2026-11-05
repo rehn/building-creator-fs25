@@ -836,12 +836,15 @@ function renderInsideUI() {
   } else {
     const it = selected(), def = it && cat[it.type];
     const fmtP = (f, v) => (+v).toFixed(f.step >= 1 ? 0 : 1) + (f.unit || "");
-    const entries = Object.entries(cat), mine = entries.filter(([, d]) => d.asset);
+    const entries = Object.entries(cat);
+    // the user's own items, and those the admin shares with everyone (mine is false only for those)
+    const mine = entries.filter(([, d]) => d.asset && d.asset.mine !== false), shared = entries.filter(([, d]) => d.asset && d.asset.mine === false);
     const addBtn = ([type, d]) => `<button type="button" data-add="${type}">+ ${esc(d.name)}</button>`;
     ed.innerHTML = `<p class="hint">Click a piece to add it, then drag it into place. Wall pieces go against the nearest wall.</p>`
       + `<div class="palette">${entries.filter(([, d]) => !d.asset && !d.missing).map(addBtn).join("")}</div>`
       + `<h4 class="palette-head">My items</h4>`
       + (mine.length ? `<div class="palette">${mine.map(addBtn).join("")}</div>` : `<p class="hint">Items you import from Giants Editor show here.</p>`)
+      + (shared.length ? `<h4 class="palette-head">Shared items</h4><div class="palette">${shared.map(addBtn).join("")}</div>` : "")
       + `<p class="hint"><a href="/items" target="_blank" rel="noopener">Import an item…</a></p>`
       + (it ? `<div class="piece"><h4>${esc(def.name)}</h4>${def.missing ? `<p class="warn">This item isn’t in My items any more, so it’s left out. Remove it, or import it again.</p>` : ""}${pr.has(it.id) ? `<p class="warn">${pr.get(it.id)}.</p>` : ""}`
           + def.params.map(f => `<div class="field"><div class="fl"><label for="pc-${f.k}">${f.label}</label><output id="pc-${f.k}-o">${fmtP(f, it[f.k])}</output></div><input type="range" id="pc-${f.k}" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}" value="${it[f.k]}"></div>`).join("")

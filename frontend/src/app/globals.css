@@ -233,3 +233,4 @@ table.list th { color: var(--muted); font-weight: 500; font-size: 14px; }
 .item-list small { color: var(--muted); }
 .item-list .actions { display: flex; gap: 6px; }
 #insideEditor .palette-head { margin: 10px 0 0; font-size: 14px; }
+.item-group { margin: 26px 0 0; font-size: 20px; }

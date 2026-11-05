@@ -37,6 +37,7 @@ type Draft = {
   files?: File[]; asset?: Asset;
   name: string; meta: Meta; positions: number[];
   missing: string[]; ignored: string[];
+  shared: boolean;
 };
 
 /** Reads the files someone picked: exactly one .i3d and one .obj, and what the i3d needs. */
@@ -52,7 +53,7 @@ async function draftFrom(picked: File[]): Promise<Draft> {
   const keep = picked.filter(f => f === i3ds[0] || f === objs[0] || needed.has(f.name.toLowerCase().replace(/\.(png|dds)$/, "")));
   return {
     files: keep, name: nameFromFile(i3ds[0].name), positions: obj.positions, missing,
-    ignored: picked.filter(f => !keep.includes(f)).map(f => f.name),
+    ignored: picked.filter(f => !keep.includes(f)).map(f => f.name), shared: false,
     meta: normalizeMeta({i3d: i3ds[0].name, obj: objs[0].name, hidden: info.hidden, box: obj.box, mount: "floor", turn: 0, kinds: []}),
   };
 }
@@ -81,17 +82,18 @@ export default function ItemsPage() {
   const edit = (a: Asset) => run(async () => {
     const meta = normalizeMeta(a.meta);
     const obj = readObj(new TextDecoder().decode(await api.assetFile(a.id, meta.obj)), meta.hidden);
-    setDraft({ asset: a, name: a.name, meta, positions: obj.positions, missing: [], ignored: [] });
+    setDraft({ asset: a, name: a.name, meta, positions: obj.positions, missing: [], ignored: [], shared: a.shared });
   });
   const change = (patch: Partial<Meta>) => setDraft(d => d && { ...d, meta: { ...d.meta, ...patch } });
   const save = () => draft && run(async () => {
     if (draft.asset) {
-      const a = await api.updateAsset(draft.asset.id, { name: draft.name, meta: draft.meta });
+      const a = await api.updateAsset(draft.asset.id, { name: draft.name, meta: draft.meta, shared: draft.shared });
       setItems(list => (list ?? []).map(x => (x.id === a.id ? a : x)));
     } else {
       const form = new FormData();
       form.append("name", draft.name);
       form.append("meta", JSON.stringify(draft.meta));
+      if (draft.shared) form.append("shared", "true");
       for (const f of draft.files ?? []) form.append("files", f, f.name);
       const a = await api.importAsset(form);
       setItems(list => [a, ...(list ?? [])]);
@@ -99,13 +101,37 @@ export default function ItemsPage() {
     setDraft(null);
   });
   const remove = (a: Asset) => {
-    if (!window.confirm(`Delete “${a.name}”? Buildings that use it keep its place, but it's left out until you import it again.`)) return;
+    const who = a.shared ? "Everyone's buildings" : "Buildings";
+    if (!window.confirm(`Delete “${a.name}”? ${who} that use it keep its place, but it's left out until it's imported again.`)) return;
     run(async () => {
       await api.deleteAsset(a.id);
       setItems(list => (list ?? []).filter(x => x.id !== a.id));
       if (draft?.asset?.id === a.id) setDraft(null);
     });
   };
+
+  const list = (shown: Asset[]) => (
+    <ul className="item-list">
+      {shown.map(a => {
+        const m = normalizeMeta(a.meta);
+        return (
+          <li key={a.id}>
+            <div>
+              <b>{a.name} {a.shared && a.mine && <span className="badge ok">Shared with everyone</span>}</b>
+              <small>{sizeText(m)} · {m.mount === "wall" ? "against a wall" : "on the floor"} · {kindsText(m)}</small>
+              <small>{a.files.length} files, {mb(a.files.reduce((s, f) => s + f.size, 0))}</small>
+            </div>
+            {a.mine && (
+              <div className="actions">
+                <button type="button" onClick={() => edit(a)} disabled={busy}>Change</button>
+                <button type="button" className="danger" onClick={() => remove(a)} disabled={busy}>Delete</button>
+              </div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
 
   const form = draft && (
     <section className="item-form" aria-label={draft.asset ? "Change item" : "Import item"}>
@@ -146,6 +172,15 @@ export default function ItemsPage() {
             </label>
           ))}
         </fieldset>
+        {user?.isAdmin && (
+          <fieldset>
+            <legend>Sharing</legend>
+            <label className="choice">
+              <input type="checkbox" checked={draft.shared} onChange={e => setDraft({ ...draft, shared: e.target.checked })} /> Share with everyone
+            </label>
+            <p className="hint">Everyone can place a shared item in their buildings. Only you can change or delete it.</p>
+          </fieldset>
+        )}
         <div className="row">
           <button type="button" className="primary" onClick={save} disabled={busy || !draft.name.trim() || draft.missing.length > 0}>
             {draft.asset ? "Save" : "Import"}
@@ -176,25 +211,13 @@ export default function ItemsPage() {
             <p className="hint">Import a feeder, a drinker or anything else you made in Giants Editor.</p>
           </div>
         )}
-        {items && items.length > 0 && (
-          <ul className="item-list">
-            {items.map(a => {
-              const m = normalizeMeta(a.meta);
-              return (
-                <li key={a.id}>
-                  <div>
-                    <b>{a.name}</b>
-                    <small>{sizeText(m)} · {m.mount === "wall" ? "against a wall" : "on the floor"} · {kindsText(m)}</small>
-                    <small>{a.files.length} files, {mb(a.files.reduce((s, f) => s + f.size, 0))}</small>
-                  </div>
-                  <div className="actions">
-                    <button type="button" onClick={() => edit(a)} disabled={busy}>Change</button>
-                    <button type="button" className="danger" onClick={() => remove(a)} disabled={busy}>Delete</button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+        {items && items.some(a => a.mine) && list(items.filter(a => a.mine))}
+        {items && items.some(a => !a.mine) && (
+          <>
+            <h3 className="item-group">Shared items</h3>
+            <p className="hint">Shared by the admin, for everyone to use.</p>
+            {list(items.filter(a => !a.mine))}
+          </>
         )}
       </main>
     </>

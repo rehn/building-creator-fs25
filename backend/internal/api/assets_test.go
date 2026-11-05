@@ -11,9 +11,9 @@ import (
 )
 
 type upload struct {
-	name, meta string
-	files      map[string][]byte
-	order      []string
+	name, meta, shared string
+	files              map[string][]byte
+	order              []string
 }
 
 // importAsset posts an item the way the browser does: a multipart form with name, meta and files.
@@ -23,6 +23,9 @@ func (c *client) importAsset(u upload) *httptest.ResponseRecorder {
 	mw := multipart.NewWriter(&buf)
 	if u.name != "" {
 		mw.WriteField("name", u.name)
+	}
+	if u.shared != "" {
+		mw.WriteField("shared", u.shared)
 	}
 	if u.meta != "" {
 		mw.WriteField("meta", u.meta)
@@ -143,4 +146,46 @@ func TestAssetsArePrivate(t *testing.T) {
 
 	anon := newClient(t, srv)
 	expectError(t, anon.do("GET", "/api/assets", nil), 401, "unauthorized")
+}
+
+func TestSharedAssets(t *testing.T) {
+	srv := newTestServer(t)
+	admin := signupAdmin(t, srv)
+	friend := signupFriend(t, srv, admin, "friend@example.se")
+
+	// The admin imports an item shared with everyone.
+	u := feeder()
+	u.shared = "true"
+	rec := admin.importAsset(u)
+	expect(t, rec, 201)
+	a := decode[store.Asset](t, rec)
+	if !a.Shared || !a.Mine {
+		t.Fatalf("admin's shared item: %+v", a)
+	}
+
+	// Everyone sees it and can use its files, but not change it.
+	list := decode[[]store.Asset](t, friend.do("GET", "/api/assets", nil))
+	if len(list) != 1 || !list[0].Shared || list[0].Mine {
+		t.Fatalf("friend's list: %+v", list)
+	}
+	expect(t, friend.do("GET", "/api/assets/"+a.ID+"/files/cow-feeder.i3d", nil), 200)
+	expectError(t, friend.do("PATCH", "/api/assets/"+a.ID, map[string]any{"name": "Mine"}), 404, "not_found")
+	expectError(t, friend.do("DELETE", "/api/assets/"+a.ID, nil), 404, "not_found")
+
+	// Only the admin shares.
+	rec = friend.importAsset(u)
+	expectError(t, rec, 403, "forbidden")
+	own := friend.importAsset(feeder())
+	expect(t, own, 201)
+	b := decode[store.Asset](t, own)
+	expectError(t, friend.do("PATCH", "/api/assets/"+b.ID, map[string]any{"shared": true}), 403, "forbidden")
+	expect(t, friend.do("PATCH", "/api/assets/"+b.ID, map[string]any{"shared": false}), 200)
+
+	// The admin stops sharing: private again.
+	rec = admin.do("PATCH", "/api/assets/"+a.ID, map[string]any{"shared": false, "name": "Foderbord"})
+	expect(t, rec, 200)
+	if c := decode[store.Asset](t, rec); c.Shared || c.Name != "Foderbord" {
+		t.Fatalf("unshared: %+v", c)
+	}
+	expectError(t, friend.do("GET", "/api/assets/"+a.ID+"/files/cow-feeder.i3d", nil), 404, "not_found")
 }

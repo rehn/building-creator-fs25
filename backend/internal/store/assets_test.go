@@ -2,8 +2,10 @@ package store
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"errors"
+	"path/filepath"
 	"testing"
 )
 
@@ -81,5 +83,72 @@ func TestAssetsArePrivate(t *testing.T) {
 	}
 	if err := s.DeleteAsset(ctx, bo.ID, a.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatal("another user can delete the item")
+	}
+}
+
+func TestSharedAssets(t *testing.T) {
+	s := openTest(t)
+	admin, bo := mustUser(t, s, "admin@example.se"), mustUser(t, s, "bo@example.se")
+	a, err := s.CreateAsset(ctx, admin.ID, "Cow feeder", json.RawMessage(`{}`), feederFiles())
+	if err != nil || a.Shared || !a.Mine {
+		t.Fatalf("an item starts out private and the owner's: %+v %v", a, err)
+	}
+	if list, _ := s.ListAssets(ctx, bo.ID); len(list) != 0 {
+		t.Fatal("private items are private")
+	}
+	on := true
+	if a, err = s.SetAssetShared(ctx, admin.ID, a.ID, on); err != nil || !a.Shared {
+		t.Fatalf("shared: %+v %v", a, err)
+	}
+
+	// Everyone sees a shared item and can use its files, but it stays the owner's.
+	list, err := s.ListAssets(ctx, bo.ID)
+	if err != nil || len(list) != 1 || !list[0].Shared || list[0].Mine || len(list[0].Files) != 3 {
+		t.Fatalf("bo's list: %+v %v", list, err)
+	}
+	if _, err := s.AssetFile(ctx, bo.ID, a.ID, "cow-feeder.i3d"); err != nil {
+		t.Fatal("bo can't read a shared item's files:", err)
+	}
+	name := "Mine"
+	if _, err := s.UpdateAsset(ctx, bo.ID, a.ID, &name, nil); !errors.Is(err, ErrNotFound) {
+		t.Fatal("bo can change a shared item")
+	}
+	if _, err := s.SetAssetShared(ctx, bo.ID, a.ID, false); !errors.Is(err, ErrNotFound) {
+		t.Fatal("bo can unshare it")
+	}
+	if err := s.DeleteAsset(ctx, bo.ID, a.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatal("bo can delete a shared item")
+	}
+	if list, _ := s.ListAssets(ctx, admin.ID); len(list) != 1 || !list[0].Mine {
+		t.Fatal("the owner still owns it")
+	}
+
+	if _, err := s.SetAssetShared(ctx, admin.ID, a.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AssetFile(ctx, bo.ID, a.ID, "cow-feeder.i3d"); !errors.Is(err, ErrNotFound) {
+		t.Fatal("unshared, it's private again")
+	}
+}
+
+func TestAssetsTableGetsSharedColumn(t *testing.T) {
+	// A database from before sharing: the column is added when it's opened.
+	path := filepath.Join(t.TempDir(), "old.db")
+	db, err := sql.Open("sqlite", "file:"+path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE TABLE assets (id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, name TEXT NOT NULL, meta TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	u := mustUser(t, s, "anna@example.se")
+	if _, err := s.CreateAsset(ctx, u.ID, "X", json.RawMessage(`{}`), feederFiles()); err != nil {
+		t.Fatal(err)
 	}
 }
