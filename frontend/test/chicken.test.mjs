@@ -492,6 +492,7 @@ test("coop: everything is inside the walls, on or above the floor, and the doorw
     const geo = buildGeometry(p), g = geo.G.fittings, { W, D, ridgeY } = geo.dims, F = p.foundation, t = 0.15;
     for (let k = 0; k < g.p.length; k += 3) {
       const [x, y, z] = g.p.slice(k, k + 3);
+      if (g.s[k / 3] === "boards" && g.n[k + 1] < -0.3) continue;   // the roof boards run out under the eaves
       assert.ok(Math.abs(x) <= W / 2 - t + 1e-6 && Math.abs(z) <= D / 2 - t + 1e-6, `${id}: ${x},${z} outside the room`);
       assert.ok(y >= F - 1e-6 && y <= ridgeY, `${id}: height ${y}`);
     }

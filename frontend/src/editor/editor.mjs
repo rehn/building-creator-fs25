@@ -3,7 +3,7 @@
 import * as THREE from "three";
 import JSZip from "jszip";
 import {
-  SCHEMA, fieldsFor, WALLS, WALL_NAMES, DTYPES, DORM_DEF, MATS,
+  SCHEMA, fieldsFor, WALLS, WALL_NAMES, DTYPES, DORM_DEF, MATS, fittingTextures,
   genRow, sanitize, serialize, slugify, buildGeometry, buildI3d, placeableSnippet, sleepPoint, surfaceSpec, scaledUV, colorFor, WP
 } from "./model.mjs";
 import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, henYard, henCap, seeThroughGlass, kindOf } from "./model.mjs";
@@ -12,6 +12,8 @@ import { roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, Hi
 import { setAssets, catalogFor, usedAssets } from "./model.mjs";
 import { readObj, assetFolder, flattenI3d } from "./assets.mjs";
 import { paintInterior, paintGlass } from "./interior.mjs";
+import { SURFACES, paintSurface, normalFromHeight } from "./surfaces.mjs";
+import { splitBySurface } from "./i3d.mjs";
 export { slugify };
 
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -202,6 +204,8 @@ function syncOutputs() {
 }
 
 const TEX = 1024;
+/** The materials with a surface texture (surfaceSpec), when their settings give them one. */
+const TEXTURED = ["walls", "roof", "chimney", "trim", "foundation", "door"];
 function hash(i, j, s) {
   let h = (Math.imul(i, 374761393) + Math.imul(j, 668265263) + Math.imul(s, 982451653)) | 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177);
@@ -215,7 +219,18 @@ function vnoise(x, y, px, py, s) {
   return lerp(lerp(hash(x0,y0,s), hash(x1,y0,s), ux), lerp(hash(x0,y1,s), hash(x1,y1,s), ux), uy);
 }
 
+/** A surface of surfaces.mjs, ready to draw: its shade map, a grey map of it (for the preview, x1.5) and its normal map. */
+const fitBases = {};
+function fitBase(kind) {
+  if (fitBases[kind]) return fitBases[kind];
+  const {N, S, H} = paintSurface(kind), nrm = normalFromHeight(H, N, SURFACES[kind].bump);
+  const canvasOf = fill => { const c = document.createElement("canvas"); c.width = c.height = N; const ctx = c.getContext("2d"), img = ctx.createImageData(N, N); fill(img.data); ctx.putImageData(img, 0, 0); return c; };
+  const normal = canvasOf(D => { for (let i = 0, j = 0; i < N * N; i++, j += 4) { D[j] = (nrm[i*3]*0.5 + 0.5) * 255; D[j+1] = (nrm[i*3+1]*0.5 + 0.5) * 255; D[j+2] = (nrm[i*3+2]*0.5 + 0.5) * 255; D[j+3] = 255; } });
+  const grey = canvasOf(D => { for (let i = 0, j = 0; i < N * N; i++, j += 4) { D[j] = D[j+1] = D[j+2] = Math.min(255, S[i] / 1.5 * 255); D[j+3] = 255; } });
+  return fitBases[kind] = {N, S, Mk: null, normal, grey};
+}
 function genBase(s) {
+  if (SURFACES[s.kind]) return fitBase(s.kind);
   const N = TEX, H = new Float32Array(N*N), S = new Float32Array(N*N), Mk = s.kind === "brick" ? new Uint8Array(N*N) : null;
   const strength = {lockpanel:10, horizontal:40, plaster:1.5, felt:1.2, tiles:60, metal:4.5, brick:3, paintedwood:0.6}[s.kind];
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
@@ -280,9 +295,9 @@ function genBase(s) {
   ctx.putImageData(img, 0, 0);
   return {S, Mk, normal: nc};
 }
-function compose(S, hex, Mk) {
-  const c = document.createElement("canvas"); c.width = c.height = TEX;
-  const ctx = c.getContext("2d"), img = ctx.createImageData(TEX, TEX), D = img.data;
+function compose(S, hex, Mk, N = TEX) {
+  const c = document.createElement("canvas"); c.width = c.height = N;
+  const ctx = c.getContext("2d"), img = ctx.createImageData(N, N), D = img.data;
   const n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
   for (let i = 0, j = 0; i < S.length; i++, j += 4) { const k = S[i], mo = Mk && Mk[i]; D[j] = Math.min(255, (mo ? 184 : r)*k); D[j+1] = Math.min(255, (mo ? 178 : g)*k); D[j+2] = Math.min(255, (mo ? 168 : b)*k); D[j+3] = 255; }
   ctx.putImageData(img, 0, 0);
@@ -296,7 +311,7 @@ function ensureSurface(m) {
   let st = surf[m];
   if (!st || st.key !== key) { st = surf[m] = {key, spec: s, base: genBase(s)}; }
   const col = colorFor(p, m);
-  if (st.color !== col) { st.color = col; st.diffuse = compose(st.base.S, col, st.base.Mk); st.dirty = true; }
+  if (st.color !== col) { st.color = col; st.diffuse = compose(st.base.S, col, st.base.Mk, st.base.N); st.dirty = true; }
   return st;
 }
 
@@ -471,9 +486,43 @@ function mkTex(c) {
   t.anisotropy = renderer.capabilities.getMaxAnisotropy();
   return t;
 }
+/**
+ * The inside's surfaces in the preview: the plain-coloured fittings stay in meshes.fittings, each
+ * surface gets a mesh of its own (children of it) with the surface's grey map over the vertex colours.
+ */
+const fitMeshes = {};
+function bufferOf(g) {
+  const b = new THREE.BufferGeometry();
+  b.setAttribute("position", new THREE.Float32BufferAttribute(g.p, 3));
+  b.setAttribute("normal", new THREE.Float32BufferAttribute(g.n, 3));
+  b.setAttribute("uv", new THREE.Float32BufferAttribute(g.uv, 2));
+  b.setAttribute("color", new THREE.Float32BufferAttribute(g.c, 3));
+  b.setIndex(g.i);
+  return b;
+}
+function drawFittingSurfaces() {
+  const parts = splitBySurface(G.fittings), host = meshes.fittings;
+  const plain = parts.get("") || {p: [], n: [], uv: [], c: [], i: []};
+  host.geometry.dispose(); host.geometry = bufferOf(plain);
+  for (const [surf, o] of Object.entries(fitMeshes)) if (!parts.has(surf)) o.visible = false;
+  for (const [surf, g] of parts) {
+    if (!surf) continue;
+    let o = fitMeshes[surf];
+    if (!o) {
+      const base = fitBase(surf);
+      const mat = new THREE.MeshStandardMaterial({roughness: ["galv", "steel", "plastic"].includes(surf) ? 0.6 : 0.95,
+        metalness: surf === "galv" ? 0.3 : 0, vertexColors: true, map: mkTex(base.grey), normalMap: mkTex(base.normal)});
+      mat.color.setScalar(1.5);   // the grey map holds shade / 1.5
+      o = fitMeshes[surf] = new THREE.Mesh(new THREE.BufferGeometry(), mat);
+      o.castShadow = o.receiveShadow = true;
+      host.add(o);
+    }
+    o.geometry.dispose(); o.geometry = bufferOf(g); o.visible = true;
+  }
+}
 function applySurfaces() {
   if (!renderer || destroyed) return;
-  for (const m of ["walls", "roof", "chimney", "trim"]) {
+  for (const m of TEXTURED) {
     const st = ensureSurface(m), mat = matObjs[m];
     if (!st) continue;
     if (st.dirty || mat.userData.key !== st.key || !mat.map) {
@@ -1155,6 +1204,7 @@ function rebuild(fit) {
         mat.color.set(m === "curtain" || m === "fittings" ? "#ffffff" : colorFor(p, m)); mat.needsUpdate = true;
       }
     });
+    drawFittingSurfaces();
     scheduleSurfaces();
     drawItems(geo.refs);
     if (!ins.on) {
@@ -1202,11 +1252,17 @@ function saveFile(name, data, fallback) {
 const canvasBlob = c => new Promise(res => c.toBlob(res, "image/png"));
 /** Adds the texture files that buildI3d(p, {withTex: true}) refers to. */
 async function addTextures(dir) {
-  for (const m of ["walls", "roof", "chimney", "trim"]) {
+  for (const m of TEXTURED) {
     if (!G[m].i.length) continue;
     const st = ensureSurface(m); if (!st) continue;
     dir.file(`textures/${m}_diffuse.png`, await canvasBlob(st.diffuse));
     dir.file(`textures/${m}_normal.png`, await canvasBlob(st.base.normal));
+  }
+  // The inside: each colour of a surface its own diffuse, one normal map per surface.
+  for (const t of fittingTextures(p, G)) {
+    const base = fitBase(t.surf);
+    dir.file(t.diffuse, await canvasBlob(compose(base.S, t.color, null, base.N)));
+    dir.file(t.normal, await canvasBlob(base.normal));
   }
   if (p.interior) dir.file("textures/interior_diffuse.png", await canvasBlob(interiorCanvas()));
   if (seeThroughGlass(p)) dir.file("textures/glass_diffuse.png", await canvasBlob(paintGlass(document)));
@@ -1295,6 +1351,7 @@ function destroy() {
   cancelAnimationFrame(raf);
   cleanups.forEach(f => f());
   for (const m of MATS) { if (meshes[m]) meshes[m].geometry.dispose(); const mat = matObjs[m]; if (mat) { if (mat.map) mat.map.dispose(); if (mat.normalMap) mat.normalMap.dispose(); mat.dispose(); } }
+  for (const o of Object.values(fitMeshes)) { o.geometry.dispose(); o.material.map.dispose(); o.material.normalMap.dispose(); o.material.dispose(); }
   if (sleepObj) sleepObj.dispose();
   if (yardObj) yardObj.dispose();
   if (interiorTex) interiorTex.dispose();

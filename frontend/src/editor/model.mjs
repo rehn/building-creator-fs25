@@ -5,6 +5,7 @@ import { I3dDoc, tg, shape, refNode, boxMesh, splitByColor, mappingsFor, num, v3
 import { KINDS, kindOf } from "./kinds/index.mjs";
 import { WALL_T, wallFrames, doorSpan, roomOf, footprint, toWorld, cleanItems, problems } from "./layout.mjs";
 import { withAssets, placement, assetFolder } from "./assets.mjs";
+import { SURFACES } from "./surfaces.mjs";
 export { boxMesh } from "./i3d.mjs";
 export { KINDS, KIND, kindOf, groupByKind, CATEGORIES } from "./kinds/index.mjs";
 export { henYard, henCap, HENS_PER_M2, MAX_HENS } from "./kinds/chicken.mjs";
@@ -479,21 +480,30 @@ function poly(mat, pts, hint, uvf) {
   if (pts.length < 3) return;
   let n = norm(cross(sub(pts[1],pts[0]), sub(pts[2],pts[0])));
   if (hint && dot(n, hint) < 0) { pts = pts.slice().reverse(); n = neg(n); }
-  // Undersides of the roof, dormer roofs and canopies (eave soffits) are painted boards, not tiles.
-  if (mat === "roof" && n[1] < -0.3) mat = "trim";
+  // Undersides of the roof, dormer roofs and canopies (eave soffits) are painted boards, not tiles;
+  // in a walk-in building, raw roof boards (seen from inside).
+  let rgbHere = fitRGB, surf = fitSurf;
+  if (mat === "roof" && n[1] < -0.3) {
+    const boards = Math.max(...pts.map(q => q[1])) >= boardsFrom;
+    mat = boards ? "fittings" : "trim";
+    if (boards) { rgbHere = hexRGB(ROOF_BOARDS); surf = "boards"; uvf = null; }
+  }
   if (mat === "trim") uvf = null;
-  const g = G[mat], base = g.p.length / 3;
+  if (mat !== "fittings") surf = undefined;
+  const g = G[mat], base = g.p.length / 3, S = surf && SURFACES[surf];
   const ax = Math.abs(n[0]), ay = Math.abs(n[1]), az = Math.abs(n[2]);
   let uvs = pts.map(q => uvf ? uvf(q) : (ay >= ax && ay >= az) ? [q[0], q[2]] : (ax >= az) ? [q[2], q[1]] : [q[0], q[1]]);
-  if (mat === "trim") {
-    // Painted wood: the grain runs along v. Lay v along the face's longest edge, the board's
-    // length, whatever its angle (sloped fascia, soffits, frames), and u across it.
+  if (mat === "trim" || (S && S.grain)) {
+    // Wood: the grain runs along v. Lay v along the face's longest edge, the board's
+    // length, whatever its angle (sloped fascia, soffits, frames, beams), and u across it.
     let along = null, best = -1;
     pts.forEach((q, k) => { const e = sub(pts[(k + 1) % pts.length], q), l = Math.hypot(...e); if (l > best) { best = l; along = e; } });
     const v = norm(along), u = norm(cross(n, v));
     uvs = pts.map(q => [dot(q, u), dot(q, v)]);
   }
-  pts.forEach((q, k) => { g.p.push(q[0], q[1], q[2]); g.n.push(n[0], n[1], n[2]); g.uv.push(uvs[k][0], uvs[k][1]); if (g.c) g.c.push(...(mat === "fittings" ? fitRGB : curtainRGB)); });
+  // An inside surface's uvs count copies of its texture.
+  if (S) uvs = uvs.map(([u, v]) => [u / S.w, v / S.h]);
+  pts.forEach((q, k) => { g.p.push(q[0], q[1], q[2]); g.n.push(n[0], n[1], n[2]); g.uv.push(uvs[k][0], uvs[k][1]); if (g.c) g.c.push(...(mat === "fittings" ? rgbHere : curtainRGB)); if (g.s) g.s.push(surf); });
   for (let k = 1; k < pts.length - 1; k++) g.i.push(base, base + k, base + k + 1);
 }
 function box(mat, P, ax, ay, az) {
@@ -576,11 +586,13 @@ function quad(mat, pts, uvs, hint) {
   let n = norm(cross(sub(pts[1], pts[0]), sub(pts[2], pts[0])));
   if (dot(n, hint) < 0) { pts = pts.slice().reverse(); uvs = uvs.slice().reverse(); n = neg(n); }
   const g = G[mat], base = g.p.length / 3;
-  pts.forEach((q, k) => { g.p.push(...q); g.n.push(...n); g.uv.push(...uvs[k]); if (g.c) g.c.push(...(mat === "fittings" ? fitRGB : curtainRGB)); });
+  pts.forEach((q, k) => { g.p.push(...q); g.n.push(...n); g.uv.push(...uvs[k]); if (g.c) g.c.push(...(mat === "fittings" ? fitRGB : curtainRGB)); if (g.s) g.s.push(undefined); });
   g.i.push(base, base + 1, base + 2, base, base + 2, base + 3);
 }
-/** Color (0..1 rgb) given to the curtain vertices being built. */
-let curtainRGB = [1, 1, 1], fitRGB = [1, 1, 1];
+/** Color (0..1 rgb) given to the curtain vertices being built; color and surface (SURFACES) of the fittings. */
+let curtainRGB = [1, 1, 1], fitRGB = [1, 1, 1], fitSurf;
+/** In a walk-in building, roof undersides reaching above this height are the roof boards seen from inside (canopies, lower down, stay painted). */
+let boardsFrom = Infinity;
 const hexRGB = hex => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]; };
 const ROOM_D = 0.75, ROOM_SIDE = 0.45, ROOM_UP = 0.35, ROOM_DOWN = 0.95;
 /**
@@ -722,11 +734,11 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
         const k = gableRise / (L / 2);
         c = clipPoly(clipPoly(c, -k, 1, H), k, 1, H + 2 * gableRise);
       }
-      paint(ct < GRIME_T ? GRIME : WHITEWASH);
+      paint(ct < GRIME_T ? GRIME : WHITEWASH, ct < GRIME_T ? "grime" : "whitewash");
       if (c.length >= 3) poly("fittings", c.map(q => WP(w, q[0], q[1], -tw)), neg(w.n));
     }
     // A tarred kickboard along the bottom, except across openings that come down to it.
-    paint(KICKBOARD);
+    paint(KICKBOARD, "timber");
     for (let i = 0; i < Xi.length - 1; i++) {
       const cs = (Xi[i] + Xi[i+1]) / 2;
       if (Xi[i+1] - Xi[i] < 0.02 || ops.some(o => cs > o.s0 && cs < o.s1 && o.t0 < KICK_T)) continue;
@@ -794,13 +806,17 @@ function addMesh(mat, m) {
   g.p.push(...m.p); g.n.push(...m.n); g.uv.push(...m.uv);
   for (const k of m.i) g.i.push(k + base);
   if (g.c) for (let k = 0; k < m.p.length / 3; k++) g.c.push(...(mat === "fittings" ? fitRGB : curtainRGB));
+  if (g.s) for (let k = 0; k < m.p.length / 3; k++) g.s.push(undefined);
 }
 
 /* ----- Drawing helpers for walk-in insides (kinds' furnish() gets these) ----- */
 /** Inside walls of a walk-in building are whitewashed. */
-const WHITEWASH = "#E9E4D8", GRIME = "#C2B8A3", GRIME_T = 0.9, KICKBOARD = "#3F352C", KICK_T = 0.28;
-/** The color the next "fittings" faces get. */
-const paint = hex => { fitRGB = hexRGB(hex); };
+const WHITEWASH = "#E9E4D8", GRIME = "#C2B8A3", GRIME_T = 0.9, KICKBOARD = "#3F352C", KICK_T = 0.28, ROOF_BOARDS = "#8C7457";
+/** The color the next "fittings" faces get, and their surface (a key of SURFACES, or none: plain color). */
+const paint = (hex, surf) => {
+  if (surf !== undefined && !SURFACES[surf]) throw new Error(`No surface called "${surf}"`);
+  fitRGB = hexRGB(hex); fitSurf = surf;
+};
 /** Vertical cylinder with closed ends, base centre c. */
 function cyl(c, r, h, seg = 12) {
   const ring = y => Array.from({length: seg}, (_, k) => { const a = k / seg * 2 * Math.PI; return [c[0] + r * Math.cos(a), y, c[2] + r * Math.sin(a)]; });
@@ -882,7 +898,7 @@ const DUCT = "#7E6E58", DUCT_DARK = "#211C17", TIMBER = "#6F5C47";
 function ventDuct(a, ridgeY, tanP, M, th, F) {
   const hd = 0.28, bt = 0.025, yTop = ridgeY - th, yBot = ridgeY - th - tanP * hd - 0.7;
   const mbox = (a0, a1, yA, yB, b0, b1) => box("fittings", (i, j, k) => M(lerp(a0, a1, i), lerp(yA, yB, j), lerp(b0, b1, k)), M(1, 0, 0), UP, M(0, 0, 1));
-  paint(DUCT);
+  paint(DUCT, "boards");
   // boards up into the roof: where they rise past its underside they're hidden in the slab (and in the ventilator above)
   for (const s of [-1, 1]) {
     mbox(a - hd, a + hd, yBot, yTop, s > 0 ? hd - bt : -hd, s > 0 ? hd : -hd + bt);
@@ -898,7 +914,7 @@ function ventDuct(a, ridgeY, tanP, M, th, F) {
   const yd = ridgeY - th - tanP * hd - 0.08, e = hd - bt;
   poly("fittings", [M(a - e, yd, -e), M(a + e, yd, -e), M(a + e, yd, e), M(a - e, yd, e)], neg(UP));
   // the damper, half open, and its cord down to where it can be reached
-  paint(DUCT);
+  paint(DUCT, "boards");
   const lowEdge = M(a, yBot + 0.14, -hd * 0.7);
   beam(lowEdge, M(a, yBot + 0.36, hd * 0.7), 2 * e - 0.02, 0.02);
   paint(DUCT_DARK);
@@ -915,7 +931,7 @@ function buildRoofFrame(ext, span, top, ridgeY, tanP, M, th, vents) {
   const inB = span / 2 - WALL_T, under = b => ridgeY - th - tanP * Math.abs(b), cosP = 1 / Math.hypot(1, tanP);
   const rw = 0.07, rh = 0.16, dv = rh / 2 / cosP;           // a rafter's section; its centre under the roof
   const n = Math.max(1, Math.round(2 * ext / 1.2)), step = 2 * ext / n;
-  paint(TIMBER);
+  paint(TIMBER, "timber");
   for (let k = 0; k <= n; k++) {
     const a = -ext + k * step;
     // (ends cut square to the slope: starting 6 cm in keeps the lower corner out of the wall)
@@ -943,7 +959,7 @@ function buildRoofFrame(ext, span, top, ridgeY, tanP, M, th, vents) {
  */
 function buildInside(kind, F, H) {
   const room = roomOf(p, openings), catalog = catalogFor(p), items = p.items || [];
-  if (kind.furnish) kind.furnish({floor: color => { paint(color); abox("fittings", [room.x0, F, room.z0], [room.x1, F + 0.02, room.z1]); }});
+  if (kind.furnish) kind.furnish({floor: (color, surf) => { paint(color, surf); abox("fittings", [room.x0, F, room.z0], [room.x1, F + 0.02, room.z1]); }});
   const outside = new Set([...problems(items, catalog, room)].filter(([, m]) => /outside/i.test(m)).map(([id]) => id));
   for (const it of items) {
     const def = catalog[it.type];
@@ -1056,8 +1072,9 @@ function build() {
   // "collision" collects simple closed solids next to the visual meshes; it is split off at the end.
   rooms = []; downpipes = []; doorLeaf = null;
   G = {}; [...MATS, "collision"].forEach(m => G[m] = {p:[], n:[], uv:[], i:[]});
-  G.curtain.c = []; G.fittings.c = [];
+  G.curtain.c = []; G.fittings.c = []; G.fittings.s = []; fitSurf = undefined;
   const W = p.width, D = p.depth, F = p.foundation, fh = p.floorHeight, H = p.floors * fh + (p.halfStorey ? p.kneeWall : 0), top = F + H;
+  boardsFrom = hollow ? top + 0.05 : Infinity;
   const tanP = Math.tan(p.roofPitch * Math.PI / 180), o = p.overhang, th = 0.16;
   const ridgeX = p.roofType === "hip" ? W >= D : p.ridge === "width";
   const Lr = ridgeX ? W : D, span = ridgeX ? D : W;
@@ -1305,13 +1322,15 @@ export function surfaceSpec(p, m) {
   const kind = m === "walls" ? p.wallCladding
     : m === "roof" ? (p.roofType === "flat" ? "felt" : p.roofMaterial === "plain" ? null : p.roofMaterial)
     : m === "chimney" ? (p.chimneyStyle === "brick" ? "brick" : null)
-    : m === "trim" ? "paintedwood" : null;
+    : m === "trim" || m === "door" ? "paintedwood"
+    : m === "foundation" ? "concrete" : null;
   if (!kind) return null;
   const sp = p.panelSpacing;
   if (kind === "lockpanel") { const n = Math.max(2, Math.round(1.2 / sp)); return {kind, n, bw: Math.min(0.8, p.battenWidth / sp), w: n*sp, h: n*sp}; }
   if (kind === "horizontal") { const n = Math.max(2, Math.round(1.2 / sp)); return {kind, n, w: n*sp, h: n*sp}; }
   if (kind === "tiles") return {kind, w: 1.2, h: 1.36};
   if (kind === "brick") return {kind, w: 1.0, h: 0.6};
+  if (SURFACES[kind]) return {kind, w: SURFACES[kind].w, h: SURFACES[kind].h};
   if (kind === "paintedwood") return {kind, w: 1.5, h: 1.5};
   return {kind, w: 2, h: 2};
 }
@@ -1392,7 +1411,20 @@ const NO_SHADOW = ["glass", "interior", "curtain"];
 export function rgb(hex) { const n = parseInt(hex.slice(1), 16); return [(n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255].map(v => num(v)).join(" ") + " 1"; }
 
 /** The material for one visual part (m: its material kind, g: its mesh). */
+const hexOf = rgb01 => "#" + rgb01.map(v => Math.round(v * 255).toString(16).padStart(2, "0")).join("");
+/** Texture files of an inside part with a surface: its own diffuse (the surface in its colour) and the surface's normal map. */
+export function fitTexture(surf, rgb01) {
+  const color = hexOf(rgb01);
+  return {surf, color, diffuse: `textures/fit_${surf}_${color.slice(1)}.png`, normal: `textures/fit_${surf}_normal.png`};
+}
+/** Every texture the textured export of the fittings needs, once each: [{surf, color, diffuse, normal}]. */
+export function fittingTextures(p, G = buildGeometry(normalize(p)).G) {
+  const out = new Map();
+  for (const g of splitByColor(G.fittings)) if (g.surf) { const t = fitTexture(g.surf, g.color); out.set(t.diffuse, t); }
+  return [...out.values()];
+}
 function materialFor(doc, p, m, name, g, withTex) {
+  if (g.color && withTex && g.surf) { const t = fitTexture(g.surf, g.color); return doc.material(`${name}_mat`, {}, [["Texture", t.diffuse], ["Normalmap", t.normal]]); }
   if (g.color) return doc.material(`${name}_mat`, {diffuseColor: `${v3(g.color)} 1`});
   if (withTex && surfaceSpec(p, m)) return doc.material(`${m}_mat`, {}, [["Texture", `textures/${m}_diffuse.png`], ["Normalmap", `textures/${m}_normal.png`]]);
   // See-through glass and the room atlas: base-game style alphaBlending on a texture.

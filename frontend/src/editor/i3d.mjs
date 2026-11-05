@@ -48,12 +48,15 @@ export function boxMesh([sx, sy, sz]) {
   return g;
 }
 
-/** Splits a mesh with vertex colors (g.c) into one mesh per color, each with that color. */
+/**
+ * Splits a mesh with vertex colors (g.c) into one mesh per color, each with that color; with
+ * surfaces (g.s, a name per vertex), one per color and surface, each with its surf.
+ */
 export function splitByColor(g) {
   const groups = new Map();
   for (let t = 0; t < g.i.length; t += 3) {
-    const v = g.i[t], color = [g.c[v*3], g.c[v*3+1], g.c[v*3+2]], key = color.map(num).join(" ");
-    if (!groups.has(key)) groups.set(key, {p:[], n:[], uv:[], i:[], color, map: new Map()});
+    const v = g.i[t], color = [g.c[v*3], g.c[v*3+1], g.c[v*3+2]], surf = g.s ? g.s[v] : undefined, key = color.map(num).join(" ") + "|" + (surf || "");
+    if (!groups.has(key)) groups.set(key, {p:[], n:[], uv:[], i:[], color, ...(surf ? {surf} : {}), map: new Map()});
     const out = groups.get(key);
     for (const u of [g.i[t], g.i[t+1], g.i[t+2]]) {
       if (!out.map.has(u)) {
@@ -64,6 +67,25 @@ export function splitByColor(g) {
     }
   }
   return [...groups.values()].map(({map, ...m}) => m);
+}
+
+/** Splits a mesh with surfaces (g.s) into one mesh per surface ("" for none), keeping its vertex colors. */
+export function splitBySurface(g) {
+  const groups = new Map();
+  for (let t = 0; t < g.i.length; t += 3) {
+    const surf = (g.s && g.s[g.i[t]]) || "";
+    if (!groups.has(surf)) groups.set(surf, {p:[], n:[], uv:[], i:[], c:[], map: new Map()});
+    const out = groups.get(surf);
+    for (const u of [g.i[t], g.i[t+1], g.i[t+2]]) {
+      if (!out.map.has(u)) {
+        out.map.set(u, out.p.length / 3);
+        out.p.push(g.p[u*3], g.p[u*3+1], g.p[u*3+2]); out.n.push(g.n[u*3], g.n[u*3+1], g.n[u*3+2]);
+        out.uv.push(g.uv[u*2], g.uv[u*2+1]); out.c.push(g.c[u*3], g.c[u*3+1], g.c[u*3+2]);
+      }
+      out.i.push(out.map.get(u));
+    }
+  }
+  return new Map([...groups].map(([k, {map, ...m}]) => [k, m]));
 }
 
 /* ---------- Scene tree ---------- */

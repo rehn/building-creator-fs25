@@ -7,3 +7,7 @@
 *.db-wal
 node_modules/
 .dev/
+
+# FS25 mods and sample items kept locally for reference
+FS25_PoultryBarn/
+cow-feeder.*

@@ -21,6 +21,13 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   A walk-in kind has a catalog of pieces and autoFurnish(p); buildGeometry draws p.items.
   src/editor/editor.mjs = controls + three.js r128 preview, mounted by Editor.tsx.
   src/editor/interior.mjs = paints the room atlas (layout: ATLAS in model.mjs) and glass texture.
+  src/editor/surfaces.mjs = tileable inside surfaces (concrete, whitewash, grime, timber, wood, boards, galv,
+  steel, plastic, rubber, straw, litter): shade + height maps, no DOM. Fittings are painted paint(colour, surface);
+  each vertex carries its surface (G.fittings.s), uvs count texture copies (grain surfaces lay v along the
+  longest edge). Export: one diffuse per colour+surface (textures/fit_<surf>_<hex>.png, fittingTextures) and one
+  normal map per surface; the preview shows a grey map over vertex colours (drawFittingSurfaces). A walk-in
+  building's roof underside (above the wall tops) is raw roof boards in fittings; the plinth is concrete and doors
+  painted wood (surfaceSpec).
   Imported items ("My items", /items page): props from Giants Editor, stored per user in the DB
   (assets + asset_files, /api/assets, files as blobs, 50 MB per item). The game loads an item's own
   i3d via a ReferenceNode (its .shapes is encrypted, we can't read it); the preview draws the .obj
@@ -44,7 +51,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Frontend tests: cd frontend && npm test (node --test, no browser needed)
 
 ## Status
-- Go tests (54) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (233) pass.
+- Go tests (54) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (254) pass.
 - Cow barn (kinds/cow.mjs): cowHusbandryPasture (no milk, like cowBarnSmall), automatic water, feed
   and water troughs outside on the pasture wall (kind.outside), a plain walk-through doorway for the
   cows (openings with plain: true; tall openings get a collision gap), feed pad + bale trigger
