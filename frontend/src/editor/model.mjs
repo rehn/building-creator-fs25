@@ -293,6 +293,28 @@ const add = (a,b) => [a[0]+b[0], a[1]+b[1], a[2]+b[2]];
 const scl = (a,k) => [a[0]*k, a[1]*k, a[2]*k];
 const dist = (a,b) => Math.hypot(...sub(a,b));
 
+/**
+ * The rings of a bent pipe through pts (radius r, seg sides): one ring per point, at the ends square
+ * to the pipe, at each bend in the mitre plane halfway between the two segments, so the segments
+ * meet without a gap or a step. Each ring is the one before carried along its segment (no twist).
+ */
+export function tubeRings(pts, r, seg = 8) {
+  const dirs = pts.slice(1).map((q, k) => norm(sub(q, pts[k])));
+  let side = cross(dirs[0], UP);
+  side = Math.hypot(...side) < 1e-6 ? [1, 0, 0] : norm(side);
+  const up = norm(cross(side, dirs[0]));
+  let ring = Array.from({length: seg}, (_, j) => { const a = (j + 0.5) / seg * 2 * Math.PI; return add(pts[0], add(scl(side, r * Math.cos(a)), scl(up, r * Math.sin(a)))); });
+  const rings = [ring];
+  for (let k = 1; k < pts.length; k++) {
+    // (a bend sharper than 120 degrees gets a square joint: its mitre would reach far out)
+    const d = dirs[k - 1], m = k < dirs.length && dot(d, dirs[k]) > -0.5 ? norm(add(d, dirs[k])) : d;
+    // each point of the ring slides along d until it meets the plane through pts[k] square to m
+    ring = ring.map(q => add(q, scl(d, dot(sub(pts[k], q), m) / dot(d, m))));
+    rings.push(ring);
+  }
+  return rings;
+}
+
 /* ---------- Pipes and gutters (smooth meshes) ---------- */
 /** Adds a triangle a, b, c to mesh m, turned so it faces along hint. */
 function tri(m, a, b, c, hint) {
@@ -811,6 +833,8 @@ function addMesh(mat, m) {
 
 /* ----- Drawing helpers for walk-in insides (kinds' furnish() gets these) ----- */
 /** Inside walls of a walk-in building are whitewashed. */
+/** The floor finish: a skin, so anything lying on the floor (bedding, droppings, plates) shows above it. */
+const FLOOR_T = 0.004;
 const WHITEWASH = "#E9E4D8", GRIME = "#C2B8A3", GRIME_T = 0.9, KICKBOARD = "#3F352C", KICK_T = 0.28, ROOF_BOARDS = "#8C7457";
 /** The color the next "fittings" faces get, and their surface (a key of SURFACES, or none: plain color). */
 const paint = (hex, surf) => {
@@ -861,6 +885,19 @@ function buildVentilators(Lr, ridgeY, tanP, M, half, th, F) {
       poly("walls", [M(a + sa * hw, y1, -hw), M(a + sa * hw, y1, hw), M(a + sa * hw, yb, hw), M(a + sa * hw, y1 + rise, 0), M(a + sa * hw, yb, -hw)], M(sa, 0, 0));
     }
   }
+}
+/** A bent pipe through points pts, radius r, seg sides, as one mitred tube in "fittings", closed at both ends. */
+function tube(pts, r, seg = 8) {
+  pts = pts.filter((q, k) => k === 0 || Math.hypot(...sub(q, pts[k - 1])) > 1e-6);
+  if (pts.length < 2) return;
+  const rings = tubeRings(pts, r, seg);
+  for (let k = 0; k + 1 < rings.length; k++) for (let j = 0; j < seg; j++) {
+    const a = rings[k][j], b = rings[k][(j + 1) % seg], c = rings[k + 1][(j + 1) % seg], d = rings[k + 1][j];
+    // (each side face is a flat quad: its four corners lie in one plane, the mitre keeps it so)
+    poly("fittings", [a, b, c, d], sub(mid([a, b, c, d]), mid([pts[k], pts[k + 1]])));
+  }
+  poly("fittings", rings[0], sub(pts[0], pts[1]));
+  poly("fittings", rings[rings.length - 1], sub(pts[pts.length - 1], pts[pts.length - 2]));
 }
 /** A round rod (pipe, perch, wire) in "fittings" from p0 to p1, radius r, seg sides. */
 function rod(p0, p1, r, seg = 8) {
@@ -959,7 +996,7 @@ function buildRoofFrame(ext, span, top, ridgeY, tanP, M, th, vents) {
  */
 function buildInside(kind, F, H) {
   const room = roomOf(p, openings), catalog = catalogFor(p), items = p.items || [];
-  if (kind.furnish) kind.furnish({floor: (color, surf) => { paint(color, surf); abox("fittings", [room.x0, F, room.z0], [room.x1, F + 0.02, room.z1]); }});
+  if (kind.furnish) kind.furnish({floor: (color, surf) => { paint(color, surf); abox("fittings", [room.x0, F, room.z0], [room.x1, F + FLOOR_T, room.z1]); }});
   const outside = new Set([...problems(items, catalog, room)].filter(([, m]) => /outside/i.test(m)).map(([id]) => id));
   for (const it of items) {
     const def = catalog[it.type];
@@ -973,7 +1010,7 @@ function buildInside(kind, F, H) {
     const pieceKit = {H, paint, box, cyl: round,
       cone: (x, z, y, r0, r1, h, seg) => { const q = toWorld(it, x, z); cone([q[0], F + y, q[1]], r0, r1, h, seg); },
       rod: (a, b, r, seg) => rod(at(a), at(b), r, seg),
-      pipe: (pts, r, seg) => { for (let k = 0; k + 1 < pts.length; k++) rod(at(pts[k]), at(pts[k + 1]), r, seg); },
+      pipe: (pts, r, seg) => tube(pts.map(at), r, seg),
       board: (a, b, w, h) => beam(at(a), at(b), w, h)};
     def.build(pieceKit, it);
     if (def.collision) { const f = footprint(it, def); abox("collision", [f.x0, F, f.z0], [f.x1, F + def.height(it), f.z1]); }

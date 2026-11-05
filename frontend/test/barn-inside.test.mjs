@@ -64,3 +64,31 @@ test("inside walls: a darker band and a kickboard at the bottom, none across the
   const board = verts(g).filter(q => { const d = (q[0] - w.o[0]) * w.n[0] + (q[2] - w.o[2]) * w.n[2]; return Math.abs(d + WALL_T + 0.025) < 0.001 && Math.abs(q[1] - p.foundation - 0.28) < 0.001; });
   assert.ok(board.length >= 4, "a kickboard along the door wall");
 });
+
+/* ---------- Bent pipes and the floor ---------- */
+import { tubeRings } from "../src/editor/model.mjs";
+const dist = (q, a, d) => { const v = q.map((x, i) => x - a[i]), t = v[0] * d[0] + v[1] * d[1] + v[2] * d[2]; return Math.hypot(...v.map((x, i) => x - t * d[i])); };
+const unit = v => { const l = Math.hypot(...v); return v.map(x => x / l); };
+
+test("a bent pipe is one tube: each ring at a bend is on the pipe's surface of both segments, so no gaps or steps", () => {
+  const pts = [[0, 0, 0], [0, 1, 0], [0, 1.3, 0.25], [0, 1.3, 0.8], [0.2, 1.1, 1.0]], r = 0.03;
+  const rings = tubeRings(pts, r, 8);
+  assert.equal(rings.length, pts.length);
+  for (const ring of rings) assert.equal(ring.length, 8);
+  for (let k = 0; k < pts.length; k++) for (const q of rings[k]) {
+    if (k > 0) assert.ok(Math.abs(dist(q, pts[k - 1], unit(pts[k].map((v, i) => v - pts[k - 1][i]))) - r) < 1e-9, `ring ${k} off the segment before`);
+    if (k + 1 < pts.length) assert.ok(Math.abs(dist(q, pts[k], unit(pts[k + 1].map((v, i) => v - pts[k][i]))) - r) < 1e-9, `ring ${k} off the segment after`);
+  }
+});
+
+test("the floor finish is thin, so bedding, droppings and plates on the floor show above it", () => {
+  const p = preset("poultryBarn"), {G, dims} = buildGeometry(p), g = G.fittings, litter = [0xB8 / 255, 0x93 / 255, 0x5A / 255];
+  let top = -Infinity;
+  for (let k = 0; k < g.p.length; k += 3) if (litter.every((c, i) => Math.abs(g.c[k + i] - c) < 1e-6)) top = Math.max(top, g.p[k + 1]);
+  assert.ok(top > dims.F - 1e-9 && top <= dims.F + 0.005 + 1e-9, `floor finish top ${(top - dims.F).toFixed(3)} m over the slab`);
+});
+
+test("a hairpin bend in a pipe stays close to the pipe", () => {
+  const pts = [[0, 0, 0], [0, 0.1, 0], [0, 0.1001, 0.005], [0, 0, 0.01]];
+  for (const ring of tubeRings(pts, 0.004, 4)) for (const q of ring) assert.ok(Math.hypot(q[0], q[1] - 0.05, q[2]) < 0.1, `ring point ${q} far off`);
+});

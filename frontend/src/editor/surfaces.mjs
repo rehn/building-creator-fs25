@@ -115,7 +115,7 @@ const PAINT = {
     // limewash: uneven, cloudy coats with brush marks, and here and there a small flake gone
     const brush = noise(x, y, N, 8, 128, 11), cloud = fbm(x, y, N, 4, 12), grit = fbm(x, y, N, 64, 14, 2), flake = fbm(x, y, N, 48, 13, 2);
     let s = 1.02 + 0.035 * (brush - 0.5) + 0.06 * (cloud - 0.5) + 0.04 * (grit - 0.5), h = 0.3 * brush + 0.3 * cloud + 0.4 * grit;
-    if (flake > 0.73) { s *= 1 - Math.min(0.1, (flake - 0.73) * 1.5); h -= 0.3; }
+    if (flake > 0.73) { s *= 1 - Math.min(0.06, (flake - 0.73) * 1.2); h -= 0.3; }
     return [s, h];
   },
   grime(x, y, N) {
@@ -123,7 +123,7 @@ const PAINT = {
     const dirt = fbm(x, y, N, 4, 21), drip = noise(x, y, N, 48, 3, 22), splash = fbm(x, y, N, 32, 23, 2);
     let s = w * (0.94 - 0.16 * Math.max(0, dirt - 0.45)) * (1 - 0.1 * drip);
     // muck splashed on: ragged smudges where the dirt is heaviest
-    if (splash > 0.64) s *= 1 - Math.min(0.22, (splash - 0.64) * 2.2) * (0.5 + dirt);
+    if (splash > 0.68) s *= 1 - Math.min(0.12, (splash - 0.68) * 1.6) * (0.5 + dirt);
     return [s, h + 0.3 * dirt];
   },
   timber(x, y, N) {

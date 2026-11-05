@@ -51,7 +51,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Frontend tests: cd frontend && npm test (node --test, no browser needed)
 
 ## Status
-- Go tests (54) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (254) pass.
+- Go tests (54) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (257) pass.
 - Cow barn (kinds/cow.mjs): cowHusbandryPasture (no milk, like cowBarnSmall), automatic water, feed
   and water troughs outside on the pasture wall (kind.outside), a plain walk-through doorway for the
   cows (openings with plain: true; tall openings get a collision gap), feed pad + bale trigger

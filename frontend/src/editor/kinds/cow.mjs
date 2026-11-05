@@ -110,9 +110,13 @@ const CATALOG = {
         c.paint(tone(COLORS.rubber, i), "rubber"); c.box(x0 + 0.02, x0 + 1.18, z0 + 0.5, zk - 0.03, bed, bed + 0.02);
         c.paint(shade(COLORS.rubber, 0.6), "rubber");
         for (let g = 0; g < 4; g++) { const z = z0 + 0.75 + g * 0.3; c.box(x0 + 0.05, x0 + 1.15, z, z + 0.012, bed + 0.02, bed + 0.024); }
-        c.paint(tone(COLORS.sawdust, i), "litter");
-        c.box(x0 + 0.2 + (i % 3) * 0.05, x0 + 0.85, zk - 0.75, zk - 0.2 - (i % 2) * 0.15, bed + 0.02, bed + 0.03);
-        c.box(x0 + 0.5, x0 + 1.0 - (i % 2) * 0.2, z0 + 0.85, z0 + 1.25, bed + 0.02, bed + 0.027);
+        // sawdust kicked about where she lies: overlapping flat drifts, so the edge is ragged and round
+        for (let k = 0; k < 7; k++) {
+          const h = ((i * 7 + k * 13) % 17) / 17, cx = x0 + 0.3 + 0.6 * ((k * 5 + i * 3) % 7) / 6, cz = zk - 0.35 - 0.8 * ((k * 3 + i) % 5) / 4;
+          const r = Math.min(0.1 + 0.15 * h, cx - x0 - 0.04, x0 + 1.16 - cx, cz - z0 - 0.52, zk - 0.05 - cz);
+          c.paint(tone(COLORS.sawdust, i + k), "litter");
+          c.cyl(cx, cz, bed + 0.02, r, 0.002 + 0.0012 * k, 11);   // (each a little higher than the last: no flicker where they overlap)
+        }
       }
       // the brisket board: where the cow's chest rests, so she lies far enough back
       c.paint(COLORS.brisket, "plastic"); c.box(-w / 2 + 0.01, w / 2 - 0.01, z0 + 0.4, z0 + 0.48, bed, bed + 0.11);
@@ -128,7 +132,10 @@ const CATALOG = {
         c.pipe(loop, PIPE, 8);
         c.paint(COLORS.galvDark, "galv");
         c.box(Math.max(-w / 2, x - 0.06), Math.min(w / 2, x + 0.06), zp - 0.06, zp + 0.06, bed, bed + 0.012);   // foot plate
-        c.box(Math.max(-w / 2, x - 0.035), Math.min(w / 2, x + 0.035), z0 + 1.02, z0 + 1.08, 1.15, 1.235);     // neck rail clamp
+        // the neck rail clamp: a sleeve round the rail, bolted down onto the loop
+        const xa = Math.max(-w / 2 + 0.035, x - 0.035), xb = Math.min(w / 2 - 0.035, x + 0.035);
+        c.rod([xa, 1.205, z0 + 1.05], [xb, 1.205, z0 + 1.05], 0.031, 10);
+        c.box(x - 0.012, x + 0.012, z0 + 1.035, z0 + 1.065, 1.15, 1.18);
         c.paint(COLORS.galv, "galv");
       }
       // the neck rail across the loops
