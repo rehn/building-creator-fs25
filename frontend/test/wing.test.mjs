@@ -120,12 +120,12 @@ test("wings: a door on a wing works, and a house keeps one door of its own when 
   assert.ok(off.windows.some(w => w.type === "door" && !WING_WALLS.includes(w.wall)));
 });
 
-test("wings: only houses have them", () => {
+test("wings: houses and barns have them", () => {
   for (const kind of ["cow", "chicken"]) {
     const p = sanitize({kind, wings: [W1]});
-    assert.deepEqual(p.wings, [], kind);
-    assert.ok(!buildGeometry(p).opsByWall.w1End, kind);
-    assert.ok(KIND[kind].hides.includes("Wings"), kind);
+    assert.equal(p.wings.length, 1, kind);
+    assert.ok(buildGeometry(p).opsByWall.w1End, kind);
+    assert.ok(!KIND[kind].hides.includes("Wings"), kind);
   }
 });
 

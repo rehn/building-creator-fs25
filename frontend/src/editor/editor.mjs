@@ -9,7 +9,7 @@ import {
 import { WINDOW_STYLES, DOOR_STYLES, PORCH_OPTIONS, PORCH_W, PORCH_D, WING_FIELDS, MAX_WINGS } from "./model.mjs";
 import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, henYard, henCap, seeThroughGlass, kindOf } from "./model.mjs";
 import { cowYard } from "./kinds/cow.mjs";
-import { roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, History, wingsOf, liveWings, wingFloors, wingHalf, wingIdOf, wingWallKey, WING_PARTS, wallsOf, eaveWalls, autoPipes, pipePositions } from "./layout.mjs";
+import { roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, History, roomBox, wingsOf, liveWings, wingFloors, wingHalf, wingIdOf, wingWallKey, WING_PARTS, wallsOf, eaveWalls, autoPipes, pipePositions } from "./layout.mjs";
 import { OBJECT_TYPES, OBJECT_LIMITS, objectOf, pastureOf, snapBox, snapPasture, objectProblems } from "./objects.mjs";
 import { setAssets, catalogFor, usedAssets } from "./model.mjs";
 import { readObj, assetFolder, flattenI3d } from "./assets.mjs";
@@ -1124,15 +1124,16 @@ function setInsideView(v) {
   clipPlane.constant = r.F + (v === "plan" ? 1.3 : cut3d);
   renderer.clippingPlanes = [clipPlane];
   if (v === "3d") {
-    view.target = [(r.x0 + r.x1) / 2, r.F + 0.4, (r.z0 + r.z1) / 2];
-    view.r = Math.max(r.x1 - r.x0, r.z1 - r.z0) * 1.4 + 3; view.phi = Math.min(view.phi, 0.95);
+    const bx = roomBox(r);
+    view.target = [(bx.x0 + bx.x1) / 2, r.F + 0.4, (bx.z0 + bx.z1) / 2];
+    view.r = Math.max(bx.x1 - bx.x0, bx.z1 - bx.z0) * 1.4 + 3; view.phi = Math.min(view.phi, 0.95);
     updateCam();
   } else fitOrtho();
   updateInsideOverlay();
 }
 /** The plan camera: straight down on the room (front of the building at the bottom), with pan and zoom. */
 function fitOrtho() {
-  const r = roomNow(), s = stage.getBoundingClientRect(), aspect = (s.width || 1) / (s.height || 1);
+  const r = roomBox(roomNow()), s = stage.getBoundingClientRect(), aspect = (s.width || 1) / (s.height || 1);
   const cx = (r.x0 + r.x1) / 2 + ins.pan[0], cz = (r.z0 + r.z1) / 2 + ins.pan[1];
   // room plus a metre round it, and room for the bar at the top
   let hw = (r.x1 - r.x0) / 2 + 1, hh = (r.z1 - r.z0) / 2 + 1.6;
@@ -1197,7 +1198,9 @@ function updateInsideOverlay() {
   const room = roomNow(), cat = catalogNow(), items = p.items || [];
   // the room's outline and keep-outs, just above the floor
   const ln = [], y = room.F + 0.03, rect = r => [r.x0, r.z0, r.x1, r.z0, r.x1, r.z0, r.x1, r.z1, r.x1, r.z1, r.x0, r.z1, r.x0, r.z1, r.x0, r.z0];
-  for (const r of [room, ...room.keepOut.map(k => k.rect)]) { const q = rect(r); for (let i = 0; i < q.length; i += 2) ln.push(q[i], y, q[i + 1]); }
+  // the room's walls (every stretch of them, the whole outline when a wing opens into it) and the keep-outs
+  for (const wl of room.walls) ln.push(wl.x0, y, wl.z0, wl.x1, y, wl.z1);
+  for (const r of room.keepOut.map(k => k.rect)) { const q = rect(r); for (let i = 0; i < q.length; i += 2) ln.push(q[i], y, q[i + 1]); }
   planLines.geometry.dispose(); planLines.geometry = new THREE.BufferGeometry();
   planLines.geometry.setAttribute("position", new THREE.Float32BufferAttribute(ln, 3));
   // problems, except on the piece being dragged

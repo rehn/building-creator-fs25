@@ -154,6 +154,7 @@ export function objectProblems(p) {
     const po = objectOf(p, "pasture"), L = past.L;
     const door = (p.windows || []).find(w => w.type === "door" && w.floor === 0 && w.wall === past.wall && w.pos * L > past.ea && w.pos * L < past.eb);
     if (door) out.set(po.id, "A door opens into the pasture: move the door or the pasture");
+    else if (liveWings(p).some(w => overlap(w.rect, past.rect, 0.01))) out.set(po.id, "A wing stands in the pasture: move the wing or the pasture");
   }
   return out;
 }

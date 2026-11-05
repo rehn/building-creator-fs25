@@ -116,36 +116,90 @@ export function openingSpan(win, L) {
 export const doorsOf = p => (p.windows || []).filter(w => w.type === "door" && w.floor === 0);
 
 /**
- * The room inside a walk-in building: the floor inside the walls {x0, x1, z0, z1}, floor height F,
- * wall height H, the first door's keep-out rectangle (door), every keep-out as keepOut [{rect, what}],
- * and each wall's inside face as
- * {x0, x1, z0, z1 (the line), into: [x, z] (towards the room), rot (of an item facing into the room)}.
+ * The room inside a walk-in building: the main part's floor inside its walls {x0, x1, z0, z1}, floor height F,
+ * wall height H, the first door's keep-out rectangle (door), every keep-out as keepOut [{rect, what}], and:
+ *   rects: the floor of every part (the main part first, then each wing: abutting rectangles, so the room is
+ *          their union; the wing's walls open into the house through a passage)
+ *   walls: the inside face of every stretch of wall round the room (a wall where a wing opens is in two
+ *          pieces), {name, x0, x1, z0, z1 (the line), into: [x, z] (towards the room), rot (of an item facing
+ *          into the room)}. name: the house's side ("front" ...), or the wing's wall ("w1Left" ...).
  * openings: other openings to keep clear inside, [{wall, s0, s1, clear, what}] (a hen hatch ...).
  */
 export function roomOf(p, openings = []) {
   const W = p.width, D = p.depth, F = p.foundation, t = WALL_T;
   const H = p.floors * p.floorHeight + (p.halfStorey ? p.kneeWall : 0);
   const x0 = -W/2 + t, x1 = W/2 - t, z0 = -D/2 + t, z1 = D/2 - t;
-  const frames = wallFrames(W, D, F);
+  const frames = wallsOf(p), main = wallFrames(W, D, F);
   // A keep-out: the opening's width plus 30 cm each side, from the wall `clear` into the room.
   const keep = (wall, s0, s1, clear) => {
     const w = frames[wall], at = (s, d) => [w.o[0] + w.u[0] * s + w.n[0] * d, w.o[2] + w.u[2] * s + w.n[2] * d];
     const a = at(s0 - 0.3, -t), b = at(s1 + 0.3, -t - clear);
     return {x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]), z0: Math.min(a[1], b[1]), z1: Math.max(a[1], b[1])};
   };
-  // every door is kept clear inside
-  // every door that opens is kept clear inside (a door on the wing, or one that stays shut, needn't be)
+  // every door that opens is kept clear inside (one that stays shut needn't be)
   const doors = doorsOf(p).filter(w => w.opens !== false && frames[w.wall]).map(w => ({rect: keep(w.wall, ...openingSpan(w, frames[w.wall].L), DOOR_CLEAR), what: "a door"}));
   const door = doors.length ? doors[0].rect : null;
   const keepOut = [...doors, ...openings.map(o => ({rect: keep(o.wall, o.s0, o.s1, o.clear), what: o.what}))];
-  const walls = [
-    {name: "back", x0, x1, z0, z1: z0, into: [0, 1], rot: 0},
-    {name: "front", x0, x1, z0: z1, z1, into: [0, -1], rot: 180},
-    {name: "left", x0, x1: x0, z0, z1, into: [1, 0], rot: 90},
-    {name: "right", x0: x1, x1, z0, z1, into: [-1, 0], rot: 270},
-  ];
-  return {x0, x1, z0, z1, F, H, door, keepOut, walls};
+  // the floors: the main part's, and each wing's from the main wall's inside face to its far wall's inside face
+  const rects = [{x0, x1, z0, z1}], names = [{back: "back", front: "front", left: "left", right: "right"}];
+  for (const w of liveWings(p)) {
+    const m = main[w.wall], at = (s, d) => [m.o[0] + m.u[0] * s + m.n[0] * d, m.o[2] + m.u[2] * s + m.n[2] * d];
+    const a = at(w.s0 + t, -t), b = at(w.s1 - t, w.wd - t);
+    rects.push({x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]), z0: Math.min(a[1], b[1]), z1: Math.max(a[1], b[1])});
+    // an edge's outward direction says which of the wing's walls it is
+    const key = part => wingWallKey(w.id, part), n = part => w.frames[key(part)].n;
+    const dir = {back: [0, -1], front: [0, 1], left: [-1, 0], right: [1, 0]}, nm = {};
+    for (const side in dir) for (const part of WING_PARTS) if (Math.abs(n(part)[0] - dir[side][0]) < 1e-6 && Math.abs(n(part)[2] - dir[side][1]) < 1e-6) nm[side] = key(part);
+    names.push(nm);
+  }
+  return {x0, x1, z0, z1, F, H, door, keepOut, rects, walls: wallSegments(rects, names)};
 }
+
+const EPS = 1e-6;
+/** The stretches of the rectangles' edges that are walls (not shared with another rectangle): see roomOf. */
+function wallSegments(rects, names) {
+  const edges = [
+    {side: "back", line: r => r.z0, span: r => [r.x0, r.x1], across: r => r.z1, horiz: true, into: [0, 1], rot: 0},
+    {side: "front", line: r => r.z1, span: r => [r.x0, r.x1], across: r => r.z0, horiz: true, into: [0, -1], rot: 180},
+    {side: "left", line: r => r.x0, span: r => [r.z0, r.z1], across: r => r.x1, horiz: false, into: [1, 0], rot: 90},
+    {side: "right", line: r => r.x1, span: r => [r.z0, r.z1], across: r => r.x0, horiz: false, into: [-1, 0], rot: 270},
+  ];
+  const opposite = {back: "front", front: "back", left: "right", right: "left"}, out = [];
+  rects.forEach((r, i) => {
+    for (const e of edges) {
+      let pieces = [e.span(r)];
+      // a rectangle abutting on the other side of this edge covers that stretch
+      const other = edges.find(x => x.side === opposite[e.side]);
+      rects.forEach((q, j) => {
+        if (j === i || Math.abs(other.line(q) - e.line(r)) > EPS) return;
+        const [a, b] = other.span(q);
+        pieces = pieces.flatMap(([u, v]) => [[u, Math.min(v, a)], [Math.max(u, b), v]]).filter(([u, v]) => v - u > EPS);
+      });
+      for (const [u, v] of pieces) {
+        if (v - u < 0.05) continue;
+        const c = e.line(r);
+        out.push({name: names[i][e.side], ...(e.horiz ? {x0: u, x1: v, z0: c, z1: c} : {x0: c, x1: c, z0: u, z1: v}), into: e.into, rot: e.rot});
+      }
+    }
+  });
+  return out;
+}
+
+/** Whether the rectangle f is inside the room (all of it, within the union of its floors). */
+export function inRoom(room, f, eps = 1e-6) {
+  const rs = room.rects || [room];
+  if (rs.length === 1) return f.x0 >= rs[0].x0 - eps && f.x1 <= rs[0].x1 + eps && f.z0 >= rs[0].z0 - eps && f.z1 <= rs[0].z1 + eps;
+  const cuts = (lo, hi, key) => [lo, hi, ...rs.flatMap(r => key(r))].filter(v => v >= lo && v <= hi).sort((a, b) => a - b);
+  const xs = cuts(f.x0, f.x1, r => [r.x0, r.x1]), zs = cuts(f.z0, f.z1, r => [r.z0, r.z1]);
+  for (let i = 0; i + 1 < xs.length; i++) for (let j = 0; j + 1 < zs.length; j++) {
+    if (xs[i + 1] - xs[i] < eps || zs[j + 1] - zs[j] < eps) continue;
+    const cx = (xs[i] + xs[i + 1]) / 2, cz = (zs[j] + zs[j + 1]) / 2;
+    if (!rs.some(r => cx >= r.x0 && cx <= r.x1 && cz >= r.z0 && cz <= r.z1)) return false;
+  }
+  return true;
+}
+/** The rectangle round all of the room's floors. */
+export const roomBox = room => { const rs = room.rects || [room]; return {x0: Math.min(...rs.map(r => r.x0)), x1: Math.max(...rs.map(r => r.x1)), z0: Math.min(...rs.map(r => r.z0)), z1: Math.max(...rs.map(r => r.z1))}; };
 
 const R = rot => rot * Math.PI / 180;
 /** The world (x, z) of the point (lx, lz) in the item's own frame. */
@@ -170,17 +224,21 @@ const clamp = (v, lo, hi) => lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo,
 export function snapItem(item, def, room) {
   const [w, d] = def.size(item);
   if (def.mount === "wall") {
-    const dist = wl => wl.x0 === wl.x1 ? Math.abs(item.x - wl.x0) : Math.abs(item.z - wl.z0);
+    // the nearest stretch of wall (its distance from the point to the stretch, not to its line)
+    const dist = wl => Math.hypot(Math.max(wl.x0 - item.x, 0, item.x - wl.x1), Math.max(wl.z0 - item.z, 0, item.z - wl.z1));
     const wl = room.walls.reduce((best, x) => dist(x) < dist(best) ? x : best);
     if (wl.x0 === wl.x1) {
-      const z = clamp(snap(item.z), room.z0 + w/2, room.z1 - w/2);
+      const z = clamp(snap(item.z), wl.z0 + w/2, wl.z1 - w/2);
       return {...item, rot: wl.rot, x: wl.x0 + wl.into[0] * d/2, z};
     }
-    const x = clamp(snap(item.x), room.x0 + w/2, room.x1 - w/2);
+    const x = clamp(snap(item.x), wl.x0 + w/2, wl.x1 - w/2);
     return {...item, rot: wl.rot, x, z: wl.z0 + wl.into[1] * d/2};
   }
-  const f = footprint({...item, x: 0, z: 0}, def);
-  return {...item, x: clamp(snap(item.x), room.x0 - f.x0, room.x1 - f.x1), z: clamp(snap(item.z), room.z0 - f.z0, room.z1 - f.z1)};
+  // a floor piece, kept in the part of the room nearest to it
+  const f = footprint({...item, x: 0, z: 0}, def), at = r => ({...item, x: clamp(snap(item.x), r.x0 - f.x0, r.x1 - f.x1), z: clamp(snap(item.z), r.z0 - f.z0, r.z1 - f.z1)});
+  const tries = (room.rects || [room]).map(at), fits = tries.filter(q => inRoom(room, footprint(q, def)));
+  const far = q => Math.hypot(q.x - item.x, q.z - item.z);
+  return (fits.length ? fits : tries).reduce((best, q) => far(q) < far(best) ? q : best);
 }
 
 const overlap = (a, b, eps = 1e-6) => a.x0 < b.x1 - eps && b.x0 < a.x1 - eps && a.z0 < b.z1 - eps && b.z0 < a.z1 - eps;
@@ -189,7 +247,7 @@ export function problems(items, catalog, room) {
   // (pieces the catalog doesn't have, from another kind of building, are left out like the build leaves them out)
   const out = new Map(), rects = items.filter(it => catalog[it.type]).map(it => [it, footprint(it, catalog[it.type])]);
   for (const [it, f] of rects) {
-    if (f.x0 < room.x0 - 1e-6 || f.x1 > room.x1 + 1e-6 || f.z0 < room.z0 - 1e-6 || f.z1 > room.z1 + 1e-6) out.set(it.id, "Sticks out through a wall (outside the room)");
+    if (!inRoom(room, f)) out.set(it.id, "Sticks out through a wall (outside the room)");
     else {
       const k = room.keepOut.find(k => overlap(f, k.rect));
       if (k) out.set(it.id, `Blocks ${k.what}`);
@@ -233,8 +291,8 @@ export function itemAt(items, catalog, x, z) {
 export function placeNew(type, items, catalog, room) {
   const def = catalog[type], id = items.reduce((m, it) => Math.max(m, it.id), 0) + 1;
   const base = {id, type, x: 0, z: 0, rot: 0, ...def.defaults};
-  const cx = (room.x0 + room.x1) / 2, cz = (room.z0 + room.z1) / 2, spots = [];
-  for (let x = room.x0; x <= room.x1 + 1e-9; x += GRID) for (let z = room.z0; z <= room.z1 + 1e-9; z += GRID) spots.push([x, z]);
+  const bx = roomBox(room), cx = (room.x0 + room.x1) / 2, cz = (room.z0 + room.z1) / 2, spots = [];
+  for (let x = bx.x0; x <= bx.x1 + 1e-9; x += GRID) for (let z = bx.z0; z <= bx.z1 + 1e-9; z += GRID) spots.push([x, z]);
   spots.sort((a, b) => Math.hypot(a[0] - cx, a[1] - cz) - Math.hypot(b[0] - cx, b[1] - cz));
   for (const [x, z] of spots) {
     const it = snapItem({...base, x, z}, def, room);
@@ -286,7 +344,7 @@ export function furnisher(room, catalog) {
   const horiz = wl => wl.z0 === wl.z1;
   const cut = (free, a, b) => free.flatMap(([u, v]) => [[u, Math.min(v, a)], [Math.max(u, b), v]]).filter(([u, v]) => v - u > 1e-6);
   const freeAlong = (wl, deep) => {
-    const [lo, hi] = horiz(wl) ? [room.x0, room.x1] : [room.z0, room.z1];
+    const [lo, hi] = horiz(wl) ? [wl.x0, wl.x1] : [wl.z0, wl.z1];
     const c0 = horiz(wl) ? wl.z0 : wl.x0, c1 = c0 + (horiz(wl) ? wl.into[1] : wl.into[0]) * deep;
     const strip = horiz(wl) ? {x0: lo, x1: hi, z0: Math.min(c0, c1), z1: Math.max(c0, c1)} : {x0: Math.min(c0, c1), x1: Math.max(c0, c1), z0: lo, z1: hi};
     let free = [[lo, hi]];
@@ -299,13 +357,13 @@ export function furnisher(room, catalog) {
     return horiz(s.wl) ? add(type, mid, s.wl.z0 + s.wl.into[1] * d / 2, s.wl.rot, params)
       : add(type, s.wl.x0 + s.wl.into[0] * d / 2, mid, s.wl.rot, params);
   };
-  const cx = (room.x0 + room.x1) / 2, cz = (room.z0 + room.z1) / 2, spots = [];
-  for (let x = room.x0; x <= room.x1 + 1e-9; x += GRID) for (let z = room.z0; z <= room.z1 + 1e-9; z += GRID) spots.push([x, z]);
+  const bx = roomBox(room), cx = (bx.x0 + bx.x1) / 2, cz = (bx.z0 + bx.z1) / 2, spots = [];
+  for (let x = bx.x0; x <= bx.x1 + 1e-9; x += GRID) for (let z = bx.z0; z <= bx.z1 + 1e-9; z += GRID) spots.push([x, z]);
   spots.sort((a, b) => Math.hypot(a[0] - cx, a[1] - cz) - Math.hypot(b[0] - cx, b[1] - cz));
   const onFloor = (type, rot = 0, params = {}) => {
     for (const pad of [0.3, 0.1, 0]) for (const [x, z] of spots) {
       const f = footprint({x, z, rot, ...params}, catalog[type]);
-      if (f.x0 < room.x0 || f.x1 > room.x1 || f.z0 < room.z0 || f.z1 > room.z1) continue;
+      if (!inRoom(room, f)) continue;
       if (!blocked(pad).some(r => overlap(r, f))) return add(type, x, z, rot, params);
     }
     return null;

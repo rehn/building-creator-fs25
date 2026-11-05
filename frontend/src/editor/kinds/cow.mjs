@@ -402,7 +402,7 @@ export default {
     {title: "Cows", side: "build", hint: "Cows graze in the pasture and come in through a wide doorway in the pasture side; they eat and drink at troughs along that wall. Fill feed (or drop bales) at the feed place outside the fence; water is automatic. The pasture, the feed pad and the rest are under Game objects. This is a barn without milking (like the game’s small cow barn).", fields: [
       {k: "cows", label: "Cows", min: 1, max: MAX_COWS, step: 1}]},
   ],
-  hides: ["Interior", "Kupor (dormers)", "Wings"],
+  hides: ["Interior", "Kupor (dormers)"],
   /**
    * Settings as this kind uses them: no sleep point, rooms or dormers; at least 6 x 6 m (troughs on
    * both sides of the doorway); no more cows than fit; the pasture's wall and depth from its object.

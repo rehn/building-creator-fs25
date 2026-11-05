@@ -17,6 +17,14 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   Kinds import only i3d.mjs, never model.mjs (no import cycles); the core passes them helpers.
   src/editor/i3d.mjs = i3d writer: scene tree (tg/shape), I3dDoc; i3dMappings are looked up by
   node name (mappingsFor), never numbered by hand.
+  Inside across parts (PLAN step 4b, done): roomOf(p) returns rects (the main part's floor, then each wing's: abutting
+  rectangles) and walls = the inside faces of every stretch of wall round their union (a wall a wing opens into is
+  in two pieces; names: the side or "w1Left" ...); x0..z1 stay the main part's. layout.mjs inRoom(room, rect) (the
+  rect is in the union), roomBox; snapItem/problems/placeNew/furnisher use them. model.mjs: a wing on a walk-in
+  building gets a passage in the house's wall (ops kind "open", up to the ceiling or the wing's height - 25 cm),
+  inside faces on its walls, a floor, hollow collision (wall slabs, door gaps) and, in a barn, raw roof boards
+  under its roof (rawUnder); the roof frame skips trusses over a valley wing. Barns and hen houses have wings too
+  (the pasture and doorway stay on the main part; objectProblems warns when a wing stands in the pasture).
   Wings (PLAN step 4a, done; houses only, barns hide "Wings"): p.wings = [{id 1..4, wall (of the house), pos, width,
   depth, floors (0 = the house's)}], up to MAX_WINGS=4: L, T, U, Z. layout.mjs wingsOf(p) -> per wing {type
   valley|eave|gable|flat, s0, s1, ww, wd, floors, H, frames {w1End, w1Left, w1Right}, rect} or {off: why} (hip ends,
@@ -30,8 +38,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   Downpipes: p.pipes = [{id, wall, pos 0..1 along the wall}] on walls with a gutter (layout.mjs eaveWalls: a gable roof's two
   eave walls, all four under hip, each wing's sides); autoPipes(p) from the downpipes count when a save has none; skipped where
   a wing stands against the wall; Downpipes section (count per wall, move one, place again).
-  Editor: Wings section (list, add, per-wing sliders, floors, half floor, roof angle, remove). The wings' insides are still closed (4b: one
-  room across all parts is next); geo.wings; test/wing.test.mjs, flicker test covers wings.
+  Editor: Wings section (list, add, per-wing sliders, floors, half floor, roof angle, remove). (The inside goes through the wings: see 4b above.)
   Game objects (PLAN step 2, done): src/editor/objects.mjs; p.objects = boxes {id, type, x, z, w, d, h, ix, iz} (sleep,
   food, bales, loading, pallets, info) and the pasture {type: "pasture", wall, a (m from the wall's start), b (m from its
   END: 0 = corner, so it stays at the corners when the building is resized; < 0 runs past), depth}. kind.objects =

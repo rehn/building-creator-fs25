@@ -96,7 +96,7 @@ test("from photos: a house's answer can have wings, with openings on their walls
   assert.ok(walls.includes("w1End") && walls.includes("w4Right"));
   assert.match(guide, /an L, a T or a U/);
   const cow = photoRequest("cow").schema;
-  assert.ok(!cow.properties.wings && !cow.properties.openings.items.properties.wall.enum.includes("w1End"), "barns have no wings");
+  assert.ok(cow.properties.wings && cow.properties.openings.items.properties.wall.enum.includes("w1End"), "barns have wings too");
   const p = applyAnswer("house", {settings: {}, wings: [{wall: "back", along: 0.2, width: 6, depth: 5, floors: 0}, {wall: "front", along: 0.8, width: 4, depth: 3, floors: 1}],
     openings: [{wall: "w1End", type: "door", floor: 0, along: 0.5, width: 1, height: 2.1, sill: 0, porch: "porch"},
                {wall: "w2Left", type: "window", floor: 0, along: 0.5, width: 1, height: 1.2, sill: 0.9, porch: "none"}]});

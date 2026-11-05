@@ -60,7 +60,8 @@ function hidden(t, geo, walkIn, F) {
   // a house's wing is solid too (its plinth starts 6 cm out from the house's)
   const inWing = (m = 0) => (geo.wings || []).some(({rect: wr}) => c[0] > wr.x0 - m && c[0] < wr.x1 + m && c[2] > wr.z0 - m && c[2] < wr.z1 + m);
   if (c[1] < F && inWing(0.06)) return true;
-  if (c[1] < top && inWing() && !inOpening(c, geo)) return true;
+  // (a walk-in building's wing is hollow: only its plinth is solid)
+  if (!walkIn && c[1] < top && inWing() && !inOpening(c, geo)) return true;
   if (c[1] < F && ax < W / 2 + 0.06 && az < D / 2 + 0.06) return true;
   if (c[1] >= top || ax >= W / 2 || az >= D / 2) return false;
   // in an opening (a window's sash, a door in its reveal) is seen
@@ -151,5 +152,19 @@ test("no flickering faces with two wall materials and the drip board between the
   for (const c of cases) {
     const p = sanitize({lowerCladding: "plaster", ...c}), f = flickers(buildGeometry(p), SHELL, {walkIn: !!kindOf(p).walkIn, F: p.foundation});
     assert.equal(f.length, 0, `${JSON.stringify(c).slice(0, 120)}:\n` + f.map(show).join("\n"));
+  }
+});
+
+test("no flickering faces in a barn or a house with wings you can walk into", () => {
+  const barn = PRESETS.find(x => x.id === "ladugard").settings, wing = (wall, pos, extra = {}) => ({wall, pos, width: 6, depth: 6, floors: 0, ...extra});
+  const cases = [
+    {...barn, wings: [wing("front", 0.35)]}, {...barn, wings: [wing("front", 0.1)]}, {...barn, wings: [wing("front", 0.35, {floors: 1, pitch: 25})]},
+    {...barn, width: 24, wings: [wing("front", 0.1), wing("front", 0.9)]}, {...barn, wings: [wing("left", 0.5, {width: 4})]},
+    {wings: [wing("back", 0.5)]}, {floors: 2, wings: [wing("back", 0.5, {floors: 1})]}, {wings: [wing("left", 0.5, {width: 4})]},
+    {kind: "chicken", wings: [wing("front", 0.4, {depth: 4})]},
+  ];
+  for (const c of cases) {
+    const p = sanitize(c), f = flickers(buildGeometry(p), SHELL, {walkIn: true, F: p.foundation});
+    assert.equal(f.length, 0, `${p.kind} ${JSON.stringify(c.wings)}:\n` + f.map(show).join("\n"));
   }
 });
