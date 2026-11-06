@@ -317,3 +317,6 @@ html:has(.editor-page) { overscroll-behavior: none; }
 .packbar { position: sticky; bottom: 12px; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin: 20px 0 0; padding: 12px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 6px 24px rgba(0, 0, 0, .18); }
 .packbar label { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
 .packbar input[type=text] { font: inherit; padding: 6px 8px; min-width: 12em; border: 1px solid var(--line); border-radius: 6px; background: var(--field); color: var(--ink); }
+
+.page-head .head-actions { display: flex; gap: 8px; align-items: center; }
+.kind-group h3 .linklike { margin-left: 12px; padding: 2px 8px; font-size: 13px; font-weight: 500; vertical-align: middle; }

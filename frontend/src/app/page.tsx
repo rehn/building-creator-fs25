@@ -102,6 +102,8 @@ export default function HousesPage() {
       setHouses(list => (list ?? []).map(x => (x.id === p.id ? p : x)));
     });
   };
+  const allPicked = !!houses && houses.length > 0 && houses.every(h => picked.includes(h.id));
+  const pickAll = () => setPicked(allPicked ? [] : (houses ?? []).map(h => h.id));
   const toggle = (id: string) => setPicked(list => (list.includes(id) ? list.filter(x => x !== id) : [...list, id]));
   /**
    * One game mod of the ticked buildings: each is opened in an editor that is not shown (the same code as the editor's own
@@ -160,7 +162,10 @@ export default function HousesPage() {
       <main className="page">
         <div className="page-head">
           <h2>My buildings</h2>
-          <button className="primary" type="button" onClick={() => setChoosing(true)} disabled={!user || busy} aria-expanded={choosing}>New</button>
+          <div className="head-actions">
+            {houses && houses.length > 1 && <button type="button" onClick={pickAll} disabled={busy}>{allPicked ? "Select none" : "Select all"}</button>}
+            <button className="primary" type="button" onClick={() => setChoosing(true)} disabled={!user || busy} aria-expanded={choosing}>New</button>
+          </div>
         </div>
         {(error || userError) && <p className="error" role="alert">{error || userError}</p>}
         {choosing && chooser}
@@ -174,7 +179,13 @@ export default function HousesPage() {
         )}
         {houses && houses.length > 0 && byKind(houses, kindOfHouse).map(g => (
           <section className="kind-group" key={g.kind.id} aria-label={g.kind.plural}>
-            <h3>{g.kind.plural} <small>{g.items.length}</small></h3>
+            <h3>{g.kind.plural} <small>{g.items.length}</small>
+              {g.items.length > 1 && (
+                <button type="button" className="linklike" onClick={() => setPicked(list => g.items.every(h => list.includes(h.id)) ? list.filter(id => !g.items.some(h => h.id === id)) : [...new Set([...list, ...g.items.map(h => h.id)])])} disabled={busy}>
+                  {g.items.every(h => picked.includes(h.id)) ? "Select none" : "Select all"}
+                </button>
+              )}
+            </h3>
             <div className="grid">
               {g.items.map(h => (
                 <article className="house" key={h.id}>
