@@ -321,6 +321,92 @@ export const CATALOG = {
         }
       }
     }},
+  toilet: {name: "Toilet (toalett)", mount: "wall", collision: true, params: [], defaults: {},
+    size: () => [0.4, 0.72], height: () => 0.86,
+    build(c) {
+      const white = "#F1F0EB", chrome = C.steel;
+      c.paint(white, "plastic");
+      c.box(-0.19, 0.19, -0.35, -0.15, 0.4, 0.82);                                                     // the cistern on the wall
+      c.box(-0.11, 0.11, -0.3, 0.1, 0, 0.4);                                                           // the pedestal
+      c.cyl(0, 0.08, 0.34, 0.19, 0.07, 22);                                                            // the bowl's body
+      c.box(-0.185, 0.185, -0.35, 0.08, 0.34, 0.41);
+      c.paint(shade(white, -0.3), "plastic"); c.cyl(0, 0.08, 0.41, 0.2, 0.025, 22); c.box(-0.2, 0.2, -0.35, 0.08, 0.41, 0.435);   // the seat
+      c.paint(white, "plastic"); c.cyl(0, 0.08, 0.435, 0.185, 0.012, 22); c.box(-0.185, 0.185, -0.35, 0.08, 0.435, 0.447);        // the lid
+      c.paint(shade(white, -0.3), "plastic"); c.box(-0.19, 0.19, -0.32, -0.17, 0.82, 0.84);              // the cistern's lid
+      c.paint(chrome, "steel"); c.cyl(0, -0.25, 0.84, 0.025, 0.012, 12);                                 // the flush button
+      c.box(-0.06, 0.06, -0.36, -0.34, 0.45, 0.47);                                                    // the hinge cover
+      for (const x of [-0.14, 0.14]) { c.cyl(x, -0.3, 0.43, 0.016, 0.012, 10); c.cyl(x, 0.02, 0.0, 0.012, 0.014, 8); }   // seat hinges and the floor bolts
+      c.paint(shade(white, -0.15), "plastic"); c.box(-0.16, 0.16, -0.31, 0.05, 0, 0.025);              // the base flange
+      c.paint(chrome, "steel"); c.box(0.1, 0.15, -0.34, -0.3, 0.3, 0.33);                                // the angle valve
+      c.box(-0.04, 0.04, -0.15, -0.14, 0.7, 0.72);                                                      // the flush plate's rim
+    }},
+  shower: {name: "Shower cabin (duschkabin)", mount: "wall", collision: true,
+    params: [{k: "width", label: "Size (square)", min: 0.8, max: 1.2, step: 0.1, unit: " m"}], defaults: {width: 0.9},
+    size: it => [it.width, it.width], height: () => 2.05,
+    build(c, it) {
+      const w = it.width, h = w / 2, tray = "#F1F0EB", glass = "#B9D3DC", chrome = C.steel;
+      c.paint(tray, "plastic"); c.box(-h, h, -h, h, 0, 0.07);                                           // the tray
+      c.paint(shade(tray, -0.5), "plastic"); c.box(-h + 0.06, h - 0.06, -h + 0.06, h - 0.06, 0.07, 0.072);   // its floor
+      c.paint(chrome, "steel"); c.cyl(0, 0, 0.072, 0.045, 0.004, 14);                                   // the drain
+      // glass walls on the two open sides (front and right) with a chrome frame, and a door in the front
+      c.paint(chrome, "steel");
+      for (const [x0, x1, z0, z1] of [[-h, h, h - 0.025, h], [h - 0.025, h, -h, h]]) { c.box(x0, x1, z0, z1, 0.07, 0.09); c.box(x0, x1, z0, z1, 2.0, 2.05); }
+      for (const [x, z] of [[-h + 0.015, h - 0.012], [h - 0.012, h - 0.012], [h - 0.012, -h + 0.015], [0.1, h - 0.012]]) c.box(x - 0.012, x + 0.012, z - 0.012, z + 0.012, 0.09, 2.0);   // uprights
+      c.paint(glass, "plastic"); c.box(-h + 0.03, h - 0.03, h - 0.018, h - 0.008, 0.09, 2.0); c.box(h - 0.018, h - 0.008, -h + 0.03, h - 0.03, 0.09, 2.0);
+      c.paint(chrome, "steel"); c.rod([0.14, 0.9, h - 0.006], [0.14, 1.2, h - 0.006], 0.01, 8);          // the door handle
+      // the mixer on the back wall and the shower head on a rail
+      c.box(-0.08, 0.08, -h, -h + 0.05, 1.0, 1.08); c.rod([0, 1.04, -h + 0.05], [0, 1.04, -h + 0.09], 0.02, 8);
+      c.rod([-h + 0.1, 0.9, -h + 0.02], [-h + 0.1, 1.9, -h + 0.02], 0.012, 8);
+      c.cyl(-h + 0.1, -h + 0.14, 1.88, 0.07, 0.015, 16); c.rod([-h + 0.1, 1.9, -h + 0.02], [-h + 0.1, 1.9, -h + 0.14], 0.012, 8);
+    }},
+  washbasin: {name: "Washbasin (handfat)", mount: "wall", collision: true,
+    params: [{k: "mirror", label: "Mirror", min: 0, max: 1, step: 1, options: ["No mirror", "With a mirror"]}], defaults: {mirror: 1},
+    size: () => [0.56, 0.46], height: it => Math.round(it.mirror) ? 1.9 : 0.95,
+    build(c, it) {
+      const white = "#F1F0EB", chrome = C.steel;
+      c.paint(white, "plastic"); c.box(-0.06, 0.06, -0.2, -0.06, 0, 0.74);                              // the pedestal
+      c.box(-0.28, 0.28, -0.23, 0.23, 0.74, 0.86);                                                      // the basin
+      c.paint(shade(white, -0.35), "plastic"); c.box(-0.22, 0.22, -0.16, 0.17, 0.856, 0.862);           // the bowl's floor
+      c.paint(shade(white, -0.15), "plastic"); c.box(-0.28, 0.28, -0.23, -0.2, 0.86, 0.92);             // the splashback
+      c.paint(chrome, "steel"); c.cyl(0, -0.1, 0.862, 0.025, 0.004, 12);                                 // the plughole
+      c.rod([0, 0.86, -0.17], [0, 0.98, -0.17], 0.012, 8); c.rod([0, 0.98, -0.17], [0, 0.97, -0.06], 0.01, 8);   // the tap
+      c.box(-0.05, 0.05, -0.19, -0.15, 0.94, 0.98);
+      for (const x of [-0.08, 0.08]) c.box(x - 0.015, x + 0.015, -0.2, -0.15, 0.92, 0.94);              // the tap handles
+      c.paint(white, "plastic"); c.box(0.18, 0.26, -0.15, -0.05, 0.862, 0.88);                          // a soap dish
+      c.paint(chrome, "steel"); c.rod([0, 0.862, -0.1], [0.05, 0.8, -0.18], 0.004, 5); c.cyl(0, -0.19, 0.58, 0.02, 0.1, 10);   // the plug chain and the trap
+      if (Math.round(it.mirror)) {
+        c.paint(C.paint, "wood"); c.box(-0.26, 0.26, -0.225, -0.2, 1.15, 1.9);                         // a framed mirror and a shelf
+        c.paint("#C7D4D8", "steel"); c.box(-0.23, 0.23, -0.2, -0.195, 1.2, 1.85);
+        c.paint(C.paint, "wood"); c.box(-0.26, 0.26, -0.225, 0.0, 1.05, 1.07);
+      }
+    }},
+  washer: {name: "Washing machine (tvättmaskin)", mount: "wall", collision: true, params: [], defaults: {},
+    size: () => [0.6, 0.66], height: () => 0.86,
+    build(c) {
+      const white = "#EEEDE8", chrome = C.steel, front = 0.3;
+      c.paint(shade(C.iron, 0.3), "steel"); for (const x of [-0.26, 0.26]) for (const z of [-0.26, 0.2]) c.box(x - 0.02, x + 0.02, z, z + 0.04, 0, 0.02);   // feet
+      c.paint(white, "plastic"); c.box(-0.3, 0.3, -0.31, 0.3, 0.02, 0.85);                              // the body
+      c.paint(shade(white, -0.25), "plastic"); c.box(-0.3, 0.3, -0.31, 0.3, 0.85, 0.86);                // the top plate
+      // the control panel: a drawer for the detergent, a display and a knob
+      c.paint(shade(white, -0.1), "plastic"); c.box(-0.27, -0.05, front, front + 0.008, 0.7, 0.8);
+      c.paint(C.iron, "steel"); c.box(-0.25, -0.07, front + 0.008, front + 0.012, 0.74, 0.76);
+      c.paint("#1C2B33", "plastic"); c.box(0.02, 0.12, front, front + 0.006, 0.73, 0.79);
+      c.paint(chrome, "steel"); c.box(0.17, 0.23, front, front + 0.02, 0.73, 0.77);
+      // the round door: a chrome ring round dark glass (drawn as strips of a circle)
+      const cy = 0.4, R = 0.205, cx = 0;
+      c.paint(chrome, "steel");
+      for (let k = 0; k < 20; k++) {
+        const a0 = k / 20 * Math.PI * 2, a1 = (k + 1) / 20 * Math.PI * 2, r1 = R, r0 = R - 0.035;
+        c.board([cx + r0 * Math.cos(a0), cy + r0 * Math.sin(a0), front + 0.012], [cx + r0 * Math.cos(a1), cy + r0 * Math.sin(a1), front + 0.012], 0.03, 0.02);
+        c.board([cx + r1 * Math.cos(a0), cy + r1 * Math.sin(a0), front + 0.012], [cx + r1 * Math.cos(a1), cy + r1 * Math.sin(a1), front + 0.012], 0.012, 0.02);
+      }
+      c.paint("#222F36", "plastic");
+      for (let k = 0; k < 9; k++) {
+        const y0 = -0.17 + k * 0.0378, y1 = y0 + 0.0378, ym = Math.min(Math.abs(y0), Math.abs(y1)), half = Math.sqrt(Math.max(0, 0.17 * 0.17 - ym * ym));
+        c.box(cx - half, cx + half, front, front + 0.008, cy + y0, cy + y1);
+      }
+      c.paint("#3A4A52", "plastic"); c.box(-0.05, 0.05, front + 0.006, front + 0.01, cy - 0.04, cy + 0.04);   // a reflection
+    }},
   rug: {name: "Rag rug (trasmatta)", mount: "floor", collision: false, params: [], defaults: {},
     size: () => [2.0, 0.8], height: () => 0.012,
     build(c) {
@@ -331,7 +417,7 @@ export const CATALOG = {
 };
 
 
-for (const [k, g] of Object.entries({"innerwall":"Walls and doors","kitchen":"Kitchen","kitchenunits":"Kitchen","cooker":"Kitchen","stove":"Kitchen","fridge":"Kitchen","pantry":"Kitchen","table":"Dining","chair":"Dining","sofa":"Living room","divan":"Living room","tvbench":"Living room","bookshelf":"Living room","bookcase":"Living room","rug":"Living room","bed":"Bedroom","singlebed":"Bedroom","wardrobe":"Bedroom","desk":"Office"})) if (CATALOG[k]) CATALOG[k].group = g;   // (the palette's groups)
+for (const [k, g] of Object.entries({"innerwall":"Walls and doors","kitchen":"Kitchen","kitchenunits":"Kitchen","cooker":"Kitchen","stove":"Kitchen","fridge":"Kitchen","pantry":"Kitchen","table":"Dining","chair":"Dining","sofa":"Living room","divan":"Living room","tvbench":"Living room","bookshelf":"Living room","bookcase":"Living room","rug":"Living room","bed":"Bedroom","singlebed":"Bedroom","wardrobe":"Bedroom","desk":"Office","toilet":"Bathroom","shower":"Bathroom","washbasin":"Bathroom","washer":"Bathroom"})) if (CATALOG[k]) CATALOG[k].group = g;   // (the palette's groups)
 
 /**
  * A first arrangement for a farmhouse's ground floor: a kitchen with a wood stove, a table with four

@@ -72,7 +72,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   Walk-in everywhere (PLAN step 3, done): the farmhouse is walkIn too, with kind.ceiling (a ceiling over the ground
   floor; inside walls stop there; no roof frame; roof underside a soffit), entrance (every door has swing: out | in, out by default)
   ("porch" for a new first door), insideWalls {wall, low, kick} (barns default BARN_WALLS), furnish (board floor),
-  catalog + autoFurnish in kinds/furniture.mjs (kitchen, stove, table, chair, bed, single bed, sofa, divan, wardrobe, bookshelf, bookcase, TV bench, desk with or without a computer, cooker with hood, kitchen units with wall cupboards, fridge/freezer, pantry, rug;
+  catalog + autoFurnish in kinds/furniture.mjs (kitchen, stove, table, chair, bed, single bed, sofa, divan, wardrobe, bookshelf, bookcase, TV bench, desk with or without a computer, cooker with hood, kitchen units with wall cupboards, fridge/freezer, pantry, toilet, shower cabin, washbasin, washing machine, rug;
   tall pieces kept off windows). Pretend rooms only behind upper-floor windows (house forces interior: true; the
   "Rooms behind the windows" checkbox is gone). Every door has opens (default true): a door that doesn't open is
   drawn but gets no leaves/animation, closes the wall's collision and isn't kept clear inside (roomOf).
@@ -147,7 +147,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Frontend tests: cd frontend && npm test (node --test, no browser needed)
 
 ## Status
-- Go tests (60) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (487) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
+- Go tests (60) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (495) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
 - Cow barn (kinds/cow.mjs): cowHusbandryPasture (no milk, like cowBarnSmall), automatic water, feed
   and water troughs outside on the pasture wall (kind.outside), a plain walk-through doorway for the
   cows (openings with plain: true; tall openings get a collision gap), feed pad + bale trigger
