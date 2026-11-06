@@ -96,7 +96,7 @@ test("inner wall: its ends are drawn to the walls of the room, and both ends fil
   const c = snapItem(wall({rot: 90, x: 1, z: 0, length: 3, door: 0}), def, room);
   assert.deepEqual([c.z, c.length], [0, 3]);
   // along x the same, against the left and right walls
-  const d = snapItem(wall({x: 0.2, z: 1, length: 9.4, door: 0}), def, room);
+  const d = snapItem(wall({x: 0.1, z: 1, length: 9.5, door: 0}), def, room);
   assert.ok(Math.abs(d.length - Math.floor((room.x1 - room.x0) * 100) / 100) < 1e-9, `${d.length}`);
   // the snapped wall fits the room
   assert.equal(problems([d], cat, room).size, 0);
@@ -121,18 +121,18 @@ test("inner wall: it is drawn to a wing's walls too, and other pieces don't snap
 test("inner wall: its end is drawn to the side of another inner wall (a T-junction), and fills between walls", () => {
   const p = house([]), room = roomOf(p), cat = catalogFor(p), def = cat.innerwall;
   const across = wall({id: 1, rot: 90, x: 0, z: 0, length: 4, door: 0});          // along z at x = 0, thickness 0.15
-  // along x at z = 1, 2 m long, its right end 0.3 m short of the wall's face (x = -0.075): it moves up against it
-  const a = snapItem(wall({id: 2, x: -1.4, z: 1, length: 2, door: 0}), def, room, [across], cat);
+  // along x at z = 1, 2 m long, its right end 0.125 m short of the wall's face (x = -0.075): it moves up against it
+  const a = snapItem(wall({id: 2, x: -1.2, z: 1, length: 2, door: 0}), def, room, [across], cat);
   assert.ok(Math.abs(a.x - (-0.075 - 1)) < 1e-9 && a.length === 2, `${a.x}`);
   // the same wall without others stays where it is
-  assert.equal(snapItem(wall({id: 2, x: -1.4, z: 1, length: 2, door: 0}), def, room).x, -1.5); // (only the grid)
+  assert.equal(snapItem(wall({id: 2, x: -1.2, z: 1, length: 2, door: 0}), def, room).x, -1.25); // (only the grid)
   // the other side: left end drawn to the face at x = +0.075
-  const b = snapItem(wall({id: 2, x: 1.3, z: 1, length: 2, door: 0}), def, room, [across], cat);
+  const b = snapItem(wall({id: 2, x: 1.2, z: 1, length: 2, door: 0}), def, room, [across], cat);
   assert.ok(Math.abs(b.x - (0.075 + 1)) < 1e-9, `${b.x}`);
   // a wall at z = 3 doesn't meet it (the other ends at z = 2)
-  assert.equal(snapItem(wall({id: 2, x: -1.4, z: 3, length: 2, door: 0}), def, room, [across], cat).x, -1.5);
+  assert.equal(snapItem(wall({id: 2, x: -1.2, z: 3, length: 2, door: 0}), def, room, [across], cat).x, -1.25);
   // between the room's left wall and the inner wall: as long as the gap, touching both
-  const d = snapItem(wall({id: 2, x: -2.3, z: 1, length: 4.6, door: 0}), def, room, [across], cat);
+  const d = snapItem(wall({id: 2, x: -2.4, z: 1, length: 4.8, door: 0}), def, room, [across], cat);
   assert.ok(Math.abs(d.length - Math.floor((-0.075 - room.x0) * 100) / 100) < 1e-9, `${d.length}`);
   assert.equal(problems([across, d], cat, room).size, 0);
 });
@@ -162,4 +162,14 @@ test("a piece can be put across the join of the house and a wing, and a wall lon
   // longer than the wing is wide, put in the wing across it: it is the wing's width there
   const b = snapItem(wall({id: 1, x: 0, z: (w.z0 + w.z1) / 2, length: 8, door: 0}), cat.innerwall, room, [], cat);
   assert.ok(b.z < w.z1 && b.length <= Math.floor((w.x1 - w.x0) * 100) / 100 && problems([b], cat, room).size === 0, JSON.stringify(b));
+});
+
+test("snapping is gentle: a wall piece put well away from an inner wall goes to the room's wall, not to it", () => {
+  const p = house([]), room = roomOf(p), cat = catalogFor(p), w = wall({id: 1, x: 0, z: 0, length: 4, door: 0});
+  const far = snapItem({id: 2, type: "sofa", x: 0, z: 1.5, rot: 0}, cat.sofa, room, [w], cat);
+  assert.ok(Math.abs(far.z - (room.z1 - cat.sofa.size({})[1] / 2)) < 1e-9 || Math.abs(far.z - (room.z0 + cat.sofa.size({})[1] / 2)) < 1e-9, JSON.stringify(far));
+  const near = snapItem({id: 2, type: "sofa", x: 0, z: 0.6, rot: 0}, cat.sofa, room, [w], cat);
+  assert.ok(Math.abs(near.z) < 1.2, JSON.stringify(near));
+  // an end 0.4 m short of a wall stays short (a quarter metre is the reach)
+  assert.ok(snapItem(wall({id: 2, rot: 90, x: 1, z: -1.75 + 0.15, length: 3, door: 0}), cat.innerwall, room, [], cat).length === 3);
 });

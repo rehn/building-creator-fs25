@@ -226,7 +226,8 @@ export function snapItem(item, def, room, others = [], catalog = {}) {
   if (def.mount === "wall") {
     // the nearest stretch of wall (its distance from the point to the stretch, not to its line)
     const dist = wl => Math.hypot(Math.max(wl.x0 - item.x, 0, item.x - wl.x1), Math.max(wl.z0 - item.z, 0, item.z - wl.z1));
-    const all = [...room.walls, ...innerFaces(room, others, catalog)];
+    // an inner wall's faces count only when the piece is put close to them (else it goes to the room's walls, as ever)
+    const all = [...room.walls, ...innerFaces(room, others, catalog).filter(f => dist(f) < INNER_NEAR)];
     const wl = all.reduce((best, x) => dist(x) < dist(best) ? x : best);
     if (wl.x0 === wl.x1) {
       const z = clamp(snap(item.z), wl.z0 + w/2, wl.z1 - w/2);
@@ -270,10 +271,12 @@ function innerFaces(room, others, catalog) {
   return out;
 }
 
+/** How near (m) a wall piece must be put to an inner wall's face to stand against it. */
+const INNER_NEAR = 0.7;
 /** How near (m) an end of an inner wall must come to a wall of the room to be drawn to it. */
-const SNAP_END = 0.5;
+const SNAP_END = 0.25;
 /**
- * An inner wall (def.snapWalls) with its ends drawn to the walls of the room: an end within SNAP_END of a wall
+ * An inner wall (def.snapWalls) with its ends drawn to the walls of the room: an end within SNAP_END (a quarter metre) of a wall
  * that crosses its direction is moved up against it; with both ends near walls it is made exactly as long as
  * the room is there. Walls are those the wall's own line meets (a wing's too).
  */
