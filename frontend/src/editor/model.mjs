@@ -863,6 +863,24 @@ const rangesSince = before => {
   return out;
 };
 /**
+ * What the window and door styles (openings.mjs) draw with, in the coordinates of a wall frame w {o, u, n}: s along it,
+ * t up, d across (towards n); skip: "d0" or "d1", the face to leave out (it lies on another surface, where it would only flicker).
+ */
+function openingKit(w) {
+  return {box: (mat, s0, s1, t0, t1, d0, d1, skip) => {
+      const P = (a, b, c) => WP(w, lerp(s0, s1, a), lerp(t0, t1, b), lerp(d0, d1, c));
+      for (const a of [0, 1]) poly(mat, [P(a,0,0), P(a,1,0), P(a,1,1), P(a,0,1)], a ? w.u : neg(w.u));
+      for (const b of [0, 1]) poly(mat, [P(0,b,0), P(1,b,0), P(1,b,1), P(0,b,1)], b ? UP : neg(UP));
+      for (const c of [0, 1]) if (skip !== (c ? "d1" : "d0")) poly(mat, [P(0,0,c), P(1,0,c), P(1,1,c), P(0,1,c)], c ? w.n : neg(w.n));
+    },
+    slab: (mat, pts, d0, d1, skip) => {
+      const f0 = pts.map(([s, t]) => WP(w, s, t, d0)), f1 = pts.map(([s, t]) => WP(w, s, t, d1));
+      if (skip !== "d0") poly(mat, f0, neg(w.n));
+      if (skip !== "d1") poly(mat, f1, w.n);
+      pts.forEach((_, i) => { const j = (i + 1) % pts.length, m = mid([f0[i], f0[j]]), c = mid(f0); poly(mat, [f0[i], f0[j], f1[j], f1[i]], sub(m, c)); });
+    }};
+}
+/**
  * A door in opening o of wall w (key: the wall's name), in its style: one leaf, or a pair when it is
  * wide. Swinging leaves sit in the reveal, hinged on their outside face, and open outwards; a sliding
  * door hangs outside the wall on a rail and slides along it. In a walk-in building (inner) the
@@ -973,18 +991,7 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
   const r = 0.15, out = 0.04;
   // what the window and door styles (openings.mjs) draw with, in this wall's coordinates; skip: "d0" or
   // "d1", the face to leave out (it lies on another surface, where it would only flicker)
-  const kit = {box: (mat, s0, s1, t0, t1, d0, d1, skip) => {
-      const P = (a, b, c) => WP(w, lerp(s0, s1, a), lerp(t0, t1, b), lerp(d0, d1, c));
-      for (const a of [0, 1]) poly(mat, [P(a,0,0), P(a,1,0), P(a,1,1), P(a,0,1)], a ? w.u : neg(w.u));
-      for (const b of [0, 1]) poly(mat, [P(0,b,0), P(1,b,0), P(1,b,1), P(0,b,1)], b ? UP : neg(UP));
-      for (const c of [0, 1]) if (skip !== (c ? "d1" : "d0")) poly(mat, [P(0,0,c), P(1,0,c), P(1,1,c), P(0,1,c)], c ? w.n : neg(w.n));
-    },
-    slab: (mat, pts, d0, d1, skip) => {
-      const f0 = pts.map(([s, t]) => WP(w, s, t, d0)), f1 = pts.map(([s, t]) => WP(w, s, t, d1));
-      if (skip !== "d0") poly(mat, f0, neg(w.n));
-      if (skip !== "d1") poly(mat, f1, w.n);
-      pts.forEach((_, i) => { const j = (i + 1) % pts.length, m = mid([f0[i], f0[j]]), c = mid(f0); poly(mat, [f0[i], f0[j], f1[j], f1[i]], sub(m, c)); });
-    }};
+  const kit = openingKit(w);
   ops.forEach(o => {
     const isDoor = o.kind === "door", isWin = o.kind === "window";
     // Frame width: 8 cm, slimmer on a small window (down to 4.5 cm), so the frame doesn't swamp it.
@@ -1246,11 +1253,37 @@ function buildInside(kind, F, H) {
       pipe: (pts, r, seg) => tube(pts.map(at), r, seg),
       board: (a, b, w, h) => beam(at(a), at(b), w, h)};
     def.build(pieceKit, it);
+    if (def.leafOf && def.leafOf(it)) buildInnerDoor(it, def.leafOf(it), F);
     if (def.solids) {
       // a piece with its own solids (an inner wall: open at its doorway), in its frame
       for (const [x0, x1, z0, z1, y0, y1] of def.solids(it, {ceil})) { const a = toWorld(it, x0, z0), b = toWorld(it, x1, z1); abox("collision", [Math.min(a[0], b[0]), F + y0, Math.min(a[1], b[1])], [Math.max(a[0], b[0]), F + y1, Math.max(a[1], b[1])]); }
     } else if (def.collision) { const f = footprint(it, def); abox("collision", [f.x0, F, f.z0], [f.x1, F + def.height(it), f.z1]); }
   }
+}
+/**
+ * A door in the doorway of an inner wall (def.leafOf), in the piece's frame: the building's door style drawn on both faces of a
+ * thin leaf, hinged at one end; when it opens, the leaf is recorded in doors like the outer doors', with its own trigger
+ * and a collision box that moves with it. A door that stays shut is drawn and left alone (the wall's collision is closed).
+ */
+function buildInnerDoor(it, L, F) {
+  const o = toWorld(it, 0, 0), ex = toWorld(it, 1, 0), ez = toWorld(it, 0, 1);
+  const u = [ex[0] - o[0], 0, ex[1] - o[1]], n = [ez[0] - o[0], 0, ez[1] - o[1]];
+  const fw = {o: [o[0], F, o[1]], u, n}, bw = {o: [o[0], F, o[1]], u: neg(u), n: neg(n)};
+  const style = p.doorStyle === "sliding" ? "zbrace" : p.doorStyle, hs = 0.008, half = 0.016, g = 0.012;
+  const s0 = L.s0 + g, s1 = L.s1 - g, t0 = 0.02, t1 = L.h - 0.01, hingeLeft = L.hingeAt === "s1";
+  const before = vcount();
+  // the side towards +z (kit forward) and the side towards -z (the kit turned half a turn: s runs the other way)
+  drawLeaf(openingKit(fw), style, {s0, s1, t0, t1, dIn: 0, dOut: half, right: hingeLeft});
+  drawLeaf(openingKit(bw), style, {s0: -s1, s1: -s0, t0, t1, dIn: 0, dOut: half, right: !hingeLeft});
+  if (!L.opens) return;
+  const hx = hingeLeft ? s1 : s0, hinge = WP(fw, hx, 0, 0), ends = [toWorld(it, s0, -half), toWorld(it, s1, half)];
+  const box = {center: [(ends[0][0] + ends[1][0]) / 2, F + t1 / 2 + t0 / 2, (ends[0][1] + ends[1][1]) / 2],
+    size: [Math.abs(ends[1][0] - ends[0][0]), t1 - t0, Math.abs(ends[1][1] - ends[0][1])]};
+  // the leaf extends from the hinge along +u (hinged at s0) or -u (at s1); DOOR_OPEN turns +u towards +n
+  const angle = (hingeLeft ? -DOOR_OPEN : DOOR_OPEN) * (L.swing > 0 ? 1 : -1);
+  const c = toWorld(it, (L.s0 + L.s1) / 2, 0), al = Math.abs(ex[0] - o[0]) > 0.5;
+  doors.push({wall: null, op: {id: 1000 + it.id}, slide: false, leaves: [{hinge, motion: {rotation: angle}, parts: rangesSince(before), box}],
+    trigger: {center: [c[0], F + 1.1, c[1]], size: al ? [L.s1 - L.s0 + 0.6, 2.2, 2.4] : [2.4, 2.2, L.s1 - L.s0 + 0.6]}});
 }
 /** The ridge cap along the ridge from a0 to a1 (ridge coordinates), placed with M. */
 /** The ridge cap from a0 to a1 along the ridge in roof axes M (Mn: their directions); keep: M keeps handedness. */
@@ -1941,7 +1974,7 @@ function exportParts(p, {withTex = false} = {}) {
         kinematic: true, collisionFilterGroup: "0x1034", collisionFilterMask: "0xfffffbff", nonRenderable: true, castsShadows: false, receiveShadows: false, materialIds: cm})])]);
     doorNodes = [tg("doors", [0, 0, 0], doors.flatMap((d, i) => [
       ...d.leaves.map((leaf, k) => leafNode(leaf, `door${i + 1}Leaf${k + 1}`)),
-      box(`door${i + 1}Trigger`, doorTrigger(geo, d.wall, d.op), trigger("0x20000000", "0x110000")),
+      box(`door${i + 1}Trigger`, d.trigger || doorTrigger(geo, d.wall, d.op), trigger("0x20000000", "0x110000")),
     ]))];
     const key = (leaf, t) => leaf.motion.translation ? `translation="${t ? v3(leaf.motion.translation) : "0 0 0"}"` : `rotation="0 ${t ? num(leaf.motion.rotation) : 0} 0"`;
     doorXml = `

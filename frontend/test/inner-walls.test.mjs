@@ -2,7 +2,7 @@
 // (open in the collision), wallpaper on each side as a textured surface, and a height that follows the ceiling.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { sanitize, buildGeometry, buildI3d, catalogFor, fittingTextures, PRESETS, KIND } from "../src/editor/model.mjs";
+import { sanitize, buildGeometry, buildI3d, catalogFor, fittingTextures, PRESETS, KIND, placeableXml } from "../src/editor/model.mjs";
 import { roomOf, problems, cleanItems, footprint } from "../src/editor/layout.mjs";
 import { WALLPAPERS, doorwayOf } from "../src/editor/kinds/innerwall.mjs";
 import { SURFACES } from "../src/editor/surfaces.mjs";
@@ -29,11 +29,11 @@ test("inner wall: every walk-in kind can have one, with choices in lists and a s
     const def = catalogFor({kind}).innerwall;
     assert.ok(def, kind);
     assert.deepEqual(def.size({length: 5}), [5, 0.15]);
-    assert.ok(def.params.filter(f => f.options).map(f => f.k).join() === "door,paperA,paperB");
+    assert.ok(def.params.filter(f => f.options).map(f => f.k).join() === "door,hinge,swing,paperA,paperB");
   }
   // saved choices stay as saved and are clamped
   const [it] = cleanItems([wall({length: 99, paperA: 40, paperB: -3, door: 5})], catalogFor({kind: "house"}));
-  assert.deepEqual([it.length, it.paperA, it.paperB, it.door], [20, WALLPAPERS.length - 1, 0, 1]);
+  assert.deepEqual([it.length, it.paperA, it.paperB, it.door], [20, WALLPAPERS.length - 1, 0, 3]);
   assert.deepEqual(house([wall()]).items.map(x => x.type), ["innerwall"], "kept by a save");
 });
 
@@ -212,4 +212,53 @@ test("any angle: a piece turned to 30 degrees has a bigger box and is kept insid
   const built = sanitize({items: [{type: "sofa", x: 1, z: 1, rot: 30}, {type: "bed", x: -1, z: 1, rot: 200}, {type: "kitchen", x: 0, z: -2, rot: 15, length: 2}]});
   assert.ok(buildGeometry(built).G.fittings.p.length > 0);
   assert.ok(buildI3d(built).includes("</i3D>"));
+});
+
+/* ---------- Doors in the doorway ---------- */
+test("inner door: a door that opens is a leaf in the doors list with its own trigger and animation; the doorway stays open for walking until it is shut", () => {
+  const p = house([wall({door: 2, hinge: 0, swing: 1})]), geo = buildGeometry(p), F = p.foundation;
+  // the house's own door first, then the inner one (ids from 1000)
+  const inner = geo.doors.filter(d => d.wall === null);
+  assert.equal(inner.length, 1);
+  const [leaf] = inner[0].leaves, [d0, d1] = doorwayOf(p.items[0]);
+  assert.ok(leaf.motion.rotation === 100 || leaf.motion.rotation === -100, JSON.stringify(leaf.motion));
+  assert.ok(leaf.hinge[0] > d0 && Math.abs(leaf.hinge[0] - (d1 - 0.012)) < 1e-6, `hinge at the +x end (left, seen from one side): ${leaf.hinge}`);
+  assert.ok(Math.abs(leaf.box.size[0] - (d1 - d0 - 0.024)) < 1e-6 && leaf.box.size[2] > 0.03 && leaf.box.size[2] < 0.04, JSON.stringify(leaf.box.size));
+  assert.ok(Object.keys(leaf.parts).includes("door"), "its meshes are the door's");
+  const xml = placeableXml(p, "House"), i3d = buildI3d(p);
+  assert.ok(i3d.includes("Leaf1Hinge") && /door2Trigger/.test(i3d), "scene nodes");
+  assert.match(xml, /saveId="door2"/);
+  // the leaf's own collision moves with it; the wall's has the doorway open
+  const mid = (d0 + d1) / 2;
+  assert.ok(!hits(geo.collision, [mid, F + 1, -1], [mid, F + 1, 1]));
+});
+
+test("inner door: the hinge end and the swing side set the leaf's turn", () => {
+  const rot = s => buildGeometry(house([wall(s)])).doors.find(d => d.wall === null).leaves[0];
+  const a = rot({door: 2, hinge: 0, swing: 0}), b = rot({door: 2, hinge: 0, swing: 1}), c = rot({door: 2, hinge: 1, swing: 1}), d = rot({door: 2, hinge: 1, swing: 0});
+  assert.equal(a.motion.rotation, -b.motion.rotation, "the other swing turns the other way");
+  assert.equal(c.motion.rotation, -b.motion.rotation, "hinged at the other end: turned the other way for the same side");
+  assert.equal(d.motion.rotation, b.motion.rotation);
+  assert.ok(a.hinge[0] !== c.hinge[0]);
+  // turned a quarter: the hinge follows the wall
+  const t = buildGeometry(house([wall({door: 2, rot: 90, x: -2})])).doors.find(d => d.wall === null).leaves[0];
+  assert.ok(t.box.size[2] > t.box.size[0], JSON.stringify(t.box.size));
+});
+
+test("inner door: a door that stays shut closes the doorway and is not animated; no doorway or an open one has no leaf", () => {
+  const p = house([wall({door: 3})]), geo = buildGeometry(p), F = p.foundation, [d0, d1] = doorwayOf(p.items[0]), mid = (d0 + d1) / 2;
+  assert.equal(geo.doors.filter(d => d.wall === null).length, 0);
+  assert.ok(hits(geo.collision, [mid, F + 1, -1], [mid, F + 1, 1]), "closed for walking");
+  assert.ok(geo.G.door.p.length > buildGeometry(house([wall({door: 1})])).G.door.p.length, "the leaf is drawn");
+  for (const door of [0, 1]) assert.equal(buildGeometry(house([wall({door})])).doors.filter(d => d.wall === null).length, 0, "door " + door);
+  assert.ok(buildI3d(p).includes("</i3D>"));
+});
+
+test("inner door: the hinge and swing settings only show when there is a door; every barn can have one too", () => {
+  const def = catalogFor(house([])).innerwall, shown = it => def.params.filter(f => !f.when || f.when(it)).map(f => f.k).join();
+  assert.ok(!shown({door: 0}).includes("doorAt"));
+  assert.ok(!shown({door: 1}).includes("hinge") && shown({door: 2}).includes("hinge") && shown({door: 3}).includes("swing"));
+  const b = barn([wall({door: 2})]);
+  assert.equal(buildGeometry(b).doors.filter(d => d.wall === null).length, 1);
+  assert.ok(buildI3d(b).includes("</i3D>"));
 });

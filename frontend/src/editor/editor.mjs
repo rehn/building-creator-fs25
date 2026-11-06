@@ -1255,7 +1255,7 @@ function renderInsideUI() {
       + (shared.length ? `<h4 class="palette-head">Shared items</h4><div class="palette">${shared.map(addBtn).join("")}</div>` : "")
       + `<p class="hint"><a href="/items" target="_blank" rel="noopener">Import an item…</a></p>`
       + (it ? `<div class="piece"><h4>${esc(def.name)}</h4>${def.missing ? `<p class="warn">This item isn’t in My items any more, so it’s left out. Remove it, or import it again.</p>` : ""}${pr.has(it.id) ? `<p class="warn">${pr.get(it.id)}.</p>` : ""}`
-          + def.params.map(f => f.options
+          + def.params.filter(f => !f.when || f.when(it)).map(f => f.options
             // a choice (wallpaper, a doorway or not): a list
             ? `<div class="field"><div class="fl"><label for="pc-${f.k}">${f.label}</label></div><select id="pc-${f.k}" data-k="${f.k}">${f.options.map((nm, i) => `<option value="${i}" ${i === Math.round(it[f.k]) ? "selected" : ""}>${esc(nm)}</option>`).join("")}</select></div>`
             : `<div class="field"><div class="fl"><label for="pc-${f.k}">${f.label}</label><output id="pc-${f.k}-o">${fmtP(f, it[f.k])}</output></div><input type="range" id="pc-${f.k}" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}" value="${it[f.k]}"></div>`).join("")
@@ -1298,7 +1298,7 @@ function renderInsideUI() {
           if ($(`pc-${f.k}-o`)) $(`pc-${f.k}-o`).textContent = fmtP(f, inp.value);
           ins.keep = true; rebuild(false); ins.keep = false;
         };
-        inp.onchange = () => { ins.hist.push(p.items); persist(); rebuild(false); };
+        inp.onchange = () => { ins.hist.push(p.items); persist(); rebuild(false); if (f.options) renderInsideUI(); };   // (a choice can show or hide other settings)
       });
     }
   }
