@@ -39,7 +39,9 @@ export const INNER_WALL = {
   params: [
     {k: "length", label: "Length", min: 1, max: 20, step: 0.01, unit: " m"},
     {k: "door", label: "Doorway", min: 0, max: 3, step: 1, options: ["No doorway", "Open doorway", "Door that opens", "Door that stays shut"]},
-    {k: "doorAt", label: "Doorway place along the wall", min: 0, max: 1, step: 0.05, when: it => it.door >= 1},
+    // (kept as 0..1 in a save; the editor shows it as metres: the doorway's middle from the wall's left end in the plan (the back end of one turned along z))
+    {k: "doorAt", label: "Doorway, middle (m from the left or back end)", min: 0, max: 1, step: 0.005, when: it => it.door >= 1,
+      metres: it => [0.12 + DOOR_W / 2, Math.max(0, it.length - DOOR_W - 0.24)]},
     {k: "hinge", label: "Hinges", min: 0, max: 1, step: 1, options: ["On the left (seen from one side)", "On the right (seen from one side)"], when: it => it.door >= 2},
     {k: "look", label: "Door", min: 0, max: DOOR_LOOKS.length, step: 1, options: ["Like the building's doors", ...DOOR_LOOKS.map(s => s.name)], when: it => it.door >= 2},
     {k: "swing", label: "Opens towards", min: 0, max: 1, step: 1, options: ["One side", "The other side"], when: it => it.door >= 2},

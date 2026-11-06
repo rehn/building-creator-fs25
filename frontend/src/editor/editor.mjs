@@ -90,9 +90,9 @@ function installNumberEntry() {
   const onClick = ev => {
     const out = ev.target.closest && ev.target.closest("output"), field = out && out.closest(".field"), slider = field && field.querySelector("input[type=range]");
     if (!slider || slider.disabled || field.querySelector("input.numin")) return;
-    const scale = +slider.dataset.scale || 1, unit = (out.textContent.match(/\s*(m|°|%)\b/) || [])[1];
+    const scale = +slider.dataset.scale || 1, offset = +slider.dataset.offset || 0, unit = (out.textContent.match(/\s*(m|°|%)\b/) || [])[1];
     const box = document.createElement("input");
-    box.type = "text"; box.className = "numin"; box.inputMode = "decimal"; box.value = String(+(slider.value * scale).toFixed(3));
+    box.type = "text"; box.className = "numin"; box.inputMode = "decimal"; box.value = String(+(offset + slider.value * scale).toFixed(3));
     box.setAttribute("aria-label", "Type a value; a sum like 10+100 works");
     out.hidden = true; out.after(box); box.focus(); box.select();
     let done = false;
@@ -103,11 +103,11 @@ function installNumberEntry() {
         const v = evalNumber(box.value);
         if (v === null) toast("That is not a number");
         else {
-          const raw = v / scale, lo = +slider.min, hi = +slider.max;
+          const raw = (v - offset) / scale, lo = +slider.min, hi = +slider.max;
           if (scale !== 1) slider.step = "any";   // (a position in metres is typed to the centimetre, finer than the slider's steps)
           slider.value = String(Math.min(hi, Math.max(lo, raw)));
           slider.dispatchEvent(new Event("input", {bubbles: true})); slider.dispatchEvent(new Event("change", {bubbles: true}));
-          if (raw < lo - 1e-9 || raw > hi + 1e-9) toast(`Kept within the range ${+(lo * scale).toFixed(2)} to ${+(hi * scale).toFixed(2)}${unit ? " " + unit : ""}`);
+          if (raw < lo - 1e-9 || raw > hi + 1e-9) toast(`Kept within the range ${+(offset + lo * scale).toFixed(2)} to ${+(offset + hi * scale).toFixed(2)}${unit ? " " + unit : ""}`);
         }
       }
       if (box.isConnected) box.remove();
@@ -897,7 +897,8 @@ function renderWingsUI() {
   if (wings.length < MAX_WINGS) html += `<div class="addrow"><button type="button" id="wingAdd">+ Add a wing</button></div>`;
   const w = wings.find(x => x.id === wSel);
   if (w) {
-    const range = f => `<div class="field"><div class="fl"><label for="wg-${f.k}">${f.label}</label><output id="wg-${f.k}-o">${(+w[f.k]).toFixed(2)}${f.k === "pos" ? "" : " m"}</output></div><input type="range" id="wg-${f.k}" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}" value="${w[f.k]}"></div>`;
+    const wallL = w.wall === "front" || w.wall === "back" ? p.width : p.depth;   // (the place along the wall is shown in metres)
+    const range = f => `<div class="field"><div class="fl"><label for="wg-${f.k}">${f.label}</label><output id="wg-${f.k}-o">${f.k === "pos" ? (w.pos * wallL).toFixed(2) : (+w[f.k]).toFixed(2)} m</output></div><input type="range" id="wg-${f.k}" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}" value="${w[f.k]}" ${f.k === "pos" ? `data-scale="${wallL}"` : ""}></div>`;
     html += `<div class="wincard"><div class="field"><div class="fl"><label for="wg-wall">On the wall</label></div><select id="wg-wall">${["front", "back", "left", "right"].map(k => opt(k, WALL_NAMES[k], w.wall)).join("")}</select></div>`
       + WING_FIELDS.map(range).join("")
       + `<div class="field"><div class="fl"><label for="wg-floors">Floors</label></div><select id="wg-floors">${opt(0, `As the house (${p.floors}${p.halfStorey ? "½" : ""})`, w.floors)}${[1, 2, 3].map(n => opt(n, `${n}${n < p.floors ? " (lower than the house)" : n > p.floors ? " (taller than the house)" : ""}`, w.floors)).join("")}</select></div>`
@@ -923,7 +924,7 @@ function renderWingsUI() {
   };
   if (!w) return;
   ed.querySelectorAll(".wincard input[type=range]").forEach(inp => {
-    inp.oninput = () => { w[inp.dataset.k] = +inp.value; $(`wg-${inp.dataset.k}-o`).textContent = `${(+inp.value).toFixed(2)}${inp.dataset.k === "pos" ? "" : " m"}`; persist(); rebuild(false); };
+    inp.oninput = () => { w[inp.dataset.k] = +inp.value; $(`wg-${inp.dataset.k}-o`).textContent = `${(+inp.value * (inp.dataset.k === "pos" ? +inp.dataset.scale : 1)).toFixed(2)} m`; persist(); rebuild(false); };
     inp.onchange = () => changed();
   });
   $("wg-wall").onchange = e => { w.wall = e.target.value; changed(); };
@@ -1373,7 +1374,8 @@ function renderInsideUI() {
     $("insideArrange").onclick = () => { setTab("build"); enterInside(); };
   } else {
     const it = selected(), def = it && cat[it.type];
-    const fmtP = (f, v) => (+v).toFixed(f.step >= 1 ? 0 : 1) + (f.unit || "");
+    // (a setting that is a place along the piece, f.metres: [offset, scale], is shown in metres: offset + value * scale)
+    const fmtP = (f, v, at = it) => f.metres && at ? (f.metres(at)[0] + v * f.metres(at)[1]).toFixed(2) + " m" : (+v).toFixed(f.step >= 1 ? 0 : 1) + (f.unit || "");
     const entries = Object.entries(cat);
     // the user's own items, and those the admin shares with everyone (mine is false only for those)
     const mine = entries.filter(([, d]) => d.asset && d.asset.mine !== false), shared = entries.filter(([, d]) => d.asset && d.asset.mine === false);
@@ -1390,7 +1392,7 @@ function renderInsideUI() {
           + def.params.filter(f => !f.when || f.when(it)).map(f => f.options
             // a choice (wallpaper, a doorway or not): a list
             ? `<div class="field"><div class="fl"><label for="pc-${f.k}">${f.label}</label></div><select id="pc-${f.k}" data-k="${f.k}">${f.options.map((nm, i) => `<option value="${i}" ${i === Math.round(it[f.k]) ? "selected" : ""}>${esc(nm)}</option>`).join("")}</select></div>`
-            : `<div class="field"><div class="fl"><label for="pc-${f.k}">${f.label}</label><output id="pc-${f.k}-o">${fmtP(f, it[f.k])}</output></div><input type="range" id="pc-${f.k}" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}" value="${it[f.k]}"></div>`).join("")
+            : `<div class="field"><div class="fl"><label for="pc-${f.k}">${f.label}</label><output id="pc-${f.k}-o">${fmtP(f, it[f.k])}</output></div><input type="range" id="pc-${f.k}" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}" value="${it[f.k]}" ${f.metres ? `data-scale="${f.metres(it)[1]}" data-offset="${f.metres(it)[0]}"` : ""}></div>`).join("")
           + posSliders(it, def)
           + `<div class="row"><button type="button" id="pcTurn">Turn</button><button type="button" id="pcRemove" class="danger">Remove</button></div></div>`
         : `<p class="hint">Click a piece in the building to change or move it.</p>`)
@@ -1428,7 +1430,7 @@ function renderInsideUI() {
         inp.oninput = () => {
           const cur = selected(), next = snapItem({...cur, [f.k]: +inp.value}, def, roomNow(), p.items, catalogNow());
           p.items = p.items.map(x => x.id === cur.id ? next : x);
-          if ($(`pc-${f.k}-o`)) $(`pc-${f.k}-o`).textContent = fmtP(f, inp.value);
+          if ($(`pc-${f.k}-o`)) $(`pc-${f.k}-o`).textContent = fmtP(f, inp.value, next);
           ins.keep = true; rebuild(false); ins.keep = false;
         };
         inp.onchange = () => { ins.hist.push(p.items); persist(); rebuild(false); if (f.options) renderInsideUI(); };   // (a choice can show or hide other settings)

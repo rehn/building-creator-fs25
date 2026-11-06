@@ -150,7 +150,7 @@ export const WALL_NAMES = {front:"Front", back:"Back", left:"Left side", right:"
 export { WING_WALLS, MAX_WINGS };
 /** A wing's sliders (the wall and floors are selects): the settings of a wing in p.wings. */
 export const WING_FIELDS = [
-  {k:"pos", label:"Where along the wall (0 = its left end, 1 = its right end, seen from outside)", min:0, max:1, step:0.01},
+  {k:"pos", label:"Middle of the wing along the wall (m from the left end, seen from outside)", min:0, max:1, step:0.005},
   {k:"width", label:"Width", min:2.5, max:30, step:0.1, unit:" m"},
   {k:"depth", label:"Length, out from the wall", min:2, max:30, step:0.1, unit:" m"}];
 /**
