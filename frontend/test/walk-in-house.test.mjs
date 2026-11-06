@@ -30,22 +30,25 @@ test("walk-in house: a floor, inside walls and a ceiling over the ground floor, 
   assert.ok(geo.rooms.length > 0 && geo.rooms.every(r => r.op.t0 >= p.floorHeight - 1e-6), "no pretend rooms on the ground floor");
 });
 
-test("walk-in house: its doors open inwards and are animated in the export; barns' still open out", () => {
-  const p = sanitize({}), geo = buildGeometry(p);
-  assert.equal(geo.doors.length, 1);
-  const d = geo.doors[0], leaf = d.leaves[0], {w} = geo.opsByWall[d.wall];
-  // the leaf's middle when open: inside the wall (behind its face)
+/** How far out of its wall (m, negative: inside it) the middle of the first door's leaf stands when it is open. */
+function openOut(p) {
+  const geo = buildGeometry(p), d = geo.doors[0], leaf = d.leaves[0], {w} = geo.opsByWall[d.wall];
   const turn = leaf.motion.rotation * Math.PI / 180, c = leaf.box.center, h = leaf.hinge;
   const rx = h[0] + (c[0] - h[0]) * Math.cos(turn) + (c[2] - h[2]) * Math.sin(turn), rz = h[2] - (c[0] - h[0]) * Math.sin(turn) + (c[2] - h[2]) * Math.cos(turn);
-  const out = (rx - w.o[0]) * w.n[0] + (rz - w.o[2]) * w.n[2];
-  assert.ok(out < -0.2, `a house door swings in (${out.toFixed(2)})`);
+  return (rx - w.o[0]) * w.n[0] + (rz - w.o[2]) * w.n[2];
+}
+test("walk-in house: doors swing outwards unless a door is set to swing inwards; animated in the export", () => {
+  const p = sanitize({});
+  assert.equal(buildGeometry(p).doors.length, 1);
+  assert.equal(p.windows.find(w => w.type === "door").swing, "out", "outwards to start with");
+  assert.ok(openOut(p) > 0.2, `a door swings out (${openOut(p).toFixed(2)})`);
+  const inward = sanitize({...p, windows: p.windows.map(w => w.type === "door" ? {...w, swing: "in"} : w)});
+  assert.equal(inward.windows.find(w => w.type === "door").swing, "in");
+  assert.ok(openOut(inward) < -0.2, `and inwards when chosen (${openOut(inward).toFixed(2)})`);
+  assert.equal(sanitize({...p, windows: p.windows.map(w => w.type === "door" ? {...w, swing: "sideways"} : w)}).windows.find(w => w.type === "door").swing, "out");
   assert.match(buildI3d(p, {}), /door1Trigger/);
-  const barn = sanitize(PRESETS.find(x => x.id === "ladugard").settings), bg = buildGeometry(barn), bd = bg.doors[0], bl = bd.leaves[0];
-  if (bl.motion.rotation !== undefined) {
-    const t2 = bl.motion.rotation * Math.PI / 180, c2 = bl.box.center, h2 = bl.hinge, ww = bg.opsByWall[bd.wall].w;
-    const x2 = h2[0] + (c2[0] - h2[0]) * Math.cos(t2) + (c2[2] - h2[2]) * Math.sin(t2), z2 = h2[2] - (c2[0] - h2[0]) * Math.sin(t2) + (c2[2] - h2[2]) * Math.cos(t2);
-    assert.ok((x2 - ww.o[0]) * ww.n[0] + (z2 - ww.o[2]) * ww.n[2] > 0.2, "a barn door swings out");
-  }
+  const barn = sanitize(PRESETS.find(x => x.id === "ladugard").settings);
+  assert.ok(openOut(barn) > 0.2, "a barn door swings out");
 });
 
 test("doors: a door can be set not to open: no animation, the wall's collision closed, nothing kept clear inside", () => {

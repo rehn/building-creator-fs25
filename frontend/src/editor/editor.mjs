@@ -710,6 +710,7 @@ function renderWinUI() {
       html += `<div class="field"><div class="fl"><label for="wf-porch">In front of the door</label></div><select id="wf-porch">${PORCH_OPTIONS.map(o => opt(o[0], o[1], s.porch)).join("")}</select></div>`;
       if (s.porch !== "none") html += PORCH_FIELDS.map(f => range(f)).join("");
       html += `<label class="check"><input type="checkbox" id="wf-opens" ${s.opens !== false ? "checked" : ""}> Opens (you can walk through it in the game)</label>`;
+      if (s.opens !== false) html += `<div class="field"><div class="fl"><label for="wf-swing">Swings</label></div><select id="wf-swing">${opt("out", "Outwards", s.swing || "out")}${opt("in", "Inwards", s.swing || "out")}</select></div>`;
     }
     if (!door) html += choiceFields("wc", s);
     if (!lastDoor) html += `<button type="button" id="winRemove">Remove this ${door ? "door" : "window"}</button>`;
@@ -748,7 +749,8 @@ function renderWinUI() {
     $("wf-wall").onchange = e => { s.wall = e.target.value; winChanged(); renderWinUI(); updateHighlight(); };
     $("wf-style").onchange = e => { s.style = e.target.value; persist(); rebuild(false); };
     if ($("wf-porch")) $("wf-porch").onchange = e => { s.porch = e.target.value; winChanged(); renderWinUI(); };
-    if ($("wf-opens")) $("wf-opens").onchange = e => { s.opens = e.target.checked; winChanged(); };
+    if ($("wf-opens")) $("wf-opens").onchange = e => { s.opens = e.target.checked; winChanged(); renderWinUI(); };
+    if ($("wf-swing")) $("wf-swing").onchange = e => { s.swing = e.target.value; winChanged(); };
     if ($("winRemove")) $("winRemove").onclick = () => { p.windows = p.windows.filter(w => w.id !== selId); selId = null; winChanged(); renderWinUI(); };
   }
 }

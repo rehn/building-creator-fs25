@@ -233,7 +233,7 @@ function cleanWindows(arr, legacy = {}) {
     return {
       id: i + 1, wall: w.wall, floor: Math.round(clampN(w.floor, 0, 2, 0)), pos: clampN(w.pos, 0, 1, 0.5),
       w: clampN(w.w, 0.3, 3, 1), h: clampN(w.h, 0.3, door ? 2.6 : 2.4, 1.25), sill: clampN(w.sill, 0, 2, 0.85),
-      ...k, ...porch, ...(door ? {opens: w.opens !== false} : {}),
+      ...k, ...porch, ...(door ? {opens: w.opens !== false, swing: w.swing === "in" ? "in" : "out"} : {}),
       room: pickRoom(w.room), curtain: pickCurtain(w.curtain), curtainColor: pickColor(w.curtainColor)
     };
   });
@@ -720,7 +720,7 @@ function layoutWall(key, L, fh, topAt, cover = null) {
     // a door made from a window stands on the floor, no taller than the floor allows
     const t0 = door ? 0 : win.floor * fh + win.sill;
     const t1 = door ? Math.min(win.h, fh - 0.25) : win.floor < wf ? Math.min(t0 + win.h, (win.floor + 1) * fh - 0.25) : t0 + win.h;
-    const op = {s0, s1, t0, t1, kind: door ? "door" : "window", id: win.id, style: styleOf(p, win), ...(door ? {opens: win.opens !== false} : {})};
+    const op = {s0, s1, t0, t1, kind: door ? "door" : "window", id: win.id, style: styleOf(p, win), ...(door ? {opens: win.opens !== false, swingIn: win.swing === "in"} : {})};
     if (door) op.porch = {type: win.porch || "none", w: win.porchW || PORCH_W[2], d: win.porchD || PORCH_D[2]};
     const g = 0.18;
     if (t1 - t0 < 0.3 || s1 - s0 < 0.3 || ops.some(q => q.s0 < op.s1 + g && op.s0 < q.s1 + g && q.t0 < op.t1 + g && op.t0 < q.t1 + g)
@@ -942,8 +942,8 @@ function buildDoor(w, o, kit, inner, r, out, key) {
     if (slide) {
       const v = (right ? 1 : -1) * travel;
       leaves.push({hinge: WP(w, s0, o.t0, dIn), motion: {translation: [w.u[0] * v, 0, w.u[2] * v]}, parts: rangesSince(before), box});
-    // a barn's doors swing out; a house's (kind.doorsIn) in, hinged on the inside of the leaf
-    } else if (kind.doorsIn) leaves.push({hinge: WP(w, right ? s1 : s0, o.t0, dIn), motion: {rotation: right ? DOOR_OPEN : -DOOR_OPEN}, parts: rangesSince(before), box});
+    // a door swings out (hinged on the outside of the leaf) or, if chosen (o.swingIn), in (hinged on the inside)
+    } else if (o.swingIn) leaves.push({hinge: WP(w, right ? s1 : s0, o.t0, dIn), motion: {rotation: right ? DOOR_OPEN : -DOOR_OPEN}, parts: rangesSince(before), box});
     else leaves.push({hinge: WP(w, right ? s1 : s0, o.t0, dOut), motion: {rotation: right ? -DOOR_OPEN : DOOR_OPEN}, parts: rangesSince(before), box});
   });
   if (inner && o.opens) doors.push({wall: key, op: o, slide, leaves});

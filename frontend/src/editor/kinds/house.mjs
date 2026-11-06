@@ -58,7 +58,6 @@ export default {
   // have the small rooms behind them); its doors open inwards
   walkIn: true,
   ceiling: "#F4F1EA",
-  doorsIn: true,
   // what a new house's first door has in front of it
   entrance: "porch",
   insideWalls: {wall: ["#E6DCC6", "whitewash"], low: null, kick: ["#F2EFE8", "wood", 0.12]},

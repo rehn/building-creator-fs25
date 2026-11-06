@@ -3,7 +3,7 @@
 //   category              where "New" lists it (CATEGORIES)
 //   walkIn                inside walls, hollow collision, doors that open and a furnished inside
 //   ceiling               walk-in: the colour of a ceiling over the ground floor (the floors above closed)
-//   doorsIn, entrance     walk-in: doors swing in (a house) rather than out; a new first door's porch
+//   entrance              walk-in: a new first door's porch (a door swings out unless it is set to swing in)
 //   insideWalls           walk-in: {wall, low, kick} finish of the inside walls (default: a barn's)
 //   glyph, yard           animal kinds: the animal icon ("hen", "cow") and yard(geo, p) -> {fence ...} for the preview
 //   objects               its game objects (objects.mjs): {types, required, pasture, defaults(p)}
