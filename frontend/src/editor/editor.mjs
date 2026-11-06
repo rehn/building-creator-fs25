@@ -461,7 +461,7 @@ function setupOrbit() {
     }
     if (ins.drag) {
       const d = ins.drag; ins.drag = null;
-      if (d.moved && (d.cand.x !== p.items.find(x => x.id === d.id).x || d.cand.z !== p.items.find(x => x.id === d.id).z)) commitItems(p.items.map(x => x.id === d.id ? d.cand : x));
+      if (d.moved && JSON.stringify(d.cand) !== JSON.stringify(p.items.find(x => x.id === d.id))) commitItems(p.items.map(x => x.id === d.id ? d.cand : x));
       else updateInsideOverlay();
     } else if (click) {
       if (ins.on) { ins.sel = null; renderInsideUI(); updateInsideOverlay(); } else pick(e);

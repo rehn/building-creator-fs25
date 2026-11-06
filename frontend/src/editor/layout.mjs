@@ -237,7 +237,15 @@ export function snapItem(item, def, room, others = [], catalog = {}) {
   }
   // a floor piece, kept in the part of the room nearest to it
   const f = footprint({...item, x: 0, z: 0}, def), at = r => ({...item, x: clamp(snap(item.x), r.x0 - f.x0, r.x1 - f.x1), z: clamp(snap(item.z), r.z0 - f.z0, r.z1 - f.z1)});
-  const tries = (room.rects || [room]).map(at), fits = tries.filter(q => inRoom(room, footprint(q, def)));
+  // where it is put if that is inside the room (it may straddle two parts), else the nearest spot in each part
+  const bx = roomBox(room), here = {...item, x: clamp(snap(item.x), bx.x0 - f.x0, bx.x1 - f.x1), z: clamp(snap(item.z), bx.z0 - f.z0, bx.z1 - f.z1)};
+  const tries = [here, ...(room.rects || [room]).map(at)], fits = tries.filter(q => inRoom(room, footprint(q, def)));
+  if (def.snapWalls && !inRoom(room, footprint(here, def))) {
+    // too long for the part it is put in: as long as that part is there (a wall into a wing narrower than it)
+    const r = (room.rects || [room]).find(r => item.x >= r.x0 && item.x <= r.x1 && item.z >= r.z0 && item.z <= r.z1), len = def.params.find(g => g.k === "length");
+    const room1 = r && (item.rot % 180 === 0 ? r.x1 - r.x0 : r.z1 - r.z0), fit = r && Math.floor(room1 * 100) / 100;
+    if (r && fit >= len.min && fit < item.length) return snapItem({...item, length: fit}, def, room, others, catalog);
+  }
   const far = q => Math.hypot(q.x - item.x, q.z - item.z);
   const placed = (fits.length ? fits : tries).reduce((best, q) => far(q) < far(best) ? q : best);
   return def.snapWalls ? endsToWalls(placed, def, room, others, catalog) : placed;

@@ -152,3 +152,14 @@ test("a wall piece is drawn to an inner wall's face too, not through its doorway
   assert.ok(c.x + cat.sofa.size({})[0] / 2 <= r[0] + 1e-9 || c.x - cat.sofa.size({})[0] / 2 >= r[1] - 1e-9 || Math.abs(c.z) > 1, JSON.stringify(c));
   assert.equal(problems([dw, a], cat, room).has(2), false);
 });
+
+test("a piece can be put across the join of the house and a wing, and a wall longer than the wing goes in it", () => {
+  const p = sanitize({wings: [{wall: "back", pos: 0.5, width: 5, depth: 5, floors: 0}], items: []}), room = roomOf(p), cat = catalogFor(p), w = room.rects[1];
+  // along z, from inside the wing through the passage into the house
+  const a = snapItem(wall({id: 1, rot: 90, x: 0, z: w.z1, length: 4, door: 0}), cat.innerwall, room, [], cat);
+  assert.ok(a.z - 2 < w.z1 && a.z + 2 > w.z1 && problems([a], cat, room).size === 0, JSON.stringify(a));
+  assert.ok(Math.abs(a.z - w.z1) < 0.2, `stays where put: ${a.z}`);
+  // longer than the wing is wide, put in the wing across it: it is the wing's width there
+  const b = snapItem(wall({id: 1, x: 0, z: (w.z0 + w.z1) / 2, length: 8, door: 0}), cat.innerwall, room, [], cat);
+  assert.ok(b.z < w.z1 && b.length <= Math.floor((w.x1 - w.x0) * 100) / 100 && problems([b], cat, room).size === 0, JSON.stringify(b));
+});
