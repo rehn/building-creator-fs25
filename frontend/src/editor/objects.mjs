@@ -36,7 +36,7 @@ export const objectInfo = (kind, type) => ({...OBJECT_TYPES[type], ...((kind.obj
 /** Ranges: positions and sizes of box objects, icons, and a pasture's ends along its wall. */
 export const OBJECT_LIMITS = {x: [-80, 80], z: [-80, 80], w: [0.5, 70], d: [0.5, 70], h: [0.2, 8], ix: [-10, 10], iz: [-10, 10], end: [-40, 40]};
 /** The opening to the pasture: width and height ranges, and what it is to start with. */
-export const GAP_LIMITS = {w: [0.8, 6], h: [1.2, 4]};
+export const GAP_LIMITS = {w: [0.8, 10], h: [1.2, 8]};
 export const GAP_DEFAULT = {w: 1.6, h: 2.2};
 export const TROUGH_KINDS = ["cow", "sheep"];
 const GRID = 0.25, CORNER_SNAP = 0.6;

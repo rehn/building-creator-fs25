@@ -86,7 +86,7 @@ test("opening: the doorway to the pasture can be put anywhere along the wall and
   assert.ok(!objectProblems(p).has(po.id));
   const edge = withObjects(p0, o => o.type === "pasture" && {...o, gapAt: -5, gapW: 40, gapH: 99});
   const e = objectOf(edge, "pasture");
-  assert.ok(e.gapW <= 6 && e.gapH <= 4 && e.gapAt - e.gapW / 2 >= 0, "kept on the wall and in range");
+  assert.ok(e.gapW <= 10 && e.gapH <= 8 && e.gapAt - e.gapW / 2 >= 0, "kept on the wall and in range");
 });
 
 test("opening: a door on the stretch where the doorway is warns", () => {
@@ -116,4 +116,17 @@ test("doors: an empty doorway with a frame (style hole) is a hole you can walk t
   assert.ok(op.kind === "hatch" && op.plain && op.hole, "drawn as a framed hole");
   assert.ok(!g.doors.some(d => d.op && d.op.id === id), "no leaves");
   assert.ok(!new RegExp("door" + id + "Leaf").test(placeableXml(p, "x")), "no door animation");
+});
+
+test("big openings: a door can be 10 m wide and 8 m high, the pasture's opening too, in a tall enough building", () => {
+  const p0 = barn({width: 24, depth: 16, floorHeight: 9, winBack: 0}), wall = objectOf(p0, "pasture").wall;
+  assert.equal(p0.floorHeight, 9);
+  const p = sanitize({...p0, windows: [...p0.windows, {id: 5, type: "door", floor: 0, wall, pos: 0.15, w: 10, h: 8, style: "hole"}]});
+  const d = p.windows.find(w => w.wall === wall && w.type === "door");
+  assert.equal(d.w, 10); assert.equal(d.h, 8);
+  const op = buildGeometry(p).opsByWall[wall].ops.find(o => o.hole);
+  assert.ok(op && Math.abs(op.s1 - op.s0 - 10) < 1e-6 && Math.abs(op.t1 - 8) < 1e-6);
+  const q = withObjects(p0, o => o.type === "pasture" && {...o, gapAt: 12, gapW: 10, gapH: 8});
+  const g = buildGeometry(q).opsByWall[wall].ops.find(o => o.kind === "hatch" && !o.hole);
+  assert.ok(Math.abs(g.s1 - g.s0 - 10) < 1e-6 && Math.abs(g.t1 - 8) < 1e-6);
 });
