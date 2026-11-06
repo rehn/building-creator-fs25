@@ -171,8 +171,9 @@ test("doors: a porch or canopy at every door that has one, and a doorstep at the
   };
   assert.ok(out("front", 1, 2) > 0, "porch at the front");
   assert.ok(out("back", 0.8, 1.7) > 0, "canopy at the back");
-  assert.equal(out("left", 0.8, 3), 0, "nothing far out at the left door");
+  assert.equal(out("left", 1.5, 3), 0, "nothing far out at the left door (the steps go 1.3 m out)");
   assert.ok(out("left", 0.1, 0.7) > 0, "a doorstep at the left door");
+  assert.ok(out("left", 0.8, 1.4) > 0, "and steps down from it on a high foundation");
   // the old entrance settings are gone from the editor
   assert.ok(!SCHEMA.some(g => g.fields.some(f => /^entrance|^door(Wall|Pos|W|H)$/.test(f.k))));
 });

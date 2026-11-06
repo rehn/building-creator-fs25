@@ -1061,6 +1061,12 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
         // the doorstep, from where the plinth ends (its top in the same plane would flicker)
         wbox("foundation", w, o.s0 - 0.3, o.s1 + 0.3, -F, 0, PLINTH_OUT, 0.7);
         wbox("collision", w, o.s0 - 0.3, o.s1 + 0.3, -F, 0, PLINTH_OUT, 0.7);
+        // on a high foundation more steps down to the ground, risers of about 18 cm, each its own slab 30 cm deep
+        const n = Math.max(1, Math.round(F / 0.18)), rh = F / n;
+        for (let k = 1; k < n; k++) {
+          wbox("foundation", w, o.s0 - 0.3, o.s1 + 0.3, -F, -k * rh, 0.7 + (k - 1) * 0.3, 0.7 + k * 0.3);
+          wbox("collision", w, o.s0 - 0.3, o.s1 + 0.3, -F, -k * rh, 0.7 + (k - 1) * 0.3, 0.7 + k * 0.3);
+        }
       }
     } else wbox("trim", w, o.s0 - fr - 0.04 * k, o.s1 + fr + 0.04 * k, o.t0 - 0.07 * k, o.t0, 0, out + 0.05 * k);
   });
