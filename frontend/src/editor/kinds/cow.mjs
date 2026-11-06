@@ -5,7 +5,7 @@
 // Imports only the i3d writer and the pure helpers; the core hands in the rest (see kinds/index.mjs).
 import { tg, shape } from "../i3d.mjs";
 import { roomOf, furnisher } from "../layout.mjs";
-import { wallLength, yardFrame, shellOf, teleportFor, withPasture, pastureWallFor } from "./pasture.mjs";
+import { wallLength, yardFrame, shellOf, teleportFor, withPasture, pastureWallFor, cornerStripes, palletLines } from "./pasture.mjs";
 import { objectOf, boxOf, iconOf, boxFrom, pastureOf } from "../objects.mjs";
 import { placeOnWall, placeOnBuilding } from "../places.mjs";
 import { tone, shade, arc, strawBale, strawLitter } from "./props.mjs";
@@ -20,6 +20,12 @@ const FOOD_PER_COW = 1700;
 const MIN_PASTURE_WIDTH = 16;
 export const cowCap = p => Math.max(1, Math.min(MAX_COWS, Math.floor(p.width * p.depth / M2_PER_COW + 1e-9)));
 const cowsOf = p => Math.min(Math.round(p.cows), cowCap(p));
+/**
+ * What differs between the barns built on this module (the cow barn and the sheep barn, sheep.mjs):
+ * the animal count, the smallest pasture, whether there are pallets (wool) and how it is exported.
+ */
+export const COW = {count: cowsOf, minWidth: MIN_PASTURE_WIDTH, pallets: false, foodPer: FOOD_PER_COW, animal: "COW", fill: "FORAGE",
+  fence: "cowFence/cowFence", glyph: "cow", fnAnimal: "$l10n_function_animalPenCow"};
 
 /* ---------- The doorway and the troughs ---------- */
 /** The cows' doorway: an open 1.6 x 2.2 m opening in the middle of the wall the pasture encloses, kept clear 1.6 m inside. */
@@ -39,14 +45,14 @@ const TROUGH = {d0: 0.25, d1: 0.95, wall: 0.08, food: {top: 0.75, bottom: 0.45, 
  *   loading:      animal trailer spot further out on the feed side; info; blockers: kept out of the walking area
  *   markers:      {food, bales, animals, teleport}; areas: ground leveled for the troughs and the pad
  */
-export function cowYard(geo, p) {
-  const yf = yardFrame(geo, p, MIN_PASTURE_WIDTH), {at, boxAt, rectOf} = yf;
+export function cowYard(geo, p, cfg = COW) {
+  const yf = yardFrame(geo, p, cfg.minWidth), {at, boxAt, rectOf} = yf;
   // The pasture: the building's pasture object, or (placing things to start with) its wall and depth.
   const pa = pastureOf(p), past = pa ? pa.w : yf.past, fence = pa ? pa.fence : yf.fence;
   const ea = pa ? pa.ea : 0, eb = pa ? pa.eb : past.L, mid = pa ? pa.mid : past.L / 2;
   const [o0, o1] = [mid - 0.8, mid + 0.8];
   const sides = [[ea + 0.4, o0 - 0.5], [o1 + 0.5, eb - 0.4]].sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]));
-  const n = cowsOf(p);
+  const n = cfg.count(p);
   const trough = (range, kind, length) => {
     const [a, b] = range, len = Math.max(0.8, Math.min(b - a, length)), s0 = (a + b) / 2 - len / 2, s1 = s0 + len, c = TROUGH[kind];
     const box = (sA, sB, dA, dB, h) => ({...boxAt(past, (sA + sB) / 2, (dA + dB) / 2, sB - sA, dB - dA, h)});
@@ -62,47 +68,52 @@ export function cowYard(geo, p) {
   const waterPlaces = along(waterTrough).map(s => ({pos: at(past, s, 1.6), rot: facing}));
   // The game objects: where the building has them (objects.mjs); to start with, the feed pad and bales
   // outside the fence on the feed side, the trailer spot further out, the info area round the barn.
-  const {food, bales, loading, info} = cowObjects(geo, p, yf);
+  const {food, bales, loading, info, pallets} = cowObjects(geo, p, yf, cfg);
   return {
+    ...(pallets && {pallet: {lines: palletLines(pallets.box), trigger: pallets.box, stripes: cornerStripes(rectOf(pallets.box))}}),
     fence, feedTrough, waterTrough, foodPlaces, waterPlaces, food: food.box, bales: bales && bales.box, loading: loading.box, info: info.box,
     blockers: [{center: [0, 1, 0], size: [geo.dims.W, 2, geo.dims.D]}, feedTrough.box, waterTrough.box],
     markers: {food: food.icon, bales: bales && bales.icon, animals: loading.icon, teleport: teleportFor(loading, geo.dims)},
-    areas: [food.box, ...(bales ? [bales.box] : []), feedTrough.box, waterTrough.box].map(rectOf),
+    areas: [food.box, ...(bales ? [bales.box] : []), ...(pallets ? [pallets.box] : []), feedTrough.box, waterTrough.box].map(rectOf),
   };
 }
 /**
  * The cow barn's game objects as {box, icon}: the building's (p.objects), or where they go to start
  * with. A building with objects that left one out (the bale drop is optional) has null for it.
  */
-function cowObjects(geo, p, yf = yardFrame(geo, p, MIN_PASTURE_WIDTH)) {
-  const {feedKey, frames, mid} = yf, {W, D} = geo.dims;
+function cowObjects(geo, p, yf, cfg) {
+  const {feedKey, otherKey, frames, mid} = yf, {W, D} = geo.dims;
   const pad = (h, icon) => w => { const [c, len] = mid(w); return {s: c, d: 1.75, along: Math.max(2.5, Math.min(4, len)), out: 3, h, icon: [c + icon, 1.75]}; };
   const start = {
     food: placeOnWall({}, "food", frames, feedKey, pad(0.3, -0.8)),
     bales: placeOnWall({}, "bales", frames, feedKey, pad(2.5, 0.8)),
     loading: placeOnWall({}, "loading", frames, feedKey, w => { const [c, len] = mid(w); return {s: c, d: 5.5, along: Math.min(4, len), out: 4, h: 3, icon: [c, 5.5]}; }),
     info: {box: placeOnBuilding({}, "info", {center: [0, 1.5, 0], size: [W + 2, 3, D + 2]}), icon: null},
+    pallets: cfg.pallets && placeOnWall({}, "pallets", frames, otherKey, w => {
+      const [c, len] = mid(w), lines = Math.min(4.8, Math.max(1.2, len - 1));
+      return {s: c, d: 2.8, along: Math.min(lines + 1, len), out: 3.2, h: 2.5, icon: null};
+    }),
   };
   const out = {};
-  for (const t of ["food", "bales", "loading", "info"]) {
+  for (const t of ["food", "bales", "loading", "info", ...(cfg.pallets ? ["pallets"] : [])]) {
     const o = objectOf(p, t);
     out[t] = o ? {box: boxOf(o), icon: iconOf(o)} : Array.isArray(p.objects) ? null : start[t];
   }
   return out;
 }
 /** Where the cow barn's objects go to start with (kind.objects.defaults): from its pasture wall and depth. */
-function defaultObjects(p) {
-  const q = {...p, pastureWall: pastureWallFor(p), objects: undefined}, y = cowObjects(shellOf(q), q);
+const defaultsOf = cfg => p => {
+  const q = {...p, pastureWall: pastureWallFor(p), objects: undefined}, geo = shellOf(q), y = cowObjects(geo, q, yardFrame(geo, q, cfg.minWidth), cfg);
   return [
-    ...["food", "bales", "loading", "info"].map(t => boxFrom(t, y[t].box, y[t].icon)),
+    ...["food", "bales", "loading", "info", ...(cfg.pallets ? ["pallets"] : [])].map(t => boxFrom(t, y[t].box, y[t].icon)),
     // (a new barn's pasture goes on a wall without a door, if it can)
     {type: "pasture", wall: q.pastureWall, a: 0, b: 0, depth: p.fenceDepth},
   ];
-}
+};
 
 /** The troughs, drawn outside the walls (c: {p, geo, abox, paint} from the core). The fill planes are separate i3d nodes. */
-function outside(c) {
-  const y = cowYard(c.geo, c.p);
+export const outsideOf = cfg => c => {
+  const y = cowYard(c.geo, c.p, cfg);
   c.paint(COLORS.concrete, "concrete");
   for (const t of [y.feedTrough, y.waterTrough]) {
     const o = t.outer, i = t.inner;
@@ -111,7 +122,7 @@ function outside(c) {
       c.abox("fittings", [a[0], t.bottom, a[1]], [b[0], t.top, b[1]]);          // its four sides
     c.abox("collision", [o.x0, 0, o.z0], [o.x1, t.top, o.z1]);
   }
-}
+};
 
 /* ---------- Inside ---------- */
 const COLORS = {concrete: "#9A968C", floor: "#8A857B", rubber: "#2E2E2C", steel: "#A9AFB3", wood: "#A47A4E", straw: "#DDBF73", hay: "#B7B064", bale: "#D9BC6A",
@@ -313,13 +324,15 @@ function autoFurnish(p) {
 /* ---------- Export ---------- */
 const quad = (sx, sz) => ({p: [-sx/2, 0, -sz/2, -sx/2, 0, sz/2, sx/2, 0, sz/2, sx/2, 0, -sz/2], n: [0,1,0, 0,1,0, 0,1,0, 0,1,0], uv: [0,0, 0,1, 1,1, 1,0], i: [0, 1, 2, 0, 2, 3]});
 /** Scene nodes and placeable XML for the pasture (c: export context from the core). */
-function scene(c) {
-  const {p, geo, doc} = c, y = cowYard(geo, p), n = cowsOf(p);
+export const sceneOf = cfg => c => {
+  const {p, geo, doc} = c, y = cowYard(geo, p, cfg), n = cfg.count(p);
+  const stripesMat = y.pallet && doc.material("warningStripes_mat", {}, ["diffuse", "normal", "specular"].map((k, i) =>
+    [["Texture", "Normalmap", "Glossmap"][i], `$data/shared/warningStripes_${k}.png`])); // the game finds the .dds
   const forage = doc.material("forage_mat", {diffuseColor: "0.42 0.45 0.2 1"}), water = doc.material("water_mat", {diffuseColor: "0.22 0.36 0.45 1"});
   const plane = (name, t, mat) => shape(name, {translation: [t.plane[0], t.planeMax, t.plane[1]], shapeId: doc.shape(name, quad(...t.size)), castsShadows: false, receiveShadows: true, materialIds: mat});
   const places = (group, name, list) => tg(group, [0, 0, 0], list.map((q, i) => tg(`${name}${i + 1}`, q.pos, [], {rotation: [0, q.rot, 0]})));
   const blocker = (b, i) => c.box(i ? `navmeshBlocker${i + 1}` : "navmeshBlocker", b, {static: true, collisionFilterGroup: "0x800000", collisionFilterMask: "0x1", buildNavMeshMask: "0xfe"});
-  const nodes = [tg("cowFeatures", [0, 0, 0], [
+  const nodes = [tg(cfg.animal === "COW" ? "cowFeatures" : "animalFeatures", [0, 0, 0], [
     // Solid, not a trigger: unloading finds it with a raycast. It only collides with triggers.
     c.box("exactFillRootNodeFood", y.food, {static: true, collisionFilterGroup: "0x40000000", collisionFilterMask: "0x20000000"}),
     tg("markerFood", y.markers.food),
@@ -335,6 +348,12 @@ function scene(c) {
     // Like the base game's cow barn: the barn and troughs are cut out of the walking area made from the fence.
     tg("navigationRootNode", [0, 0, 0], y.blockers.map(blocker)),
     tg("fence1", [0, 0, 0], y.fence.map((q, i) => tg(`fence1Node${i + 1}`, q))),
+    ...(y.pallet ? [
+      c.box("palletTrigger", y.pallet.trigger, c.trigger("0x20000000", "0x10000")),
+      ...y.pallet.lines.map(([a, b], i) => tg(`palletAreaStart0${i + 1}`, a, [tg(`palletAreaEnd0${i + 1}`, b.map((v, k) => v - a[k]))])),
+      // Hidden until the game's trigger marker setting shows it; projected onto the terrain.
+      shape("warningStripes01", {translation: [0, 0.02, 0], shapeId: doc.shape("warningStripes", y.pallet.stripes), castsShadows: false, receiveShadows: true,
+        nonRenderable: true, terrainDecal: true, materialIds: stripesMat, clipDistance: 100})] : []),
   ])];
   const t = y.feedTrough, w = y.waterTrough;
   const xml = `
@@ -342,25 +361,26 @@ function scene(c) {
         <triggerMarker node="markerFood" filename="$data/shared/assets/marker/markerIconFood.i3d" adjustToGround="true"/>
         <triggerMarker node="markerAnimals" filename="$data/shared/assets/marker/markerIconAnimals.i3d" adjustToGround="true"/>
 ${y.bales ? `        <triggerMarker node="markerBales" filename="$data/shared/assets/marker/markerIconBales.i3d" adjustToGround="true"/>
+` : ""}${y.pallet ? `        <triggerMarker node="warningStripes01"/>
 ` : ""}    </triggerMarkers>
 
     <hotspots>
-        <hotspot type="COW" teleportNode="teleportNode"/>
+        <hotspot type="${cfg.animal}" teleportNode="teleportNode"/>
     </hotspots>
 
     <infoTrigger triggerNode="infoTrigger"/>
 
-    <husbandry saveId="Animals_COW" hasStatistics="false">
+    <husbandry saveId="Animals_${cfg.animal}" hasStatistics="false">
         <!-- The walking area is made from the fence when the barn is placed; the barn and troughs are blocked out. -->
-        <animals type="COW" baseMaxNumAnimals="${n}" maxNumAnimals="${n}">
+        <animals type="${cfg.animal}" baseMaxNumAnimals="${n}" maxNumAnimals="${n}">
             <navigation rootNode="navigationRootNode"/>
             <loadingTrigger node="loadingTrigger"/>
         </animals>
-        <food capacity="${n * FOOD_PER_COW}">
+        <food capacity="${n * cfg.foodPer}">
             <foodPlaces>
 ${y.foodPlaces.map((_, i) => `                <foodPlace node="foodPlace${i + 1}"/>`).join("\n")}
             </foodPlaces>
-            <foodPlane node="foodPlane" minY="${t.planeMin}" maxY="${t.planeMax}" changeVisibility="true" defaultFillType="FORAGE"/>
+            <foodPlane node="foodPlane" minY="${t.planeMin}" maxY="${t.planeMax}" changeVisibility="true" defaultFillType="${cfg.fill}"/>
             <unloadTrigger exactFillRootNode="exactFillRootNodeFood"/>
 ${y.bales ? `            <baleTrigger triggerNode="baleTrigger" deleteLitersPerSecond="200"/>
 ` : ""}        </food>
@@ -370,7 +390,16 @@ ${y.bales ? `            <baleTrigger triggerNode="baleTrigger" deleteLitersPerS
 ${y.waterPlaces.map((_, i) => `                <waterPlace node="waterPlace${i + 1}"/>`).join("\n")}
             </waterPlaces>
         </water>
-        <fence xmlFilename="$data/placeables/brandless/fences/husbandries/cowFence/cowFence.xml">
+${y.pallet ? `        <pallets>
+            <palletSpawner fillTypes="${cfg.pallets.fills}" maxNumPallets="${cfg.pallets.max}">
+                <palletTrigger node="palletTrigger"/>
+                <spawnPlaces>
+                    <spawnPlace startNode="palletAreaStart01" endNode="palletAreaEnd01"/>
+                    <spawnPlace startNode="palletAreaStart02" endNode="palletAreaEnd02"/>
+                </spawnPlaces>
+            </palletSpawner>
+        </pallets>
+` : ""}        <fence xmlFilename="$data/placeables/brandless/fences/husbandries/${cfg.fence}.xml">
             <sections>
                 <section segmentId="SEGMENT" customizable="true">
 ${y.fence.map((_, i) => `                    <node node="fence1Node${i + 1}"/>`).join("\n")}
@@ -389,7 +418,7 @@ ${y.fence.map((_, i) => `                    <node node="fence1Node${i + 1}"/>`)
     </husbandry>
 `;
   return {nodes, xml, areas: y.areas};
-}
+};
 
 /* ---------- The kind ---------- */
 const swedishRed = {wallCladding: "lockpanel", wallColor: "#8E2A1E", trimColor: "#F2EFE8"};
@@ -420,13 +449,13 @@ export default {
     note: `Cow barn: use <placeable type="cowHusbandryPasture" ...>, as in the base game's small cow barn.`}),
   description: p => `A ${(+p.width).toFixed(1)} x ${(+p.depth).toFixed(1)} m cow barn for ${cowsOf(p)} cows, made with House to i3d.`,
   furnish,
-  outside,
+  outside: outsideOf(COW),
   catalog: CATALOG,
   autoFurnish,
-  scene,
+  scene: sceneOf(COW),
   // the game objects: the bale drop is optional
   objects: {types: ["food", "bales", "loading", "info", "pasture"], required: ["food", "loading", "info", "pasture"],
-    pasture: {minWidth: MIN_PASTURE_WIDTH, depth: [10, 60]}, defaults: defaultObjects},
+    pasture: {minWidth: MIN_PASTURE_WIDTH, depth: [10, 60]}, defaults: defaultsOf(COW)},
   presets: [
     {id: "ladugard", name: "Röd ladugård", blurb: "16 × 9 m red Swedish barn for 20 cows: falu red boards, white trim, a fieldstone base and lanterns on the ridge.", settings: {
       cows: 20, pastureWall: "back", fenceDepth: 18, ...swedishRed,

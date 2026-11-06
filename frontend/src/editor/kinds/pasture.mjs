@@ -74,3 +74,29 @@ export function withPasture(q) {
   const pa = pastureOf(q);
   return pa ? {...q, pastureWall: pa.wall, fenceDepth: pa.depth, pastureMid: pa.mid} : q;
 }
+
+/** Two pallet spawn lines inside a pallet trigger box, along its longer side: 50 cm in from its ends and 80 cm either side of its middle. */
+export function palletLines(box) {
+  const [cx, , cz] = box.center, [sw, , sd] = box.size, long = sw >= sd;
+  const ll = Math.max(0.2, (long ? sw : sd) - 1) / 2, dd = Math.min(0.8, Math.max(0, (long ? sd : sw) / 2 - 0.2));
+  return [-dd, dd].map(o => long ? [[cx - ll, 0, cz + o], [cx + ll, 0, cz + o]] : [[cx + o, 0, cz - ll], [cx + o, 0, cz + ll]]);
+}
+
+/**
+ * Warning stripes: an L-shaped mark (two flat arms, up to 1 m long and 0.25 m wide) in each corner
+ * of the ground rectangle r, facing up. UVs in metres: the stripe texture tiles once per metre.
+ */
+export function cornerStripes(r, arm = 1, w = 0.25) {
+  const g = {p: [], n: [], uv: [], i: []};
+  const quad = (xa, xb, za, zb) => {
+    const [x0, x1] = [Math.min(xa, xb), Math.max(xa, xb)], [z0, z1] = [Math.min(za, zb), Math.max(za, zb)], base = g.p.length / 3;
+    for (const [x, z] of [[x0, z0], [x0, z1], [x1, z1], [x1, z0]]) { g.p.push(x, 0, z); g.n.push(0, 1, 0); g.uv.push(x, z); }
+    g.i.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  };
+  const ax = Math.min(arm, (r.x1 - r.x0) / 2), az = Math.min(arm, (r.z1 - r.z0) / 2);
+  for (const [cx, sx] of [[r.x0, 1], [r.x1, -1]]) for (const [cz, sz] of [[r.z0, 1], [r.z1, -1]]) {
+    quad(cx, cx + sx * ax, cz, cz + sz * w);          // arm along x, including the corner square
+    quad(cx, cx + sx * w, cz + sz * w, cz + sz * az); // arm along z
+  }
+  return g;
+}
