@@ -173,3 +173,12 @@ test("snapping is gentle: a wall piece put well away from an inner wall goes to 
   // an end 0.4 m short of a wall stays short (a quarter metre is the reach)
   assert.ok(snapItem(wall({id: 2, rot: 90, x: 1, z: -1.75 + 0.15, length: 3, door: 0}), cat.innerwall, room, [], cat).length === 3);
 });
+
+test("a wall piece put near an inner wall stands against it even when a room wall is nearer", () => {
+  const p = house([]), room = roomOf(p), cat = catalogFor(p), w = wall({id: 1, x: 0, z: 2.2, length: 4, door: 0}), d = cat.sofa.size({})[1];
+  const s = snapItem({id: 2, type: "sofa", x: 0, z: 2.9, rot: 0}, cat.sofa, room, [w], cat);
+  assert.ok(Math.abs(s.z - (2.2 + 0.075 + d / 2)) < 1e-9 && s.rot === 0, JSON.stringify(s));
+  // far from it, the room's wall
+  const t = snapItem({id: 2, type: "sofa", x: 0, z: -1, rot: 0}, cat.sofa, room, [w], cat);
+  assert.ok(Math.abs(t.z - (room.z0 + d / 2)) < 1e-9, JSON.stringify(t));
+});

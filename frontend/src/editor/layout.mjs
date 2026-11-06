@@ -226,9 +226,11 @@ export function snapItem(item, def, room, others = [], catalog = {}) {
   if (def.mount === "wall") {
     // the nearest stretch of wall (its distance from the point to the stretch, not to its line)
     const dist = wl => Math.hypot(Math.max(wl.x0 - item.x, 0, item.x - wl.x1), Math.max(wl.z0 - item.z, 0, item.z - wl.z1));
-    // an inner wall's faces count only when the piece is put close to them (else it goes to the room's walls, as ever)
-    const all = [...room.walls, ...innerFaces(room, others, catalog).filter(f => dist(f) < INNER_NEAR)];
-    const wl = all.reduce((best, x) => dist(x) < dist(best) ? x : best);
+    // an inner wall's face wins when the piece is put near it (its middle within the piece's half depth and INNER_NEAR of the
+    // face), even if a room wall is nearer; else the nearest room wall, as ever
+    const nearest = list => list.reduce((best, x) => dist(x) < dist(best) ? x : best);
+    const inner = innerFaces(room, others, catalog).filter(f => dist(f) < INNER_NEAR + d / 2);
+    const wl = nearest(inner.length ? inner : room.walls);
     if (wl.x0 === wl.x1) {
       const z = clamp(snap(item.z), wl.z0 + w/2, wl.z1 - w/2);
       return {...item, rot: wl.rot, x: wl.x0 + wl.into[0] * d/2, z};
@@ -271,8 +273,8 @@ function innerFaces(room, others, catalog) {
   return out;
 }
 
-/** How near (m) a wall piece must be put to an inner wall's face to stand against it. */
-const INNER_NEAR = 0.7;
+/** How near (m) beyond its half depth) a wall piece must be put to an inner wall's face to stand against it, and then it does, even if a room wall is nearer. */
+const INNER_NEAR = 0.8;
 /** How near (m) an end of an inner wall must come to a wall of the room to be drawn to it. */
 const SNAP_END = 0.25;
 /**
