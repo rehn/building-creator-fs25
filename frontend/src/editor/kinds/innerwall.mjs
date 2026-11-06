@@ -2,7 +2,7 @@
 // skirting boards and a cornice, and, if wanted, a doorway with casings. A catalog entry for every walk-in kind
 // (see layout.mjs); drawn with the kit in props.mjs in its own frame: x along the wall, z across it, y up.
 import { tone } from "./props.mjs";
-import { DOOR_STYLES } from "../openings.mjs";
+import { DOOR_STYLES, INNER_DOOR_STYLES } from "../openings.mjs";
 
 /** What a side can be: [name, colour, surface]. The surfaces are in surfaces.mjs. */
 export const WALLPAPERS = [
@@ -17,8 +17,8 @@ export const WALLPAPERS = [
 ];
 const CORE = "#D8D2C4", TRIM = "#F2EFE8", CORE_T = 0.045, SHEET = 0.005, DOOR_W = 0.9, DOOR_H = 2.05, CASING = 0.07;
 const options = WALLPAPERS.map(w => w[0]);
-/** The doors an inner wall can have: the building's own style, or one of the swinging styles (not the sliding barn door). */
-const DOOR_LOOKS = DOOR_STYLES.filter(s => s.id !== "sliding");
+/** The doors an inner wall can have: the building's own style, the models for rooms, or one of the outer swinging styles (not the sliding barn door). */
+const DOOR_LOOKS = [...INNER_DOOR_STYLES, ...DOOR_STYLES.filter(s => s.id !== "sliding")];
 
 /** The doorway [x0, x1] of a wall, or null: where it is along the wall (doorAt 0..1), when the wall has room for one. */
 export function doorwayOf(it) {

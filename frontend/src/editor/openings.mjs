@@ -21,6 +21,13 @@ export const DOOR_STYLES = [
   {id: "panel", name: "Panelled, glass at the top"},
   {id: "sliding", name: "Sliding barn door"},
 ];
+/** Doors for the rooms of a house (inner walls): lighter and finer than the outer doors; not offered as the building's door style. */
+export const INNER_DOOR_STYLES = [
+  {id: "flush", name: "Smooth (slät dörr)"},
+  {id: "mirror", name: "Mirror door (spegeldörr)"},
+  {id: "fourpanel", name: "Four panels (fyllningsdörr)"},
+  {id: "glazed", name: "Glazed above, panel below (glasad dörr)"},
+];
 export const WINDOW_STYLE_IDS = WINDOW_STYLES.map(s => s.id);
 export const DOOR_STYLE_IDS = DOOR_STYLES.map(s => s.id);
 
@@ -137,6 +144,35 @@ export function drawLeaf(kit, style, L) {
     for (const [a, b] of [[L.t0 + bot, lock - 0.05], [lock + 0.05, tm - mid]]) if (b - a > 0.1) on("door", st + 0.03, W - st - 0.03, a + 0.03, b - 0.03, f, f + 0.012);
     box("glass", st + 0.001, W - st - 0.001, tm + 0.001, tg - 0.001, f + 0.001, f + 0.004);   // (1 mm clear of the frame all round: flush faces flicker)
     if (W - 2 * st > 0.6) { const c = W / 2; box("door", c - 0.015, c + 0.015, tm, tg, f + 0.005, f + 0.018); }
+    handleU = W - st / 2; handleAt = 0.02;
+  }
+  else if (style === "flush") {
+    // a smooth leaf: just the lever and its rosette
+    handleU = W - 0.06; handleAt = 0;
+  } else if (style === "mirror") {
+    // one tall "mirror" (spegel): a moulded frame round a recessed panel, in the middle of the leaf
+    const m = 0.14, mo = 0.04, a = L.t0 + 0.3, b = L.t1 - 0.3;
+    on("door", m, W - m, a, a + mo, f, f + 0.016); on("door", m, W - m, b - mo, b, f, f + 0.016);
+    on("door", m, m + mo, a + mo, b - mo, f, f + 0.016); on("door", W - m - mo, W - m, a + mo, b - mo, f, f + 0.016);
+    on("door", m + mo + 0.01, W - m - mo - 0.01, a + mo + 0.01, b - mo - 0.01, f, f + 0.008);
+    handleU = W - 0.06; handleAt = 0;
+  } else if (style === "fourpanel") {
+    // stiles and rails (top, lock rail, bottom) round four recessed panels
+    const st = 0.09, rt = 0.1, rb = 0.2, lk = L.t0 + 1.0, rm = 0.05, cs = W / 2;
+    for (const [u0, u1] of [[0, st], [cs - st / 2, cs + st / 2], [W - st, W]]) on("door", u0, u1, L.t0, L.t1, f, f + 0.02);
+    on("door", st, W - st, L.t0, L.t0 + rb, f, f + 0.02); on("door", st, W - st, L.t1 - rt, L.t1, f, f + 0.02); on("door", st, W - st, lk - rm, lk + rm, f, f + 0.02);
+    for (const [u0, u1] of [[st, cs - st / 2], [cs + st / 2, W - st]]) for (const [a, b] of [[L.t0 + rb, lk - rm], [lk + rm, L.t1 - rt]])
+      on("door", u0 + 0.025, u1 - 0.025, a + 0.025, b - 0.025, f, f + 0.012);
+    handleU = W - st / 2; handleAt = 0.02;
+  } else if (style === "glazed") {
+    // glass in small panes above (three rows of two), a recessed panel below, stiles and rails of the leaf's wood
+    const st = 0.09, rt = 0.1, rb = 0.2, rm = 0.1, tm = L.t0 + 1.0, tg = L.t1 - rt, gH = tg - tm, cs = W / 2;
+    on("door", 0, st, L.t0, L.t1, f, f + 0.02); on("door", W - st, W, L.t0, L.t1, f, f + 0.02);
+    on("door", st, W - st, L.t0, L.t0 + rb, f, f + 0.02); on("door", st, W - st, tg, L.t1, f, f + 0.02); on("door", st, W - st, tm - rm, tm, f, f + 0.02);
+    on("door", st + 0.025, W - st - 0.025, L.t0 + rb + 0.025, tm - rm - 0.025, f, f + 0.012);
+    box("glass", st + 0.001, W - st - 0.001, tm + 0.001, tg - 0.001, f + 0.001, f + 0.004);
+    box("door", cs - 0.012, cs + 0.012, tm, tg, f + 0.003, f + 0.016);
+    for (const k of [1, 2]) on("door", st, W - st, tm + gH * k / 3 - 0.012, tm + gH * k / 3 + 0.012, f + 0.003, f + 0.016);
     handleU = W - st / 2; handleAt = 0.02;
   }
   // strap hinges from the hinge edge

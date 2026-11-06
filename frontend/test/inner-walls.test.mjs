@@ -280,7 +280,7 @@ test("inner door: its colour is its own setting (Colors), apart from the outer d
 
 test("inner door: the door can be chosen: the building's own style or any swinging style, each drawn differently", () => {
   const def = catalogFor(house([])).innerwall, look = def.params.find(f => f.k === "look");
-  assert.deepEqual(look.options.slice(0, 2), ["Like the building's doors", "Plain"]);
+  assert.deepEqual(look.options.slice(0, 2), ["Like the building's doors", "Smooth (slät dörr)"]);
   assert.ok(!look.options.some(o => /sliding/i.test(o)), "no sliding barn door in a house's rooms");
   const sizes = [];
   for (let i = 0; i <= look.options.length - 1; i++) {
@@ -288,10 +288,12 @@ test("inner door: the door can be chosen: the building's own style or any swingi
     assert.equal(g.doors.filter(d => d.wall === null).length, 1, "look " + i);
     sizes.push(g.G.doorIn.p.length + g.G.trim.p.length + g.G.glass.p.length + g.G.iron.p.length);
   }
-  assert.ok(new Set(sizes).size >= 4, "the styles differ: " + sizes.join(","));
+  assert.ok(new Set(sizes).size >= 7, "the styles differ: " + sizes.join(","));
+  assert.deepEqual(look.options.slice(1, 5).map(o => o.split(" (")[0]), ["Smooth", "Mirror door", "Four panels", "Glazed above, panel below"], "models for rooms first");
   // 0 = like the building's: a barn with a sliding door still gets a swinging inner door
   assert.deepEqual(buildGeometry(barn([wall({door: 2, look: 0})])).doors.filter(d => d.wall === null).map(d => d.slide), [false]);
-  assert.equal(def.leafOf(wall({door: 2, look: 2})).style, "plank");
+  assert.equal(def.leafOf(wall({door: 2, look: 2})).style, "mirror");
+  assert.equal(def.leafOf(wall({door: 2, look: 6})).style, "plank");
   assert.equal(def.leafOf(wall({door: 2, look: 0})).style, null);
   assert.ok(buildI3d(house([wall({door: 2, look: 5})])).includes("</i3D>"));
 });
