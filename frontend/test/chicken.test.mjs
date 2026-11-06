@@ -553,6 +553,15 @@ test("i3d: coop fittings export as plain colored parts", () => {
 });
 
 /* ---------- Canopy, pasture side and hen hatch ---------- */
+/** Whether point q is in a door of the walls (its leaf and the details on its inside face are part of the door, not leaks from the outside). */
+function atDoor(geo, q) {
+  return Object.values(geo.opsByWall).some(({w, ops}) => ops.some(o => {
+    if (o.kind !== "door") return false;
+    const v = [q[0] - w.o[0], q[1] - w.o[1], q[2] - w.o[2]], s = v[0] * w.u[0] + v[2] * w.u[2], d = v[0] * w.n[0] + v[2] * w.n[2];
+    return d > -0.25 && d < 0.02 && s > o.s0 - 0.05 && s < o.s1 + 0.05 && v[1] > -0.05 && v[1] < o.t1 + 0.05;
+  }));
+}
+
 test("shell: an entrance canopy stays out of a walk-in barn's room", () => {
   for (const entrance of ["gable", "shed", "porch"]) for (const doorWall of ["front", "left"]) {
     // one floor, so the canopy reaches up to the eaves (as in the screenshot)
@@ -563,7 +572,7 @@ test("shell: an entrance canopy stays out of a walk-in barn's room", () => {
       for (let k = 0; k < g.p.length; k += 3) {
         const [x, y, z] = g.p.slice(k, k + 3);
         const inside = Math.abs(x) < W / 2 - t - 0.01 && Math.abs(z) < D / 2 - t - 0.01 && y > F + 0.01 && y < top - 0.01;
-        assert.ok(!inside, `${entrance} canopy on ${doorWall}: ${m} at ${x.toFixed(2)},${y.toFixed(2)},${z.toFixed(2)} inside the room`);
+        assert.ok(!inside || atDoor(geo, [x, y, z]), `${entrance} canopy on ${doorWall}: ${m} at ${x.toFixed(2)},${y.toFixed(2)},${z.toFixed(2)} inside the room`);
       }
     }
     // nor its collision: you can stand inside the door

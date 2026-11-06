@@ -54,7 +54,13 @@ for (const st of DOOR_STYLES) for (const right of [false, true]) test(`door styl
   const {kit, parts} = recorder();
   drawLeaf(kit, st.id, {...leaf, right});
   // the leaf itself: door material filling it
-  assert.ok(parts.some(q => q.mat === "door" && q.s[0] <= leaf.s0 + 1e-9 && q.s[1] >= leaf.s1 - 1e-9 && q.d[0] <= leaf.dIn + 1e-9 && q.d[1] >= leaf.dOut - 1e-9));
+  if (st.id === "panel") {
+    // (a panelled door has a hole for its glass: the leaf is four boards round it, and the glass pane lies in the middle of its thickness)
+    const body = parts.filter(q => q.mat === "door" && q.d[0] <= leaf.dIn + 1e-9 && q.d[1] >= leaf.dOut - 1e-9 && q.t[1] - q.t[0] > 0.2);
+    assert.ok(body.length >= 4, "the leaf round the glass");
+    const glass = parts.find(q => q.mat === "glass");
+    assert.ok(glass && glass.d[0] > leaf.dIn && glass.d[1] < leaf.dOut, "glass in the thickness of the leaf (seen through from both sides)");
+  } else assert.ok(parts.some(q => q.mat === "door" && q.s[0] <= leaf.s0 + 1e-9 && q.s[1] >= leaf.s1 - 1e-9 && q.d[0] <= leaf.dIn + 1e-9 && q.d[1] >= leaf.dOut - 1e-9));
   for (const q of parts) {
     assert.ok(MATS.includes(q.mat), q.mat);
     assert.ok(q.s[0] >= leaf.s0 - 1e-9 && q.s[1] <= leaf.s1 + 1e-9 && q.t[0] >= leaf.t0 - 1e-9 && q.t[1] <= leaf.t1 + 1e-9, `${st.id}: ${JSON.stringify(q)} off the leaf`);
@@ -73,4 +79,13 @@ test("door styles: braced doors have trim on them, a panelled door glass, a plai
 test("a wide opening is a pair of doors", () => {
   assert.equal(isPair(1.2), false);
   assert.equal(isPair(1.6), true);
+});
+
+test("door styles: the details are on the inside face too (mirrored), unless the leaf is half of an inner door", () => {
+  const count = (id, extra = {}) => { const {kit, parts} = recorder(); drawLeaf(kit, id, {...leaf, ...extra}); return parts.filter(q => q.d[1] <= leaf.dIn + 1e-9 && q.d[0] >= leaf.dIn - 0.08).length; };
+  for (const id of ["plank", "zbrace", "xbrace", "panel"]) {
+    assert.ok(count(id) > 3, `${id}: ${count(id)} parts on the inside`);
+    assert.ok(count(id, {back: false}) < count(id), `${id}: fewer without the back`);
+  }
+  assert.equal(count("sliding"), count("sliding", {back: false}), "a sliding door hangs outside: nothing mirrored");
 });

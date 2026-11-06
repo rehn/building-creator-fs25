@@ -21,12 +21,20 @@ function frame(p) {
     inside: ([x, , z]) => Math.abs(x) < W / 2 - WALL_T - 0.01 && Math.abs(z) < D / 2 - WALL_T - 0.01};
 }
 
+/** Whether point q is in a door of the walls (its leaf and the details on its inside face are part of the door, not leaks from the outside). */
+function atDoor(geo, q) {
+  return Object.values(geo.opsByWall).some(({w, ops}) => ops.some(o => {
+    if (o.kind !== "door") return false;
+    const v = [q[0] - w.o[0], q[1] - w.o[1], q[2] - w.o[2]], s = v[0] * w.u[0] + v[2] * w.u[2], d = v[0] * w.n[0] + v[2] * w.n[2];
+    return d > -0.25 && d < 0.02 && s > o.s0 - 0.05 && s < o.s1 + 0.05 && v[1] > -0.05 && v[1] < o.t1 + 0.05;
+  }));
+}
 test("ventilators: nothing of their outside shows under the roof of a walk-in barn", () => {
   const p = preset("ladugard");
   assert.ok(p.ventilators > 0);
   const f = frame(p);
   for (const m of ["walls", "roof", "trim"]) for (const q of points(f.geo.G[m])) {
-    if (f.inside(q)) assert.ok(q[1] >= f.under(q) - 1e-6, `${m} vertex ${q.map(v => v.toFixed(2))} hangs below the roof underside ${f.under(q).toFixed(2)}`);
+    if (f.inside(q) && !atDoor(f.geo, q)) assert.ok(q[1] >= f.under(q) - 1e-6, `${m} vertex ${q.map(v => v.toFixed(2))} hangs below the roof underside ${f.under(q).toFixed(2)}`);
   }
 });
 
