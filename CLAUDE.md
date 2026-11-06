@@ -131,12 +131,17 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Frontend tests: cd frontend && npm test (node --test, no browser needed)
 
 ## Status
-- Go tests (60) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (386) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
+- Go tests (60) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (442) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
 - Cow barn (kinds/cow.mjs): cowHusbandryPasture (no milk, like cowBarnSmall), automatic water, feed
   and water troughs outside on the pasture wall (kind.outside), a plain walk-through doorway for the
   cows (openings with plain: true; tall openings get a collision gap), feed pad + bale trigger
   outside the fence. Presets: ladugard, fahus, losdriftsstall. Not yet tested in-game.
   Next for cows: a dairy (cowHusbandryBarnMilk with the game's milking robots), straw and manure.
+- Sheep barn (kinds/sheep.mjs, kind "sheep", sheepHusbandry like the base game's sheep barns): built on cow.mjs, which takes a
+  config (COW / SHEEP: count, minWidth, pallets, animal, fill, fence; cowYard/outsideOf/sceneOf/defaultsOf(cfg)). Wool (WOOL GOATMILK)
+  pallets as a game object "pallets" (kind.objects.labels renames it, objectInfo(kind, type)); palletLines/cornerStripes live in
+  pasture.mjs. kind.glyph and kind.yard(geo, p) tell the preview which animal icon and fence to draw. Pieces: hay trough, hay rack,
+  water bowl, lambing pen, bale. Presets: farhus, farstall, storfarstall. Automatic water; not yet tried in-game.
 - Shared: kinds/pasture.mjs (yardFrame: fence, feed/other side), layout.mjs furnisher (autoFurnish
   helpers), fieldsFor(kind) (kinds can share a key with different ranges), roof ventilators.
 - Hen house: pastureWall (fence + a 40 x 50 cm hen hatch, kind.openings) moves off a wall with a door;
@@ -149,7 +154,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   also has tone/shade, arc, strawBale, strawLitter). test/pieces.test.mjs keeps every piece inside its
   footprint and height (hanging parts up to c.H) and asks for some detail. Each fittings colour is
   its own i3d part, so tones are kept to a few per material.
-- Kinds: settings.kind "house" | "chicken" | "cow", fixed after creation. "New" and "My buildings" group by kind
+- Kinds: settings.kind "house" | "chicken" | "cow" | "sheep", fixed after creation. "New" and "My buildings" group by kind
   (groupByKind, kind.plural); the project list API returns each project's kind (from data.kind, read in SQL).
   Chicken barns export as chickenHusbandryPasture (modelled on data/placeables/rudolfHormann/
   chickenBarnBig, 360 hens). Walk-in kinds (kind.walkIn): inside wall faces, hollow collision, a door

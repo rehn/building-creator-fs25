@@ -3,7 +3,7 @@
 // sends it (backend/internal/vision); the admin then adjusts the result in the editor. No DOM.
 import { SCHEMA, KIND, sanitize, buildGeometry, WALLS, WALL_NAMES, PORCH_OPTIONS, WING_WALLS, MAX_WINGS } from "./model.mjs";
 import { wallsOf, wingsOf } from "./layout.mjs";
-import { OBJECT_TYPES, objectProblems } from "./objects.mjs";
+import { OBJECT_TYPES, objectInfo, objectProblems } from "./objects.mjs";
 
 /** Sections Claude leaves alone: the game's own places, the inside, the shop. */
 const SKIP = new Set(["Game mod", "Game places", "Inside", "Interior", "Farmhouse", "Game objects"]);
@@ -82,7 +82,7 @@ export function photoRequest(kindId) {
     depth: {type: "number", description: `How far out from that wall the fence goes, ${ps.depth[0]} to ${ps.depth[1]} m`}}} : null;
   // the game's boxes (feed pad, sleep point ...): only the ones the photos give a reason to move; the rest go where the app puts them
   const kinds = placeable(kind), objects = kinds.length ? {type: "array", description: "Game objects the photos show a place for (an empty list: the app places them all)", items: {type: "object", additionalProperties: false, required: ["type", "wall", "along", "out"], properties: {
-    type: {type: "string", enum: kinds, description: kinds.map(t => `${t} = ${OBJECT_TYPES[t].name}`).join("; ")},
+    type: {type: "string", enum: kinds, description: kinds.map(t => `${t} = ${objectInfo(kind, t).name}`).join("; ")},
     wall: {type: "string", enum: WALLS, description: "The main building's wall it is beside"},
     along: {type: "number", description: "Its middle along that wall, 0 = the left end, 1 = the right end, seen from outside"},
     out: {type: "number", description: "metres from the wall to its middle"}}}} : null;
@@ -129,7 +129,7 @@ Doors: "opens" says whether the player can open a door in the game. A door peopl
   const objectText = objects
     ? `
 
-Game objects: the game needs boxes around the building: ${kinds.map(t => `${t} (${OBJECT_TYPES[t].name}: ${OBJECT_TYPES[t].hint})`).join("; ")}. ` +
+Game objects: the game needs boxes around the building: ${kinds.map(t => `${t} (${objectInfo(kind, t).name}: ${objectInfo(kind, t).hint})`).join("; ")}. ` +
       `The app places them by itself, so leave "objects" empty unless the photos show where one belongs, for example a feed alley or a loading ramp: then give its wall, along and out (the middle's distance from the wall).`
     : "";
   const sections = [];
@@ -202,12 +202,12 @@ export function answerProblems(kindId, answer) {
   const p = applyAnswer(kindId, answer), asked = Array.isArray(a.wings) ? a.wings.length : 0;
   wingsOf(p).forEach(w => { if (w.off) out.push(`Wing ${w.id} was left out: ${w.off}`); });
   if (asked > p.wings.length) out.push(`${asked - p.wings.length} of the ${asked} wings were dropped (at most ${MAX_WINGS}).`);
-  for (const [id, msg] of objectProblems(p)) { const o = p.objects.find(x => x.id === id); out.push(`${o ? OBJECT_TYPES[o.type].name : "An object"}: ${msg}.`); }
+  for (const [id, msg] of objectProblems(p)) { const o = p.objects.find(x => x.id === id); out.push(`${o ? objectInfo(KIND[kindId], o.type).name : "An object"}: ${msg}.`); }
   buildGeometry(p);
   const hidden = p.windows.filter(w => w._hidden).length;
   if (hidden) out.push(`${hidden} window${hidden > 1 ? "s or doors overlap" : " or door overlaps"} another or a wing and ${hidden > 1 ? "are" : "is"} hidden: check their places.`);
-  const want = a.settings && Math.round(+a.settings.cows || +a.settings.hens || 0), got = p.cows || p.hens || 0;
-  if (want && got && want > got) out.push(`The ${p.kind === "cow" ? "cows" : "hens"} are limited to ${got} by the floor area (Claude asked for ${want}).`);
+  const want = a.settings && Math.round(+a.settings.cows || +a.settings.sheep || +a.settings.hens || 0), got = p.cows || p.sheep || p.hens || 0;
+  if (want && got && want > got) out.push(`The ${{cow: "cows", sheep: "sheep"}[p.kind] || "hens"} are limited to ${got} by the floor area (Claude asked for ${want}).`);
   return out;
 }
 

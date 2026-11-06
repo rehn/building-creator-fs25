@@ -7,7 +7,7 @@ import { WALL_T, wallFrames, wallsOf, liveWings, wingsOf, wingHeight, wingFloors
 import { withAssets, placement, assetFolder } from "./assets.mjs";
 import { SURFACES } from "./surfaces.mjs";
 import { agedColor } from "./age.mjs";
-import { cleanObjects, objectOf, boxOf, OBJECT_TYPES } from "./objects.mjs";
+import { cleanObjects, objectOf, boxOf, objectInfo } from "./objects.mjs";
 import { WINDOW_STYLES, DOOR_STYLES, WINDOW_STYLE_IDS, DOOR_STYLE_IDS, DOUBLE_DOOR_FROM, isPair, styleOf, drawSash, drawLeaf } from "./openings.mjs";
 export { WINDOW_STYLES, DOOR_STYLES, DOUBLE_DOOR_FROM } from "./openings.mjs";
 export { boxMesh } from "./i3d.mjs";
@@ -1836,7 +1836,7 @@ export function sleepPoint(geo, p = {}) {
 export function gamePlaces(p) {
   const q = sanitize(p), kind = kindOf(q);
   return (q.objects || []).filter(o => o.type !== "pasture").map(o => {
-    const t = OBJECT_TYPES[o.type], glyph = t.glyph === "animals" ? (kind.id === "cow" ? "cow" : "hen") : t.glyph;
+    const t = objectInfo(kind, o.type), glyph = t.glyph === "animals" ? (kind.glyph || "hen") : t.glyph;
     return {id: o.id, type: o.type, name: t.name, glyph, box: boxOf(o), icon: t.icon ? [o.x + o.ix, o.type === "sleep" ? q.foundation : 0, o.z + o.iz] : null};
   });
 }

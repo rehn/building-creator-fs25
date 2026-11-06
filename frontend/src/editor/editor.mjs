@@ -10,7 +10,7 @@ import { WINDOW_STYLES, DOOR_STYLES, PORCH_OPTIONS, PORCH_W, PORCH_D, WING_FIELD
 import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, henYard, henCap, seeThroughGlass, kindOf } from "./model.mjs";
 import { cowYard } from "./kinds/cow.mjs";
 import { roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, History, roomBox, wingsOf, liveWings, wingFloors, wingHalf, wingIdOf, wingWallKey, WING_PARTS, wallsOf, eaveWalls, autoPipes, pipePositions } from "./layout.mjs";
-import { OBJECT_TYPES, OBJECT_LIMITS, objectOf, pastureOf, snapBox, snapPasture, objectProblems } from "./objects.mjs";
+import { OBJECT_TYPES, objectInfo, OBJECT_LIMITS, objectOf, pastureOf, snapBox, snapPasture, objectProblems } from "./objects.mjs";
 import { setAssets, catalogFor, usedAssets } from "./model.mjs";
 import { readObj, assetFolder, flattenI3d } from "./assets.mjs";
 import { paintInterior, paintGlass } from "./interior.mjs";
@@ -859,7 +859,7 @@ const BOX_SLIDERS = [["x", "Left / right (+ to the right)", 0.25], ["z", "Back /
   ["d", "Depth (back to front)", 0.05], ["h", "Height", 0.05], ["ix", "Icon left / right", 0.05], ["iz", "Icon back / front", 0.05]];
 const objectsNow = () => p.objects || [];
 const selObject = () => objectsNow().find(o => o.id === ob.sel) || null;
-const objName = o => OBJECT_TYPES[o.type].name;
+const objName = o => objectInfo(kindOf(p), o.type).name;
 /** An edit to the objects: snapped, saved and built. */
 function setObjects(list, sel = ob.sel) {
   p.objects = list; ob.sel = sel;
@@ -877,10 +877,10 @@ function renderObjectsUI() {
   const missing = spec.types.filter(t => !list.some(o => o.type === t));
   let html = `<div class="row"><button type="button" class="primary" id="objPlan" ${renderer ? "" : "disabled"}>${ob.on ? "Done moving" : "Move them in the plan view"}</button></div>`;
   html += `<ul class="objlist">${list.map(o => `<li><button type="button" data-obj="${o.id}" aria-pressed="${o.id === ob.sel}">${esc(objName(o))}</button>${pr.has(o.id) ? ` <span class="warn">${esc(pr.get(o.id))}</span>` : ""}</li>`).join("")}</ul>`;
-  if (missing.length) html += `<div class="addrow">${missing.map(t => `<button type="button" data-addobj="${t}">+ ${esc(OBJECT_TYPES[t].name)}</button>`).join("")}</div>`;
+  if (missing.length) html += `<div class="addrow">${missing.map(t => `<button type="button" data-addobj="${t}">+ ${esc(objectInfo(kind, t).name)}</button>`).join("")}</div>`;
   const o = selObject();
   if (o) {
-    const t = OBJECT_TYPES[o.type], must = spec.required.includes(o.type), range = (k, label, lo, hi, step, v, unit = " m") =>
+    const t = objectInfo(kind, o.type), must = spec.required.includes(o.type), range = (k, label, lo, hi, step, v, unit = " m") =>
       `<div class="field"><div class="fl"><label for="ob-${k}">${label}</label><output id="ob-${k}-o">${(+v).toFixed(2)}${unit}</output></div><input type="range" id="ob-${k}" data-k="${k}" min="${lo}" max="${hi}" step="${step}" value="${v}"></div>`;
     html += `<div class="wincard"><p class="hint">${esc(t.hint)}</p>${pr.has(o.id) ? `<p class="warn">${esc(pr.get(o.id))}.</p>` : ""}`;
     if (o.type === "pasture") {
@@ -905,7 +905,7 @@ function renderObjectsUI() {
     // a new one goes where the kind puts it to start with
     const t = b.dataset.addobj, def = spec.defaults({...p}).find(x => x.type === t), id = list.reduce((m, x) => Math.max(m, x.id), 0) + 1;
     setObjects(sanitize({...p, objects: [...list, {...(def || {type: t, x: p.width / 2 + 3, z: 0}), id}]}).objects, id);
-    toast(`${OBJECT_TYPES[t].name} added`);
+    toast(`${objectInfo(kindOf(p), t).name} added`);
   });
   $("objAuto").onclick = () => { setObjects(sanitize({...p, objects: spec.defaults({...p})}).objects, null); toast("Game objects placed where they go automatically"); };
   if (!o) return;
@@ -1538,9 +1538,10 @@ function postsGeometry(points, h) {
 }
 function updateYardMarker(geo) {
   if (!yardObj) return;
-  yardObj.group.visible = p.kind === "chicken" || p.kind === "cow";
+  const kind = kindOf(p);
+  yardObj.group.visible = !!kind.yard;
   if (!yardObj.group.visible) return;
-  const fence = (p.kind === "chicken" ? henYard(geo, p) : cowYard(geo, p)).fence;
+  const fence = kind.yard(geo, p).fence;
   const h = 1.1, pos = [], wire = [], postAt = [];
   for (let i = 0; i + 1 < fence.length; i++) {
     const a = fence[i], b = fence[i + 1];

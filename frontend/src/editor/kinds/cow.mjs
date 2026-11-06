@@ -29,7 +29,7 @@ export const COW = {count: cowsOf, minWidth: MIN_PASTURE_WIDTH, pallets: false, 
 
 /* ---------- The doorway and the troughs ---------- */
 /** The cows' doorway: an open 1.6 x 2.2 m opening in the middle of the wall the pasture encloses, kept clear 1.6 m inside. */
-function openings(p) {
+export function openings(p) {
   const L = wallLength(p, p.pastureWall), m = p.pastureMid ?? L / 2, h = Math.min(2.2, p.floors * p.floorHeight - 0.3);
   return [{wall: p.pastureWall, s0: m - 0.8, s1: m + 0.8, t1: h, clear: 1.6, what: "the cows' doorway", plain: true}];
 }
@@ -102,7 +102,7 @@ function cowObjects(geo, p, yf, cfg) {
   return out;
 }
 /** Where the cow barn's objects go to start with (kind.objects.defaults): from its pasture wall and depth. */
-const defaultsOf = cfg => p => {
+export const defaultsOf = cfg => p => {
   const q = {...p, pastureWall: pastureWallFor(p), objects: undefined}, geo = shellOf(q), y = cowObjects(geo, q, yardFrame(geo, q, cfg.minWidth), cfg);
   return [
     ...["food", "bales", "loading", "info", ...(cfg.pallets ? ["pallets"] : [])].map(t => boxFrom(t, y[t].box, y[t].icon)),
@@ -125,7 +125,7 @@ export const outsideOf = cfg => c => {
 };
 
 /* ---------- Inside ---------- */
-const COLORS = {concrete: "#9A968C", floor: "#8A857B", rubber: "#2E2E2C", steel: "#A9AFB3", wood: "#A47A4E", straw: "#DDBF73", hay: "#B7B064", bale: "#D9BC6A",
+export const COLORS = {concrete: "#9A968C", floor: "#8A857B", rubber: "#2E2E2C", steel: "#A9AFB3", wood: "#A47A4E", straw: "#DDBF73", hay: "#B7B064", bale: "#D9BC6A",
   galv: "#B3B9BC", galvDark: "#8D9498", kerb: "#86827A", table: "#A9A59B", sawdust: "#B09B74", brisket: "#44523F",
   silage: "#857C45", plank: "#9C7148", iron: "#3A3A3A", bowl: "#56656D", water: "#7FA0AE", bucketRed: "#B23A2E", bucketWhite: "#E8E6E0"};
 /** The floor: concrete over the whole room. */
@@ -137,7 +137,7 @@ function furnish(c) { c.floor(COLORS.floor, "concrete"); }
  * of a wall piece.
  */
 const stallDepth = 2.3, PIPE = 0.03;
-const CATALOG = {
+export const CATALOG = {
   innerwall: INNER_WALL,
   stalls: {name: "Cubicles (liggbås)", mount: "wall", collision: true,
     params: [{k: "count", label: "Cubicles", min: 1, max: 24, step: 1}], defaults: {count: 6},
@@ -428,6 +428,8 @@ export default {
   plural: "Cow barns",
   category: "animals",
   walkIn: true,
+  glyph: "cow",
+  yard: (geo, p) => cowYard(geo, p),
   defaults: {cows: 12, pastureWall: "back", fenceDepth: 15, winStyle: "stall", doorStyle: "xbrace"},
   sections: [
     {title: "Cows", side: "build", hint: "Cows graze in the pasture and come in through a wide doorway in the pasture side; they eat and drink at troughs along that wall. Fill feed (or drop bales) at the feed place outside the fence; water is automatic. The pasture, the feed pad and the rest are under Game objects. This is a barn without milking (like the game’s small cow barn).", fields: [

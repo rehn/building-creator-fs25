@@ -419,6 +419,8 @@ export default {
   category: "animals",
   /** Walk-in: inside walls, hollow collision, a door that opens and a furnished inside. */
   walkIn: true,
+  glyph: "hen",
+  yard: (geo, p) => henYard(geo, p),
   defaults: {hens: 30, pastureWall: "back", fenceDepth: 8, winStyle: "single", doorStyle: "zbrace"},
   /** Editor sections only this kind has (shown first), and shared ones it doesn't use. */
   sections: [

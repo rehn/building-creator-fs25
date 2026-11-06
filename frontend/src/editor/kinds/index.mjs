@@ -5,6 +5,7 @@
 //   ceiling               walk-in: the colour of a ceiling over the ground floor (the floors above closed)
 //   doorsIn, entrance     walk-in: doors swing in (a house) rather than out; a new first door's porch
 //   insideWalls           walk-in: {wall, low, kick} finish of the inside walls (default: a barn's)
+//   glyph, yard           animal kinds: the animal icon ("hen", "cow") and yard(geo, p) -> {fence ...} for the preview
 //   objects               its game objects (objects.mjs): {types, required, pasture, defaults(p)}
 //   defaults, sections    its own settings and the editor sections for them (shown first)
 //   hides                 titles of shared editor sections it doesn't use
@@ -19,8 +20,9 @@
 import house from "./house.mjs";
 import chicken from "./chicken.mjs";
 import cow from "./cow.mjs";
+import sheep from "./sheep.mjs";
 
-export const KINDS = [house, chicken, cow];
+export const KINDS = [house, chicken, cow, sheep];
 export const KIND = Object.fromEntries(KINDS.map(k => [k.id, k]));
 /** The kind of a project's settings; saves without one are farmhouses. */
 export const kindOf = p => KIND[p && p.kind] || house;

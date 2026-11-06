@@ -27,6 +27,8 @@ export const OBJECT_TYPES = {
   pasture: {name: "Pasture (fence)", glyph: null, icon: false,
     hint: "The fence, out from one wall. Its ends snap to the building's corners; the animals' way out is in the middle of the wall it encloses. In the game you can still drag the fence to any shape when placing the building."},
 };
+/** What the kind calls a type of object, and its hint (a sheep barn's pallets are wool): OBJECT_TYPES overridden by kind.objects.labels. */
+export const objectInfo = (kind, type) => ({...OBJECT_TYPES[type], ...((kind.objects && kind.objects.labels && kind.objects.labels[type]) || {})});
 /** Ranges: positions and sizes of box objects, icons, and a pasture's ends along its wall. */
 export const OBJECT_LIMITS = {x: [-80, 80], z: [-80, 80], w: [0.5, 70], d: [0.5, 70], h: [0.2, 8], ix: [-10, 10], iz: [-10, 10], end: [-40, 40]};
 const GRID = 0.25, CORNER_SNAP = 0.6;
