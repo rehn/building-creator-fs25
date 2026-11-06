@@ -276,10 +276,10 @@ export const CATALOG = {
       }
     }},
   fridge: {name: "Fridge / freezer (kyl och frys)", mount: "wall", collision: true,
-    params: [{k: "type", label: "Type", min: 0, max: 2, step: 1, options: ["Fridge-freezer (kyl-frys)", "Fridge (kylskåp)", "Freezer (frys)"]}], defaults: {type: 0},
+    params: [{k: "model", label: "Type", min: 0, max: 2, step: 1, options: ["Fridge-freezer (kyl-frys)", "Fridge (kylskåp)", "Freezer (frys)"]}], defaults: {model: 0},
     size: () => [0.6, 0.68], height: () => 1.85,
     build(c, it) {
-      const t = Math.round(it.type), white = "#EDECE7", door = (y0, y1) => { c.paint(shade(white, 0.1), "plastic"); c.box(-0.295, 0.295, 0.31, 0.325, y0, y1); };
+      const t = Math.round(it.model), white = "#EDECE7", door = (y0, y1) => { c.paint(shade(white, 0.1), "plastic"); c.box(-0.295, 0.295, 0.31, 0.325, y0, y1); };
       c.paint(C.iron, "steel"); c.box(-0.28, 0.28, -0.3, 0.28, 0, 0.05);                              // the plinth
       c.paint(shade(C.iron, 0.5), "steel"); for (let k = 0; k < 4; k++) c.box(-0.2, 0.2, 0.28, 0.285, 0.008 + k * 0.011, 0.015 + k * 0.011);   // its air grille
       c.paint(shade("#EDECE7", -0.3), "plastic"); c.box(-0.3, 0.3, -0.34, 0.315, 1.84, 1.855);     // the top edge
@@ -329,6 +329,9 @@ export const CATALOG = {
       c.paint("#E8E0CC"); c.box(-1, -0.95, -0.38, 0.38, 0, 0.008); c.box(0.95, 1, -0.38, 0.38, 0, 0.008);   // fringes
     }},
 };
+
+
+for (const [k, g] of Object.entries({"innerwall":"Walls and doors","kitchen":"Kitchen","kitchenunits":"Kitchen","cooker":"Kitchen","stove":"Kitchen","fridge":"Kitchen","pantry":"Kitchen","table":"Dining","chair":"Dining","sofa":"Living room","divan":"Living room","tvbench":"Living room","bookshelf":"Living room","bookcase":"Living room","rug":"Living room","bed":"Bedroom","singlebed":"Bedroom","wardrobe":"Bedroom","desk":"Office"})) if (CATALOG[k]) CATALOG[k].group = g;   // (the palette's groups)
 
 /**
  * A first arrangement for a farmhouse's ground floor: a kitchen with a wood stove, a table with four

@@ -414,6 +414,29 @@ function sliceMesh(g, from, to) {
   for (let t = 0; t < g.i.length; t += 3) if (g.i[t] >= from && g.i[t] < to) out.i.push(g.i[t] - from, g.i[t + 1] - from, g.i[t + 2] - from);
   return out;
 }
+/** Like sliceMesh, with the per-vertex colours when the material has them. */
+function sliceColored(g, from, to) { const o = sliceMesh(g, from, to); if (g.c) o.c = g.c.slice(from * 3, to * 3); return o; }
+/**
+ * One of each piece of the building's catalog, set out in rows in a big empty room, built: {geo, spots [{id, type, x, z}]}.
+ * geo.itemParts[id] says which vertices of each material a piece drew (pieceMeshes gives them as meshes): for the thumbnails.
+ */
+export function pieceSheet(p) {
+  const q = sanitize(p), cat = catalogFor(q), types = Object.keys(cat).filter(t => !cat[t].asset && !cat[t].missing), cols = 5, gap = 4.6;
+  const items = types.map((type, i) => ({id: i + 1, type, x: ((i % cols) - (cols - 1) / 2) * gap, z: (Math.floor(i / cols) - (Math.ceil(types.length / cols) - 1) / 2) * gap, rot: 0, ...cat[type].defaults}));
+  const s = sanitize({...q, width: 32, depth: 26, floors: 1, floorHeight: 3.4, wings: [], items, age: 0});
+  const geo = buildGeometry(s);
+  return {geo, p: s, spots: s.items.map(it => ({id: it.id, type: it.type, x: it.x, z: it.z}))};
+}
+/** The meshes piece id drew in a sheet: [{m (material), g {p, n, uv, c?, i}}], positions relative to the piece's own spot. */
+export function pieceMeshes(sheet, id) {
+  const spot = sheet.spots.find(s => s.id === id), parts = sheet.geo.itemParts[id] || {}, out = [];
+  for (const [m, [a, b]] of Object.entries(parts)) {
+    const g = sliceColored(sheet.geo.G[m], a, b);
+    for (let k = 0; k < g.p.length; k += 3) { g.p[k] -= spot.x; g.p[k + 2] -= spot.z; }
+    out.push({m, g});
+  }
+  return out;
+}
 /**
  * The rings of a bent pipe through pts (radius r, seg sides): one ring per point, at the ends square
  * to the pipe, at each bend in the mitre plane halfway between the two segments, so the segments
@@ -611,7 +634,7 @@ export function gutterMesh(c0, c1, out, r, {seg = 12} = {}) {
 export function buildGeometry(p) {
 p = normalize(p);
 const kind = kindOf(p);
-let G, opsByWall = {}, dims = {}, rooms = [], downpipes = [], doors = [];
+let G, opsByWall = {}, dims = {}, rooms = [], downpipes = [], doors = [], itemParts = {};
 // Imported items placed inside: [{asset, item, translation, rotY}] (see assets.mjs placement).
 const refs = [];
 // Walk-in kinds (a hen house ...): walls with an inside face, hollow collision, a door that opens.
@@ -1253,8 +1276,10 @@ function buildInside(kind, F, H) {
       rod: (a, b, r, seg) => rod(at(a), at(b), r, seg),
       pipe: (pts, r, seg) => tube(pts.map(at), r, seg),
       board: (a, b, w, h) => beam(at(a), at(b), w, h)};
+    const drawn = vcount();
     def.build(pieceKit, it);
     if (def.leafOf && def.leafOf(it)) buildInnerDoor(it, def.leafOf(it), F);
+    itemParts[it.id] = rangesSince(drawn);   // (which vertices of each material this piece drew: the thumbnails)
     if (def.solids) {
       // a piece with its own solids (an inner wall: open at its doorway), in its frame
       for (const [x0, x1, z0, z1, y0, y1] of def.solids(it, {ceil})) { const a = toWorld(it, x0, z0), b = toWorld(it, x1, z1); abox("collision", [Math.min(a[0], b[0]), F + y0, Math.min(a[1], b[1])], [Math.max(a[0], b[0]), F + y1, Math.max(a[1], b[1])]); }
@@ -1382,7 +1407,7 @@ function buildEntrance(w, o, limit, F, mainEave) {
 
 function build() {
   // "collision" collects simple closed solids next to the visual meshes; it is split off at the end.
-  rooms = []; downpipes = []; doors = [];
+  rooms = []; downpipes = []; doors = []; itemParts = {};
   G = {}; [...MATS, "collision"].forEach(m => G[m] = {p:[], n:[], uv:[], i:[]});
   G.curtain.c = []; G.fittings.c = []; G.fittings.s = []; fitSurf = undefined;
   const W = p.width, D = p.depth, F = p.foundation, fh = p.floorHeight, H = p.floors * fh + (p.halfStorey ? p.kneeWall : 0), top = F + H;
@@ -1770,7 +1795,7 @@ build();
 const {collision, ...visual} = G;
 // the doors in the window list's order (door1, door2 ...)
 doors.sort((a, b) => (a.op.id || 0) - (b.op.id || 0));
-return {G: visual, dims, opsByWall, collision, rooms, downpipes, doors, refs, wings: liveWings(p)};
+return {G: visual, dims, opsByWall, collision, rooms, downpipes, doors, itemParts, refs, wings: liveWings(p)};
 }
 
 /* ---------- Materials ---------- */

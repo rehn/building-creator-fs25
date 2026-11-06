@@ -275,6 +275,7 @@ function summary(items) {
     feeders: sum("feeder", () => 1) + sum("trough", () => 1), drinkers: sum("drinker", () => 1) + sum("nipples", () => 1)};
 }
 
+for (const [k, g] of Object.entries({"innerwall":"Walls and doors","nests":"Roosting and nests","perch":"Roosting and nests","feeder":"Feeding and water","drinker":"Feeding and water","trough":"Feeding and water","nipples":"Feeding and water","bale":"Straw and bales"})) if (CATALOG[k]) CATALOG[k].group = g;   // (the palette's groups)
 const step = (v, s) => +(Math.floor(v / s + 1e-9) * s).toFixed(3);
 /**
  * Fills the inside to match the barn's size and hens, using the free wall space (clear of the door,

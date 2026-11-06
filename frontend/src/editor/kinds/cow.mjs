@@ -291,6 +291,8 @@ export const CATALOG = {
     build(c) { strawBale(c, 0, 0, 0, COLORS.bale); }},
 };
 
+for (const [k, g] of Object.entries({"innerwall":"Walls and doors","stalls":"Housing","calfpen":"Housing","feedfence":"Feeding and water","hayrack":"Feeding and water","waterbowl":"Feeding and water","bale":"Straw and bales"})) if (CATALOG[k]) CATALOG[k].group = g;   // (the palette's groups)
+
 /**
  * Fills the inside to match the barn's size and cows, in the free space: rows of cubicles (one per
  * cow) along the longest free walls, a feeding fence down the middle of a bigger barn (hay racks in

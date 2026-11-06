@@ -51,6 +51,8 @@ const CATALOG = {
   bale: COW_CATALOG.bale,
 };
 
+for (const [k, g] of Object.entries({"innerwall":"Walls and doors","feedtrough":"Feeding and water","lambpen":"Housing"})) if (CATALOG[k]) CATALOG[k].group = g;   // (the palette's groups)
+
 /** Fills the inside: hay troughs and racks along the longest free walls, water bowls, a lambing pen per 20 sheep, bales. */
 function autoFurnish(p) {
   const room = roomOf(p, openings(p)), n = sheepOf(p), f = furnisher(room, CATALOG), {items} = f;

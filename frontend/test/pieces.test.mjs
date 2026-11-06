@@ -58,3 +58,35 @@ for (const kind of KINDS.filter(k => k.catalog)) for (const [type, def] of Objec
     assert.ok(r.colors() >= 2, `only ${r.colors()} colour`);
   });
 }
+
+/* ---------- Groups and thumbnails ---------- */
+import { pieceGroups } from "../src/editor/layout.mjs";
+import { sanitize, pieceSheet, pieceMeshes, catalogFor as catalogOf } from "../src/editor/model.mjs";
+const KINDS_TO_CHECK = [["house", {}], ["cow", {kind: "cow"}], ["chicken", {kind: "chicken"}], ["sheep", {kind: "sheep"}]];
+for (const [name, s] of KINDS_TO_CHECK) {
+  test(`${name}: every piece is in a group, groups hold every piece once, in a sensible order`, () => {
+    const cat = catalogOf(sanitize(s)), groups = pieceGroups(cat), all = groups.flatMap(g => g.types);
+    assert.deepEqual([...all].sort(), Object.keys(cat).sort());
+    assert.equal(new Set(all).size, all.length);
+    assert.ok(groups.every(g => g.name !== "Other"), "no piece without a group: " + groups.map(g => g.name + ":" + g.types).join(" | "));
+    assert.equal(groups[0].name, "Walls and doors", "the inner wall first");
+    assert.ok(groups.length >= 3 && groups.every(g => g.types.length >= 1));
+  });
+  test(`${name}: a sheet of one of each piece gives a mesh for every piece, centred on its own spot`, () => {
+    const sheet = pieceSheet(s), cat = catalogOf(sheet.p);
+    assert.equal(sheet.spots.length, Object.keys(cat).length);
+    for (const spot of sheet.spots) {
+      const meshes = pieceMeshes(sheet, spot.id);
+      assert.ok(meshes.length > 0, spot.type + " drew something");
+      const xs = meshes.flatMap(({g}) => g.p.filter((_, i) => i % 3 === 0)), zs = meshes.flatMap(({g}) => g.p.filter((_, i) => i % 3 === 2));
+      assert.ok(Math.min(...xs) > -4 && Math.max(...xs) < 4 && Math.min(...zs) > -4 && Math.max(...zs) < 4, `${spot.type} stays near its own spot`);
+      assert.ok(meshes.every(({g}) => g.i.length > 0 && g.p.length === g.n.length), spot.type);
+    }
+    assert.equal(sheet.geo.itemParts[sheet.spots[0].id] !== undefined, true);
+  });
+}
+
+test("no piece setting is called type, id, x, z or rot (it would overwrite the piece's own fields)", () => {
+  for (const kind of KINDS.filter(k => k.catalog)) for (const [name, def] of Object.entries(kind.catalog)) for (const f of def.params || [])
+    assert.ok(!["type", "id", "x", "z", "rot"].includes(f.k), `${kind.id}.${name}.${f.k}`);
+});

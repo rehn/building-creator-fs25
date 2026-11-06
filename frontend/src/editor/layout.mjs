@@ -377,6 +377,22 @@ export function rotateItem(item, def, room, others = [], catalog = {}) {
   return snapItem({...item, rot: (item.rot + 90) % 360}, def, room, others, catalog, true);
 }
 
+/**
+ * The catalog's pieces for the palette, in groups: [{name, types}], groups in the order their first piece comes, pieces
+ * without a group last under "Other"; imported items (asset) and the ones that are missing are left out.
+ */
+export function pieceGroups(catalog) {
+  const groups = new Map();
+  for (const [type, def] of Object.entries(catalog)) {
+    if (def.asset || def.missing) continue;
+    const name = def.group || "Other";
+    if (!groups.has(name)) groups.set(name, []);
+    groups.get(name).push(type);
+  }
+  const other = groups.get("Other"); groups.delete("Other");
+  return [...groups, ...(other ? [["Other", other]] : [])].map(([name, types]) => ({name, types}));
+}
+
 /** Undo and redo over copies of a state (the pieces list). */
 export class History {
   constructor(state, limit = 100) { this.past = []; this.future = []; this.now = clone(state); this.limit = limit; }

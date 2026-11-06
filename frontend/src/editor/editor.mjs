@@ -7,9 +7,10 @@ import {
   genRow, sanitize, serialize, slugify, buildGeometry, buildI3d, placeableSnippet, gamePlaces, surfaceSpec, scaledUV, colorFor, WP
 } from "./model.mjs";
 import { WINDOW_STYLES, DOOR_STYLES, PORCH_OPTIONS, PORCH_W, PORCH_D, WING_FIELDS, MAX_WINGS } from "./model.mjs";
+import { pieceSheet, pieceMeshes } from "./model.mjs";
 import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, henYard, henCap, seeThroughGlass, kindOf } from "./model.mjs";
 import { cowYard } from "./kinds/cow.mjs";
-import { roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, History, roomBox, wingsOf, liveWings, wingFloors, wingHalf, wingIdOf, wingWallKey, WING_PARTS, wallsOf, eaveWalls, autoPipes, pipePositions } from "./layout.mjs";
+import { pieceGroups, roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, History, roomBox, wingsOf, liveWings, wingFloors, wingHalf, wingIdOf, wingWallKey, WING_PARTS, wallsOf, eaveWalls, autoPipes, pipePositions } from "./layout.mjs";
 import { OBJECT_TYPES, objectInfo, OBJECT_LIMITS, objectOf, pastureOf, snapBox, snapPasture, objectProblems } from "./objects.mjs";
 import { setAssets, catalogFor, usedAssets } from "./model.mjs";
 import { readObj, assetFolder, flattenI3d } from "./assets.mjs";
@@ -1080,7 +1081,7 @@ async function addItems(dir) {
 // Interior mode: the building cut off at the top of its walls (a clipping plane), seen from straight
 // above (Plan, an orthographic camera) or in 3D. Pieces are picked and dragged on the floor; the
 // rules (snapping, problems, history) are in layout.mjs.
-const ins = {on: false, view: "plan", sel: null, drag: null, hist: null, keep: false, pan: [0, 0]};
+const ins = {on: false, view: "plan", sel: null, drag: null, hist: null, keep: false, pan: [0, 0], closed: new Set()};
 let ortho = null, ghost = null, marks = null, planLines = null;
 const clipPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0);
 const activeCam = () => (ins.on && ins.view === "plan") || ob.on ? ortho : camera;
@@ -1088,6 +1089,48 @@ const roomNow = () => { const k = kindOf(p); return roomOf(p, k.openings ? k.ope
 const catalogNow = () => catalogFor(p);
 const selected = () => (p.items || []).find(it => it.id === ins.sel) || null;
 
+/**
+ * Pictures of the pieces for the palette: one of each piece is built in a big empty room (pieceSheet), then each is drawn
+ * on its own from the front corner into a small picture. Made once per kind of building, a moment after the arranging starts.
+ */
+let thumbUrls = {}, thumbKind = null, thumbBusy = false;
+function ensureThumbs() {
+  const kid = p.kind;
+  if (thumbKind === kid || thumbBusy || !renderer) return;
+  thumbBusy = true;
+  setTimeout(() => {
+    try { thumbUrls = makeThumbs(); thumbKind = kid; } catch (e) { console.warn("thumbnails", e); thumbKind = kid; }
+    thumbBusy = false;
+    if (ins.on) renderInsideUI();
+  }, 40);
+}
+function makeThumbs() {
+  const sheet = pieceSheet({...p, items: []}), W = 96, H = 72, urls = {};
+  const r2 = new THREE.WebGLRenderer({alpha: true, antialias: true, preserveDrawingBuffer: true});
+  try {
+    r2.setPixelRatio(2); r2.setSize(W, H, false); r2.setClearColor(0x000000, 0);
+    const sc = new THREE.Scene(), cam = new THREE.PerspectiveCamera(28, W / H, 0.1, 100);
+    sc.add(new THREE.HemisphereLight(0xffffff, 0x8a8678, 0.95));
+    const dl = new THREE.DirectionalLight(0xffffff, 0.75); dl.position.set(3, 6, 4); sc.add(dl);
+    for (const spot of sheet.spots) {
+      const group = new THREE.Group(), geos = [];
+      for (const {m, g} of pieceMeshes(sheet, spot.id)) {
+        if (m === "glass") continue;
+        if (!g.c) { const [r, gr, b] = new THREE.Color(colorFor(sheet.p, m)).toArray(); g.c = []; for (let k = 0; k < g.p.length; k += 3) g.c.push(r, gr, b); }
+        const geo = bufferOf(g); geos.push(geo);
+        group.add(new THREE.Mesh(geo, new THREE.MeshStandardMaterial({vertexColors: true, roughness: 0.8, metalness: m === "iron" ? 0.3 : 0, side: THREE.DoubleSide})));
+      }
+      sc.add(group);
+      const box = new THREE.Box3().setFromObject(group), size = box.getSize(new THREE.Vector3()), mid = box.getCenter(new THREE.Vector3());
+      const radius = 0.5 * Math.hypot(size.x, size.y, size.z) || 1, dir = new THREE.Vector3(0.75, 0.6, 1).normalize();
+      cam.position.copy(mid).addScaledVector(dir, radius / Math.sin(14 * Math.PI / 180) * 1.02); cam.lookAt(mid); cam.updateMatrixWorld();
+      r2.render(sc, cam);
+      urls[spot.type] = r2.domElement.toDataURL("image/png");
+      sc.remove(group); geos.forEach(g => g.dispose());
+    }
+  } finally { r2.dispose(); }
+  return urls;
+}
 function enterInside() {
   if (!renderer || !kindOf(p).catalog) return;
   if (ob.on) leaveObjects();
@@ -1101,6 +1144,7 @@ function enterInside() {
   window.addEventListener("keydown", insideKey);
   setInsideView(ins.view);
   renderInsideUI();
+  ensureThumbs();
 }
 function leaveInside() {
   if (!ins.on) return;
@@ -1247,9 +1291,11 @@ function renderInsideUI() {
     const entries = Object.entries(cat);
     // the user's own items, and those the admin shares with everyone (mine is false only for those)
     const mine = entries.filter(([, d]) => d.asset && d.asset.mine !== false), shared = entries.filter(([, d]) => d.asset && d.asset.mine === false);
-    const addBtn = ([type, d]) => `<button type="button" data-add="${type}">+ ${esc(d.name)}</button>`;
+    const addBtn = ([type, d]) => `<button type="button" class="pal" data-add="${type}" title="${esc(d.name)}">${thumbUrls[type] ? `<img src="${thumbUrls[type]}" alt="" width="96" height="72">` : ""}<span>${esc(d.name)}</span></button>`;
+    // the pieces in groups (a group folds away; the choice is kept while arranging), each with a picture of it
+    const groupsHtml = pieceGroups(cat).map(g => `<details class="pgroup" data-group="${esc(g.name)}" ${ins.closed.has(g.name) ? "" : "open"}><summary>${esc(g.name)} <span>${g.types.length}</span></summary><div class="palette">${g.types.map(t => addBtn([t, cat[t]])).join("")}</div></details>`).join("");
     ed.innerHTML = `<p class="hint">Click a piece to add it, then drag it into place or use the position sliders. Pieces are free; wall pieces (counters, beds, wardrobes) snap to a wall or inner wall when put close to it.</p>`
-      + `<div class="palette">${entries.filter(([, d]) => !d.asset && !d.missing).map(addBtn).join("")}</div>`
+      + groupsHtml
       + `<h4 class="palette-head">My items</h4>`
       + (mine.length ? `<div class="palette">${mine.map(addBtn).join("")}</div>` : `<p class="hint">Items you import from Giants Editor show here.</p>`)
       + (shared.length ? `<h4 class="palette-head">Shared items</h4><div class="palette">${shared.map(addBtn).join("")}</div>` : "")
@@ -1265,6 +1311,7 @@ function renderInsideUI() {
       + (pr.size ? `<p class="warn">${pr.size} piece${pr.size > 1 ? "s have" : " has"} a problem (red).</p>` : "")
       + fillRow;
     ed.querySelectorAll("[data-add]").forEach(b => b.onclick = () => addPiece(b.dataset.add));
+    ed.querySelectorAll(".pgroup").forEach(d => d.ontoggle = () => { if (d.open) ins.closed.delete(d.dataset.group); else ins.closed.add(d.dataset.group); });
     if (it) {
       // position sliders: move the piece without dragging (to the centimetre; wall pieces stay on their wall)
       // the rotation slider: any angle (the position is kept inside the room)
