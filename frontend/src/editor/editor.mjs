@@ -11,6 +11,7 @@ import { pieceSheet, pieceMeshes } from "./model.mjs";
 import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, henYard, henCap, seeThroughGlass, kindOf } from "./model.mjs";
 import { cowYard } from "./kinds/cow.mjs";
 import { WALLPAPERS } from "./kinds/innerwall.mjs";
+import { evalNumber } from "./calc.mjs";
 import { cleanPapers, wallBreaks, pieceGroups, roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, History, roomBox, wingsOf, liveWings, wingFloors, wingHalf, wingIdOf, wingWallKey, WING_PARTS, wallsOf, eaveWalls, autoPipes, pipePositions } from "./layout.mjs";
 import { OBJECT_TYPES, objectInfo, OBJECT_LIMITS, objectOf, pastureOf, snapBox, snapPasture, objectProblems } from "./objects.mjs";
 import { setAssets, catalogFor, usedAssets } from "./model.mjs";
@@ -80,6 +81,45 @@ const remember = {
 const openState = remember.get("hx-open-sections") || {};
 const sideSeen = {};
 const editorEl = root.querySelector(".hx-editor");
+/**
+ * Every slider's number can be clicked and typed over: a small box with the value, where a sum works too ("10+100" gives 110).
+ * Enter or leaving the box sets it (kept within the slider's range and step, the slider's own handlers do the rest), Escape cancels.
+ * A slider whose number is not its own value (a position as a fraction of the wall, shown in metres) says so with data-scale.
+ */
+function installNumberEntry() {
+  const onClick = ev => {
+    const out = ev.target.closest && ev.target.closest("output"), field = out && out.closest(".field"), slider = field && field.querySelector("input[type=range]");
+    if (!slider || slider.disabled || field.querySelector("input.numin")) return;
+    const scale = +slider.dataset.scale || 1, unit = (out.textContent.match(/\s*(m|°|%)\b/) || [])[1];
+    const box = document.createElement("input");
+    box.type = "text"; box.className = "numin"; box.inputMode = "decimal"; box.value = String(+(slider.value * scale).toFixed(3));
+    box.setAttribute("aria-label", "Type a value; a sum like 10+100 works");
+    out.hidden = true; out.after(box); box.focus(); box.select();
+    let done = false;
+    const finish = commit => {
+      if (done) return;
+      done = true;
+      if (commit) {
+        const v = evalNumber(box.value);
+        if (v === null) toast("That is not a number");
+        else {
+          const raw = v / scale, lo = +slider.min, hi = +slider.max;
+          if (scale !== 1) slider.step = "any";   // (a position in metres is typed to the centimetre, finer than the slider's steps)
+          slider.value = String(Math.min(hi, Math.max(lo, raw)));
+          slider.dispatchEvent(new Event("input", {bubbles: true})); slider.dispatchEvent(new Event("change", {bubbles: true}));
+          if (raw < lo - 1e-9 || raw > hi + 1e-9) toast(`Kept within the range ${+(lo * scale).toFixed(2)} to ${+(hi * scale).toFixed(2)}${unit ? " " + unit : ""}`);
+        }
+      }
+      if (box.isConnected) box.remove();
+      if (out.isConnected) out.hidden = false;
+    };
+    // (keys stay in the box: R, Delete and the other shortcuts of the editor are not for it)
+    box.onkeydown = k => { if (k.key === "Enter") { k.preventDefault(); finish(true); } else if (k.key === "Escape") { k.preventDefault(); finish(false); } k.stopPropagation(); };
+    box.onblur = () => finish(true);
+  };
+  editorEl.addEventListener("click", onClick);
+  cleanups.push(() => editorEl.removeEventListener("click", onClick));
+}
 function setTab(t) {
   editorEl.dataset.tab = t;
   for (const s of ["build", "finish"]) {
@@ -392,6 +432,7 @@ function initThree() {
   $("view3d").onclick = () => setInsideView("3d");
   $("insideUndo").onclick = undoInside; $("insideRedo").onclick = redoInside; $("insideDone").onclick = leaveInside;
   cleanups.push(() => window.removeEventListener("keydown", insideKey));
+  installNumberEntry();
   applyTheme();
   const mq = window.matchMedia("(prefers-color-scheme: dark)");
   mq.addEventListener("change", applyTheme);
@@ -642,7 +683,7 @@ function winChanged() {
   if (applyKindRules()) syncControls();
   persist(); rebuild(false);
 }
-const winOut = (f, s) => f.k === "pos" ? `${(s.pos * wallLen(s.wall)).toFixed(2)} m from left` : `${s[f.k].toFixed(2)} m`;
+const winOut = (f, s) => f.k === "pos" ? `${(s.pos * wallLen(s.wall)).toFixed(2)} m to the middle, from left` : `${s[f.k].toFixed(2)} m`;
 /** Room and curtain choices for one window or kupa (obj), with ids starting with prefix. */
 function choiceFields(prefix, obj) {
   const dis = p.interior ? "" : "disabled";
@@ -694,7 +735,7 @@ function renderWinUI() {
     const lastDoor = door && p.windows.filter(w => w.type === "door").length === 1;
     const own = (styles.find(x => x.id === (door ? p.doorStyle : p.winStyle)) || styles[0]).name.toLowerCase();
     const opt = (v, label, cur) => `<option value="${v}" ${v === cur ? "selected" : ""}>${esc(label)}</option>`;
-    const range = (f, lo = f.min, hi = f.max) => `<div class="field"><div class="fl"><label for="wf-${f.k}">${f.label}</label><output id="wf-${f.k}-o">${winOut(f, s)}</output></div><input type="range" id="wf-${f.k}" data-k="${f.k}" min="${lo}" max="${hi}" step="${f.step}" value="${s[f.k]}"></div>`;
+    const range = (f, lo = f.min, hi = f.max) => `<div class="field"><div class="fl"><label for="wf-${f.k}">${f.label}</label><output id="wf-${f.k}-o">${winOut(f, s)}</output></div><input type="range" id="wf-${f.k}" data-k="${f.k}" min="${lo}" max="${hi}" step="${f.step}" value="${s[f.k]}" ${f.k === "pos" ? `data-scale="${wallLen(s.wall)}"` : ""}></div>`;
     html += `<div class="wincard"><p class="warn" id="winWarn" ${s._hidden ? "" : "hidden"}>This overlaps a door or another window, so it’s hidden. Move it or make it smaller.</p>`;
     // a window on the ground floor can be a door (and back)
     html += `<div class="field"><div class="fl"><label for="wf-type">This is a</label></div><select id="wf-type" ${lastDoor ? "disabled" : ""}>${opt("window", "Window", s.type)}${s.floor === 0 ? opt("door", "Door", s.type) : ""}</select></div>`;
@@ -822,7 +863,7 @@ function renderPipesUI() {
   if (s) {
     const L = walls[s.wall].L;
     out = v => `${(v * L).toFixed(2)} m from the left`;
-    html += `<div class="wincard"><div class="field"><div class="fl"><label for="pipePos">Place along the wall</label><output id="pipePos-o">${out(s.pos)}</output></div><input type="range" id="pipePos" min="0" max="1" step="0.005" value="${s.pos}"></div>`
+    html += `<div class="wincard"><div class="field"><div class="fl"><label for="pipePos">Place along the wall</label><output id="pipePos-o">${out(s.pos)}</output></div><input type="range" id="pipePos" min="0" max="1" step="0.005" value="${s.pos}" data-scale="${L}"></div>`
       + `<p class="hint">Seen from outside, from the wall’s left end. A pipe can’t stand where a wing meets the wall.</p><div class="row"><button type="button" id="pipeRemove" class="danger">Remove this downpipe</button></div></div>`;
   }
   html += `<button type="button" id="pipeAuto">Place them again from “Downpipes per long side”</button>`;

@@ -304,3 +304,8 @@ html:has(.editor-page) { overscroll-behavior: none; }
 #insideEditor .palette button.pal { display: flex; flex-direction: column; align-items: stretch; gap: 3px; padding: 4px 4px 5px; text-align: center; font-size: 12.5px; line-height: 1.2; }
 #insideEditor .palette button.pal img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: contain; border-radius: 5px; background: color-mix(in srgb, var(--field) 70%, transparent); }
 #insideEditor .palette button.pal span { padding: 0 2px; overflow-wrap: anywhere; }
+
+/* A slider's number can be clicked and typed over (10+100 works): a hint on the number, and the little box that replaces it. */
+.hx-panel .fl output { cursor: text; border-bottom: 1px dotted color-mix(in srgb, var(--muted) 60%, transparent); }
+.hx-panel .fl output:hover { color: var(--ink); border-bottom-color: var(--accent); }
+.hx-panel input.numin { width: 8.5em; max-width: 60%; margin: 0; padding: 2px 6px; text-align: right; font-variant-numeric: tabular-nums; }
