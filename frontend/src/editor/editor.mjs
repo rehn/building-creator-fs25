@@ -1032,7 +1032,7 @@ function renderObjectsUI() {
       if (o.points) {
         const n = o.points.length, sel = ob.pt !== null && ob.pt < n ? ob.pt : null;
         html += `<p class="hint"><b>The fence is drawn by hand: ${n} posts.</b> Drag a post in the plan view; press a small dot between two posts to make a new one. The green post is where it starts, the red where it stops: put them at corners of the building (they snap there).</p>`
-          + `<p class="hint">${sel === null ? "Press a post to choose it." : `Post ${sel + 1} of ${n}${sel === 0 ? " (the start)" : sel === n - 1 ? " (the stop)" : ""} at ${o.points[sel][0].toFixed(2)}, ${o.points[sel][1].toFixed(2)}.`}</p>`
+          + `<p class="hint">${sel === null ? "Press a post to choose it." : `Post ${sel + 1} of ${n}${sel === 0 ? " (the start)" : sel === n - 1 ? " (the stop)" : ""}. ${[sel < n - 1 ? `<b>${fenceDist(o.points, sel, sel + 1).toFixed(2)} m</b> to the next post` : "", sel > 0 ? `${fenceDist(o.points, sel, sel - 1).toFixed(2)} m from the previous one` : ""].filter(Boolean).join(", ")}.`} The whole fence is ${o.points.slice(1).reduce((s, q, j) => s + fenceDist(o.points, j, j + 1), 0).toFixed(1)} m.</p>`
           + `<div class="row">${ob.on ? "" : `<button type="button" id="ob-plan" class="primary">Drag the posts in the plan view</button>`}<button type="button" id="ob-addpt" ${n >= MAX_FENCE_POINTS ? "disabled" : ""}>+ Add a post</button><button type="button" id="ob-rmpt" ${sel === null || n <= 2 ? "disabled" : ""}>Remove this post</button><button type="button" id="ob-rect">Back to a rectangle</button></div>`;
         html += range("a", "Animals go out from the wall’s left end (0: the corner)", OBJECT_LIMITS.end[0], pa.L, 0.25, o.a);
         html += range("b", "…to the wall’s right end (0: the corner)", OBJECT_LIMITS.end[0], pa.L, 0.25, o.b);
@@ -1141,6 +1141,8 @@ function groundPoint(e) {
   const hit = rc.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3());
   return hit ? [hit.x, hit.z] : null;
 }
+/** The distance (m) between two posts of a fence drawn by hand. */
+const fenceDist = (pts, i, j) => Math.hypot(pts[i][0] - pts[j][0], pts[i][1] - pts[j][1]);
 /** The pasture's handles: its two ends (the fence's sides) and its outer edge, [{k, at: [x, z]}]. */
 function pastureHandles() {
   const pa = pastureOf(p), fo = objectOf(p, "pasture");
@@ -1693,15 +1695,26 @@ function makePlacesMarker() {
   const handleGeo = new THREE.CylinderGeometry(0.45, 0.45, 0.06, 24), handleMat = new THREE.MeshBasicMaterial({color: 0x2f6fd0, depthTest: false});
   // (a fence drawn by hand: a handle for each post, green at the start, red at the stop, and a small pale one between two posts to make a new one)
   const handleMats = {pt: handleMat, start: new THREE.MeshBasicMaterial({color: 0x3f9a43, depthTest: false}), end: new THREE.MeshBasicMaterial({color: 0xd03a2a, depthTest: false}), mid: new THREE.MeshBasicMaterial({color: 0xffffff, transparent: true, opacity: 0.85, depthTest: false})};
+  // the length of the chosen post's next stretch, written over it
+  const lc = document.createElement("canvas"); lc.width = 256; lc.height = 64;
+  const labelTex = new THREE.CanvasTexture(lc), distLabel = new THREE.Sprite(new THREE.SpriteMaterial({map: labelTex, depthTest: false, transparent: true}));
+  distLabel.visible = false; distLabel.renderOrder = 12; distLabel.scale.set(6, 1.5, 1); group.add(distLabel);
+  const setLabel = text => {
+    const x = lc.getContext("2d"); x.clearRect(0, 0, 256, 64);
+    x.fillStyle = "rgba(255,255,255,0.92)"; x.strokeStyle = "#2f6fd0"; x.lineWidth = 3;
+    x.beginPath(); if (x.roundRect) x.roundRect(6, 6, 244, 52, 14); else x.rect(6, 6, 244, 52); x.fill(); x.stroke();
+    x.fillStyle = "#1b2a41"; x.font = "bold 30px sans-serif"; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText(text, 128, 33);
+    labelTex.needsUpdate = true;
+  };
   const handles = Array.from({length: 3 + 2 * MAX_FENCE_POINTS}, () => { const m = new THREE.Mesh(handleGeo, handleMat); m.visible = false; m.renderOrder = 11; group.add(m); return m; });
   const dispose = () => {
     boxGeo.dispose(); edgeGeo.dispose();
-    handleGeo.dispose(); Object.values(handleMats).forEach(m => m.dispose());
+    handleGeo.dispose(); Object.values(handleMats).forEach(m => m.dispose()); distLabel.material.dispose(); labelTex.dispose();
     Object.values(boxes).forEach(b => { b.mesh.material.dispose(); b.edges.material.dispose(); });
     Object.values(icons).forEach(s => s.material.dispose());
     Object.values(textures).forEach(t => t.dispose());
   };
-  return {group, boxes, icons, handles, handleMats, boxFor, iconFor, dispose};
+  return {group, boxes, icons, handles, handleMats, distLabel, setLabel, boxFor, iconFor, dispose};
 }
 function updatePlacesMarker() {
   if (!placesObj) return;
@@ -1727,6 +1740,14 @@ function updatePlacesMarker() {
     m.position.set(hs[i].at[0], 0.05, hs[i].at[1]); m.material = placesObj.handleMats[hs[i].style || "pt"];
     const sc = hs[i].style === "mid" ? 0.5 : hs[i].sel ? 1.5 : 1; m.scale.set(sc, 1, sc);
   });
+  // the length of the chosen post's next stretch (of the one before, for the last post), over its middle
+  const fp = objectOf(p, "pasture"), lab = placesObj.distLabel;
+  if (hs.length && fp && fp.points && ob.pt !== null && ob.pt < fp.points.length && fp.points.length > 1) {
+    const n = fp.points.length, j = ob.pt < n - 1 ? ob.pt + 1 : ob.pt - 1, a = fp.points[ob.pt], b2 = fp.points[j];
+    lab.visible = true; lab.position.set((a[0] + b2[0]) / 2, 1.2, (a[1] + b2[1]) / 2);
+    const text = fenceDist(fp.points, ob.pt, j).toFixed(1) + " m";
+    if (lab.userData.text !== text) { lab.userData.text = text; placesObj.setLabel(text); }
+  } else lab.visible = false;
   needs = true;
 }
 function drawBed(x) {
