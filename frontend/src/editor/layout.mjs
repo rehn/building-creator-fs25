@@ -316,15 +316,16 @@ const overlap = (a, b, eps = 1e-6) => a.x0 < b.x1 - eps && b.x0 < a.x1 - eps && 
 export function problems(items, catalog, room) {
   // (pieces the catalog doesn't have, from another kind of building, are left out like the build leaves them out)
   const out = new Map(), rects = items.filter(it => catalog[it.type]).map(it => [it, footprint(it, catalog[it.type])]);
+  // (a marker, def.ghost, like the sleep point, only has to be inside: it may stand on a bed)
   for (const [it, f] of rects) {
     if (!inRoom(room, f)) out.set(it.id, "Sticks out through a wall (outside the room)");
-    else {
+    else if (!catalog[it.type].ghost) {
       const k = room.keepOut.find(k => overlap(f, k.rect));
       if (k) out.set(it.id, `Blocks ${k.what}`);
     }
   }
   for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) {
-    if (!overlap(rects[i][1], rects[j][1])) continue;
+    if (catalog[rects[i][0].type].ghost || catalog[rects[j][0].type].ghost || !overlap(rects[i][1], rects[j][1])) continue;
     for (const it of [rects[i][0], rects[j][0]]) if (!out.has(it.id)) out.set(it.id, "Overlaps another piece");
   }
   return out;

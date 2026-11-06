@@ -429,7 +429,7 @@ export function pieceSheet(p) {
   const q = sanitize(p), cat = catalogFor(q), types = Object.keys(cat).filter(t => !cat[t].asset && !cat[t].missing), cols = 5, gap = 4.6;
   const items = types.map((type, i) => ({id: i + 1, type, x: ((i % cols) - (cols - 1) / 2) * gap, z: (Math.floor(i / cols) - (Math.ceil(types.length / cols) - 1) / 2) * gap, rot: 0, ...cat[type].defaults}));
   const s = sanitize({...q, width: 32, depth: 26, floors: 1, floorHeight: 3.4, wings: [], items, age: 0});
-  const geo = buildGeometry(s);
+  const geo = buildGeometry(s, {ghosts: true});
   return {geo, p: s, spots: s.items.map(it => ({id: it.id, type: it.type, x: it.x, z: it.z}))};
 }
 /** The meshes piece id drew in a sheet: [{m (material), g {p, n, uv, c?, i}}], positions relative to the piece's own spot. */
@@ -636,7 +636,7 @@ export function gutterMesh(c0, c1, out, r, {seg = 12} = {}) {
  * the house dimensions, the wall openings and a simple collision box.
  * Marks windows and dormers that don't fit with _hidden = true.
  */
-export function buildGeometry(p) {
+export function buildGeometry(p, {ghosts = false} = {}) {
 p = normalize(p);
 const kind = kindOf(p);
 let G, opsByWall = {}, dims = {}, rooms = [], downpipes = [], doors = [], itemParts = {};
@@ -1285,7 +1285,7 @@ function buildInside(kind, F, H) {
   const outside = new Set([...problems(items, catalog, room)].filter(([, m]) => /outside/i.test(m)).map(([id]) => id));
   for (const it of items) {
     const def = catalog[it.type];
-    if (!def || outside.has(it.id) || def.missing) continue;
+    if (!def || outside.has(it.id) || def.missing || (def.ghost && !ghosts)) continue;   // (a marker, like the sleep point, is not part of the building)
     // An imported item: the game loads its own i3d (with its collision); the editor draws its .obj.
     if (def.asset) { refs.push({asset: def.asset, item: it, ...placement(def.asset.meta, it, F)}); continue; }
     // (a box turned to any other angle than a quarter is drawn as a turned box)
@@ -1906,17 +1906,19 @@ export function placementAreas(geo, extra = []) {
  * on another wall, at that wall's first door or else its middle (places.mjs).
  */
 export function sleepPoint(geo, p = {}) {
-  const o = objectOf(p, "sleep");
+  // the sleep point piece placed inside (a bedroom), else the game object outside the door
+  const piece = (p.items || []).find(it => it.type === "sleeppoint"), {dims} = geo;
+  const o = piece ? {x: piece.x, z: piece.z, w: piece.width, d: piece.depth, h: 2.2, ix: 0, iz: 0} : objectOf(p, "sleep");
   if (!o) return null;
-  const {dims} = geo, c = [o.x, 0, o.z];
-  // out from the building: along the axis the box is further out on (past the walls)
-  const alongX = Math.abs(o.x) - dims.W / 2 > Math.abs(o.z) - dims.D / 2;
+  const c = [o.x, 0, o.z];
+  // out from the building: along the axis the box is further out on (past the walls); a piece inside: towards the nearest wall
+  const alongX = piece ? dims.W / 2 - Math.abs(o.x) < dims.D / 2 - Math.abs(o.z) : Math.abs(o.x) - dims.W / 2 > Math.abs(o.z) - dims.D / 2;
   const n = alongX ? [Math.sign(o.x) || 1, 0, 0] : [0, 0, Math.sign(o.z) || 1], u = [n[2], 0, -n[0]];
   const toward = (from, to) => {
     const dx = to[0] - from[0], dy = to[1] - from[1], dz = to[2] - from[2], deg = 180 / Math.PI;
     return [Math.atan2(dy, Math.hypot(dx, dz)) * deg, Math.atan2(-dx, -dz) * deg, 0];
   };
-  const trigger = boxOf(o), marker = [o.x + o.ix, dims.F, o.z + o.iz];
+  const trigger = piece ? {center: [o.x, dims.F + o.h / 2, o.z], size: [o.w, o.h, o.d]} : boxOf(o), marker = [o.x + o.ix, dims.F, o.z + o.iz];
   // The spawn point: out past the far side of the cleared area, then one metre more.
   const {clear} = placementAreas(geo);
   const reach = Math.max(...[[clear.x0, clear.z0], [clear.x1, clear.z0], [clear.x0, clear.z1], [clear.x1, clear.z1]]
@@ -1934,10 +1936,14 @@ export function sleepPoint(geo, p = {}) {
  */
 export function gamePlaces(p) {
   const q = sanitize(p), kind = kindOf(q);
-  return (q.objects || []).filter(o => o.type !== "pasture").map(o => {
+  const piece = (q.items || []).find(it => it.type === "sleeppoint");
+  const list = (q.objects || []).filter(o => o.type !== "pasture" && !(piece && o.type === "sleep")).map(o => {
     const t = objectInfo(kind, o.type), glyph = t.glyph === "animals" ? (kind.glyph || "hen") : t.glyph;
     return {id: o.id, type: o.type, name: t.name, glyph, box: boxOf(o), icon: t.icon ? [o.x + o.ix, o.type === "sleep" ? q.foundation : 0, o.z + o.iz] : null};
   });
+  // the sleep point placed inside (a piece) is the one the game gets: its trigger and icon in the preview
+  if (piece) list.push({id: 1000 + piece.id, type: "sleep", name: "Sleep point", glyph: "sleep", box: {center: [piece.x, q.foundation + 1.1, piece.z], size: [piece.width, 2.2, piece.depth]}, icon: [piece.x, q.foundation, piece.z]});
+  return list;
 }
 
 /* ---------- Export ---------- */

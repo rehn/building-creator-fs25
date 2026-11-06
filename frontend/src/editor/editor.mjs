@@ -1343,6 +1343,11 @@ function updateInsideOverlay() {
     const m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({color: 0xd03a2a, transparent: true, opacity: 0.3, depthWrite: false}));
     boxOn(m, footprint(it, cat[it.type]), room.F, cat[it.type].height(it) + 0.05); marks.add(m);
   }
+  // markers (def.ghost: the sleep point) are not drawn in the building: a blue box where their trigger is
+  for (const it of items) if (cat[it.type] && cat[it.type].ghost && !(ins.drag && ins.drag.id === it.id)) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({color: 0x2f6fd0, transparent: true, opacity: 0.22, depthWrite: false}));
+    boxOn(m, footprint(it, cat[it.type]), room.F, cat[it.type].height(it)); marks.add(m);
+  }
   // the selected piece, or where the dragged one would land: green if fine, red if not
   const it = ins.drag ? ins.drag.cand : selected();
   ghost.visible = !!it;

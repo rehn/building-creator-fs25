@@ -407,6 +407,21 @@ export const CATALOG = {
       }
       c.paint("#3A4A52", "plastic"); c.box(-0.05, 0.05, front + 0.006, front + 0.01, cy - 0.04, cy + 0.04);   // a reflection
     }},
+  // A marker, not furniture: where the player sleeps (the game's sleep trigger and its bed icon). Drawn only in the editor and for the picture
+  // (def.ghost: the export leaves it out); it never blocks or overlaps anything.
+  sleeppoint: {name: "Sleep point (sovplats)", mount: "floor", collision: false, ghost: "sleep",
+    params: [{k: "width", label: "Trigger width", min: 1, max: 3, step: 0.1, unit: " m"}, {k: "depth", label: "Trigger depth", min: 1, max: 3, step: 0.1, unit: " m"}], defaults: {width: 1.8, depth: 1.4},
+    size: it => [it.width, it.depth], height: () => 2.2,
+    build(c, it) {
+      const w = it.width / 2, d = it.depth / 2, blue = "#2F6FD0";
+      c.paint(blue);
+      c.box(-w, w, -d, -d + 0.04, 0, 0.02); c.box(-w, w, d - 0.04, d, 0, 0.02); c.box(-w, -w + 0.04, -d, d, 0, 0.02); c.box(w - 0.04, w, -d, d, 0, 0.02);   // the trigger's outline on the floor
+      c.rod([0, 0.02, 0], [0, 1.3, 0], 0.012, 6);                                                    // a post up to the icon
+      c.paint(shade(blue, 0.3)); c.box(-0.22, 0.22, -0.12, 0.12, 1.3, 1.38);                         // the icon: a little bed
+      c.box(-0.22, -0.2, -0.12, 0.12, 1.38, 1.5); c.box(0.2, 0.22, -0.12, 0.12, 1.38, 1.44);                  // its head and foot boards
+      c.paint("#FFFFFF"); c.box(-0.16, 0.0, -0.09, 0.09, 1.38, 1.42); c.box(0.02, 0.19, -0.1, 0.1, 1.38, 1.4);   // a pillow and a sheet
+      c.paint(blue); for (const x of [-w, w - 0.04]) for (const z of [-d, d - 0.04]) c.box(x, x + 0.04, z, z + 0.04, 0.02, 0.1);   // short posts at the corners
+    }},
   rug: {name: "Rag rug (trasmatta)", mount: "floor", collision: false, params: [], defaults: {},
     size: () => [2.0, 0.8], height: () => 0.012,
     build(c) {
@@ -417,7 +432,7 @@ export const CATALOG = {
 };
 
 
-for (const [k, g] of Object.entries({"innerwall":"Walls and doors","kitchen":"Kitchen","kitchenunits":"Kitchen","cooker":"Kitchen","stove":"Kitchen","fridge":"Kitchen","pantry":"Kitchen","table":"Dining","chair":"Dining","sofa":"Living room","divan":"Living room","tvbench":"Living room","bookshelf":"Living room","bookcase":"Living room","rug":"Living room","bed":"Bedroom","singlebed":"Bedroom","wardrobe":"Bedroom","desk":"Office","toilet":"Bathroom","shower":"Bathroom","washbasin":"Bathroom","washer":"Bathroom"})) if (CATALOG[k]) CATALOG[k].group = g;   // (the palette's groups)
+for (const [k, g] of Object.entries({"innerwall":"Walls and doors","kitchen":"Kitchen","kitchenunits":"Kitchen","cooker":"Kitchen","stove":"Kitchen","fridge":"Kitchen","pantry":"Kitchen","table":"Dining","chair":"Dining","sofa":"Living room","divan":"Living room","tvbench":"Living room","bookshelf":"Living room","bookcase":"Living room","rug":"Living room","bed":"Bedroom","singlebed":"Bedroom","wardrobe":"Bedroom","desk":"Office","sleeppoint":"Bedroom","toilet":"Bathroom","shower":"Bathroom","washbasin":"Bathroom","washer":"Bathroom"})) if (CATALOG[k]) CATALOG[k].group = g;   // (the palette's groups)
 
 /**
  * A first arrangement for a farmhouse's ground floor: a kitchen with a wood stove, a table with four

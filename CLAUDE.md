@@ -57,6 +57,8 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   paperAt(s); Inside walls section in Finish (editor.mjs renderPapersUI). A wing's side walls' inside faces run right up to the house (see-through.test.mjs).
   Number entry: the number beside any slider (an output inside .field .fl) can be clicked and typed over, sums allowed (calc.mjs evalNumber; editor.mjs
   installNumberEntry; a slider whose number is not its own value has data-scale, e.g. a window's position in metres).
+  Marker pieces (def.ghost, e.g. furniture.mjs sleeppoint): not built into the geometry (buildGeometry(p, {ghosts: true}) for the thumbnails), never overlap or block
+  (layout.mjs problems), drawn by the editor as a blue box while arranging; sleepPoint() in model.mjs takes the sleep trigger/icon from the piece before the sleep object.
   Palette: catalog entries have `group` (layout.mjs pieceGroups gives the groups in order); each piece has a thumbnail: model.mjs pieceSheet(p) builds one
   of each piece in a big empty room (geo.itemParts[id] = the vertices of each material a piece drew), pieceMeshes(sheet, id) slices one out, and
   editor.mjs makeThumbs() renders each to a small picture (once per kind, ensureThumbs after entering the arranging). A piece's setting must not be
@@ -149,7 +151,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Frontend tests: cd frontend && npm test (node --test, no browser needed)
 
 ## Status
-- Go tests (60) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (504) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
+- Go tests (60) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (511) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
 - Cow barn (kinds/cow.mjs): cowHusbandryPasture (no milk, like cowBarnSmall), automatic water, feed
   and water troughs outside on the pasture wall (kind.outside), a plain walk-through doorway for the
   cows (openings with plain: true; tall openings get a collision gap), feed pad + bale trigger
