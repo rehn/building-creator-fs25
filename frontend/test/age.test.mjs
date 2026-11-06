@@ -69,3 +69,15 @@ test("weathering: old paint peels to grey wood, an old tile roof grows moss, an 
   const Mk = new Uint8Array(N * N).fill(1);
   assert.ok(weather({S: b.S, H: b.H, Mk, N}, "brick", 30).Mk.filter(v => v === 1).length > N * N / 2);
 });
+
+test("vertical boards: a wall cladding of its own, with a texture spec, that weathers like the other painted wood", () => {
+  const p = sanitize({wallCladding: "vertical", panelSpacing: 0.15});
+  assert.equal(p.wallCladding, "vertical");
+  const s = surfaceSpec(p, "walls");
+  assert.equal(s.kind, "vertical");
+  assert.ok(s.n >= 2 && Math.abs(s.w - s.n * 0.15) < 1e-9);
+  assert.ok(AGED_KINDS.includes("vertical"));
+  const b = base(null), w = weather({S: b.S, H: b.H, Mk: null, N: b.N}, "vertical", 40);
+  assert.ok((w.Mk || []).some(v => v > 0), "bare wood shows through the paint when old");
+  assert.equal(sanitize({lowerCladding: "vertical", wallSplit: "floor"}).lowerCladding, "vertical");
+});

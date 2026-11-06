@@ -55,7 +55,7 @@ const pickRoom = v => ROOM_TYPES.includes(v) ? v : "auto";
 const pickCurtain = v => CURTAIN_STYLES.includes(v) ? v : "default";
 const pickColor = v => typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v) ? v : "default";
 /** What the walls can be clad in: [id, name]. */
-const CLADDING = [["lockpanel","Board and batten (lockpanel)"],["horizontal","Horizontal boards"],["plaster","Plaster"]];
+const CLADDING = [["lockpanel","Board and batten (lockpanel)"],["horizontal","Horizontal boards"],["vertical","Vertical boards (stående plank)"],["plaster","Plaster"]];
 /** The editor's tabs, one for each thing you do: [id, name]. Every section is in one of them (its tab). */
 export const TABS = [["shape", "Shape"], ["openings", "Openings"], ["inside", "Inside"], ["look", "Look"], ["game", "Game"]];
 /** Editor sections every building shares (kinds hide the ones they don't use, see kind.hides). */
@@ -1880,7 +1880,7 @@ function baseSpec(p, m) {
   if (!kind) return null;
   const sp = p.panelSpacing;
   if (kind === "lockpanel") { const n = Math.max(2, Math.round(1.2 / sp)); return {kind, n, bw: Math.min(0.8, p.battenWidth / sp), w: n*sp, h: n*sp}; }
-  if (kind === "horizontal") { const n = Math.max(2, Math.round(1.2 / sp)); return {kind, n, w: n*sp, h: n*sp}; }
+  if (kind === "vertical" || kind === "horizontal") { const n = Math.max(2, Math.round(1.2 / sp)); return {kind, n, w: n*sp, h: n*sp}; }
   if (kind === "tiles") return {kind, w: 1.2, h: 1.36};
   if (kind === "brick") return {kind, w: 1.0, h: 0.6};
   if (SURFACES[kind]) return {kind, w: SURFACES[kind].w, h: SURFACES[kind].h};

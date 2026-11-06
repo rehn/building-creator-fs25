@@ -342,7 +342,7 @@ function fitBase(kind, age = 0, outdoor = false) {
 function genBase(s) {
   if (SURFACES[s.kind]) return fitBase(s.kind, s.age, true);
   let N = TEX, H = new Float32Array(N*N), S = new Float32Array(N*N), Mk = s.kind === "brick" ? new Uint8Array(N*N) : null;
-  const strength = {lockpanel:10, horizontal:40, plaster:1.5, felt:1.2, tiles:60, metal:4.5, brick:3, paintedwood:0.6}[s.kind];
+  const strength = {lockpanel:10, vertical:14, horizontal:40, plaster:1.5, felt:1.2, tiles:60, metal:4.5, brick:3, paintedwood:0.6}[s.kind];
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
     let h = 0, sh = 1;
     if (s.kind === "lockpanel") {
@@ -354,6 +354,12 @@ function genBase(s) {
       } else {
         sh = (0.97 + (hash(Math.floor(x / P), 2, 13) - 0.5) * 0.08 + grain) * (1 - 0.4 * Math.exp(-(d - bwp/2) / 5));
       }
+    } else if (s.kind === "vertical") {
+      // plain boards standing side by side: a flat face with a small chamfer and a dark joint between the boards, grain running down
+      const P = N / s.n, lx = x % P, d = Math.min(lx, P - lx), board = Math.floor(x / P);
+      const grain = (vnoise(x/8, y/64, N/8, N/64, 3) - 0.5) * 0.12 + (vnoise(x/2, y/16, N/2, N/16, 5) - 0.5) * 0.06;
+      h = d < 4 ? d / 4 : 1;
+      sh = (0.98 + (hash(board % s.n, 4, 23) - 0.5) * 0.1 + grain) * (1 - 0.55 * Math.exp(-d / 2.5));
     } else if (s.kind === "horizontal") {
       const P = N / s.n, ly = y % P;
       h = ly / P;

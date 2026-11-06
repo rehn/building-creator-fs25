@@ -42,7 +42,7 @@ export function agedColor(hex, years, mat) {
 
 /* ---------- Surfaces ---------- */
 /** The surface kinds weathering knows: the outside ones (surfaceSpec) and the inside ones (surfaces.mjs). */
-export const AGED_KINDS = ["lockpanel", "horizontal", "paintedwood", "plaster", "tiles", "felt", "metal", "brick", "concrete",
+export const AGED_KINDS = ["lockpanel", "horizontal", "vertical", "paintedwood", "plaster", "tiles", "felt", "metal", "brick", "concrete",
   "whitewash", "grime", "timber", "boards", "wood", "galv", "steel", "plastic", "rubber", "straw", "litter", "paperPlain", "paperStripe", "paperFlower"];
 
 /**
@@ -61,7 +61,7 @@ export function weather({S, H, Mk, N}, kind, years, {outdoor = false} = {}) {
     let s = 1;
     // grime everywhere, in clouds and in streaks where the rain runs down
     s *= 1 - 0.1 * t * Math.max(0, dirt - 0.3) - 0.07 * t * streak;
-    if (kind === "lockpanel" || kind === "horizontal" || kind === "paintedwood") {
+    if (kind === "lockpanel" || kind === "horizontal" || kind === "vertical" || kind === "paintedwood") {
       // paint chalks unevenly; where it has worn through, the grey wood shows (more along the grain)
       s *= 1 + 0.05 * t * (fbm(x, y, N, 8, 504) - 0.5);
       const peel = kind === "horizontal" ? noise(x, y, N, 6, 48, 505) * 0.6 + fbm(x, y, N, 32, 506) * 0.4 : noise(x, y, N, 48, 6, 505) * 0.6 + fbm(x, y, N, 32, 506) * 0.4;
