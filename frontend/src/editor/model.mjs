@@ -986,7 +986,10 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
     // the kind's finish (a barn's by default); under a ceiling (kind.ceiling) only up to it, the floors above closed
     const fin = kind.insideWalls || BARN_WALLS, ceil = kind.ceiling ? p.floorHeight : Infinity;
     const Hi = Math.min(H + inner.lift, ceil), tw = WALL_T, lowT = fin.low ? fin.low[2] : 0;
-    const Xi = uniq([tw, L - tw, L/2, ...ops.flatMap(o => [o.s0, o.s1])]).filter(s => s > tw - 1e-6 && s < L - tw + 1e-6);
+    // (a wing's side wall meets the house's outer face at its start (Left) or its end (Right): its inside face runs right up to it,
+    // or a slit shows between it and the house's wall)
+    const sideOf = /^w[0-9]+(Left|Right)$/.exec(key), s0i = sideOf && sideOf[1] === "Left" ? 0 : tw, s1i = sideOf && sideOf[1] === "Right" ? L : L - tw;
+    const Xi = uniq([s0i, s1i, L/2, ...ops.flatMap(o => [o.s0, o.s1])]).filter(s => s > s0i - 1e-6 && s < s1i + 1e-6);
     // (a barn's: whitewash, greyer and grubbier along the bottom where the animals rub and muck splashes)
     const Ti = uniq([0, ...(lowT ? [lowT] : []), Hi, ...(ceil < Infinity ? [] : [H + gableRise]), ...ops.flatMap(o => [o.t0, o.t1])]);
     for (let i = 0; i < Xi.length - 1; i++) for (let j = 0; j < Ti.length - 1; j++) {
