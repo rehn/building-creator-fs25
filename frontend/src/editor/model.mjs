@@ -1804,7 +1804,7 @@ export function placementAreas(geo, extra = []) {
  *   spawn:   on the ground outside the cleared area, facing the house
  *   camera:  view while sleeping, above and in front of the house; rot = [pitch, yaw, 0] degrees
  * It starts at the first door (the window list's first); the player can move it, size it or put it
- * on another wall, at that wall's first door or else its middle (p.places.sleep, places.mjs).
+ * on another wall, at that wall's first door or else its middle (places.mjs).
  */
 export function sleepPoint(geo, p = {}) {
   const o = objectOf(p, "sleep");

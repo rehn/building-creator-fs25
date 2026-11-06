@@ -85,11 +85,11 @@ function cowObjects(geo, p, yf, cfg) {
   const {feedKey, otherKey, frames, mid} = yf, {W, D} = geo.dims;
   const pad = (h, icon) => w => { const [c, len] = mid(w); return {s: c, d: 1.75, along: Math.max(2.5, Math.min(4, len)), out: 3, h, icon: [c + icon, 1.75]}; };
   const start = {
-    food: placeOnWall({}, "food", frames, feedKey, pad(0.3, -0.8)),
-    bales: placeOnWall({}, "bales", frames, feedKey, pad(2.5, 0.8)),
-    loading: placeOnWall({}, "loading", frames, feedKey, w => { const [c, len] = mid(w); return {s: c, d: 5.5, along: Math.min(4, len), out: 4, h: 3, icon: [c, 5.5]}; }),
-    info: {box: placeOnBuilding({}, "info", {center: [0, 1.5, 0], size: [W + 2, 3, D + 2]}), icon: null},
-    pallets: cfg.pallets && placeOnWall({}, "pallets", frames, otherKey, w => {
+    food: placeOnWall(frames, feedKey, pad(0.3, -0.8)),
+    bales: placeOnWall(frames, feedKey, pad(2.5, 0.8)),
+    loading: placeOnWall(frames, feedKey, w => { const [c, len] = mid(w); return {s: c, d: 5.5, along: Math.min(4, len), out: 4, h: 3, icon: [c, 5.5]}; }),
+    info: {box: placeOnBuilding({center: [0, 1.5, 0], size: [W + 2, 3, D + 2]}), icon: null},
+    pallets: cfg.pallets && placeOnWall(frames, otherKey, w => {
       const [c, len] = mid(w), lines = Math.min(4.8, Math.max(1.2, len - 1));
       return {s: c, d: 2.8, along: Math.min(lines + 1, len), out: 3.2, h: 2.5, icon: null};
     }),

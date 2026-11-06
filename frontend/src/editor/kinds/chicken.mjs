@@ -60,13 +60,13 @@ function henObjects(geo, p, yf = yardFrame(geo, p, MIN_PASTURE_WIDTH)) {
   const {feedKey, otherKey, frames, mid} = yf, {W, D} = geo.dims;
   const start = {
     // Feed pad: low on the ground, so a tipping trailer's or auger's raycast starts above it.
-    food: placeOnWall({}, "food", frames, feedKey, w => { const [c, len] = mid(w); return {s: c, d: 1.75, along: Math.max(2.5, Math.min(4, len)), out: 3, h: 0.3, icon: [c, 1.75]}; }),
-    loading: placeOnWall({}, "loading", frames, feedKey, w => { const [c, len] = mid(w); return {s: c, d: 5.5, along: Math.min(4, len), out: 4, h: 3, icon: [c, 5.5]}; }),
-    pallets: placeOnWall({}, "pallets", frames, otherKey, w => {
+    food: placeOnWall(frames, feedKey, w => { const [c, len] = mid(w); return {s: c, d: 1.75, along: Math.max(2.5, Math.min(4, len)), out: 3, h: 0.3, icon: [c, 1.75]}; }),
+    loading: placeOnWall(frames, feedKey, w => { const [c, len] = mid(w); return {s: c, d: 5.5, along: Math.min(4, len), out: 4, h: 3, icon: [c, 5.5]}; }),
+    pallets: placeOnWall(frames, otherKey, w => {
       const [c, len] = mid(w), lines = Math.min(4.8, Math.max(1.2, len - 1));
       return {s: c, d: 2.8, along: Math.min(lines + 1, len), out: 3.2, h: 2.5, icon: null};
     }),
-    info: {box: placeOnBuilding({}, "info", {center: [0, 1.5, 0], size: [W + 2, 3, D + 2]}), icon: null},
+    info: {box: placeOnBuilding({center: [0, 1.5, 0], size: [W + 2, 3, D + 2]}), icon: null},
   };
   const out = {};
   for (const t of ["food", "loading", "pallets", "info"]) {

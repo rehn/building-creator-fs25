@@ -42,7 +42,7 @@ function scene(c) {
 function defaultObjects(p) {
   if (p.sleepPoint === false) return [];
   const walls = wallsOf(p), doors = (p.windows || []).filter(w => w.type === "door" && w.floor === 0 && walls[w.wall]).sort((a, b) => a.id - b.id);
-  const pl = placeOnWall({}, "sleep", walls, doors.length ? doors[0].wall : "front", (w, key) => {
+  const pl = placeOnWall(walls, doors.length ? doors[0].wall : "front", (w, key) => {
     const d = doors.find(x => x.wall === key), s = d ? openingSpan(d, w.L).reduce((u, v) => (u + v) / 2) : w.L / 2;
     return {s, d: 0.9, along: 1.8, out: 1.8, h: p.foundation + 2.2, icon: [s, 0.9]};
   });

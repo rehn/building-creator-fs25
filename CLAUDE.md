@@ -68,7 +68,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   A walk-in kind has a catalog of pieces and autoFurnish(p); buildGeometry draws p.items.
   src/editor/editor.mjs = controls + three.js r128 preview, mounted by Editor.tsx.
   src/editor/interior.mjs = paints the room atlas (layout: ATLAS in model.mjs) and glass texture.
-  src/editor/places.mjs = placeOnWall/placeOnBuilding: where the kinds put their game objects to start with (the
+  src/editor/places.mjs = placeOnWall(walls, wall, def)/placeOnBuilding(def): where the kinds put their game objects to start with (the
   objects themselves are in objects.mjs; p.places and cleanPlaces are from before and no longer used).
   gamePlaces(p) (model.mjs) gives the preview the same boxes and icons the export writes.
   src/editor/age.mjs = p.age (0-60 years): agedColor (via colorFor) and weather() on texture shade/height/marks
