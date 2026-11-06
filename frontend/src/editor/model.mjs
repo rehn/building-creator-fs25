@@ -238,7 +238,7 @@ function cleanWindows(arr, legacy = {}) {
     return {
       id: i + 1, wall: w.wall, floor: Math.round(clampN(w.floor, 0, 2, 0)), pos: clampN(w.pos, 0, 1, 0.5),
       w: clampN(w.w, 0.3, door ? 10 : 3, 1), h: clampN(w.h, 0.3, door ? 8 : 2.4, 1.25), sill: clampN(w.sill, 0, 2, 0.85),
-      ...k, ...porch, ...(door ? {opens: w.opens !== false, swing: w.swing === "in" ? "in" : "out", hinge: w.hinge === "right" ? "right" : "left"} : {}),
+      ...k, ...porch, ...(door ? {ramp: !!w.ramp, opens: w.opens !== false, swing: w.swing === "in" ? "in" : "out", hinge: w.hinge === "right" ? "right" : "left"} : {}),
       room: pickRoom(w.room), curtain: pickCurtain(w.curtain), curtainColor: pickColor(w.curtainColor)
     };
   });
@@ -716,7 +716,7 @@ function layoutWall(key, L, fh, topAt, cover = null) {
   const ops = [];
   // The kind's own openings (a hen hatch ...) first, then the doors, then the windows: a window over a
   // door is hidden, not the door.
-  for (const h of openings) if (h.wall === key) ops.push({s0: h.s0, s1: h.s1, t0: 0, t1: h.t1, kind: "hatch", plain: !!h.plain});
+  for (const h of openings) if (h.wall === key) ops.push({s0: h.s0, s1: h.s1, t0: 0, t1: h.t1, kind: "hatch", plain: !!h.plain, ...(h.ramp ? {ramp: true} : {})});
   // a wing opens into this wall: a passage through it, from the floor to under the wing's ceiling (a window in it is hidden)
   if (hollow) for (const w of liveWings(p)) if (w.wall === key) ops.push({s0: w.s0 + WALL_T, s1: w.s1 - WALL_T, t0: 0, t1: kind.ceiling ? Math.min(p.floorHeight, w.H) : w.H - 0.25, kind: "open"});   // (under a ceiling: right up to it, no lintel)
   const list = p.windows.filter(w => w.wall === key);
@@ -728,6 +728,7 @@ function layoutWall(key, L, fh, topAt, cover = null) {
     const t0 = door ? 0 : win.floor * fh + win.sill;
     const t1 = door ? Math.min(win.h, fh - 0.25) : win.floor < wf ? Math.min(t0 + win.h, (win.floor + 1) * fh - 0.25) : t0 + win.h;
     const op = {s0, s1, t0, t1, kind: door ? "door" : "window", id: win.id, style: styleOf(p, win), ...(door ? {opens: win.opens !== false, swingIn: win.swing === "in", hingeRight: win.hinge === "right"} : {})};
+    if (door && win.ramp) op.ramp = true;
     if (door && op.style === "hole") { op.kind = "hatch"; op.plain = true; op.hole = true; delete op.opens; delete op.swingIn; delete op.hingeRight; }   // an empty doorway: the framed hole
     else if (door) op.porch = {type: win.porch || "none", w: win.porchW || PORCH_W[2], d: win.porchD || PORCH_D[2]};
     const g = 0.18;
@@ -871,7 +872,15 @@ function buildCurtains(R) {
  * above it between two rails, and, if the floor is raised, a ramp with cleats down to the ground.
  * Hens use the walking area, not physics, so the wall's collision stays whole.
  */
+/** A ramp from the opening's sill (the floor) down to the ground, 1:5, as wide as the opening and 20 cm more each side; solid, and in the collision. */
+function buildRamp(w, o, F) {
+  const s0 = o.s0 - 0.2, s1 = o.s1 + 0.2, d0 = PLINTH_OUT, d1 = PLINTH_OUT + Math.max(0.6, F * 5);
+  const P = (s, t, d) => WP(w, s, t, d);
+  const A = P(s0, -F, d0), B = P(s1, -F, d0), C = P(s1, 0, d0), D = P(s0, 0, d0), E = P(s0, -F, d1), G = P(s1, -F, d1);
+  for (const mat of ["foundation", "collision"]) solid(mat, [[A, B, C, D], [A, B, G, E], [D, C, G, E], [A, D, E], [B, C, G]]);
+}
 function buildHatch(w, o, F, fr, out) {
+  if (o.ramp && F > 0.05) buildRamp(w, o, F);
   wbox("trim", w, o.s0 - fr, o.s0, o.t0, o.t1 + fr, 0, out);
   wbox("trim", w, o.s1, o.s1 + fr, o.t0, o.t1 + fr, 0, out);
   wbox("trim", w, o.s0, o.s1, o.t1, o.t1 + fr, 0, out);
@@ -1066,7 +1075,8 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
     wbox("trim", w, o.s1, o.s1 + fr, b0, o.t1 + fr, 0, out);
     wbox("trim", w, o.s0, o.s1, o.t1, o.t1 + fr, 0, out);
     if (isDoor) {
-      if (F > 0.05 && o.porch.type !== "porch") {
+      if (F > 0.05 && o.ramp && o.porch.type !== "porch") buildRamp(w, o, F);
+      else if (F > 0.05 && o.porch.type !== "porch") {
         // the doorstep, from where the plinth ends (its top in the same plane would flicker)
         wbox("foundation", w, o.s0 - 0.3, o.s1 + 0.3, -F, 0, PLINTH_OUT, 0.7);
         wbox("collision", w, o.s0 - 0.3, o.s1 + 0.3, -F, 0, PLINTH_OUT, 0.7);

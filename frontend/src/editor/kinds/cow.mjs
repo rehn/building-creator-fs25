@@ -32,7 +32,7 @@ export const COW = {count: cowsOf, minWidth: MIN_PASTURE_WIDTH, pallets: false, 
 export function openings(p) {
   if (p.pastureNoGap) return [];
   const L = wallLength(p, p.pastureWall), m = p.pastureMid ?? L / 2, w = p.pastureGapW ?? 1.6, h = Math.min(p.pastureGapH ?? 2.2, p.floors * p.floorHeight - 0.3);
-  return [{wall: p.pastureWall, s0: m - w / 2, s1: m + w / 2, t1: h, clear: w, what: "the cows' doorway", plain: true}];
+  return [{wall: p.pastureWall, s0: m - w / 2, s1: m + w / 2, t1: h, clear: w, what: "the cows' doorway", plain: true, ramp: !!p.pastureRamp}];
 }
 // Troughs are game objects (feedTrough, waterTrough: a box on the ground, its height the top edge). A trough is a plank box
 // with a wall round a hollow; the fill plane floats in the hollow.

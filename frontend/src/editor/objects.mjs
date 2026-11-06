@@ -91,7 +91,7 @@ function cleanPasture(o, ps = {minWidth: 0, depth: [2, 60]}, p) {
   const gapAt = has(o.gapAt) ? clamp(+o.gapAt, [half, Math.max(half, L - half)]) : null;
   return {type: "pasture", wall, a: round(a), b: round(b), depth: round(clamp(num(o.depth, ps.depth[0]), ps.depth)),
     ...(gapAt !== null ? {gapAt: round(gapAt)} : {}), ...(gw !== null ? {gapW: round(gw)} : {}), ...(has(o.gapH) ? {gapH: round(clamp(+o.gapH, GAP_LIMITS.h))} : {}),
-    ...(o.noGap ? {noGap: true} : {}), ...(pts.length >= 2 ? {points: pts} : {})};
+    ...(o.noGap ? {noGap: true} : {}), ...(o.gapRamp ? {gapRamp: true} : {}), ...(pts.length >= 2 ? {points: pts} : {})};
 }
 
 /** The building's object of a type, or null. */
@@ -130,7 +130,7 @@ export function pastureOf(p, o = objectOf(p, "pasture")) {
   const pts = [at(s0, 0), at(s1, d), ...fence];
   const rect = {x0: Math.min(...pts.map(q => q[0])), x1: Math.max(...pts.map(q => q[0])), z0: Math.min(...pts.map(q => q[2])), z1: Math.max(...pts.map(q => q[2]))};
   const gapW = o.gapW ?? GAP_DEFAULT.w, gapH = o.gapH ?? GAP_DEFAULT.h, mid = o.gapAt ?? (ea + eb) / 2;
-  return {wall: o.wall, w, L, s0, s1, ea, eb, mid, gapW, gapH, noGap: !!o.noGap, depth: d, fence, rect, at, free};
+  return {wall: o.wall, w, L, s0, s1, ea, eb, mid, gapW, gapH, noGap: !!o.noGap, gapRamp: !!o.gapRamp, depth: d, fence, rect, at, free};
 }
 
 /** Box objects snap to a 25 cm grid and are kept out of the building (pushed out the shortest way). */

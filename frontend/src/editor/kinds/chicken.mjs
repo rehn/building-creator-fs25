@@ -89,7 +89,7 @@ function defaultObjects(p) {
 function openings(p) {
   if (p.pastureNoGap) return [];
   const L = (p.pastureWall === "front" || p.pastureWall === "back") ? p.width : p.depth, m = p.pastureMid ?? L / 2;
-  return [{wall: p.pastureWall, s0: m - 0.2, s1: m + 0.2, t1: 0.5, clear: 0.8, what: "the hen hatch"}];
+  return [{wall: p.pastureWall, s0: m - 0.2, s1: m + 0.2, t1: 0.5, clear: 0.8, what: "the hen hatch", ramp: !!p.pastureRamp}];
 }
 
 /* ---------- Interior ---------- */

@@ -805,9 +805,11 @@ function renderWinUI() {
     if (door) {
       html += `<div class="field"><div class="fl"><label for="wf-porch">In front of the door</label></div><select id="wf-porch">${PORCH_OPTIONS.map(o => opt(o[0], o[1], s.porch)).join("")}</select></div>`;
       if (s.porch !== "none") html += PORCH_FIELDS.map(f => range(f)).join("");
-      html += `<label class="check"><input type="checkbox" id="wf-opens" ${s.opens !== false ? "checked" : ""}> Opens (you can walk through it in the game)</label>`;
-      if (s.opens !== false && !(s.w > DOUBLE_DOOR_FROM)) html += `<div class="field"><div class="fl"><label for="wf-hinge">Hinges</label></div><select id="wf-hinge">${opt("left", "On the left (seen from outside)", s.hinge || "left")}${opt("right", "On the right (seen from outside)", s.hinge || "left")}</select></div>`;
-      if (s.opens !== false) html += `<div class="field"><div class="fl"><label for="wf-swing">Swings</label></div><select id="wf-swing">${opt("out", "Outwards", s.swing || "out")}${opt("in", "Inwards", s.swing || "out")}</select></div>`;
+      html += `<label class="check"><input type="checkbox" id="wf-ramp" ${s.ramp ? "checked" : ""}> A ramp down to the ground (instead of steps; needs a foundation)</label>`;
+      if ((s.style === "default" ? p.doorStyle : s.style) === "hole") html += `<p class="hint">An empty doorway: no door, so nothing to open.</p>`;
+      else html += `<label class="check"><input type="checkbox" id="wf-opens" ${s.opens !== false ? "checked" : ""}> Opens (you can walk through it in the game)</label>`;
+      if ((s.style === "default" ? p.doorStyle : s.style) !== "hole" && s.opens !== false && !(s.w > DOUBLE_DOOR_FROM)) html += `<div class="field"><div class="fl"><label for="wf-hinge">Hinges</label></div><select id="wf-hinge">${opt("left", "On the left (seen from outside)", s.hinge || "left")}${opt("right", "On the right (seen from outside)", s.hinge || "left")}</select></div>`;
+      if ((s.style === "default" ? p.doorStyle : s.style) !== "hole" && s.opens !== false) html += `<div class="field"><div class="fl"><label for="wf-swing">Swings</label></div><select id="wf-swing">${opt("out", "Outwards", s.swing || "out")}${opt("in", "Inwards", s.swing || "out")}</select></div>`;
     }
     if (!door) html += choiceFields("wc", s);
     if (!lastDoor) html += `<button type="button" id="winRemove">Remove this ${door ? "door" : "window"}</button>`;
@@ -846,6 +848,7 @@ function renderWinUI() {
     $("wf-wall").onchange = e => { s.wall = e.target.value; winChanged(); renderWinUI(); updateHighlight(); };
     $("wf-style").onchange = e => { s.style = e.target.value; persist(); rebuild(false); };
     if ($("wf-porch")) $("wf-porch").onchange = e => { s.porch = e.target.value; winChanged(); renderWinUI(); };
+    if ($("wf-ramp")) $("wf-ramp").onchange = e => { s.ramp = e.target.checked; winChanged(); };
     if ($("wf-opens")) $("wf-opens").onchange = e => { s.opens = e.target.checked; winChanged(); renderWinUI(); };
     if ($("wf-swing")) $("wf-swing").onchange = e => { s.swing = e.target.value; winChanged(); };
     if ($("wf-hinge")) $("wf-hinge").onchange = e => { s.hinge = e.target.value; winChanged(); };
@@ -1048,6 +1051,7 @@ function renderObjectsUI() {
       html += `<label class="check"><input type="checkbox" id="ob-nogap" ${o.noGap ? "" : "checked"}> The building’s own opening to the pasture</label>`;
       html += o.noGap ? `<p class="hint">No opening: add a door in the Openings tab and choose the style “Open doorway, framed (no door)” for an empty hole with a frame, wherever you want it.</p>`
         : `<p class="hint">The animals walk through it (a small hatch for hens). Its middle is measured from the wall’s left end seen from outside.</p>`;
+      if (!o.noGap) html += `<label class="check"><input type="checkbox" id="ob-ramp" ${o.gapRamp ? "checked" : ""}> A ramp down to the ground (needs a foundation)</label>`;
       if (!o.noGap) html += range("gapAt", "Opening: position (m from the left end)", 0, pa.L, 0.05, pa.mid);
       if (ps.gapSize && !o.noGap) {
         html += range("gapW", "Opening: width", GAP_LIMITS.w[0], GAP_LIMITS.w[1], 0.05, pa.gapW);
@@ -1082,6 +1086,7 @@ function renderObjectsUI() {
     };
     inp.onchange = () => swap(snapObj(selObject()));
   });
+  if ($("ob-ramp")) $("ob-ramp").onchange = e => { const c = {...selObject()}; if (e.target.checked) c.gapRamp = true; else delete c.gapRamp; swap(snapObj(c)); };
   if ($("ob-nogap")) $("ob-nogap").onchange = e => { const c = {...selObject()}; if (e.target.checked) delete c.noGap; else c.noGap = true; swap(snapObj(c)); };
   if ($("ob-wall")) $("ob-wall").onchange = e => swap(snapObj({...selObject(), wall: e.target.value}));
   // a fence drawn by hand: start it from the rectangle, add and remove posts, go back
