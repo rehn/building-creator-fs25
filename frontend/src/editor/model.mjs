@@ -654,6 +654,7 @@ function box(mat, P, ax, ay, az) {
   for (const b of [0,1]) poly(mat, [P(0,b,0),P(1,b,0),P(1,b,1),P(0,b,1)], b ? ay : neg(ay));
   for (const c of [0,1]) poly(mat, [P(0,0,c),P(1,0,c),P(1,1,c),P(0,1,c)], c ? az : neg(az));
 }
+const meshBox = box;   // (the loop in buildInside has its own box)
 function wbox(mat, w, s0, s1, t0, t1, d0, d1) {
   box(mat, (a,b,c) => WP(w, lerp(s0,s1,a), lerp(t0,t1,b), lerp(d0,d1,c)), w.u, UP, w.n);
 }
@@ -1226,7 +1227,14 @@ function buildInside(kind, F, H) {
     if (!def || outside.has(it.id) || def.missing) continue;
     // An imported item: the game loads its own i3d (with its collision); the editor draws its .obj.
     if (def.asset) { refs.push({asset: def.asset, item: it, ...placement(def.asset.meta, it, F)}); continue; }
-    const box = (x0, x1, z0, z1, y0, y1) => { const a = toWorld(it, x0, z0), b = toWorld(it, x1, z1); abox("fittings", [a[0], F + y0, a[1]], [b[0], F + y1, b[1]]); };
+    // (a box turned to any other angle than a quarter is drawn as a turned box)
+    const o0 = toWorld(it, 0, 0), ex = toWorld(it, 1, 0), ez = toWorld(it, 0, 1);
+    const axX = [ex[0] - o0[0], 0, ex[1] - o0[1]], axZ = [ez[0] - o0[0], 0, ez[1] - o0[1]];
+    const box = (x0, x1, z0, z1, y0, y1) => {
+      if (it.rot % 90 === 0) { const a = toWorld(it, x0, z0), b = toWorld(it, x1, z1); abox("fittings", [a[0], F + y0, a[1]], [b[0], F + y1, b[1]]); return; }
+      const [xa, xb] = [Math.min(x0, x1), Math.max(x0, x1)], [za, zb] = [Math.min(z0, z1), Math.max(z0, z1)];
+      meshBox("fittings", (a, b, c) => { const q = toWorld(it, lerp(xa, xb, a), lerp(za, zb, c)); return [q[0], F + lerp(y0, y1, b), q[1]]; }, axX, UP, axZ);
+    };
     const round = (x, z, y, r, h, seg) => { const q = toWorld(it, x, z); cyl([q[0], F + y, q[1]], r, h, seg); };
     // points of the piece's frame ([x, y, z], y up from the floor) in the world
     const at = ([x, y, z]) => { const q = toWorld(it, x, z); return [q[0], F + y, q[1]]; };

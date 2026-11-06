@@ -47,6 +47,10 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   read in sanitize. withPasture (pasture.mjs) derives pastureWall, fenceDepth, pastureMid for the rest of the kind
   (doorway/hatch at pastureMid, troughs on [ea, eb]). House: a sleep object makes it a farmhouse (no sleepPoint
   setting). Editor: Game objects section + plan view (ob state, fitSite, drag boxes and the pasture's 3 handles).
+  Every inside piece is free (layout.mjs snapItem): wall pieces (mount "wall") are drawn up against a wall or an inner wall only when put
+  within WALL_REACH (0.4 m + half depth; inner faces 0.8 m) of it, a new piece (toWall) always goes to a wall; position sliders (fine = true:
+  centimetres, no wall snapping) and a Rotation slider (any angle in degrees; inner walls only quarters). footprint() is the box round a
+  turned piece; the build draws a turned box with the oriented box (meshBox in model.mjs), collision is that box.
   Inner walls (kinds/innerwall.mjs, "innerwall" in every walk-in catalog): a floor piece of length 1-20 m, 15 cm deep,
   with a doorway (open in the collision: def.solids, which buildInside uses instead of the footprint box when a piece
   has it) and wallpaper per side from WALLPAPERS (limewash, plain, striped, flowers, painted boards; surfaces
@@ -131,7 +135,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Frontend tests: cd frontend && npm test (node --test, no browser needed)
 
 ## Status
-- Go tests (60) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (442) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
+- Go tests (60) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (446) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
 - Cow barn (kinds/cow.mjs): cowHusbandryPasture (no milk, like cowBarnSmall), automatic water, feed
   and water troughs outside on the pasture wall (kind.outside), a plain walk-through doorway for the
   cows (openings with plain: true; tall openings get a collision gap), feed pad + bale trigger

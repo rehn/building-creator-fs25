@@ -1248,7 +1248,7 @@ function renderInsideUI() {
     // the user's own items, and those the admin shares with everyone (mine is false only for those)
     const mine = entries.filter(([, d]) => d.asset && d.asset.mine !== false), shared = entries.filter(([, d]) => d.asset && d.asset.mine === false);
     const addBtn = ([type, d]) => `<button type="button" data-add="${type}">+ ${esc(d.name)}</button>`;
-    ed.innerHTML = `<p class="hint">Click a piece to add it, then drag it into place. Wall pieces go against the nearest wall.</p>`
+    ed.innerHTML = `<p class="hint">Click a piece to add it, then drag it into place or use the position sliders. Pieces are free; wall pieces (counters, beds, wardrobes) snap to a wall or inner wall when put close to it.</p>`
       + `<div class="palette">${entries.filter(([, d]) => !d.asset && !d.missing).map(addBtn).join("")}</div>`
       + `<h4 class="palette-head">My items</h4>`
       + (mine.length ? `<div class="palette">${mine.map(addBtn).join("")}</div>` : `<p class="hint">Items you import from Giants Editor show here.</p>`)
@@ -1260,13 +1260,24 @@ function renderInsideUI() {
             ? `<div class="field"><div class="fl"><label for="pc-${f.k}">${f.label}</label></div><select id="pc-${f.k}" data-k="${f.k}">${f.options.map((nm, i) => `<option value="${i}" ${i === Math.round(it[f.k]) ? "selected" : ""}>${esc(nm)}</option>`).join("")}</select></div>`
             : `<div class="field"><div class="fl"><label for="pc-${f.k}">${f.label}</label><output id="pc-${f.k}-o">${fmtP(f, it[f.k])}</output></div><input type="range" id="pc-${f.k}" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}" value="${it[f.k]}"></div>`).join("")
           + posSliders(it, def)
-          + `<div class="row"><button type="button" id="pcTurn" ${def.mount === "wall" ? "title=\"Moves it to the next wall round the room\"" : ""}>${def.mount === "wall" ? "Next wall" : "Turn"}</button><button type="button" id="pcRemove" class="danger">Remove</button></div></div>`
+          + `<div class="row"><button type="button" id="pcTurn">Turn</button><button type="button" id="pcRemove" class="danger">Remove</button></div></div>`
         : `<p class="hint">Click a piece in the building to change or move it.</p>`)
       + (pr.size ? `<p class="warn">${pr.size} piece${pr.size > 1 ? "s have" : " has"} a problem (red).</p>` : "")
       + fillRow;
     ed.querySelectorAll("[data-add]").forEach(b => b.onclick = () => addPiece(b.dataset.add));
     if (it) {
       // position sliders: move the piece without dragging (to the centimetre; wall pieces stay on their wall)
+      // the rotation slider: any angle (the position is kept inside the room)
+      ed.querySelectorAll("[data-rot]").forEach(inp => {
+        inp.oninput = () => {
+          const cur = selected(), next = snapItem({...cur, rot: +inp.value}, def, roomNow(), p.items, catalogNow(), true);
+          p.items = p.items.map(x => x.id === cur.id ? next : x);
+          $("pp-rot-o").textContent = Math.round(next.rot) + "°";
+          for (const k of ["x", "z"]) { const o = $(`pp-${k}`); if (o) { o.value = next[k]; $(`pp-${k}-o`).textContent = next[k].toFixed(2) + " m"; } }
+          ins.keep = true; rebuild(false); ins.keep = false;
+        };
+        inp.onchange = () => { ins.hist.push(p.items); persist(); rebuild(false); };
+      });
       ed.querySelectorAll("[data-pos]").forEach(inp => {
         const axis = inp.dataset.pos;
         inp.oninput = () => {
@@ -1302,9 +1313,11 @@ function renderInsideUI() {
 function posSliders(it, def) {
   if (def.missing) return "";
   const r = roomBox(roomNow()), alongX = it.rot % 180 === 0;
-  const axes = def.mount === "wall" ? (alongX ? ["x"] : ["z"]) : ["x", "z"];
-  const lab = {x: "Left / right", z: "Back / front"}, along = def.mount === "wall" ? " along the wall" : "", range = {x: [r.x0, r.x1], z: [r.z0, r.z1]};
-  return axes.map(k => `<div class="field"><div class="fl"><label for="pp-${k}">${lab[k]} (position${along})</label><output id="pp-${k}-o">${(+it[k]).toFixed(2)} m</output></div><input type="range" id="pp-${k}" data-pos="${k}" min="${range[k][0].toFixed(2)}" max="${range[k][1].toFixed(2)}" step="0.01" value="${it[k]}"></div>`).join("");
+  const axes = ["x", "z"];
+  const lab = {x: "Left / right", z: "Back / front"}, range = {x: [r.x0, r.x1], z: [r.z0, r.z1]};
+  // (an inner wall only turns in quarters, with the Turn button)
+  const rotation = def.snapWalls ? "" : `<div class="field"><div class="fl"><label for="pp-rot">Rotation</label><output id="pp-rot-o">${Math.round(it.rot)}°</output></div><input type="range" id="pp-rot" data-rot min="0" max="359" step="1" value="${Math.round(it.rot)}"></div>`;
+  return axes.map(k => `<div class="field"><div class="fl"><label for="pp-${k}">${lab[k]} (position)</label><output id="pp-${k}-o">${(+it[k]).toFixed(2)} m</output></div><input type="range" id="pp-${k}" data-pos="${k}" min="${range[k][0].toFixed(2)}" max="${range[k][1].toFixed(2)}" step="0.01" value="${it[k]}"></div>`).join("") + rotation;
 }
 function renderDormUI() {
   const ed = $("dormEditor");

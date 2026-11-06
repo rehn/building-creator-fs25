@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { sanitize, buildGeometry, buildI3d, catalogFor, fittingTextures, PRESETS, KIND } from "../src/editor/model.mjs";
-import { roomOf, problems, cleanItems } from "../src/editor/layout.mjs";
+import { roomOf, problems, cleanItems, footprint } from "../src/editor/layout.mjs";
 import { WALLPAPERS, doorwayOf } from "../src/editor/kinds/innerwall.mjs";
 import { SURFACES } from "../src/editor/surfaces.mjs";
 
@@ -164,12 +164,19 @@ test("a piece can be put across the join of the house and a wing, and a wall lon
   assert.ok(b.z < w.z1 && b.length <= Math.floor((w.x1 - w.x0) * 100) / 100 && problems([b], cat, room).size === 0, JSON.stringify(b));
 });
 
-test("snapping is gentle: a wall piece put well away from an inner wall goes to the room's wall, not to it", () => {
-  const p = house([]), room = roomOf(p), cat = catalogFor(p), w = wall({id: 1, x: 0, z: 0, length: 4, door: 0});
-  const far = snapItem({id: 2, type: "sofa", x: 0, z: 1.5, rot: 0}, cat.sofa, room, [w], cat);
-  assert.ok(Math.abs(far.z - (room.z1 - cat.sofa.size({})[1] / 2)) < 1e-9 || Math.abs(far.z - (room.z0 + cat.sofa.size({})[1] / 2)) < 1e-9, JSON.stringify(far));
-  const near = snapItem({id: 2, type: "sofa", x: 0, z: 0.6, rot: 0}, cat.sofa, room, [w], cat);
-  assert.ok(Math.abs(near.z) < 1.2, JSON.stringify(near));
+test("every piece is free: a wall piece put away from the walls stays where it is, near a wall or an inner wall it stands against it", () => {
+  const p = house([]), room = roomOf(p), cat = catalogFor(p), w = wall({id: 1, x: 0, z: 0, length: 4, door: 0}), d = cat.sofa.size({})[1];
+  // in the middle of the room, well away from every wall: free (on the grid), keeps its turn
+  const far = snapItem({id: 2, type: "sofa", x: 0, z: 1.5, rot: 90}, cat.sofa, room, [], cat);
+  assert.deepEqual([far.x, far.z, far.rot], [0, 1.5, 90]);
+  // within reach of the back wall: against it, facing the room
+  const back = snapItem({id: 2, type: "sofa", x: 0, z: room.z0 + 0.8, rot: 90}, cat.sofa, room, [], cat);
+  assert.ok(back.rot === 0 && Math.abs(back.z - (room.z0 + d / 2)) < 1e-9, JSON.stringify(back));
+  // near an inner wall: against its face
+  const near = snapItem({id: 2, type: "sofa", x: 0, z: 0.6, rot: 90}, cat.sofa, room, [w], cat);
+  assert.ok(near.rot === 0 && Math.abs(near.z - (0.075 + d / 2)) < 1e-9, JSON.stringify(near));
+  // a new piece always goes to a wall
+  assert.ok(placeNew("sofa", [], cat, room).z !== 0);
   // an end 0.4 m short of a wall stays short (a quarter metre is the reach)
   assert.ok(snapItem(wall({id: 2, rot: 90, x: 1, z: -1.75 + 0.15, length: 3, door: 0}), cat.innerwall, room, [], cat).length === 3);
 });
@@ -178,38 +185,31 @@ test("a wall piece put near an inner wall stands against it even when a room wal
   const p = house([]), room = roomOf(p), cat = catalogFor(p), w = wall({id: 1, x: 0, z: 2.2, length: 4, door: 0}), d = cat.sofa.size({})[1];
   const s = snapItem({id: 2, type: "sofa", x: 0, z: 2.9, rot: 0}, cat.sofa, room, [w], cat);
   assert.ok(Math.abs(s.z - (2.2 + 0.075 + d / 2)) < 1e-9 && s.rot === 0, JSON.stringify(s));
-  // far from it, the room's wall
-  const t = snapItem({id: 2, type: "sofa", x: 0, z: -1, rot: 0}, cat.sofa, room, [w], cat);
-  assert.ok(Math.abs(t.z - (room.z0 + d / 2)) < 1e-9, JSON.stringify(t));
 });
 
-test("fine positions: the sliders move a piece to the centimetre, without the grid or the wall ends pulling", () => {
+test("fine positions: the sliders move a piece to the centimetre, without the grid, the walls or the wall ends pulling", () => {
   const p = house([]), room = roomOf(p), cat = catalogFor(p);
   const t = snapItem({id: 1, type: "table", x: 0.43, z: -0.27, rot: 0}, cat.table, room, [], cat, true);
   assert.deepEqual([t.x, t.z], [0.43, -0.27]);
-  assert.notDeepEqual([snapItem({id: 1, type: "table", x: 0.43, z: -0.27, rot: 0}, cat.table, room).x], [0.43]);
-  // a wall piece slides along its wall by centimetres and stays against it
-  const s = snapItem({id: 2, type: "sofa", x: 0.43, z: 0, rot: 0}, cat.sofa, room, [], cat, true);
-  assert.equal(s.x, 0.43);
-  assert.equal(Math.abs(s.z) > 2, true);
+  // a wall piece stays where the slider puts it (and keeps its turn), inside the room
+  const s = snapItem({id: 2, type: "sofa", x: 0.43, z: 0.1, rot: 90}, cat.sofa, room, [], cat, true);
+  assert.deepEqual([s.x, s.z, s.rot], [0.43, 0.1, 90]);
   // an inner wall near a wall keeps where the slider put it
   const w = snapItem(wall({id: 3, rot: 90, x: 1, z: -1.75, length: 3, door: 0}), cat.innerwall, room, [], cat, true);
   assert.equal(w.z, -1.75);
 });
 
-test("turning a wall piece moves it to the next wall round the room, and round an inner wall's faces", () => {
-  const p = house([]), room = roomOf(p), cat = catalogFor(p), d = cat.sofa.size({})[1];
-  let it = snapItem({id: 1, type: "sofa", x: 0, z: -3, rot: 0}, cat.sofa, room);            // on the back wall (z0), facing +z
-  assert.equal(it.rot, 0);
-  const seen = [it.rot];
-  for (let k = 0; k < 4; k++) { it = rotateItem(it, cat.sofa, room); seen.push(it.rot); assert.equal(problems([it], cat, room).size, 0, JSON.stringify(it)); }
-  assert.deepEqual(seen, [0, 90, 180, 270, 0]);
-  // on the left wall after the first turn: against x0
-  const left = rotateItem(snapItem({id: 1, type: "sofa", x: 0, z: -3, rot: 0}, cat.sofa, room), cat.sofa, room);
-  assert.ok(Math.abs(left.x - (room.x0 + d / 2)) < 1e-9, JSON.stringify(left));
-  // with an inner wall in the room, a wall piece can end up against its faces
-  const w = wall({id: 9, rot: 90, x: 0, z: 0, length: 4, door: 0});
-  let q = snapItem({id: 2, type: "sofa", x: 0.6, z: 0, rot: 270}, cat.sofa, room, [w], cat), faces = new Set();
-  for (let k = 0; k < 8; k++) { q = rotateItem(q, cat.sofa, room, [w], cat); faces.add(Math.abs(q.x) < 1 && Math.abs(q.z) < 2.5 ? "inner" : "outer"); }
-  assert.ok(faces.has("inner") && faces.has("outer"), [...faces].join());
+test("any angle: a piece turned to 30 degrees has a bigger box and is kept inside the room; inner walls only turn in quarters", () => {
+  const p = house([]), room = roomOf(p), cat = catalogFor(p);
+  const q = {id: 1, type: "sofa", x: 0, z: 0, rot: 30}, [w, d] = cat.sofa.size(q), f = footprint(q, cat.sofa);
+  assert.ok(Math.abs((f.x1 - f.x0) - (w * Math.cos(Math.PI / 6) + d * Math.sin(Math.PI / 6))) < 1e-9);
+  assert.equal(cleanItems([{type: "sofa", x: 0, z: 0, rot: 37.4}], cat)[0].rot, 37);
+  assert.equal(cleanItems([wall({rot: 37})], cat)[0].rot, 0);
+  // at the wall it is put right against it
+  const t = snapItem({...q, z: room.z0 + 0.3}, cat.sofa, room, [], cat, true);
+  assert.ok(footprint(t, cat.sofa).z0 >= room.z0 - 1e-9, JSON.stringify(t));
+  // the build and export handle it
+  const built = sanitize({items: [{type: "sofa", x: 1, z: 1, rot: 30}, {type: "bed", x: -1, z: 1, rot: 200}, {type: "kitchen", x: 0, z: -2, rot: 15, length: 2}]});
+  assert.ok(buildGeometry(built).G.fittings.p.length > 0);
+  assert.ok(buildI3d(built).includes("</i3D>"));
 });

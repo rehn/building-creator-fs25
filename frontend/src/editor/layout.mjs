@@ -210,21 +210,26 @@ export function toWorld(item, lx, lz) {
 
 /** The rectangle an item covers on the floor. */
 export function footprint(item, def) {
-  const [w, d] = def.size(item), turned = item.rot % 180 !== 0;
-  const hx = (turned ? d : w) / 2, hz = (turned ? w : d) / 2;
+  const [w, d] = def.size(item);
+  // (a quarter turn exactly; any other angle: the box round the turned rectangle)
+  const quarter = item.rot % 90 === 0, turned = item.rot % 180 !== 0, c = Math.abs(Math.cos(R(item.rot))), s = Math.abs(Math.sin(R(item.rot)));
+  const hx = (quarter ? (turned ? d : w) : w * c + d * s) / 2, hz = (quarter ? (turned ? w : d) : w * s + d * c) / 2;
   return {x0: item.x - hx, x1: item.x + hx, z0: item.z - hz, z1: item.z + hz};
 }
 
 const snap = v => Math.round(v / GRID) * GRID + 0; // (+ 0 turns -0 into 0)
 const clamp = (v, lo, hi) => lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v));
 /**
- * Where an item ends up when dropped: a wall item against the nearest inside wall, facing the room,
- * slid along it to the grid; a floor item on the grid (to the centimetre when `fine`). Both kept inside the room.
+ * Where an item ends up when dropped. Every piece is free to stand anywhere in the room (kept inside it, on the grid);
+ * a wall piece (a counter, a bed, a wardrobe) that is put within WALL_REACH of a wall, or an inner wall's face, is drawn
+ * up against it, facing away from it. `fine` (the position sliders, turning) = to the centimetre, no drawing to walls;
+ * `toWall` (a new piece) = a wall piece always goes to the nearest wall.
  */
-export function snapItem(item, def, room, others = [], catalog = {}, fine = false) {
+const WALL_REACH = 0.4;
+export function snapItem(item, def, room, others = [], catalog = {}, fine = false, toWall = false) {
   const sn = fine ? v => +v.toFixed(2) + 0 : snap;   // (fine: to the centimetre, for the position sliders)
   const [w, d] = def.size(item);
-  if (def.mount === "wall") {
+  if (def.mount === "wall" && !fine) {
     // the nearest stretch of wall (its distance from the point to the stretch, not to its line)
     const dist = wl => Math.hypot(Math.max(wl.x0 - item.x, 0, item.x - wl.x1), Math.max(wl.z0 - item.z, 0, item.z - wl.z1));
     // an inner wall's face wins when the piece is put near it (its middle within the piece's half depth and INNER_NEAR of the
@@ -232,12 +237,14 @@ export function snapItem(item, def, room, others = [], catalog = {}, fine = fals
     const nearest = list => list.reduce((best, x) => dist(x) < dist(best) ? x : best);
     const inner = innerFaces(room, others, catalog).filter(f => dist(f) < INNER_NEAR + d / 2);
     const wl = nearest(inner.length ? inner : room.walls);
-    if (wl.x0 === wl.x1) {
-      const z = clamp(sn(item.z), wl.z0 + w/2, wl.z1 - w/2);
-      return {...item, rot: wl.rot, x: wl.x0 + wl.into[0] * d/2, z};
+    if (toWall || dist(wl) <= d / 2 + WALL_REACH) {
+      if (wl.x0 === wl.x1) {
+        const z = clamp(sn(item.z), wl.z0 + w/2, wl.z1 - w/2);
+        return {...item, rot: wl.rot, x: wl.x0 + wl.into[0] * d/2, z};
+      }
+      const x = clamp(sn(item.x), wl.x0 + w/2, wl.x1 - w/2);
+      return {...item, rot: wl.rot, x, z: wl.z0 + wl.into[1] * d/2};
     }
-    const x = clamp(sn(item.x), wl.x0 + w/2, wl.x1 - w/2);
-    return {...item, rot: wl.rot, x, z: wl.z0 + wl.into[1] * d/2};
   }
   // a floor piece, kept in the part of the room nearest to it
   const f = footprint({...item, x: 0, z: 0}, def), at = r => ({...item, x: clamp(sn(item.x), r.x0 - f.x0, r.x1 - f.x1), z: clamp(sn(item.z), r.z0 - f.z0, r.z1 - f.z1)});
@@ -329,7 +336,8 @@ export function cleanItems(arr, catalog) {
   if (!Array.isArray(arr)) return [];
   return arr.filter(it => it && typeof it === "object" && Object.hasOwn(catalog, it.type)).slice(0, MAX_ITEMS).map((it, i) => {
     const def = catalog[it.type], out = {id: i + 1, type: it.type, x: num(it.x, -50, 50, 0), z: num(it.z, -50, 50, 0),
-      rot: ((Math.round(num(it.rot, -720, 720, 0) / 90) * 90) % 360 + 360) % 360};
+      // quarter turns, or any angle (to the degree) for pieces that are not inner walls
+      rot: (((def.snapWalls ? Math.round(num(it.rot, -720, 720, 0) / 90) * 90 : Math.round(num(it.rot, -720, 720, 0))) % 360) + 360) % 360};
     for (const f of def.params) {
       const v = num(it[f.k], f.min, f.max, def.defaults[f.k]);
       out[f.k] = +(Math.round(v / f.step) * f.step).toFixed(3);
@@ -358,28 +366,15 @@ export function placeNew(type, items, catalog, room) {
   for (let x = bx.x0; x <= bx.x1 + 1e-9; x += GRID) for (let z = bx.z0; z <= bx.z1 + 1e-9; z += GRID) spots.push([x, z]);
   spots.sort((a, b) => Math.hypot(a[0] - cx, a[1] - cz) - Math.hypot(b[0] - cx, b[1] - cz));
   for (const [x, z] of spots) {
-    const it = snapItem({...base, x, z}, def, room, items, catalog);
+    const it = snapItem({...base, x, z}, def, room, items, catalog, false, true);
     if (!problems([...items, it], catalog, room).has(id)) return it;
   }
-  return snapItem({...base, x: cx, z: cz}, def, room, items, catalog);
+  return snapItem({...base, x: cx, z: cz}, def, room, items, catalog, false, true);
 }
 
-/**
- * A floor piece turned a quarter (and kept inside). A wall piece faces away from its wall, so "turning" it moves it on
- * to the next wall a quarter turn round (the room's, or an inner wall's face), at the same place along it as near as it gets.
- */
+/** A piece turned a quarter where it stands (kept inside the room; a wall piece next to a wall stays next to it, turned). */
 export function rotateItem(item, def, room, others = [], catalog = {}) {
-  if (def.mount === "wall") {
-    const rot = (item.rot + 90) % 360, [w, d] = def.size(item);
-    const dist = wl => Math.hypot(Math.max(wl.x0 - item.x, 0, item.x - wl.x1), Math.max(wl.z0 - item.z, 0, item.z - wl.z1));
-    const to = [...room.walls, ...innerFaces(room, others, catalog)].filter(w => w.rot === rot);
-    if (!to.length) return item;
-    const wl = to.reduce((best, w) => dist(w) < dist(best) ? w : best);
-    // against that wall, as far along it as it was (kept within the stretch)
-    const at = wl.x0 === wl.x1 ? {x: wl.x0 + wl.into[0] * d / 2, z: clamp(item.z, wl.z0 + w / 2, wl.z1 - w / 2)} : {x: clamp(item.x, wl.x0 + w / 2, wl.x1 - w / 2), z: wl.z0 + wl.into[1] * d / 2};
-    return {...item, x: +at.x.toFixed(3), z: +at.z.toFixed(3), rot};
-  }
-  return snapItem({...item, rot: (item.rot + 90) % 360}, def, room, others, catalog);
+  return snapItem({...item, rot: (item.rot + 90) % 360}, def, room, others, catalog, true);
 }
 
 /** Undo and redo over copies of a state (the pieces list). */

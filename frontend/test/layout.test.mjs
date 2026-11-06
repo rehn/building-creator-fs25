@@ -38,7 +38,7 @@ test("toWorld and footprint: an item turns about its centre in quarter turns", (
 test("snapItem: a wall item goes flat against the nearest inside wall, facing the room", () => {
   const room = roomOf(P);
   // dropped near the back wall (z = -2), a bit off it and turned the wrong way
-  const s = snapItem({ id: 1, type: "shelf", x: 0.33, z: -1.2, rot: 90, length: 2 }, CATALOG.shelf, room);
+  const s = snapItem({ id: 1, type: "shelf", x: 0.33, z: -1.7, rot: 90, length: 2 }, CATALOG.shelf, room);
   assert.equal(s.rot, 0, "faces +z, into the room");
   near(s.z, room.z0 + 0.2, "back against the wall");
   near(s.x, 0.25, "slid along the wall to the grid");
@@ -76,7 +76,7 @@ test("problems: outside the room, overlapping, or in the doorway", () => {
   assert.equal(pr.has(5), false);
 });
 
-test("cleanItems: unknown types dropped, settings clamped, quarter turns, ids renumbered", () => {
+test("cleanItems: unknown types dropped, settings clamped, angles in degrees, ids renumbered", () => {
   const out = cleanItems([
     { id: 9, type: "shelf", x: "1.234", z: -1, rot: 100, length: 99 },
     { id: 3, type: "dragon", x: 0, z: 0 },
@@ -84,7 +84,7 @@ test("cleanItems: unknown types dropped, settings clamped, quarter turns, ids re
     null,
   ], CATALOG);
   assert.equal(out.length, 2);
-  assert.deepEqual(out[0], { id: 1, type: "shelf", x: 1.234, z: -1, rot: 90, length: 4 });
+  assert.deepEqual(out[0], { id: 1, type: "shelf", x: 1.234, z: -1, rot: 100, length: 4 });
   assert.deepEqual(out[1], { id: 2, type: "crate", x: 0, z: 0, rot: 270 });
   assert.equal(cleanItems(Array(500).fill({ type: "crate", x: 0, z: 0 }), CATALOG).length, 200, "at most 200");
 });
@@ -116,16 +116,17 @@ test("placeNew: a new piece lands snapped, inside, clear of the door and the oth
   assert.ok(on(shelf.x, [room.x0 + 0.2, room.x1 - 0.2]) || on(shelf.z, [room.z0 + 0.2, room.z1 - 0.2]), "against a wall");
 });
 
-test("rotateItem: floor pieces turn a quarter and stay inside; a wall piece moves to the next wall", () => {
+test("rotateItem: floor pieces turn a quarter and stay inside; a wall piece turns too", () => {
   const room = roomOf(P);
   const c = rotateItem({ id: 1, type: "crate", x: room.x1 - 0.4, z: 0, rot: 0 }, CATALOG.crate, room);
   assert.equal(c.rot, 90);
   assert.ok(footprint(c, CATALOG.crate).x1 <= room.x1 + 1e-9);
   assert.equal(rotateItem({ ...c, rot: 270 }, CATALOG.crate, room).rot, 0);
+  // a wall piece turns where it stands too (kept inside the room)
   const s = { id: 2, type: "shelf", x: 0, z: room.z0 + 0.2, rot: 0, length: 2 };
   const r = rotateItem(s, CATALOG.shelf, room);
   assert.equal(r.rot, 90);
-  assert.ok(Math.abs(r.x - (room.x0 + CATALOG.shelf.size(s)[1] / 2)) < 1e-9, JSON.stringify(r));
+  assert.ok(footprint(r, CATALOG.shelf).z0 >= room.z0 - 1e-9 && footprint(r, CATALOG.shelf).x0 >= room.x0 - 1e-9, JSON.stringify(r));
 });
 
 test("History: undo and redo through edits; a new edit drops the redo", () => {
