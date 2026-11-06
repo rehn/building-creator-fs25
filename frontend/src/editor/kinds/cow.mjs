@@ -6,7 +6,7 @@
 import { tg, shape } from "../i3d.mjs";
 import { roomOf, furnisher } from "../layout.mjs";
 import { wallLength, yardFrame, shellOf, teleportFor, withPasture, pastureWallFor, cornerStripes, palletLines } from "./pasture.mjs";
-import { objectOf, boxOf, iconOf, boxFrom, pastureOf } from "../objects.mjs";
+import { objectOf, boxOf, iconOf, boxFrom, pastureOf, insidePoly } from "../objects.mjs";
 import { placeOnWall, placeOnBuilding } from "../places.mjs";
 import { tone, shade, arc, strawBale, strawLitter } from "./props.mjs";
 import { INNER_WALL } from "./innerwall.mjs";
@@ -28,13 +28,51 @@ export const COW = {count: cowsOf, minWidth: MIN_PASTURE_WIDTH, pallets: false, 
   fence: "cowFence/cowFence", glyph: "cow", fnAnimal: "$l10n_function_animalPenCow"};
 
 /* ---------- The doorway and the troughs ---------- */
-/** The cows' doorway: an open 1.6 x 2.2 m opening in the middle of the wall the pasture encloses, kept clear 1.6 m inside. */
+/** The cows' doorway: an open hole in the pasture wall (1.6 x 2.2 m in the middle of the stretch it encloses, unless the pasture says where and how big), kept clear inside. */
 export function openings(p) {
-  const L = wallLength(p, p.pastureWall), m = p.pastureMid ?? L / 2, h = Math.min(2.2, p.floors * p.floorHeight - 0.3);
-  return [{wall: p.pastureWall, s0: m - 0.8, s1: m + 0.8, t1: h, clear: 1.6, what: "the cows' doorway", plain: true}];
+  const L = wallLength(p, p.pastureWall), m = p.pastureMid ?? L / 2, w = p.pastureGapW ?? 1.6, h = Math.min(p.pastureGapH ?? 2.2, p.floors * p.floorHeight - 0.3);
+  return [{wall: p.pastureWall, s0: m - w / 2, s1: m + w / 2, t1: h, clear: w, what: "the cows' doorway", plain: true}];
 }
-// Troughs against the pasture wall, outside: feed on one side of the doorway, water on the other.
-const TROUGH = {d0: 0.25, d1: 0.95, wall: 0.08, food: {top: 0.75, bottom: 0.45, min: 0.5, max: 0.7}, water: {top: 0.7, bottom: 0.4, min: 0.45, max: 0.62}};
+// Troughs are game objects (feedTrough, waterTrough: a box on the ground, its height the top edge). A trough is a plank box
+// with a wall round a hollow; the fill plane floats in the hollow.
+const TROUGH = {wall: 0.08, stand: 0.7, spacing: 1.4};
+
+/**
+ * A trough from its object {x, z, w, d, h}: its outer and inner rectangles, the heights of its floor and fill, and
+ * where animals stand: along its long sides, 70 cm out, on each side that is inside the fence (and not in the building),
+ * or else on the side away from the building. Null where the building has none.
+ */
+function troughFrom(o, fence, rects) {
+  if (!o) return null;
+  const outer = {x0: o.x - o.w / 2, x1: o.x + o.w / 2, z0: o.z - o.d / 2, z1: o.z + o.d / 2}, t = TROUGH.wall;
+  const inner = {x0: outer.x0 + t, x1: outer.x1 - t, z0: outer.z0 + t, z1: outer.z1 - t};
+  const top = o.h, bottom = top * 0.6;
+  const alongX = o.w >= o.d, len = alongX ? o.w : o.d, k = Math.max(1, Math.floor((len - 0.2) / TROUGH.spacing));
+  const out = (alongX ? o.d : o.w) / 2 + TROUGH.stand;
+  const spots = sign => Array.from({length: k}, (_, i) => {
+    const s = -len / 2 + (i + 0.5) * len / k, n = alongX ? [0, sign] : [sign, 0];
+    return {pos: [o.x + (alongX ? s : n[0] * out), 0, o.z + (alongX ? n[1] * out : s)], rot: Math.atan2(-n[0], -n[1]) * 180 / Math.PI};
+  });
+  const free = q => !rects.some(r => q[0] > r.x0 - 0.3 && q[0] < r.x1 + 0.3 && q[2] > r.z0 - 0.3 && q[2] < r.z1 + 0.3) && (!fence || insidePoly(fence, q[0], q[2]));
+  let sides = [1, -1].map(spots).filter(list => list.every(q => free(q.pos)));
+  if (!sides.length) { // not reachable (the warning says so): at least the side away from the building
+    const c = rects[0] ? [(rects[0].x0 + rects[0].x1) / 2, (rects[0].z0 + rects[0].z1) / 2] : [0, 0];
+    const away = sign => { const q = spots(sign)[0].pos; return Math.hypot(q[0] - c[0], q[2] - c[1]); };
+    sides = [spots(away(1) >= away(-1) ? 1 : -1)];
+  }
+  return {outer, inner, top, bottom, planeMin: bottom + (top - bottom) * 0.15, planeMax: top - (top - bottom) * 0.2,
+    plane: [o.x, o.z], size: [inner.x1 - inner.x0, inner.z1 - inner.z0], box: {center: [o.x, top / 2, o.z], size: [o.w, top, o.d]}, places: sides.flat()};
+}
+/** The troughs to start with: against the pasture wall outside, feed on one side of the doorway, water on the other (the longer stretch gets the feed). */
+function startTroughs(yf, p, cfg) {
+  const {past, boxAt} = yf, L = past.L, m = L / 2, n = cfg.count(p);
+  const sides = [[0.4, m - 0.8 - 0.5], [m + 0.8 + 0.5, L - 0.4]].sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]));
+  const one = ([a, b], length, top) => {
+    const len = Math.max(0.8, Math.min(b - a, length)), s = (a + b) / 2;
+    return {box: boxAt(past, s, 0.6, len, 0.7, top), icon: null};
+  };
+  return {feedTrough: one(sides[0], Math.max(2, n * 0.6), 0.75), waterTrough: one(sides[1], 2, 0.7)};
+}
 
 /**
  * Where a cow barn's gameplay places are, from built geometry. All points in world space.
@@ -49,32 +87,20 @@ export function cowYard(geo, p, cfg = COW) {
   const yf = yardFrame(geo, p, cfg.minWidth), {at, boxAt, rectOf} = yf;
   // The pasture: the building's pasture object, or (placing things to start with) its wall and depth.
   const pa = pastureOf(p), past = pa ? pa.w : yf.past, fence = pa ? pa.fence : yf.fence;
-  const ea = pa ? pa.ea : 0, eb = pa ? pa.eb : past.L, mid = pa ? pa.mid : past.L / 2;
-  const [o0, o1] = [mid - 0.8, mid + 0.8];
-  const sides = [[ea + 0.4, o0 - 0.5], [o1 + 0.5, eb - 0.4]].sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]));
-  const n = cfg.count(p);
-  const trough = (range, kind, length) => {
-    const [a, b] = range, len = Math.max(0.8, Math.min(b - a, length)), s0 = (a + b) / 2 - len / 2, s1 = s0 + len, c = TROUGH[kind];
-    const box = (sA, sB, dA, dB, h) => ({...boxAt(past, (sA + sB) / 2, (dA + dB) / 2, sB - sA, dB - dA, h)});
-    const outer = box(s0, s1, TROUGH.d0, TROUGH.d1, c.top), innerB = box(s0 + TROUGH.wall, s1 - TROUGH.wall, TROUGH.d0 + TROUGH.wall, TROUGH.d1 - TROUGH.wall, c.top);
-    return {s0, s1, outer: rectOf(outer), inner: rectOf(innerB), top: c.top, bottom: c.bottom, planeMin: c.min, planeMax: c.max,
-      plane: [innerB.center[0], innerB.center[2]], size: [innerB.size[0], innerB.size[2]], box: outer};
-  };
-  const feedTrough = trough(sides[0], "food", Math.max(2, n * 0.6)), waterTrough = trough(sides[1], "water", 2);
-  // A cow at a trough faces it: its +z points back at the wall.
-  const facing = Math.atan2(-past.n[0], -past.n[2]) * 180 / Math.PI;
-  const along = t => { const k = Math.max(1, Math.floor((t.s1 - t.s0) / 1.4)); return Array.from({length: k}, (_, i) => t.s0 + (i + 0.5) * (t.s1 - t.s0) / k); };
-  const foodPlaces = along(feedTrough).map(s => ({pos: at(past, s, 1.7), rot: facing}));
-  const waterPlaces = along(waterTrough).map(s => ({pos: at(past, s, 1.6), rot: facing}));
+  const {feedTrough: ft, waterTrough: wt} = cowObjects(geo, p, yf, cfg);
+  const fromObj = e => e && (({center: [x, , z], size: [w, h, d]}) => ({x, z, w, d, h}))(e.box);
+  const rects = geo.footprints || [{x0: -geo.dims.W / 2, x1: geo.dims.W / 2, z0: -geo.dims.D / 2, z1: geo.dims.D / 2}];
+  const feedTrough = troughFrom(fromObj(ft), fence, rects), waterTrough = troughFrom(fromObj(wt), fence, rects);
+  const foodPlaces = feedTrough ? feedTrough.places : [], waterPlaces = waterTrough ? waterTrough.places : [];
   // The game objects: where the building has them (objects.mjs); to start with, the feed pad and bales
   // outside the fence on the feed side, the trailer spot further out, the info area round the barn.
   const {food, bales, loading, info, pallets} = cowObjects(geo, p, yf, cfg);
   return {
     ...(pallets && {pallet: {lines: palletLines(pallets.box), trigger: pallets.box, stripes: cornerStripes(rectOf(pallets.box))}}),
     fence, feedTrough, waterTrough, foodPlaces, waterPlaces, food: food.box, bales: bales && bales.box, loading: loading.box, info: info.box,
-    blockers: [{center: [0, 1, 0], size: [geo.dims.W, 2, geo.dims.D]}, feedTrough.box, waterTrough.box],
+    blockers: [{center: [0, 1, 0], size: [geo.dims.W, 2, geo.dims.D]}, ...[feedTrough, waterTrough].filter(Boolean).map(t => t.box)],
     markers: {food: food.icon, bales: bales && bales.icon, animals: loading.icon, teleport: teleportFor(loading, geo.dims)},
-    areas: [food.box, ...(bales ? [bales.box] : []), ...(pallets ? [pallets.box] : []), feedTrough.box, waterTrough.box].map(rectOf),
+    areas: [food.box, ...(bales ? [bales.box] : []), ...(pallets ? [pallets.box] : []), ...[feedTrough, waterTrough].filter(Boolean).map(t => t.box)].map(rectOf),
   };
 }
 /**
@@ -94,8 +120,9 @@ function cowObjects(geo, p, yf, cfg) {
       return {s: c, d: 2.8, along: Math.min(lines + 1, len), out: 3.2, h: 2.5, icon: null};
     }),
   };
+  Object.assign(start, startTroughs(yf, p, cfg));
   const out = {};
-  for (const t of ["food", "bales", "loading", "info", ...(cfg.pallets ? ["pallets"] : [])]) {
+  for (const t of ["food", "bales", "loading", "info", "feedTrough", "waterTrough", ...(cfg.pallets ? ["pallets"] : [])]) {
     const o = objectOf(p, t);
     out[t] = o ? {box: boxOf(o), icon: iconOf(o)} : Array.isArray(p.objects) ? null : start[t];
   }
@@ -105,7 +132,7 @@ function cowObjects(geo, p, yf, cfg) {
 export const defaultsOf = cfg => p => {
   const q = {...p, pastureWall: pastureWallFor(p), objects: undefined}, geo = shellOf(q), y = cowObjects(geo, q, yardFrame(geo, q, cfg.minWidth), cfg);
   return [
-    ...["food", "bales", "loading", "info", ...(cfg.pallets ? ["pallets"] : [])].map(t => boxFrom(t, y[t].box, y[t].icon)),
+    ...["food", "bales", "loading", "info", "feedTrough", "waterTrough", ...(cfg.pallets ? ["pallets"] : [])].map(t => boxFrom(t, y[t].box, y[t].icon)),
     // (a new barn's pasture goes on a wall without a door, if it can)
     {type: "pasture", wall: q.pastureWall, a: 0, b: 0, depth: p.fenceDepth},
   ];
@@ -115,7 +142,7 @@ export const defaultsOf = cfg => p => {
 export const outsideOf = cfg => c => {
   const y = cowYard(c.geo, c.p, cfg);
   c.paint(COLORS.concrete, "concrete");
-  for (const t of [y.feedTrough, y.waterTrough]) {
+  for (const t of [y.feedTrough, y.waterTrough].filter(Boolean)) {
     const o = t.outer, i = t.inner;
     c.abox("fittings", [o.x0, 0, o.z0], [o.x1, t.bottom, o.z1]);                 // the base, up to the trough's floor
     for (const [a, b] of [[[o.x0, o.z0], [i.x0, o.z1]], [[i.x1, o.z0], [o.x1, o.z1]], [[i.x0, o.z0], [i.x1, i.z0]], [[i.x0, i.z1], [i.x1, o.z1]]])
@@ -343,10 +370,8 @@ export const sceneOf = cfg => c => {
     tg("markerAnimals", y.markers.animals),
     c.box("infoTrigger", y.info, c.trigger("0x20000000", "0x110000")),
     tg("teleportNode", y.markers.teleport),
-    plane("foodPlane", y.feedTrough, forage),
-    places("foodPlaces", "foodPlace", y.foodPlaces),
-    plane("waterPlane", y.waterTrough, water),
-    places("waterPlaces", "waterPlace", y.waterPlaces),
+    ...(y.feedTrough ? [plane("foodPlane", y.feedTrough, forage), places("foodPlaces", "foodPlace", y.foodPlaces)] : []),
+    ...(y.waterTrough ? [plane("waterPlane", y.waterTrough, water), places("waterPlaces", "waterPlace", y.waterPlaces)] : []),
     // Like the base game's cow barn: the barn and troughs are cut out of the walking area made from the fence.
     tg("navigationRootNode", [0, 0, 0], y.blockers.map(blocker)),
     tg("fence1", [0, 0, 0], y.fence.map((q, i) => tg(`fence1Node${i + 1}`, q))),
@@ -379,19 +404,19 @@ ${y.bales ? `        <triggerMarker node="markerBales" filename="$data/shared/as
             <loadingTrigger node="loadingTrigger"/>
         </animals>
         <food capacity="${n * cfg.foodPer}">
-            <foodPlaces>
+${t ? `            <foodPlaces>
 ${y.foodPlaces.map((_, i) => `                <foodPlace node="foodPlace${i + 1}"/>`).join("\n")}
             </foodPlaces>
             <foodPlane node="foodPlane" minY="${t.planeMin}" maxY="${t.planeMax}" changeVisibility="true" defaultFillType="${cfg.fill}"/>
-            <unloadTrigger exactFillRootNode="exactFillRootNodeFood"/>
+` : ""}            <unloadTrigger exactFillRootNode="exactFillRootNodeFood"/>
 ${y.bales ? `            <baleTrigger triggerNode="baleTrigger" deleteLitersPerSecond="200"/>
 ` : ""}        </food>
         <water automaticWaterSupply="true">
-            <waterPlane node="waterPlane" minY="${w.planeMin}" maxY="${w.planeMax}"/>
+${w ? `            <waterPlane node="waterPlane" minY="${w.planeMin}" maxY="${w.planeMax}"/>
             <waterPlaces>
 ${y.waterPlaces.map((_, i) => `                <waterPlace node="waterPlace${i + 1}"/>`).join("\n")}
             </waterPlaces>
-        </water>
+` : ""}        </water>
 ${y.pallet ? `        <pallets>
             <palletSpawner fillTypes="${cfg.pallets.fills}" maxNumPallets="${cfg.pallets.max}">
                 <palletTrigger node="palletTrigger"/>
@@ -458,8 +483,8 @@ export default {
   autoFurnish,
   scene: sceneOf(COW),
   // the game objects: the bale drop is optional
-  objects: {types: ["food", "bales", "loading", "info", "pasture"], required: ["food", "loading", "info", "pasture"],
-    pasture: {minWidth: MIN_PASTURE_WIDTH, depth: [10, 60]}, defaults: defaultsOf(COW)},
+  objects: {types: ["food", "bales", "loading", "feedTrough", "waterTrough", "info", "pasture"], required: ["food", "loading", "info", "pasture"],
+    pasture: {minWidth: MIN_PASTURE_WIDTH, depth: [10, 60], gapSize: true}, defaults: defaultsOf(COW)},
   presets: [
     {id: "ladugard", name: "Röd ladugård", blurb: "16 × 9 m red Swedish barn for 20 cows: falu red boards, white trim, a fieldstone base and lanterns on the ridge.", settings: {
       cows: 20, pastureWall: "back", fenceDepth: 18, ...swedishRed,

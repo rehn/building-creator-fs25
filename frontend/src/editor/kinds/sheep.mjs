@@ -100,8 +100,8 @@ export default {
   autoFurnish,
   scene: sceneOf(SHEEP),
   // the game objects: the bale drop is optional; wool comes out on pallets
-  objects: {types: ["food", "bales", "loading", "pallets", "info", "pasture"], required: ["food", "loading", "pallets", "info", "pasture"],
-    pasture: {minWidth: MIN_PASTURE_WIDTH, depth: [8, 60]}, defaults: defaultsOf(SHEEP),
+  objects: {types: ["food", "bales", "loading", "pallets", "feedTrough", "waterTrough", "info", "pasture"], required: ["food", "loading", "pallets", "info", "pasture"],
+    pasture: {minWidth: MIN_PASTURE_WIDTH, depth: [8, 60], gapSize: true}, defaults: defaultsOf(SHEEP),
     labels: {pallets: {name: "Wool pallets", hint: "Where wool (and goat milk) pallets appear (two rows inside it), with warning stripes in its corners."}}},
   presets: [
     {id: "farhus", name: "Fårhus", blurb: "8 × 6 m small red sheep shed for 12 sheep, a red tile roof and a plain door.", settings: {

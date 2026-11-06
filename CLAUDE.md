@@ -203,6 +203,11 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   The user wants Swedish building designs.
 - npm run build succeeds.
 - go.sum and package-lock.json are committed.
+- Troughs and the opening (cow/sheep): feedTrough and waterTrough are game objects (box: x, z, w, d, h = top edge; optional, objects.mjs
+  objectWarnings says when one is missing, objectProblems when it's not inside the fence); cow.mjs troughFrom builds the trough and the places
+  animals stand (both long sides if inside the fence). Start positions: startTroughs (along the pasture wall). The doorway to the pasture is set on the
+  pasture object: gapAt (middle, m from the wall's left end), gapW, gapH (kind.objects.pasture.gapSize); pastureOf gives mid/gapW/gapH, withPasture
+  pastureMid/pastureGapW/pastureGapH. Without a trough the husbandry XML leaves out its plane/places (not tried in the game).
 
 ## Dev environment (WSL)
 - ./dev.sh starts API (:8080) + Next dev server (:3000); data in .dev/ (gitignored),

@@ -68,11 +68,11 @@ export function teleportFor(l, {W, D}) {
 }
 /**
  * The settings the rest of the kind reads, from its pasture object: pastureWall, fenceDepth and
- * pastureMid (where on that wall the animals go out: the middle of the stretch the pasture encloses).
+ * pastureMid (where on that wall the animals go out: the opening set on the pasture, else the middle of the stretch it encloses), pastureGapW and pastureGapH (its size).
  */
 export function withPasture(q) {
   const pa = pastureOf(q);
-  return pa ? {...q, pastureWall: pa.wall, fenceDepth: pa.depth, pastureMid: pa.mid} : q;
+  return pa ? {...q, pastureWall: pa.wall, fenceDepth: pa.depth, pastureMid: pa.mid, pastureGapW: pa.gapW, pastureGapH: pa.gapH} : q;
 }
 
 /** Two pallet spawn lines inside a pallet trigger box, along its longer side: 50 cm in from its ends and 80 cm either side of its middle. */

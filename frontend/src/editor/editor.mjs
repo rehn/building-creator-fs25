@@ -14,7 +14,7 @@ import { WALLPAPERS } from "./kinds/innerwall.mjs";
 import { evalNumber } from "./calc.mjs";
 import { DOUBLE_DOOR_FROM } from "./openings.mjs";
 import { cleanPapers, wallBreaks, pieceGroups, roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, History, roomBox, wingsOf, liveWings, wingFloors, wingHalf, wingIdOf, wingWallKey, WING_PARTS, wallsOf, eaveWalls, autoPipes, pipePositions } from "./layout.mjs";
-import { OBJECT_TYPES, objectInfo, OBJECT_LIMITS, objectOf, pastureOf, snapBox, snapPasture, objectProblems, fencePoints, snapFencePoint, MAX_FENCE_POINTS } from "./objects.mjs";
+import { OBJECT_TYPES, objectInfo, OBJECT_LIMITS, GAP_LIMITS, objectOf, pastureOf, snapBox, snapPasture, objectProblems, objectWarnings, fencePoints, snapFencePoint, MAX_FENCE_POINTS } from "./objects.mjs";
 import { setAssets, catalogFor, usedAssets } from "./model.mjs";
 import { readObj, assetFolder, flattenI3d } from "./assets.mjs";
 import { paintInterior, paintGlass } from "./interior.mjs";
@@ -1020,6 +1020,7 @@ function renderObjectsUI() {
   const missing = spec.types.filter(t => !list.some(o => o.type === t));
   let html = `<div class="row"><button type="button" class="primary" id="objPlan" ${renderer ? "" : "disabled"}>${ob.on ? "Done moving" : "Move them in the plan view"}</button></div>`;
   html += `<ul class="objlist">${list.map(o => `<li><button type="button" data-obj="${o.id}" aria-pressed="${o.id === ob.sel}">${esc(objName(o))}</button>${pr.has(o.id) ? ` <span class="warn">${esc(pr.get(o.id))}</span>` : ""}</li>`).join("")}</ul>`;
+  html += objectWarnings(p).map(w => `<p class="warn">${esc(w)}</p>`).join("");
   if (missing.length) html += `<div class="addrow">${missing.map(t => `<button type="button" data-addobj="${t}">+ ${esc(objectInfo(kind, t).name)}</button>`).join("")}</div>`;
   const o = selObject();
   if (o) {
@@ -1042,6 +1043,13 @@ function renderObjectsUI() {
         html += range("depth", "Depth, out from the wall", ps.depth[0], ps.depth[1], 0.5, o.depth);
         html += `<p class="hint">At least ${ps.minWidth} m wide. Below 0 it runs past the corner and back along the wall to the building.</p>`
           + `<div class="row"><button type="button" id="ob-draw">Draw the fence myself</button></div><p class="hint">Draw it with posts in the plan view: any shape, from one corner of the building round to another.</p>`;
+      }
+      // the opening to the pasture, like a door that is only a hole: where along the wall and how big
+      html += `<p class="hint"><b>The opening to the pasture</b> (the animals walk through it; the hen hatch for hens). Its middle is measured from the wall’s left end seen from outside.</p>`;
+      html += range("gapAt", "Opening: position (m from the left end)", 0, pa.L, 0.05, pa.mid);
+      if (ps.gapSize) {
+        html += range("gapW", "Opening: width", GAP_LIMITS.w[0], GAP_LIMITS.w[1], 0.05, pa.gapW);
+        html += range("gapH", "Opening: height", GAP_LIMITS.h[0], GAP_LIMITS.h[1], 0.05, pa.gapH);
       }
     } else for (const [k, label, step] of BOX_SLIDERS) {
       if ((k === "ix" || k === "iz") && !t.icon) continue;

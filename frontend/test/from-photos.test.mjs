@@ -152,7 +152,7 @@ test("from photos: a long barn with an arm and an annex becomes parts, wall mate
   // the feed pad where Claude put it: beside the right wall, 6 m out, 1.2 m from its left end ... and the rest where the barn puts them
   const food = p.objects.find(o => o.type === "food");
   assert.ok(Math.abs(food.x - (20 + 6)) < 1e-6 && Math.abs(food.z - (6 - 1.2)) < 1e-6, `${food.x}, ${food.z}`);   // (a right wall runs from the front corner back)
-  assert.deepEqual(p.objects.map(o => o.type).sort(), ["bales", "food", "info", "loading", "pasture"]);
+  assert.deepEqual(p.objects.map(o => o.type).sort(), ["bales", "feedTrough", "food", "info", "loading", "pasture", "waterTrough"]);
   assert.equal(p.pastureWall, "back");
 });
 

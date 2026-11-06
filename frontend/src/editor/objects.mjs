@@ -22,6 +22,10 @@ export const OBJECT_TYPES = {
     hint: "Where a livestock trailer loads and unloads the animals. The map's teleport point is 3 m further out from the building."},
   pallets: {name: "Egg pallets", glyph: "pallet", icon: false, size: [4, 3.2, 2.5],
     hint: "Where egg pallets appear (two rows inside it), with warning stripes in its corners."},
+  feedTrough: {name: "Feed trough", glyph: null, icon: false, size: [3, 0.7, 0.75],
+    hint: "Where the animals eat. Put it where they can get to it, inside the fence (against the barn wall or free in the pasture); the long side is where they stand, and the height is the top edge. The feed pad fills it."},
+  waterTrough: {name: "Water trough", glyph: null, icon: false, size: [2, 0.7, 0.7],
+    hint: "Where the animals drink (the water is automatic). Put it inside the fence, where they can get to it; the long side is where they stand."},
   info: {name: "Info area", glyph: null, icon: false, size: [10, 10, 3],
     hint: "Standing in it shows the building's info box. It usually goes round the whole building."},
   pasture: {name: "Pasture (fence)", glyph: null, icon: false,
@@ -31,6 +35,10 @@ export const OBJECT_TYPES = {
 export const objectInfo = (kind, type) => ({...OBJECT_TYPES[type], ...((kind.objects && kind.objects.labels && kind.objects.labels[type]) || {})});
 /** Ranges: positions and sizes of box objects, icons, and a pasture's ends along its wall. */
 export const OBJECT_LIMITS = {x: [-80, 80], z: [-80, 80], w: [0.5, 70], d: [0.5, 70], h: [0.2, 8], ix: [-10, 10], iz: [-10, 10], end: [-40, 40]};
+/** The opening to the pasture: width and height ranges, and what it is to start with. */
+export const GAP_LIMITS = {w: [0.8, 6], h: [1.2, 4]};
+export const GAP_DEFAULT = {w: 1.6, h: 2.2};
+export const TROUGH_KINDS = ["cow", "sheep"];
 const GRID = 0.25, CORNER_SNAP = 0.6;
 
 const num = (v, d) => { v = +v; return Number.isFinite(v) ? v : d; };
@@ -77,7 +85,13 @@ function cleanPasture(o, ps = {minWidth: 0, depth: [2, 60]}, p) {
   // a fence drawn by hand: its posts [[x, z] ...] from where it starts to where it stops (the wall, a and b then only say where the animals go out)
   const pts = Array.isArray(o.points) ? o.points.filter(q => Array.isArray(q) && Number.isFinite(+q[0]) && Number.isFinite(+q[1]) && q[0] !== null && q[1] !== null).slice(0, MAX_FENCE_POINTS)
     .map(q => [round(clamp(+q[0], OBJECT_LIMITS.x)), round(clamp(+q[1], OBJECT_LIMITS.z))]) : [];
-  return {type: "pasture", wall, a: round(a), b: round(b), depth: round(clamp(num(o.depth, ps.depth[0]), ps.depth)), ...(pts.length >= 2 ? {points: pts} : {})};
+  // the opening to the pasture (a doorway or hatch): where along the wall (its middle) and how big; left out until the player sets it
+  const has = v => v !== undefined && v !== null && v !== "" && Number.isFinite(+v);
+  const gw = has(o.gapW) ? clamp(+o.gapW, GAP_LIMITS.w) : null, half = (gw ?? GAP_DEFAULT.w) / 2;
+  const gapAt = has(o.gapAt) ? clamp(+o.gapAt, [half, Math.max(half, L - half)]) : null;
+  return {type: "pasture", wall, a: round(a), b: round(b), depth: round(clamp(num(o.depth, ps.depth[0]), ps.depth)),
+    ...(gapAt !== null ? {gapAt: round(gapAt)} : {}), ...(gw !== null ? {gapW: round(gw)} : {}), ...(has(o.gapH) ? {gapH: round(clamp(+o.gapH, GAP_LIMITS.h))} : {}),
+    ...(pts.length >= 2 ? {points: pts} : {})};
 }
 
 /** The building's object of a type, or null. */
@@ -115,7 +129,8 @@ export function pastureOf(p, o = objectOf(p, "pasture")) {
   const ea = Math.max(0, s0), eb = Math.min(L, s1);
   const pts = [at(s0, 0), at(s1, d), ...fence];
   const rect = {x0: Math.min(...pts.map(q => q[0])), x1: Math.max(...pts.map(q => q[0])), z0: Math.min(...pts.map(q => q[2])), z1: Math.max(...pts.map(q => q[2]))};
-  return {wall: o.wall, w, L, s0, s1, ea, eb, mid: (ea + eb) / 2, depth: d, fence, rect, at, free};
+  const gapW = o.gapW ?? GAP_DEFAULT.w, gapH = o.gapH ?? GAP_DEFAULT.h, mid = o.gapAt ?? (ea + eb) / 2;
+  return {wall: o.wall, w, L, s0, s1, ea, eb, mid, gapW, gapH, depth: d, fence, rect, at, free};
 }
 
 /** Box objects snap to a 25 cm grid and are kept out of the building (pushed out the shortest way). */
@@ -183,8 +198,9 @@ const rectOf = o => ({x0: o.x - o.w / 2, x1: o.x + o.w / 2, z0: o.z - o.d / 2, z
 export function objectProblems(p) {
   const out = new Map(), boxes = (p.objects || []).filter(o => o.type !== "pasture" && o.type !== "info"), past = pastureOf(p);
   for (const o of boxes) {
-    const r = rectOf(o);
+    const r = rectOf(o), trough = o.type === "feedTrough" || o.type === "waterTrough";
     if (footprints(p).some(f => overlap(r, f, 0.01))) out.set(o.id, "It’s in the building");
+    else if (trough) { if (past && !insidePoly(past.fence, o.x, o.z)) out.set(o.id, "The animals can’t reach it: put it inside the fence"); }
     else if (past && overlap(r, past.rect, 0.01)) out.set(o.id, "It’s in the pasture, behind the fence");
     // (the bale drop may lie over the feed pad, as it does to start with: one is solid, the other a trigger)
     else { const pair = q => [o.type, q.type].sort().join() === "bales,food", other = boxes.find(q => q !== o && !pair(q) && overlap(r, rectOf(q), 0.01)); if (other) out.set(o.id, `It’s on top of the ${OBJECT_TYPES[other.type].name.toLowerCase()}`); }
@@ -195,5 +211,23 @@ export function objectProblems(p) {
     if (door) out.set(po.id, "A door opens into the pasture: move the door or the pasture");
     else if (liveWings(p).some(w => overlap(w.rect, past.rect, 0.01))) out.set(po.id, "A wing stands in the pasture: move the wing or the pasture");
   }
+  return out;
+}
+
+/** Is the point inside the polygon of posts [[x, y, z] ...] (seen from above)? */
+export function insidePoly(poly, x, z) {
+  let c = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, , zi] = poly[i], [xj, , zj] = poly[j];
+    if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) c = !c;
+  }
+  return c;
+}
+/** What the building lacks, for the player to read (no ids to hang it on): a kind with troughs that has none of one. */
+export function objectWarnings(p) {
+  const out = [];
+  if (!TROUGH_KINDS.includes(p.kind)) return out;
+  for (const t of ["feedTrough", "waterTrough"]) if (!objectOf(p, t))
+    out.push(t === "feedTrough" ? "No feed trough: the animals have nothing to eat from. Add one under Game objects." : "No water trough: the animals have nothing to drink from. Add one under Game objects.");
   return out;
 }

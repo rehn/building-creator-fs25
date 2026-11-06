@@ -9,7 +9,7 @@ const barn = (s = {}) => sanitize({...PRESETS.find(x => x.id === "ladugard").set
 const types = p => p.objects.map(o => o.type).sort();
 
 test("objects: a new building gets its kind's, and old saves keep their pasture and sleep point", () => {
-  assert.deepEqual(types(barn()), ["bales", "food", "info", "loading", "pasture"]);
+  assert.deepEqual(types(barn()), ["bales", "feedTrough", "food", "info", "loading", "pasture", "waterTrough"]);
   assert.deepEqual(types(sanitize({kind: "chicken"})), ["food", "info", "loading", "pallets", "pasture"]);
   assert.deepEqual(types(sanitize({})), ["sleep"]);
   assert.deepEqual(types(sanitize({sleepPoint: false})), [], "a house that had no sleep point");
