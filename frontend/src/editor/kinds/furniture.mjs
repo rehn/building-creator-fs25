@@ -224,6 +224,103 @@ export const CATALOG = {
       c.box(-0.95, 0.95, 0.43, 0.436, 0.36, 0.46); c.box(0.74, 0.745, -0.44, 0.44, 0.36, 0.64);
       c.paint(shade(ochre, -0.55)); for (let i = 0; i < 6; i++) c.cyl(-0.8 + i * 0.3, -0.275, 0.5 + (i % 2) * 0.1, 0.014, 0.008, 8);
     }},
+  cooker: {name: "Cooker with hood (spis med spiskåpa)", mount: "wall", collision: true, params: [], defaults: {},
+    size: () => [0.6, 0.68], height: () => 2.0,
+    build(c) {
+      const enamel = "#E9E8E3";
+      c.paint(C.iron, "steel"); c.box(-0.3, 0.3, -0.31, 0.27, 0, 0.06);                               // the plinth
+      c.paint(enamel, "plastic"); c.box(-0.3, 0.3, -0.31, 0.31, 0.06, 0.9);                          // the body
+      c.paint("#17181A", "plastic"); c.box(-0.26, 0.26, 0.31, 0.318, 0.12, 0.62);                    // the oven door's glass
+      c.paint(C.steel, "steel"); c.rod([-0.24, 0.68, 0.326], [0.24, 0.68, 0.326], 0.012, 8);            // its handle
+      for (const x of [-0.24, 0.24]) c.box(x - 0.01, x + 0.01, 0.31, 0.328, 0.675, 0.69);               // and the brackets
+      for (let i = 0; i < 5; i++) { c.paint(C.iron, "steel"); c.box(-0.22 + i * 0.11 - 0.017, -0.22 + i * 0.11 + 0.017, 0.31, 0.332, 0.77, 0.805); }   // knobs
+      c.paint("#101113", "plastic"); c.box(-0.3, 0.3, -0.31, 0.31, 0.9, 0.915);                      // the hob
+      c.paint(C.steel, "steel");
+      for (const [x, z, r] of [[-0.14, -0.1, 0.07], [0.14, -0.1, 0.055], [-0.14, 0.14, 0.055], [0.14, 0.14, 0.07]]) c.cyl(x, z, 0.915, r, 0.008, 18);   // the rings
+      // the hood: a canopy over the hob, a flue up to the ceiling, a filter and a lamp
+      c.paint(C.steel, "steel"); c.box(-0.3, 0.3, -0.31, 0.1, 1.55, 1.68);
+      c.box(-0.13, 0.13, -0.31, -0.07, 1.68, 2.0);
+      c.paint(shade(C.steel, -0.4), "steel"); c.box(-0.27, 0.27, -0.28, 0.07, 1.536, 1.55);
+      c.paint("#FFF3C4"); c.box(-0.2, -0.14, -0.1, -0.04, 1.532, 1.536); c.box(0.14, 0.2, -0.1, -0.04, 1.532, 1.536);
+    }},
+  kitchenunits: {name: "Kitchen units with worktop and wall cupboards (köksskåp)", mount: "wall", collision: true,
+    params: [{k: "count", label: "Units (60 cm each)", min: 1, max: 8, step: 1},
+      {k: "upper", label: "Wall cupboards", min: 0, max: 1, step: 1, options: ["No wall cupboards", "With wall cupboards"]},
+      {k: "sink", label: "Sink", min: 0, max: 1, step: 1, options: ["No sink", "With a sink"]}], defaults: {count: 3, upper: 1, sink: 0},
+    size: it => [it.count * 0.6, 0.62], height: it => Math.round(it.upper) ? 2.0 : 0.92,
+    build(c, it) {
+      const n = it.count, w = n * 0.6, sinkAt = Math.round(it.sink) && n >= 2 ? Math.floor(n / 2) : -1;
+      c.paint(C.iron); c.box(-w / 2 + 0.02, w / 2 - 0.02, -0.31, 0.24, 0, 0.1);                       // the plinth
+      c.paint(C.paint, "wood"); c.box(-w / 2, w / 2, -0.31, 0.27, 0.1, 0.88);                        // the carcass
+      for (let i = 0; i < n; i++) {
+        const x0 = -w / 2 + i * 0.6, drawers = i % 3 === 1 && i !== sinkAt;
+        c.paint(shade(C.paint, i % 2 ? -0.05 : 0.05), "wood");
+        if (drawers) for (let k = 0; k < 3; k++) { const y = 0.14 + k * 0.24; c.box(x0 + 0.02, x0 + 0.58, 0.27, 0.29, y, y + 0.22); c.paint(C.brass); c.box(x0 + 0.24, x0 + 0.36, 0.29, 0.3, y + 0.1, y + 0.12); c.paint(shade(C.paint, i % 2 ? -0.05 : 0.05), "wood"); }
+        else { c.box(x0 + 0.02, x0 + 0.58, 0.27, 0.29, 0.14, 0.84); c.paint(C.brass); c.box(x0 + 0.27, x0 + 0.33, 0.29, 0.3, 0.72, 0.74); }
+      }
+      c.paint(C.worktop, "wood"); c.box(-w / 2, w / 2, -0.31, 0.31, 0.88, 0.92);                    // the worktop
+      if (sinkAt >= 0) {
+        const cx = -w / 2 + (sinkAt + 0.5) * 0.6;
+        c.paint(C.steel, "steel"); c.box(cx - 0.25, cx + 0.25, -0.2, 0.15, 0.905, 0.921);
+        c.rod([cx, 0.92, -0.26], [cx, 1.15, -0.26], 0.012); c.rod([cx, 1.15, -0.26], [cx, 1.12, -0.12], 0.01);
+      }
+      if (Math.round(it.upper)) {
+        // wall cupboards, 34 cm deep, from 1.4 m up to 2.0 m, with a tile splashback between
+        c.paint("#DAD6C8", "wood"); c.box(-w / 2, w / 2, -0.31, -0.29, 0.92, 1.4);
+        c.paint(C.paint, "wood"); c.box(-w / 2, w / 2, -0.31, 0.03, 1.4, 2.0);
+        for (let i = 0; i < n; i++) {
+          const x0 = -w / 2 + i * 0.6;
+          c.paint(shade(C.paint, i % 2 ? -0.05 : 0.05), "wood"); c.box(x0 + 0.02, x0 + 0.58, 0.03, 0.05, 1.43, 1.97);
+          c.paint(C.brass); c.box(x0 + 0.27, x0 + 0.33, 0.05, 0.06, 1.46, 1.48);
+        }
+      }
+    }},
+  fridge: {name: "Fridge / freezer (kyl och frys)", mount: "wall", collision: true,
+    params: [{k: "type", label: "Type", min: 0, max: 2, step: 1, options: ["Fridge-freezer (kyl-frys)", "Fridge (kylskåp)", "Freezer (frys)"]}], defaults: {type: 0},
+    size: () => [0.6, 0.68], height: () => 1.85,
+    build(c, it) {
+      const t = Math.round(it.type), white = "#EDECE7", door = (y0, y1) => { c.paint(shade(white, 0.1), "plastic"); c.box(-0.295, 0.295, 0.31, 0.325, y0, y1); };
+      c.paint(C.iron, "steel"); c.box(-0.28, 0.28, -0.3, 0.28, 0, 0.05);                              // the plinth
+      c.paint(shade(C.iron, 0.5), "steel"); for (let k = 0; k < 4; k++) c.box(-0.2, 0.2, 0.28, 0.285, 0.008 + k * 0.011, 0.015 + k * 0.011);   // its air grille
+      c.paint(shade("#EDECE7", -0.3), "plastic"); c.box(-0.3, 0.3, -0.34, 0.315, 1.84, 1.855);     // the top edge
+      c.box(-0.305, -0.295, 0.31, 0.325, 0.06, 1.84); c.box(0.295, 0.305, 0.31, 0.325, 0.06, 1.84);   // the door seals
+      c.paint(white, "plastic"); c.box(-0.3, 0.3, -0.34, 0.31, 0.05, 1.85);                           // the cabinet
+      const handle = (y0, y1) => { c.paint(C.steel, "steel"); c.box(0.2, 0.225, 0.325, 0.335, y0, y1); };
+      if (t === 0) { door(0.06, 0.6); handle(0.5, 0.58); door(0.62, 1.84); handle(0.66, 1.2); c.paint(C.steel, "steel"); c.box(-0.295, 0.295, 0.31, 0.325, 0.6, 0.62); }
+      else if (t === 1) { door(0.06, 1.84); handle(0.9, 1.5); c.paint(C.iron, "steel"); c.box(-0.2, 0.0, 0.325, 0.33, 1.7, 1.74); }            // (a small display)
+      else { for (let k = 0; k < 4; k++) { const y = 0.07 + k * 0.445; door(y, y + 0.43); handle(y + 0.3, y + 0.38); } }                      // drawers
+    }},
+  pantry: {name: "Pantry cupboard (skafferi)", mount: "wall", collision: true,
+    params: [{k: "count", label: "Sections (60 cm each)", min: 1, max: 3, step: 1},
+      {k: "open", label: "Front", min: 0, max: 1, step: 1, options: ["Closed doors", "Open shelves"]}], defaults: {count: 1, open: 0},
+    size: it => [it.count * 0.6, 0.55], height: () => 2.0,
+    build(c, it) {
+      const n = it.count, w = n * 0.6, shelves = [0.1, 0.5, 0.9, 1.3, 1.65];
+      c.paint(C.green, "wood"); c.box(-w / 2, w / 2, -0.275, -0.26, 0, 2.0);                          // the back
+      c.paint(shade(C.green, -0.3), "wood"); c.box(-w / 2, w / 2, -0.26, 0.25, 0, 0.08);             // plinth
+      c.paint(C.green, "wood");
+      for (let i = 0; i <= n; i++) { const x = -w / 2 + i * 0.6; c.box(Math.max(-w / 2, x - 0.012), Math.min(w / 2, x + 0.012), -0.26, 0.25, 0.08, 2.0); }
+      c.box(-w / 2, w / 2, -0.26, 0.26, 1.96, 2.0);                                                   // the top
+      for (const y of shelves) c.box(-w / 2 + 0.012, w / 2 - 0.012, -0.26, 0.24, y, y + 0.022);       // shelves
+      for (let i = 0; i < n; i++) {
+        const x0 = -w / 2 + i * 0.6;
+        if (Math.round(it.open)) {
+          // jars, tins and packets on the shelves
+          const cols = ["#9A7A3A", "#C9B27A", "#7A2E2A", "#E8E0CC", "#5E7A62", "#B8883A"];
+          shelves.slice(0, 4).forEach((y, k) => {
+            for (let j = 0; j < 4; j++) {
+              const x = x0 + 0.1 + j * 0.13, col = cols[(i + k + j) % cols.length], h = 0.14 + ((k + j) % 3) * 0.05;
+              c.paint(col, (j + k) % 2 ? "plastic" : "steel"); if ((j + k) % 2) c.cyl(x, -0.05 + ((j * 3 + k) % 3) * 0.05, y + 0.022, 0.05, h, 12); else c.box(x - 0.045, x + 0.045, -0.12, 0.05, y + 0.022, y + 0.022 + h * 0.9);
+            }
+          });
+        } else {
+          c.paint(tone(C.green, i), "wood");
+          c.box(x0 + 0.015, x0 + 0.585, 0.25, 0.265, 0.1, 1.94);                                      // the door
+          c.paint(shade(C.green, 0.3), "wood"); c.box(x0 + 0.07, x0 + 0.53, 0.265, 0.272, 0.2, 0.9); c.box(x0 + 0.07, x0 + 0.53, 0.265, 0.272, 1.0, 1.85);   // panels
+          c.paint(C.brass); c.box(x0 + 0.51, x0 + 0.54, 0.265, 0.275, 0.95, 1.08);                    // the handle
+        }
+      }
+    }},
   rug: {name: "Rag rug (trasmatta)", mount: "floor", collision: false, params: [], defaults: {},
     size: () => [2.0, 0.8], height: () => 0.012,
     build(c) {

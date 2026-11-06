@@ -130,7 +130,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   The inner door's wood is the material "doorIn" (setting innerDoorColor, in Colors), apart from "door" (doorColor).
   ("porch" for a new first door), insideWalls {wall, low, kick} (barns default BARN_WALLS), furnish (board floor),
   The inner door's wood is the material "doorIn" (setting innerDoorColor, in Colors), apart from "door" (doorColor).
-  catalog + autoFurnish in kinds/furniture.mjs (kitchen, stove, table, chair, bed, single bed, sofa, divan, wardrobe, bookshelf, bookcase, TV bench, desk with or without a computer, rug;
+  catalog + autoFurnish in kinds/furniture.mjs (kitchen, stove, table, chair, bed, single bed, sofa, divan, wardrobe, bookshelf, bookcase, TV bench, desk with or without a computer, cooker with hood, kitchen units with wall cupboards, fridge/freezer, pantry, rug;
   The inner door's wood is the material "doorIn" (setting innerDoorColor, in Colors), apart from "door" (doorColor).
   tall pieces kept off windows). Pretend rooms only behind upper-floor windows (house forces interior: true; the
   The inner door's wood is the material "doorIn" (setting innerDoorColor, in Colors), apart from "door" (doorColor).
@@ -280,7 +280,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   The inner door's wood is the material "doorIn" (setting innerDoorColor, in Colors), apart from "door" (doorColor).
 ## Status
   The inner door's wood is the material "doorIn" (setting innerDoorColor, in Colors), apart from "door" (doorColor).
-- Go tests (60) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (462) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
+- Go tests (60) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (470) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
   The inner door's wood is the material "doorIn" (setting innerDoorColor, in Colors), apart from "door" (doorColor).
 - Cow barn (kinds/cow.mjs): cowHusbandryPasture (no milk, like cowBarnSmall), automatic water, feed
   The inner door's wood is the material "doorIn" (setting innerDoorColor, in Colors), apart from "door" (doorColor).
