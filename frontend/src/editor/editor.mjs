@@ -220,7 +220,7 @@ function syncOutputs() {
 
 const TEX = 1024;
 /** The materials with a surface texture (surfaceSpec), when their settings give them one. */
-const TEXTURED = ["walls", "wallsLow", "roof", "chimney", "trim", "foundation", "door"];
+const TEXTURED = ["walls", "wallsLow", "roof", "chimney", "trim", "foundation", "door", "doorIn"];
 function hash(i, j, s) {
   let h = (Math.imul(i, 374761393) + Math.imul(j, 668265263) + Math.imul(s, 982451653)) | 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177);

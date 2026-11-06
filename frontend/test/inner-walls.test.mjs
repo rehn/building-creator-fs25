@@ -2,7 +2,7 @@
 // (open in the collision), wallpaper on each side as a textured surface, and a height that follows the ceiling.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { sanitize, buildGeometry, buildI3d, catalogFor, fittingTextures, PRESETS, KIND, placeableXml } from "../src/editor/model.mjs";
+import { sanitize, buildGeometry, buildI3d, catalogFor, fittingTextures, PRESETS, KIND, placeableXml, colorFor, surfaceSpec, SCHEMA } from "../src/editor/model.mjs";
 import { roomOf, problems, cleanItems, footprint } from "../src/editor/layout.mjs";
 import { WALLPAPERS, doorwayOf } from "../src/editor/kinds/innerwall.mjs";
 import { SURFACES } from "../src/editor/surfaces.mjs";
@@ -224,7 +224,7 @@ test("inner door: a door that opens is a leaf in the doors list with its own tri
   assert.ok(leaf.motion.rotation === 100 || leaf.motion.rotation === -100, JSON.stringify(leaf.motion));
   assert.ok(leaf.hinge[0] > d0 && Math.abs(leaf.hinge[0] - (d1 - 0.012)) < 1e-6, `hinge at the +x end (left, seen from one side): ${leaf.hinge}`);
   assert.ok(Math.abs(leaf.box.size[0] - (d1 - d0 - 0.024)) < 1e-6 && leaf.box.size[2] > 0.03 && leaf.box.size[2] < 0.04, JSON.stringify(leaf.box.size));
-  assert.ok(Object.keys(leaf.parts).includes("door"), "its meshes are the door's");
+  assert.ok(Object.keys(leaf.parts).includes("doorIn") && !Object.keys(leaf.parts).includes("door"), "its meshes are the inner doors' own material");
   const xml = placeableXml(p, "House"), i3d = buildI3d(p);
   assert.ok(i3d.includes("Leaf1Hinge") && /door2Trigger/.test(i3d), "scene nodes");
   assert.match(xml, /saveId="door2"/);
@@ -249,7 +249,7 @@ test("inner door: a door that stays shut closes the doorway and is not animated;
   const p = house([wall({door: 3})]), geo = buildGeometry(p), F = p.foundation, [d0, d1] = doorwayOf(p.items[0]), mid = (d0 + d1) / 2;
   assert.equal(geo.doors.filter(d => d.wall === null).length, 0);
   assert.ok(hits(geo.collision, [mid, F + 1, -1], [mid, F + 1, 1]), "closed for walking");
-  assert.ok(geo.G.door.p.length > buildGeometry(house([wall({door: 1})])).G.door.p.length, "the leaf is drawn");
+  assert.ok(geo.G.doorIn.p.length > buildGeometry(house([wall({door: 1})])).G.doorIn.p.length, "the leaf is drawn");
   for (const door of [0, 1]) assert.equal(buildGeometry(house([wall({door})])).doors.filter(d => d.wall === null).length, 0, "door " + door);
   assert.ok(buildI3d(p).includes("</i3D>"));
 });
@@ -261,4 +261,19 @@ test("inner door: the hinge and swing settings only show when there is a door; e
   const b = barn([wall({door: 2})]);
   assert.equal(buildGeometry(b).doors.filter(d => d.wall === null).length, 1);
   assert.ok(buildI3d(b).includes("</i3D>"));
+});
+
+test("inner door: its colour is its own setting (Colors), apart from the outer doors", () => {
+  const p = sanitize({items: [wall({door: 2})], doorColor: "#112233", innerDoorColor: "#AABBCC"});
+  assert.equal(colorFor(p, "doorIn"), "#AABBCC");
+  assert.equal(colorFor(p, "door"), "#112233");
+  assert.ok(sanitize({}).innerDoorColor, "has a default");
+  assert.ok(SCHEMA.some(g => g.fields && g.fields.some(f => f.k === "innerDoorColor" && f.type === "color")), "a colour field in the editor");
+  // it is its own part with its own material in the export, painted wood, and weathers like the doors
+  const i3d = buildI3d(p);
+  assert.ok(/name="doorIn"/.test(i3d) || /Leaf1DoorIn/.test(i3d), "its part in the export");
+  assert.ok(surfaceSpec(p, "doorIn").kind === "paintedwood");
+  // changing the outer door colour leaves the inner doors alone
+  const q = sanitize({items: [wall({door: 2})], doorColor: "#FF0000", innerDoorColor: "#AABBCC"});
+  assert.equal(colorFor(q, "doorIn"), colorFor(p, "doorIn"));
 });
