@@ -66,3 +66,29 @@ test("wall zones: a wing, a walk-in barn and the export have them too", () => {
   assert.match(buildI3d(w, {withTex: true}), /textures\/wallsLow_diffuse\.png/);
   assert.doesNotMatch(buildI3d(sanitize({}), {withTex: true}), /wallsLow/);
 });
+
+test("wall zones: each wall can have its own split (one material, the top of the ground floor, a height), the rest follow the building", () => {
+  const p0 = two({wallSplit: "one"});
+  assert.deepEqual(p0.wallZones, {});
+  const lowOn = (p, wall) => {
+    const w = buildGeometry(p).opsByWall[wall].w, out = [], g = buildGeometry(p).G.wallsLow;
+    for (let i = 0; i < g.p.length; i += 3) {
+      // the point's distance from the wall's plane (it is on the plane) and along it
+      const d = (g.p[i] - w.o[0]) * w.n[0] + (g.p[i + 2] - w.o[2]) * w.n[2];
+      const along = (g.p[i] - w.o[0]) * w.u[0] + (g.p[i + 2] - w.o[2]) * w.u[2];   // (not the corners, which the next wall shares)
+      if (Math.abs(d) < 1e-6 && along > 0.2 && along < w.L - 0.2) out.push([g.p[i], g.p[i + 1], g.p[i + 2]]);
+    }
+    return out;
+  };
+  assert.equal(lowOn(p0, "front").length, 0);
+  const p = sanitize({...p0, wallZones: {front: {split: "floor"}, left: {split: "height", height: 1.1}, bogus: {split: "floor"}, back: {split: "zebra"}}});
+  assert.deepEqual(Object.keys(p.wallZones).sort(), ["front", "left"], "unknown walls and splits are dropped");
+  assert.ok(lowOn(p, "front").length > 0, "the front has a lower part");
+  assert.equal(lowOn(p, "back").length, 0, "the back is one material");
+  const left = lowOn(p, "left");
+  assert.ok(left.length > 0 && left.every(q => q[1] <= p.foundation + 1.1 + 1e-6), "the left splits at its own height");
+  // one material on a wall of a split building
+  const q = sanitize({...two(), wallZones: {front: {split: "one"}}});
+  assert.equal(lowOn(q, "front").length, 0);
+  assert.ok(lowOn(q, "back").length > 0);
+});

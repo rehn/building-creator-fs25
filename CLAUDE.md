@@ -208,6 +208,9 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   animals stand (both long sides if inside the fence). Start positions: startTroughs (along the pasture wall). The doorway to the pasture is set on the
   pasture object: gapAt (middle, m from the wall's left end), gapW, gapH (kind.objects.pasture.gapSize); pastureOf gives mid/gapW/gapH, withPasture
   pastureMid/pastureGapW/pastureGapH. Without a trough the husbandry XML leaves out its plane/places (not tried in the game).
+- Per-wall split: p.wallZones = {wall: {split: one|floor|height, height}} (any key of wallsOf, wings too) overrides wallSplit/splitHeight for that wall;
+  model.mjs splitAtOf(p, key); the two materials stay the building's. Editor: renderZonesUI under Surfaces. Vertical boards: wallCladding "vertical".
+  Door style "hole" = empty framed doorway (a plain hatch op); doors and the pasture opening can have a ramp (buildRamp).
 
 ## Dev environment (WSL)
 - ./dev.sh starts API (:8080) + Next dev server (:3000); data in .dev/ (gitignored),

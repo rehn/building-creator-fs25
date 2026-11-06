@@ -248,10 +248,11 @@ SCHEMA.forEach(g => {
       if (ruled) syncControls(); else syncOutputs();
       persist(); rebuild(false);
       if (["floors", "halfStorey", "roofType", "ridge", "interior", "curtainStyle", "curtainColor", "winStyle", "doorStyle"].includes(f.k)) { renderWinUI(); renderDormUI(); renderWingsUI(); }
-      renderPipesUI(); renderPapersUI();
+      renderPipesUI(); renderPapersUI(); renderZonesUI();
       if (ob.sel || ob.on) renderObjectsUI();
     });
   });
+  if (g.custom === "zones") { const ed = document.createElement("div"); ed.id = "zonesEditor"; d.appendChild(ed); }
   if (g.custom === "papers") { const ed = document.createElement("div"); ed.id = "papersEditor"; d.appendChild(ed); }
   if (g.custom === "pipes") { const ed = document.createElement("div"); ed.id = "pipesEditor"; d.appendChild(ed); }
   if (g.custom === "wings") { const ed = document.createElement("div"); ed.id = "wingsEditor"; d.appendChild(ed); }
@@ -281,7 +282,7 @@ function syncControls() {
   renderDormUI();
   renderObjectsUI();
   renderWingsUI();
-  renderPipesUI(); renderPapersUI();
+  renderPipesUI(); renderPapersUI(); renderZonesUI();
 }
 function syncOutputs() {
   for (const k in inputs) {
@@ -293,11 +294,11 @@ function syncOutputs() {
   const off = (k, v) => { if (inputs[k]) { inputs[k].disabled = v; const row = inputs[k].closest("[data-k]"); if (row) row.classList.toggle("na", v); } };
   off("ridge", p.roofType !== "gable");
   // the walls' zones: board settings apply when either zone has boards
-  const clads = p.wallSplit === "one" ? [p.wallCladding] : [p.wallCladding, p.lowerCladding];
+  const clads = !zonesUsed() ? [p.wallCladding] : [p.wallCladding, p.lowerCladding];
   off("panelSpacing", clads.every(c => c === "plaster"));
   off("battenWidth", !clads.includes("lockpanel"));
   off("splitHeight", p.wallSplit !== "height");
-  off("lowerCladding", p.wallSplit === "one"); off("lowerColor", p.wallSplit === "one");
+  off("lowerCladding", !zonesUsed()); off("lowerColor", !zonesUsed());
   off("roofMaterial", p.roofType === "flat");
   off("chimneyStyle", !p.chimney);
   off("kneeWall", !p.halfStorey);
@@ -867,6 +868,35 @@ function renderWinUI() {
 let pipeSel = null;
 const renumber = list => list.map((x, i) => ({...x, id: i + 1}));
 const pipeLabel = (x, list) => `${WALL_NAMES[x.wall]}, ${list.filter(y => y.wall === x.wall).sort((a, b) => a.pos - b.pos).indexOf(x) + 1}`;
+/* ---------- Two materials, wall by wall ---------- */
+// p.wallZones: a wall with a split of its own instead of the building's (the two materials themselves are the building's).
+let zoneWall = "front";
+const zonesUsed = () => p.wallSplit !== "one" || Object.values(p.wallZones || {}).some(z => z.split !== "one");
+function renderZonesUI() {
+  const ed = $("zonesEditor");
+  if (!ed) return;
+  const walls = wallsOf(p), keys = Object.keys(walls);
+  if (!walls[zoneWall]) zoneWall = keys[0];
+  const z = (p.wallZones || {})[zoneWall], mode = z ? z.split : "same";
+  const opt = (v, label, cur) => `<option value="${v}" ${v === cur ? "selected" : ""}>${esc(label)}</option>`;
+  const own = Object.keys(p.wallZones || {});
+  let html = `<p class="hint">The split above is for every wall. Choose a wall to give it its own: one material, or split at the top of the ground floor or at a height. The two materials (cladding and colour) are the same on every wall.${own.length ? ` Walls with their own: ${own.map(k => esc(WALL_NAMES[k] || k)).join(", ")}.` : ""}</p>`;
+  html += `<div class="field"><div class="fl"><label for="znWall">Wall</label></div><select id="znWall">${keys.map(k => opt(k, WALL_NAMES[k] || k, zoneWall)).join("")}</select></div>`;
+  html += `<div class="field"><div class="fl"><label for="znMode">Materials on this wall</label></div><select id="znMode">${opt("same", "Same as the building", mode)}${opt("one", "One material", mode)}${opt("floor", "Split at the top of the ground floor", mode)}${opt("height", "Split at a height", mode)}</select></div>`;
+  if (mode === "height") html += `<div class="field"><div class="fl"><label for="znHeight">Split height, above the ground floor’s floor</label><output id="znHeight-o">${(+z.height).toFixed(2)} m</output></div><input type="range" id="znHeight" min="0.5" max="10" step="0.05" value="${z.height}"></div>`;
+  ed.innerHTML = html;
+  const save = (again = true) => { persist(); rebuild(false); syncOutputs(); applyKindRules(); if (again) renderZonesUI(); };
+  $("znWall").onchange = e => { zoneWall = e.target.value; renderZonesUI(); };
+  $("znMode").onchange = e => {
+    const v = e.target.value, zones = {...(p.wallZones || {})};
+    if (v === "same") delete zones[zoneWall]; else zones[zoneWall] = v === "height" ? {split: "height", height: p.splitHeight} : {split: v};
+    p.wallZones = zones; syncControls(); save();
+  };
+  if ($("znHeight")) {
+    $("znHeight").oninput = e => { p.wallZones = {...p.wallZones, [zoneWall]: {split: "height", height: +e.target.value}}; $("znHeight-o").textContent = `${(+e.target.value).toFixed(2)} m`; rebuild(false); };
+    $("znHeight").onchange = () => save(false);
+  }
+}
 /* ---------- Wallpaper on the inside of the outer walls ---------- */
 // Sections along each wall (p.papers), one per room behind it; the setting "every inside wall" is in the section's own field.
 let paperWall = "front";
@@ -932,13 +962,13 @@ function renderPipesUI() {
   }
   html += `<button type="button" id="pipeAuto">Place them again from “Downpipes per long side”</button>`;
   ed.innerHTML = html;
-  const save = () => { persist(); rebuild(false); renderPipesUI(); renderPapersUI(); };
+  const save = () => { persist(); rebuild(false); renderPipesUI(); renderPapersUI(); renderZonesUI(); };
   ed.querySelectorAll("[data-pw]").forEach(b => b.onclick = () => {
     const k = b.dataset.pw, n = pipes.filter(x => x.wall === k).length + (+b.dataset.d);
     p.pipes = renumber([...(p.pipes || []).filter(x => x.wall !== k), ...pipePositions(walls[k].L, n).map(pos => ({wall: k, pos: +pos.toFixed(3)}))]);
     pipeSel = null; save();
   });
-  $("pipeSel").onchange = e => { pipeSel = +e.target.value || null; renderPipesUI(); renderPapersUI(); };
+  $("pipeSel").onchange = e => { pipeSel = +e.target.value || null; renderPipesUI(); renderPapersUI(); renderZonesUI(); };
   $("pipeAuto").onclick = () => { p.pipes = autoPipes(p); pipeSel = null; save(); toast("Downpipes placed again"); };
   if (!s) return;
   const mine = () => (p.pipes || []).find(x => x.id === pipeSel);
@@ -975,7 +1005,7 @@ function renderWingsUI() {
     // (a removed wing takes its downpipes with it)
     const ids = new Set(liveWings(p).map(x => x.id));
     p.pipes = (p.pipes || []).filter(x => !wingIdOf(x.wall) || ids.has(wingIdOf(x.wall)));
-    persist(); rebuild(false); if (renderToo) { renderWingsUI(); renderWinUI(); renderPipesUI(); renderPapersUI(); }
+    persist(); rebuild(false); if (renderToo) { renderWingsUI(); renderWinUI(); renderPipesUI(); renderPapersUI(); renderZonesUI(); }
   };
   ed.querySelectorAll("[data-wing]").forEach(b => b.onclick = () => { wSel = +b.dataset.wing; renderWingsUI(); });
   if ($("wingAdd")) $("wingAdd").onclick = () => {

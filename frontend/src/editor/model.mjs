@@ -89,7 +89,7 @@ const SHARED_SECTIONS = [
   {title:"Doors", tab:"openings", hint:"The style of every door. The doors themselves are in the list under Windows: choose one there (or tap it in the preview) to move it, change its size or give it a porch or canopy.", fields:[
     {k:"doorStyle", label:"Style", type:"select", options:DOOR_STYLES.map(s => [s.id, s.name])}]},
   {title:"Inside", label:"Furniture and pieces", tab:"inside", custom:"inside", hint:"The pieces inside the building. Fill it automatically to match its size, then change it as you like.", fields:[]},
-  {title:"Surfaces", tab:"look", fields:[
+  {title:"Surfaces", tab:"look", custom:"zones", fields:[
     {k:"wallCladding", label:"Wall cladding (the upper part when split)", type:"select", options:CLADDING},
     {k:"wallSplit", label:"Two materials on the walls", type:"select", options:[["one","No, one material"],["floor","Yes, split at the top of the ground floor"],["height","Yes, split at a height"]]},
     {k:"splitHeight", label:"Split height, above the ground floor's floor", min:0.5, max:10, step:0.05, unit:" m"},
@@ -213,6 +213,20 @@ export function genAll(P, src, start = []) {
   }
   return list;
 }
+/** Walls with a split of their own: {wall: {split, height}}, for the walls that exist and splits that are known (the rest follow wallSplit). */
+function cleanWallZones(z, p) {
+  const out = {}, walls = wallsOf(p);
+  if (z && typeof z === "object") for (const [k, v] of Object.entries(z)) {
+    if (!walls[k] || !v || !["one", "floor", "height"].includes(v.split)) continue;
+    out[k] = v.split === "height" ? {split: "height", height: clampN(v.height, 0.5, 10, p.splitHeight)} : {split: v.split};
+  }
+  return out;
+}
+/** Where the lower material ends on wall key (m above the wall's foot; 0: one material): the wall's own split, else the building's. */
+export function splitAtOf(p, key) {
+  const z = p.wallZones && p.wallZones[key], mode = z ? z.split : p.wallSplit;
+  return mode === "floor" ? p.floorHeight : mode === "height" ? (z && z.height !== undefined ? z.height : p.splitHeight) : 0;
+}
 /** An entry of the window list's type ("window" or, on the ground floor, "door") and style ("default" or one of its type's). */
 function openingKind(w) {
   const type = w.type === "door" && Math.round(clampN(w.floor, 0, 2, 0)) === 0 ? "door" : "window";
@@ -310,6 +324,8 @@ export function sanitize(obj) {
   out.pipes = Array.isArray(obj.pipes) ? cleanPipes(obj.pipes, out) : autoPipes(out);
   // sections of wallpaper on the inside of the outer walls
   out.papers = cleanPapers(obj.papers, out, WALLPAPERS.length);
+  // walls with a split of their own (instead of the building's): {wall: {split: "one" | "floor" | "height", height}}
+  out.wallZones = cleanWallZones(obj.wallZones, out);
   // where the player moved the game places (sleep point, feed pad ...), one entry per place of the kind
   // the game objects (sleep point, feed pad, pasture ...): the save's, or where the kind puts them to start with
   // (from the settings of before they were objects: the pasture's wall and depth, the sleep point on or off)
@@ -1456,8 +1472,6 @@ function build() {
   G.curtain.c = []; G.fittings.c = []; G.fittings.s = []; fitSurf = undefined;
   const W = p.width, D = p.depth, F = p.foundation, fh = p.floorHeight, H = p.floors * fh + (p.halfStorey ? p.kneeWall : 0), top = F + H;
   // two materials on the walls: where the lower one ends (none at the walls' top or above: the gables are the upper's)
-  const splitAt = p.wallSplit === "floor" ? fh : p.wallSplit === "height" ? p.splitHeight : 0;
-  const split = splitAt > 0.05 && splitAt < H - 0.05 ? splitAt : null;
   // (under a ceiling the roof's underside is never seen from inside: a soffit, not raw boards)
   boardsFrom = hollow && !kind.ceiling ? top + 0.05 : Infinity;
   const tanP = Math.tan(p.roofPitch * Math.PI / 180), o = p.overhang, th = 0.16;
@@ -1606,7 +1620,7 @@ function build() {
     }));
   };
   // (the walls' lower material ends at splitAt, if that is under the wall's top)
-  const splitFor = Hh => splitAt > 0.05 && splitAt < Hh - 0.05 ? splitAt : null;
+  const splitFor = (Hh, key) => { const at = splitAtOf(p, key); return at > 0.05 && at < Hh - 0.05 ? at : null; };
   const WS = wallFrames(W, D, F);
   const entrances = [];
   opsByWall = {};
@@ -1616,7 +1630,7 @@ function build() {
     const ops = layoutWall(key, Lw, fh, sv => H + R * Math.max(0, 1 - Math.abs(sv - Lw/2) / (Lw/2)), wingCover(key));
     // Eave walls' inside faces reach into the roof slab (which sits lower further in), staying below its top.
     const inner = hollow ? {lift: R > 0 || p.roofType === "flat" ? 0 : Math.min(WALL_T * tanP, th - 0.02)} : null;
-    buildWall(WS[key], ops, H, R, F, {topAt: sv => H + R * Math.max(0, 1 - Math.abs(sv - Lw/2) / (Lw/2)), inner, key, split});
+    buildWall(WS[key], ops, H, R, F, {topAt: sv => H + R * Math.max(0, 1 - Math.abs(sv - Lw/2) / (Lw/2)), inner, key, split: splitFor(H, key)});
     opsByWall[key] = {w: WS[key], ops};
     for (const dOp of ops) if (dOp.kind === "door" && dOp.porch.type !== "none") entrances.push({w: WS[key], o: dOp, key, gable});
   }
@@ -1628,7 +1642,7 @@ function build() {
     const ops = layoutWall(key, Lw, fh, topAt);
     // (inside faces in a walk-in building, with the same lift under the wing's roof slab as the house's eave walls)
     const inner = hollow ? {lift: R > 0 || p.roofType === "flat" ? 0 : Math.min(WALL_T * wing.tanW, th - 0.02)} : null;
-    buildWall(w, ops, Hw, R, F, {topAt, key, split: splitFor(Hw), inner});
+    buildWall(w, ops, Hw, R, F, {topAt, key, split: splitFor(Hw, key), inner});
     opsByWall[key] = {w, ops};
     for (const dOp of ops) if (dOp.kind === "door" && dOp.porch.type !== "none") entrances.push({w, o: dOp, key, gable: R > 0, H: Hw, nf: wing.floors});
   }
