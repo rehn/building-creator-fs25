@@ -74,7 +74,10 @@ function cleanPasture(o, ps = {minWidth: 0, depth: [2, 60]}, p) {
   if (a > L - b - 1) { const m = (a + L - b) / 2; a = m - 0.5; b = L - m - 0.5; }
   const short = ps.minWidth - (L - a - b);
   if (short > 0) { a -= short / 2; b -= short / 2; }
-  return {type: "pasture", wall, a: round(a), b: round(b), depth: round(clamp(num(o.depth, ps.depth[0]), ps.depth))};
+  // around a corner too: the fence goes on past the end of the wall (0 no, 1 the left end, 2 the right end, seen from outside) and along the wall
+  // there for wrapLen m, so the pasture lies round two walls
+  const side = wall === "front" || wall === "back" ? p.depth : p.width, wrap = [1, 2].includes(Math.round(num(o.wrap, 0))) ? Math.round(num(o.wrap, 0)) : 0;
+  return {type: "pasture", wall, a: round(a), b: round(b), depth: round(clamp(num(o.depth, ps.depth[0]), ps.depth)), ...(wrap ? {wrap, wrapLen: round(clamp(num(o.wrapLen, side), [1, side]))} : {})};
 }
 
 /** The building's object of a type, or null. */
@@ -92,7 +95,8 @@ export function boxFrom(type, box, icon = null) {
 /**
  * The pasture in the building: its wall's frame w, the stretch of the wall it encloses [ea, eb] and its
  * middle (where the animals go out), and the fence posts from one end round to the other (the base
- * game's winding: when it runs past a corner, back along the wall's line to the building).
+ * game's winding: when it runs past a corner, back along the wall's line to the building). A pasture with wrap (1: round the left corner,
+ * 2: round the right one) goes on past the end of its wall and along the next wall for wrapLen m: round two walls.
  */
 export function pastureOf(p, o = objectOf(p, "pasture")) {
   if (!o) return null;
@@ -100,14 +104,19 @@ export function pastureOf(p, o = objectOf(p, "pasture")) {
   if (!w) return null;
   const L = w.L, s0 = o.a, s1 = L - o.b, post = 0.15, d = o.depth;
   const at = (s, dd) => [w.o[0] + w.u[0] * s + w.n[0] * dd, 0, w.o[2] + w.u[2] * s + w.n[2] * dd];
-  const fence = [];
-  if (s1 > L + 1e-6) fence.push(at(L, post));
-  fence.push(at(s1, post), at(s1, d), at(s0, d), at(s0, post));
-  if (s0 < -1e-6) fence.push(at(0, post));
-  const ea = Math.max(0, s0), eb = Math.min(L, s1);
-  const corners = [at(s0, 0), at(s1, d)];
-  const rect = {x0: Math.min(corners[0][0], corners[1][0]), x1: Math.max(corners[0][0], corners[1][0]), z0: Math.min(corners[0][2], corners[1][2]), z1: Math.max(corners[0][2], corners[1][2])};
-  return {wall: o.wall, w, L, s0, s1, ea, eb, mid: (ea + eb) / 2, depth: d, fence, rect, at};
+  const wrap = o.wrap === 1 || o.wrap === 2 ? o.wrap : 0, wl = wrap ? Math.max(1, o.wrapLen || 1) : 0;
+  let fence = [];
+  if (wrap === 2) fence = [at(L + post, -wl), at(L + d, -wl), at(L + d, d), at(s0, d), at(s0, post)];
+  else if (wrap === 1) fence = [at(s1, post), at(s1, d), at(-d, d), at(-d, -wl), at(-post, -wl)];
+  else {
+    if (s1 > L + 1e-6) fence.push(at(L, post));
+    fence.push(at(s1, post), at(s1, d), at(s0, d), at(s0, post));
+    if (s0 < -1e-6) fence.push(at(0, post));
+  }
+  const ea = wrap === 1 ? 0 : Math.max(0, s0), eb = wrap === 2 ? L : Math.min(L, s1);
+  const pts = [at(s0, 0), at(s1, d), ...fence];
+  const rect = {x0: Math.min(...pts.map(q => q[0])), x1: Math.max(...pts.map(q => q[0])), z0: Math.min(...pts.map(q => q[2])), z1: Math.max(...pts.map(q => q[2]))};
+  return {wall: o.wall, w, L, s0, s1, ea, eb, mid: (ea + eb) / 2, depth: d, fence, rect, at, wrap, wrapLen: wl};
 }
 
 /** Box objects snap to a 25 cm grid and are kept out of the building (pushed out the shortest way). */

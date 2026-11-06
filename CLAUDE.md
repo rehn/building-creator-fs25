@@ -59,6 +59,8 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   installNumberEntry; a slider whose number is not its own value has data-scale, e.g. a window's position in metres).
   Mod of several buildings (start page, app/page.tsx pack()): tick boxes on the cards; each building is opened in a hidden createEditor, ed.exportInto(folder, name)
   (editor.mjs fillMod: house.xml, house.i3d, textures, items, store.png), then modDescXmlMulti lists them all (model.mjs); icon.png from the first.
+  Pasture round two walls: the pasture object has optional wrap (1 left corner, 2 right corner, seen from outside) and wrapLen (m along the next wall); pastureOf() (objects.mjs)
+  then gives a fence of 5 posts: past the end of the wall, along the next wall, out round the back and in to the other end; the way out stays on the wall.
   Marker pieces (def.ghost, e.g. furniture.mjs sleeppoint): not built into the geometry (buildGeometry(p, {ghosts: true}) for the thumbnails), never overlap or block
   (layout.mjs problems), drawn by the editor as a blue box while arranging; sleepPoint() in model.mjs takes the sleep trigger/icon from the piece before the sleep object.
   Palette: catalog entries have `group` (layout.mjs pieceGroups gives the groups in order); each piece has a thumbnail: model.mjs pieceSheet(p) builds one
@@ -153,7 +155,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Frontend tests: cd frontend && npm test (node --test, no browser needed)
 
 ## Status
-- Go tests (60) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (525) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
+- Go tests (60) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (527) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
 - Cow barn (kinds/cow.mjs): cowHusbandryPasture (no milk, like cowBarnSmall), automatic water, feed
   and water troughs outside on the pasture wall (kind.outside), a plain walk-through doorway for the
   cows (openings with plain: true; tall openings get a collision gap), feed pad + bale trigger

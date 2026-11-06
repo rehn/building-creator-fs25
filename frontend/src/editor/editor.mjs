@@ -980,7 +980,9 @@ function renderObjectsUI() {
       html += range("a", "Start, from the wall’s left end (0: the corner)", OBJECT_LIMITS.end[0], pa.L, 0.25, o.a);
       html += range("b", "End, from the wall’s right end (0: the corner)", OBJECT_LIMITS.end[0], pa.L, 0.25, o.b);
       html += range("depth", "Depth, out from the wall", ps.depth[0], ps.depth[1], 0.5, o.depth);
-      html += `<p class="hint">At least ${ps.minWidth} m wide. Below 0 it runs past the corner and back along the wall to the building.</p>`;
+      html += `<div class="field"><div class="fl"><label for="ob-wrap">Round a corner too</label></div><select id="ob-wrap">${opt(0, "No: along one wall", o.wrap || 0)}${opt(1, "Yes, past the left end (seen from outside)", o.wrap || 0)}${opt(2, "Yes, past the right end", o.wrap || 0)}</select></div>`;
+      if (o.wrap) html += range("wrapLen", "Along the next wall (from the corner)", 1, o.wrap === 1 || o.wrap === 2 ? (o.wall === "front" || o.wall === "back" ? p.depth : p.width) : 1, 0.25, o.wrapLen);
+      html += `<p class="hint">At least ${ps.minWidth} m wide. Below 0 it runs past the corner and back along the wall to the building. Round a corner, the fence goes on past the end of the wall and along the next one, so the pasture lies round two walls (the end you go round is then the wall's whole end).</p>`;
     } else for (const [k, label, step] of BOX_SLIDERS) {
       if ((k === "ix" || k === "iz") && !t.icon) continue;
       const [lo, hi] = OBJECT_LIMITS[k];
@@ -1011,6 +1013,7 @@ function renderObjectsUI() {
     inp.onchange = () => swap(snapObj(selObject()));
   });
   if ($("ob-wall")) $("ob-wall").onchange = e => swap(snapObj({...selObject(), wall: e.target.value}));
+  if ($("ob-wrap")) $("ob-wrap").onchange = e => swap(snapObj({...selObject(), wrap: +e.target.value}));
   if ($("objTurn")) $("objTurn").onclick = () => { const c = selObject(); swap(snapObj({...c, w: c.d, d: c.w, ix: -c.iz, iz: c.ix})); };
   $("objRemove").onclick = () => setObjects(list.filter(x => x.id !== o.id), null);
 }

@@ -108,3 +108,35 @@ test("objects: egg pallet rows stay inside their box, the teleport point goes wi
   assert.deepEqual(tp.map(v => +v.toFixed(3)), [-18, 0, 0], "3 m further out from the barn");
   assert.ok(lo);
 });
+
+/* ---------- A pasture round two walls ---------- */
+const withPasture = (extra, base = {}) => { const p = sanitize({kind: "cow", width: 20, depth: 7, ...base}), o = p.objects.find(x => x.type === "pasture"); return sanitize({...p, objects: p.objects.map(x => x === o ? {...o, wall: "back", a: 0, b: 0, depth: 15, ...extra} : x)}); };
+
+test("pasture round a corner: wrap 2 goes on past the right end of the wall and along the next wall", () => {
+  const p = withPasture({wrap: 2, wrapLen: 7}), pa = pastureOf(p), near = (q, x, z) => Math.abs(q[0] - x) < 1e-6 && Math.abs(q[2] - z) < 1e-6;
+  assert.equal(pa.wrap, 2);
+  // the back wall of a 20 x 7 m house (z = -3.5; seen from outside its right end is x = -10): the fence starts 15 cm off the left wall at its front corner, goes
+  // 15 m out, round the back and in to the wall's other corner
+  assert.equal(pa.fence.length, 5);
+  assert.ok(near(pa.fence[0], -10.15, 3.5), JSON.stringify(pa.fence[0]));
+  assert.ok(near(pa.fence[1], -25, 3.5) && near(pa.fence[2], -25, -18.5) && near(pa.fence[3], 10, -18.5) && near(pa.fence[4], 10, -3.65), JSON.stringify(pa.fence));
+  assert.equal(pa.eb, 20, "the animals' way out is still on the back wall, over its whole length");
+  assert.ok(pa.rect.x0 <= -25 && pa.rect.z1 >= 3.5 && pa.rect.z0 <= -18.5 && pa.rect.x1 >= 10);
+});
+
+test("pasture round a corner: wrap 1 is the same on the left end, a shorter side, none is as before, junk is none", () => {
+  const p = withPasture({wrap: 1, wrapLen: 4}), pa = pastureOf(p);
+  assert.equal(pa.fence.length, 5);
+  assert.ok(Math.abs(pa.fence[2][0] - 25) < 1e-6 && Math.abs(pa.fence[3][2] - 0.5) < 1e-6, JSON.stringify(pa.fence));   // 4 m along the right wall from its back corner: z = -3.5 + 4
+  assert.equal(pa.ea, 0);
+  const none = pastureOf(withPasture({})), junk = withPasture({wrap: 7, wrapLen: "x"});
+  assert.equal(none.fence.length, 4);
+  assert.equal(objectOf(junk, "pasture").wrap, undefined);
+  assert.equal(objectOf(withPasture({wrap: 2, wrapLen: 99}), "pasture").wrapLen, 7, "no longer than the wall");
+  assert.equal(objectOf(withPasture({wrap: 2, wrapLen: 0.2}), "pasture").wrapLen, 1);
+  // a hen house too, and the export has all the posts
+  const hen = sanitize({kind: "chicken", objects: sanitize({kind: "chicken"}).objects.map(o => o.type === "pasture" ? {...o, wall: "back", wrap: 2, wrapLen: 5} : o)});
+  assert.equal(pastureOf(hen).fence.length, 5);
+  assert.equal([...buildI3d(hen).matchAll(/name="fence1Node\d+"/g)].length, 5);
+  assert.equal(objectProblems(withPasture({wrap: 2, wrapLen: 7})).size >= 0, true);
+});
