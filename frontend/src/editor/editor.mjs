@@ -3,7 +3,7 @@
 import * as THREE from "three";
 import JSZip from "jszip";
 import {
-  SCHEMA, fieldsFor, WALLS, WALL_NAMES, DTYPES, DORM_DEF, MATS, fittingTextures,
+  SCHEMA, TABS, fieldsFor, WALLS, WALL_NAMES, DTYPES, DORM_DEF, MATS, fittingTextures,
   genRow, sanitize, serialize, slugify, buildGeometry, buildI3d, placeableSnippet, gamePlaces, surfaceSpec, scaledUV, colorFor, WP
 } from "./model.mjs";
 import { WINDOW_STYLES, DOOR_STYLES, PORCH_OPTIONS, PORCH_W, PORCH_D, WING_FIELDS, MAX_WINGS } from "./model.mjs";
@@ -26,14 +26,17 @@ export { slugify };
 const lerp = (a, b, t) => a + (b - a) * t;
 /** Text for innerHTML (names of imported items are the user's own text). */
 const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-// Two sides of settings: building the house (left) and finishing it (right). On narrower
-// screens they share one column and the tabs switch between them (see globals.css).
-const MARKUP = `<div class="hx-editor" data-tab="build">
+// The settings are in one panel with a tab for each thing you do (TABS: shape, openings, inside, look, game) and a search box that looks
+// through all of them. On narrow screens the panel goes under the preview (see globals.css).
+const MARKUP = `<div class="hx-editor" data-tab="shape">
   <div class="hx-tabs" role="tablist" aria-label="Settings">
-    <button type="button" role="tab" id="tab-build" aria-controls="panel-build">Build</button>
-    <button type="button" role="tab" id="tab-finish" aria-controls="panel-finish">Finish</button>
+    ${TABS.map(([id, name]) => `<button type="button" role="tab" id="tab-${id}" aria-controls="panel">${name}</button>`).join("")}
   </div>
-  <aside class="hx-panel hx-build" id="panel-build" role="tabpanel" aria-labelledby="tab-build"><h2 class="hx-side">Build the house</h2><div id="controls-build"></div></aside>
+  <aside class="hx-panel" id="panel" role="tabpanel" aria-label="Settings">
+    <div class="hx-search"><input type="search" id="settingsSearch" placeholder="Search all settings…" aria-label="Search all settings" autocomplete="off"><button type="button" id="searchClear" hidden aria-label="Clear the search">\u00D7</button></div>
+    ${TABS.map(([id, name]) => `<div class="hx-tabbody" id="controls-${id}" data-tab="${id}"><h2 class="hx-side">${name}</h2></div>`).join("")}
+    <p class="hint hx-nomatch" id="noMatches" hidden>Nothing matches. Try another word, like \u201Croof\u201D, \u201Ccolor\u201D or \u201Cdoor\u201D.</p>
+  </aside>
   <section class="hx-stage" id="stage" aria-label="3D preview">
     <canvas id="view"></canvas>
     <div class="readout" id="readout"></div>
@@ -47,7 +50,6 @@ const MARKUP = `<div class="hx-editor" data-tab="build">
       <button type="button" id="insideDone" class="primary">Done</button>
     </div>
   </section>
-  <aside class="hx-panel hx-finish" id="panel-finish" role="tabpanel" aria-labelledby="tab-finish"><h2 class="hx-side">Finish and export</h2><div id="controls-finish"></div></aside>
   <div id="toast" class="hx-toast" role="status" aria-live="polite"></div>
   <dialog id="textDlg" class="hx-dialog">
     <h2 id="dlgTitle">Copy file</h2>
@@ -121,25 +123,68 @@ function installNumberEntry() {
   editorEl.addEventListener("click", onClick);
   cleanups.push(() => editorEl.removeEventListener("click", onClick));
 }
+let searching = false;
+const openBeforeSearch = new Map();
+/** Whether text matches every word of the query. */
+const matches = (text, words) => words.every(w => text.includes(w));
+/**
+ * Searching: every tab shows at once (each section's summary names its tab); a section stays if its name or text has all the words, and in a
+ * section that only matches through some of its settings the other settings go. A section opens while it is found and goes back when the search ends.
+ */
+function applySearch() {
+  const words = $("settingsSearch").value.toLowerCase().split(/\s+/).filter(Boolean);
+  $("searchClear").hidden = !words.length;
+  const was = searching; searching = words.length > 0;
+  editorEl.classList.toggle("searching", searching);
+  if (!searching) {
+    if (was) {
+      for (const d of editorEl.querySelectorAll(".hx-panel details")) { d.classList.remove("nomatch"); d.querySelectorAll(".nomatch").forEach(x => x.classList.remove("nomatch")); if (openBeforeSearch.has(d)) d.open = openBeforeSearch.get(d); }
+      openBeforeSearch.clear(); $("noMatches").hidden = true;
+    }
+    setTab(editorEl.dataset.tab); return;
+  }
+  if (!was) editorEl.querySelectorAll(".hx-panel details").forEach(d => openBeforeSearch.set(d, d.open));
+  for (const [s] of TABS) $("controls-" + s).hidden = false;
+  let any = false;
+  for (const d of editorEl.querySelectorAll(".hx-panel details")) {
+    if (d.hidden) continue;
+    const head = (d.querySelector("summary").textContent + " " + d.dataset.section + " " + d.querySelector("summary").dataset.tabname).toLowerCase();
+    const rows = [...d.querySelectorAll(":scope > div:not([id]) > [data-k]")];
+    const rowText = rows.map(r => r.textContent.toLowerCase());
+    const custom = d.querySelector(":scope > div[id$='Editor']"), bodyText = custom ? custom.textContent.toLowerCase() : "";   // (a list the section builds, not its help text)
+    const titleHit = matches(head, words), rowHits = rows.map((_, i) => matches(rowText[i], words)), someRow = rowHits.some(Boolean);
+    const hit = titleHit || someRow || (!!custom && matches(bodyText, words));
+    d.classList.toggle("nomatch", !hit);
+    rows.forEach((r, i) => r.classList.toggle("nomatch", hit && !titleHit && !rowHits[i] && someRow));
+    if (hit) { any = true; d.open = true; }
+  }
+  $("noMatches").hidden = any;
+}
+function clearSearch() { $("settingsSearch").value = ""; applySearch(); }
 function setTab(t) {
+  if (!TABS.some(x => x[0] === t)) t = TABS[0][0];
   editorEl.dataset.tab = t;
-  for (const s of ["build", "finish"]) {
+  for (const [s] of TABS) {
     const b = $("tab-" + s);
     b.setAttribute("aria-selected", String(s === t));
     b.tabIndex = s === t ? 0 : -1;
+    $("controls-" + s).hidden = !searching && s !== t;
   }
   remember.set("hx-tab", t);
 }
-for (const s of ["build", "finish"]) {
+for (const [s] of TABS) {
   const b = $("tab-" + s);
-  b.onclick = () => setTab(s);
-  b.onkeydown = e => {
-    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-    const other = s === "build" ? "finish" : "build";
-    setTab(other); $("tab-" + other).focus(); e.preventDefault();
+  b.onclick = () => { if (searching) clearSearch(); setTab(s); };
+  b.onkeydown = ev => {
+    if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
+    const i = TABS.findIndex(x => x[0] === s), other = TABS[(i + (ev.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length][0];
+    setTab(other); $("tab-" + other).focus(); ev.preventDefault();
   };
 }
-setTab(remember.get("hx-tab") === "finish" ? "finish" : "build");
+setTab(remember.get("hx-tab"));
+$("settingsSearch").addEventListener("input", applySearch);
+$("settingsSearch").addEventListener("keydown", ev => { if (ev.key === "Escape") { ev.stopPropagation(); clearSearch(); } });
+$("searchClear").onclick = () => { clearSearch(); $("settingsSearch").focus(); };
 const inputs = {};
 function fmt(f, v) {
   if (f.k === "hens") { const cap = henCap(p); return v > cap ? `${cap} (barn full)` : `${v} (room for ${cap})`; }
@@ -158,10 +203,11 @@ SCHEMA.forEach(g => {
   const d = document.createElement("details");
   if (g.kinds) kindSections.push({g, d});
   // First time: only the first section of each side is open. After that, as the user left them.
-  d.open = g.title in openState ? !!openState[g.title] : !sideSeen[g.side];
-  sideSeen[g.side] = true;
+  d.open = g.title in openState ? !!openState[g.title] : !sideSeen[g.tab];
+  sideSeen[g.tab] = true;
   d.addEventListener("toggle", () => { openState[g.title] = d.open; remember.set("hx-open-sections", openState); });
-  d.innerHTML = `<summary>${g.title}</summary>` + (g.hint ? `<p class="hint">${g.hint}</p>` : "");
+  d.innerHTML = `<summary data-tabname="${TABS.find(x => x[0] === g.tab)[1]}">${g.label || g.title}</summary>` + (g.hint ? `<p class="hint">${g.hint}</p>` : "");
+  d.dataset.section = g.title;
   const wrap = document.createElement("div");
   if (g.colors) wrap.className = "colors";
   g.fields.forEach(f => {
@@ -185,7 +231,7 @@ SCHEMA.forEach(g => {
       el = document.createElement("div"); el.className = "field";
       el.innerHTML = `<div class="fl"><label for="${id}">${f.label}</label><output id="${id}-o"></output></div><input type="range" id="${id}" min="${f.min}" max="${f.max}" step="${f.step}">`;
     }
-    wrap.appendChild(el);
+    wrap.appendChild(el); el.dataset.k = f.k;
     const input = el.querySelector("input,select,textarea");
     inputs[f.k] = input;
     input.addEventListener("input", () => {
@@ -222,7 +268,7 @@ SCHEMA.forEach(g => {
     b.onclick = () => { p.windows.forEach(w => { if (w.type === "door") return; w.w = p.winW; w.h = p.winH; w.sill = p.sill; }); persist(); rebuild(false); renderWinUI(); toast("All windows now use this size"); };
     d.appendChild(b);
   }
-  $("controls-" + g.side).appendChild(d);
+  $("controls-" + g.tab).appendChild(d);
 });
 function syncControls() {
   for (const k in inputs) {
@@ -243,8 +289,8 @@ function syncOutputs() {
     const o = $("f-" + k + "-o");
     if (o) o.textContent = fmt(f, p[k]);
   }
-  // Controls that don't apply right now are greyed out (a kind may not have some of them at all).
-  const off = (k, v) => { if (inputs[k]) inputs[k].disabled = v; };
+  // Controls that don't apply right now are not shown (a kind may not have some of them at all).
+  const off = (k, v) => { if (inputs[k]) { inputs[k].disabled = v; const row = inputs[k].closest("[data-k]"); if (row) row.classList.toggle("na", v); } };
   off("ridge", p.roofType !== "gable");
   // the walls' zones: board settings apply when either zone has boards
   const clads = p.wallSplit === "one" ? [p.wallCladding] : [p.wallCladding, p.lowerCladding];
@@ -1006,7 +1052,7 @@ function renderObjectsUI() {
   } else html += `<p class="hint">Choose one to change it, or move them in the plan view.</p>`;
   html += `<button type="button" id="objAuto">Place all automatically</button>`;
   ed.innerHTML = html;
-  $("objPlan").onclick = () => ob.on ? leaveObjects() : (setTab("finish"), enterObjects());
+  $("objPlan").onclick = () => ob.on ? leaveObjects() : (setTab("game"), enterObjects());
   ed.querySelectorAll("[data-obj]").forEach(b => b.onclick = () => { ob.sel = +b.dataset.obj; renderObjectsUI(); updatePlacesMarker(); });
   ed.querySelectorAll("[data-addobj]").forEach(b => b.onclick = () => {
     // a new one goes where the kind puts it to start with
@@ -1418,7 +1464,7 @@ function renderInsideUI() {
       + (out ? `<p class="warn">${out} piece${out > 1 ? "s stick" : " sticks"} out through a wall and ${out > 1 ? "are" : "is"} left out. Make the building bigger, move ${out > 1 ? "them" : "it"} or fill it again.</p>` : "")
       + (other ? `<p class="warn">${other} piece${other > 1 ? "s overlap or block" : " overlaps or blocks"} something.</p>` : "")
       + `<div class="row"><button type="button" class="primary" id="insideArrange" ${renderer ? "" : "disabled"}>Arrange the inside</button></div>` + fillRow;
-    $("insideArrange").onclick = () => { setTab("build"); enterInside(); };
+    $("insideArrange").onclick = () => { setTab("inside"); enterInside(); };
   } else {
     const it = selected(), def = it && cat[it.type];
     // (a setting that is a place along the piece, f.metres: [offset, scale], is shown in metres: offset + value * scale)
@@ -1584,7 +1630,8 @@ function pick(e) {
     const op = ops.find(o => o.id && (o.kind === "window" || o.kind === "door") && s > o.s0 - 0.12 && s < o.s1 + 0.12 && t > o.t0 - 0.12 && t < o.t1 + 0.12);
     if (op) {
       selId = op.id;
-      setTab("build");
+      if (searching) clearSearch();
+      setTab("openings");
       const det = $("winEditor").closest("details"); det.open = true;
       renderWinUI(); updateHighlight();
       if (!window.matchMedia("(max-width: 820px)").matches) $("winSel").scrollIntoView({block:"nearest"});

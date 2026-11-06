@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULTS, SCHEMA, sanitize, buildGeometry, buildI3d, serialize, MATS, placementAreas, placeableSnippet, sleepPoint, boxMesh, WP, ROOM_TYPES, CURTAIN_STYLES, rgb, pipeMesh, gutterMesh, surfaceSpec, scaledUV, ridgeCapMesh } from "../src/editor/model.mjs";
+import { DEFAULTS, SCHEMA, sanitize, buildGeometry, buildI3d, serialize, MATS, placementAreas, placeableSnippet, sleepPoint, boxMesh, WP, ROOM_TYPES, CURTAIN_STYLES, rgb, pipeMesh, gutterMesh, surfaceSpec, scaledUV, ridgeCapMesh , TABS } from "../src/editor/model.mjs";
 
 const cross3 = (a, b) => [a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0]];
 const countOn = (p, wall, floor) => p.windows.filter(w => w.wall === wall && w.floor === floor && w.type !== "door").length;
@@ -27,12 +27,19 @@ test("sanitize: invalid selects, colors and booleans fall back to defaults", () 
   assert.equal(p.chimney, DEFAULTS.chimney);
 });
 
-// The editor shows "build" on the left (or the first tab) and "finish" on the right (or the second tab).
-test("schema: sections are split into building the house and finishing it", () => {
-  const side = s => SCHEMA.filter(g => g.side === s).map(g => g.title);
-  assert.ok(SCHEMA.every(g => g.side === "build" || g.side === "finish"), "every section has a side");
-  assert.deepEqual(side("build"), ["Chickens", "Cows", "Sheep", "Size", "Wings", "Roof", "Downpipes", "Kupor (dormers)", "Windows", "Doors", "Inside"]);
-  assert.deepEqual(side("finish"), ["Surfaces", "Colors", "Interior", "Inside walls", "Game objects", "Game mod"]);
+// The editor has a tab for each thing you do; every section is in one of them.
+test("schema: every section is in a tab, in the order of what you do", () => {
+  const ids = TABS.map(t => t[0]), inTab = t => SCHEMA.filter(g => g.tab === t).map(g => g.title);
+  assert.deepEqual(ids, ["shape", "openings", "inside", "look", "game"]);
+  assert.ok(SCHEMA.every(g => ids.includes(g.tab)), "every section has a tab");
+  assert.deepEqual(inTab("shape"), ["Size", "Wings", "Roof", "Downpipes", "Kupor (dormers)"]);
+  assert.deepEqual(inTab("openings"), ["Windows", "Doors"]);
+  assert.deepEqual(inTab("inside"), ["Inside", "Interior", "Inside walls"]);
+  assert.deepEqual(inTab("look"), ["Surfaces", "Colors"]);
+  assert.deepEqual(inTab("game"), ["Chickens", "Cows", "Sheep", "Game objects", "Game mod"]);
+  // the names shown say what the section is for
+  const label = t => { const g = SCHEMA.find(x => x.title === t); return g.label || g.title; };
+  assert.deepEqual(["Inside", "Interior", "Inside walls", "Game mod"].map(label), ["Furniture and pieces", "Rooms and curtains", "Wallpaper", "Shop and mod"]);
 });
 
 test("sanitize: unknown keys are dropped", () => {

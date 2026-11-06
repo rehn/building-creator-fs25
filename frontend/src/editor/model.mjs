@@ -56,10 +56,12 @@ const pickCurtain = v => CURTAIN_STYLES.includes(v) ? v : "default";
 const pickColor = v => typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v) ? v : "default";
 /** What the walls can be clad in: [id, name]. */
 const CLADDING = [["lockpanel","Board and batten (lockpanel)"],["horizontal","Horizontal boards"],["plaster","Plaster"]];
+/** The editor's tabs, one for each thing you do: [id, name]. Every section is in one of them (its tab). */
+export const TABS = [["shape", "Shape"], ["openings", "Openings"], ["inside", "Inside"], ["look", "Look"], ["game", "Game"]];
 /** Editor sections every building shares (kinds hide the ones they don't use, see kind.hides). */
 const SHARED_SECTIONS = [
-  // side: where the editor shows the section, "build" (left / first tab) or "finish" (right / second tab).
-  {title:"Size", side:"build", fields:[
+  // tab: where the editor shows the section (TABS); label: its name there, when not the title (the title is also its id).
+  {title:"Size", tab:"shape", fields:[
     {k:"width", label:"Front wall length", min:2.5, max:60, step:0.1, unit:" m"},
     {k:"depth", label:"Side wall length", min:2.5, max:30, step:0.1, unit:" m"},
     {k:"floors", label:"Full floors", min:1, max:3, step:1},
@@ -67,8 +69,8 @@ const SHARED_SECTIONS = [
     {k:"kneeWall", label:"Knee wall height", min:0.2, max:1.6, step:0.05, unit:" m"},
     {k:"floorHeight", label:"Floor height", min:2.3, max:4, step:0.05, unit:" m"},
     {k:"foundation", label:"Foundation height", min:0, max:1.2, step:0.05, unit:" m"}]},
-  {title:"Wings", side:"build", custom:"wings", hint:"Wings make an L-, T- or U-shaped house: up to four, each on a wall with its own width, length and number of floors. On a long side a wing's roof meets the house's in a valley; a wing with fewer floors runs up to the wall under the eaves; on a gable end it is a lower annex. It has the house's roof pitch and overhang. Its windows and doors are under Windows.", fields:[]},
-  {title:"Roof", side:"build", fields:[
+  {title:"Wings", tab:"shape", custom:"wings", hint:"Wings make an L-, T- or U-shaped house: up to four, each on a wall with its own width, length and number of floors. On a long side a wing's roof meets the house's in a valley; a wing with fewer floors runs up to the wall under the eaves; on a gable end it is a lower annex. It has the house's roof pitch and overhang. Its windows and doors are under Windows.", fields:[]},
+  {title:"Roof", tab:"shape", fields:[
     {k:"roofType", label:"Roof type", type:"select", options:[["gable","Gable"],["hip","Hip"],["flat","Flat"]]},
     {k:"ridge", label:"Ridge direction", type:"select", options:[["width","Parallel to the front"],["depth","Front to back"]]},
     {k:"roofPitch", label:"Pitch", min:5, max:60, step:1, unit:"\u00B0"},
@@ -77,17 +79,17 @@ const SHARED_SECTIONS = [
     {k:"gutters", label:"Rain gutters", type:"check"},
     {k:"downpipes", label:"Downpipes per long side (a new house starts with this; place them one by one under Downpipes)", min:0, max:2, step:1},
     {k:"ventilators", label:"Roof ventilators (lanterns on the ridge)", min:0, max:4, step:1}]},
-  {title:"Downpipes", side:"build", custom:"pipes", hint:"Where the downpipes go: how many on each wall with a gutter, and where along it. Change \"Downpipes per long side\" under Roof to place them again.", fields:[]},
-  {title:"Kupor (dormers)", side:"build", custom:"dormers", fields:[]},
-  {title:"Windows", side:"build", custom:"windows", hint:"Set how many windows each floor has. To change one window or door, move it to another wall, turn a window into a door or give a door a porch, choose it below or tap it in the preview.", fields:[
+  {title:"Downpipes", tab:"shape", custom:"pipes", hint:"Where the downpipes go: how many on each wall with a gutter, and where along it. Change \"Downpipes per long side\" under Roof to place them again.", fields:[]},
+  {title:"Kupor (dormers)", tab:"shape", custom:"dormers", fields:[]},
+  {title:"Windows", tab:"openings", custom:"windows", hint:"Set how many windows each floor has. To change one window or door, move it to another wall, turn a window into a door or give a door a porch, choose it below or tap it in the preview.", fields:[
     {k:"winStyle", label:"Style", type:"select", options:WINDOW_STYLES.map(s => [s.id, s.name])},
     {k:"winW", label:"Width", min:0.4, max:2.5, step:0.05, unit:" m"},
     {k:"winH", label:"Height", min:0.4, max:2.2, step:0.05, unit:" m"},
     {k:"sill", label:"Sill height", min:0.2, max:1.5, step:0.05, unit:" m"}]},
-  {title:"Doors", side:"build", hint:"The style of every door. The doors themselves are in the list under Windows: choose one there (or tap it in the preview) to move it, change its size or give it a porch or canopy.", fields:[
+  {title:"Doors", tab:"openings", hint:"The style of every door. The doors themselves are in the list under Windows: choose one there (or tap it in the preview) to move it, change its size or give it a porch or canopy.", fields:[
     {k:"doorStyle", label:"Style", type:"select", options:DOOR_STYLES.map(s => [s.id, s.name])}]},
-  {title:"Inside", side:"build", custom:"inside", hint:"The pieces inside the building. Fill it automatically to match its size, then change it as you like.", fields:[]},
-  {title:"Surfaces", side:"finish", fields:[
+  {title:"Inside", label:"Furniture and pieces", tab:"inside", custom:"inside", hint:"The pieces inside the building. Fill it automatically to match its size, then change it as you like.", fields:[]},
+  {title:"Surfaces", tab:"look", fields:[
     {k:"wallCladding", label:"Wall cladding (the upper part when split)", type:"select", options:CLADDING},
     {k:"wallSplit", label:"Two materials on the walls", type:"select", options:[["one","No, one material"],["floor","Yes, split at the top of the ground floor"],["height","Yes, split at a height"]]},
     {k:"splitHeight", label:"Split height, above the ground floor's floor", min:0.5, max:10, step:0.05, unit:" m"},
@@ -97,7 +99,7 @@ const SHARED_SECTIONS = [
     {k:"roofMaterial", label:"Roof covering", type:"select", options:[["tiles","Concrete tiles"],["metal","Standing seam metal"],["plain","Plain color"]]},
     {k:"chimneyStyle", label:"Chimney", type:"select", options:[["brick","Brick"],["plain","Plain color"]]},
     {k:"age", label:"Age (paint fades, moss, rust, dirt)", min:0, max:60, step:1, unit:" years"}]},
-  {title:"Colors", side:"finish", colors:true, fields:[
+  {title:"Colors", tab:"look", colors:true, fields:[
     {k:"wallColor", label:"Walls", type:"color"},
     {k:"lowerColor", label:"Lower walls", type:"color"},
     {k:"trimColor", label:"Trim", type:"color"},
@@ -108,12 +110,12 @@ const SHARED_SECTIONS = [
     {k:"chimneyColor", label:"Chimney", type:"color"},
     {k:"gutterColor", label:"Gutters", type:"color"},
     {k:"curtainColor", label:"Curtains", type:"color"}]},
-  {title:"Interior", side:"finish", hint:"The floors above the ground floor are closed: a small furnished room is seen through each of their windows. To pick the room or curtains for one window, choose it under Windows (or a kupa under Kupor). The ground floor's inside is under Inside.", fields:[
+  {title:"Interior", label:"Rooms and curtains", tab:"inside", hint:"The floors above the ground floor are closed: a small furnished room is seen through each of their windows. To pick the room or curtains for one window, choose it under Windows (or a kupa under Kupor). The ground floor's inside is under Inside.", fields:[
     {k:"curtainStyle", label:"Curtains", type:"select", options:CURTAIN_OPTIONS}]},
-  {title:"Inside walls", side:"finish", custom:"papers", hint:"Wallpaper on the inside of the outer walls: one for every wall, or sections along a wall, one for each room behind it.", fields:[
+  {title:"Inside walls", label:"Wallpaper", tab:"inside", custom:"papers", hint:"Wallpaper on the inside of the outer walls: one for every wall, or sections along a wall, one for each room behind it.", fields:[
     {k:"insidePaper", label:"Wallpaper on every inside wall", type:"select", options:[["none", "None (plaster as it is)"], ...WALLPAPERS.map((w, i) => [String(i), w[0]])]}]},
-  {title:"Game objects", side:"finish", custom:"objects", hint:"What the game needs around the building: where you sleep, tip feed, drop bales, load animals, collect eggs, and the pasture's fence. Add and remove them here, and drag them into place in the plan view.", fields:[]},
-  {title:"Game mod", side:"finish", hint:"Used by \u201CExport game mod\u201D: what the house costs in the shop and who made it. The project name is the name in the shop.", fields:[
+  {title:"Game objects", tab:"game", custom:"objects", hint:"What the game needs around the building: where you sleep, tip feed, drop bales, load animals, collect eggs, and the pasture's fence. Add and remove them here, and drag them into place in the plan view.", fields:[]},
+  {title:"Game mod", label:"Shop and mod", tab:"game", hint:"Used by \u201CExport game mod\u201D: what the house costs in the shop and who made it. The project name is the name in the shop.", fields:[
     {k:"modPrice", label:"Price", min:0, max:2000000, step:500, money:true},
     {k:"modUpkeep", label:"Daily upkeep", min:0, max:5000, step:5, money:true},
     {k:"modAuthor", label:"Author (empty: your name)", type:"text", max:60},
