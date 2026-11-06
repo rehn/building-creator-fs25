@@ -1033,7 +1033,7 @@ function renderObjectsUI() {
         const n = o.points.length, sel = ob.pt !== null && ob.pt < n ? ob.pt : null;
         html += `<p class="hint"><b>The fence is drawn by hand: ${n} posts.</b> Drag a post in the plan view; press a small dot between two posts to make a new one. The green post is where it starts, the red where it stops: put them at corners of the building (they snap there).</p>`
           + `<p class="hint">${sel === null ? "Press a post to choose it." : `Post ${sel + 1} of ${n}${sel === 0 ? " (the start)" : sel === n - 1 ? " (the stop)" : ""} at ${o.points[sel][0].toFixed(2)}, ${o.points[sel][1].toFixed(2)}.`}</p>`
-          + `<div class="row"><button type="button" id="ob-addpt" ${n >= MAX_FENCE_POINTS ? "disabled" : ""}>+ Add a post</button><button type="button" id="ob-rmpt" ${sel === null || n <= 2 ? "disabled" : ""}>Remove this post</button><button type="button" id="ob-rect">Back to a rectangle</button></div>`;
+          + `<div class="row">${ob.on ? "" : `<button type="button" id="ob-plan" class="primary">Drag the posts in the plan view</button>`}<button type="button" id="ob-addpt" ${n >= MAX_FENCE_POINTS ? "disabled" : ""}>+ Add a post</button><button type="button" id="ob-rmpt" ${sel === null || n <= 2 ? "disabled" : ""}>Remove this post</button><button type="button" id="ob-rect">Back to a rectangle</button></div>`;
         html += range("a", "Animals go out from the wall’s left end (0: the corner)", OBJECT_LIMITS.end[0], pa.L, 0.25, o.a);
         html += range("b", "…to the wall’s right end (0: the corner)", OBJECT_LIMITS.end[0], pa.L, 0.25, o.b);
       } else {
@@ -1074,15 +1074,24 @@ function renderObjectsUI() {
   });
   if ($("ob-wall")) $("ob-wall").onchange = e => swap(snapObj({...selObject(), wall: e.target.value}));
   // a fence drawn by hand: start it from the rectangle, add and remove posts, go back
-  if ($("ob-draw")) $("ob-draw").onclick = () => { ob.pt = null; swap(snapObj({...selObject(), points: fencePoints(p)})); };
+  if ($("ob-draw")) $("ob-draw").onclick = () => { ob.pt = null; swap(snapObj({...selObject(), points: fencePoints(p)})); if (!ob.on) { setTab("game"); enterObjects(); } };
+  // the posts are dragged in the plan view: a button to it while the fence is being drawn
+  if ($("ob-plan")) $("ob-plan").onclick = () => { setTab("game"); enterObjects(); };
   if ($("ob-rect")) $("ob-rect").onclick = () => { const c = {...selObject()}; delete c.points; ob.pt = null; swap(snapObj(c)); };
   if ($("ob-addpt")) $("ob-addpt").onclick = () => {
     const c = selObject(), pts = c.points.slice(), i = ob.pt !== null && ob.pt < pts.length ? ob.pt : pts.length - 1;
     let q;
-    if (i < pts.length - 1) q = [(pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2];
-    else { const a = pts[i - 1] || pts[i], dx = pts[i][0] - a[0], dz = pts[i][1] - a[1], l = Math.hypot(dx, dz) || 1; q = [pts[i][0] + dx / l * 3, pts[i][1] + dz / l * 3]; }
-    pts.splice(i + 1, 0, q); ob.pt = i + 1;
+    if (i < pts.length - 1) {
+      // halfway along the next stretch and 3 m out from it, away from the building (on the line it would not show)
+      const a = pts[i], b2 = pts[i + 1], mx = (a[0] + b2[0]) / 2, mz = (a[1] + b2[1]) / 2;
+      let nx = -(b2[1] - a[1]), nz = b2[0] - a[0]; const nl = Math.hypot(nx, nz) || 1; nx /= nl; nz /= nl;
+      if (nx * mx + nz * mz < 0) { nx = -nx; nz = -nz; }
+      q = snapFencePoint(p, [mx + nx * 3, mz + nz * 3]);
+    }
+    else { const dx = pts[i][0], dz = pts[i][1], l = Math.hypot(dx, dz) || 1; q = l < 1e-6 ? [pts[i][0] + 3, pts[i][1]] : [pts[i][0] + dx / l * 3, pts[i][1] + dz / l * 3]; }   // after the last post: 3 m further out, away from the building
+    pts.splice(i + 1, 0, snapFencePoint(p, q)); ob.pt = i + 1;
     swap({...c, points: pts});
+    if (!ob.on) { setTab("game"); enterObjects(); }
   };
   if ($("ob-rmpt")) $("ob-rmpt").onclick = () => {
     const c = selObject(); if (ob.pt === null || c.points.length <= 2) return;
@@ -1711,7 +1720,7 @@ function updatePlacesMarker() {
     const at = x.icon || [x.box.center[0], 0, x.box.center[2]], s = placesObj.iconFor(x.type, x.glyph);
     s.position.set(at[0], at[1] + 1.3, at[2]);
   }
-  const hs = ob.on ? pastureHandles() : [];
+  const hs = ob.on || (ob.sel !== null && (objectOf(p, "pasture") || {}).id === ob.sel && (objectOf(p, "pasture") || {}).points) ? pastureHandles() : [];
   placesObj.handles.forEach((m, i) => {
     m.visible = !!hs[i];
     if (!hs[i]) return;
