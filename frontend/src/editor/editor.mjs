@@ -1387,7 +1387,7 @@ function makePlacesMarker() {
   const group = new THREE.Group(), boxGeo = new THREE.BoxGeometry(1, 1, 1), edgeGeo = new THREE.EdgesGeometry(boxGeo);
   const boxes = {}, icons = {}, textures = {};
   // one canvas texture per glyph, drawn in white on a coloured circle
-  const GLYPHS = {sleep: ["#2f6fd0", drawBed], food: ["#d07a1f", drawFeed], bales: ["#c0901a", drawBale], hen: ["#3f9a43", drawHen], cow: ["#3f9a43", drawCow], pallet: ["#c9a514", drawPallet]};
+  const GLYPHS = {sleep: ["#2f6fd0", drawBed], food: ["#d07a1f", drawFeed], bales: ["#c0901a", drawBale], hen: ["#3f9a43", drawHen], cow: ["#3f9a43", drawCow], sheep: ["#3f9a43", drawSheep], pallet: ["#c9a514", drawPallet]};
   const texture = glyph => {
     if (!textures[glyph]) {
       const c = document.createElement("canvas"); c.width = c.height = 128;
@@ -1508,6 +1508,13 @@ function drawCow(x, bg) {
   x.beginPath(); x.ellipse(64, 90, 20, 13, 0, 0, Math.PI * 2); x.fill();
   x.fillStyle = bg;
   for (const [cx, cy, r] of [[55, 56, 4], [73, 56, 4], [57, 91, 3.5], [71, 91, 3.5]]) { x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill(); }
+}
+function drawSheep(x, bg) {
+  // A sheep in profile: a woolly body of overlapping puffs, a dark head with an ear, and legs.
+  for (const [cx, cy, r] of [[46, 62, 17], [62, 54, 18], [78, 62, 17], [60, 72, 18], [42, 76, 12], [78, 76, 12]]) { x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill(); }
+  x.beginPath(); x.ellipse(98, 58, 9, 13, 0.3, 0, Math.PI * 2); x.fill();
+  x.fillStyle = bg; x.beginPath(); x.ellipse(98, 58, 7, 11, 0.3, 0, Math.PI * 2); x.fill(); x.beginPath(); x.arc(101, 54, 2, 0, Math.PI * 2); x.fillStyle = "#fff"; x.fill();
+  x.strokeStyle = "#fff"; x.lineWidth = 6; x.beginPath(); x.moveTo(46, 88); x.lineTo(46, 108); x.moveTo(74, 88); x.lineTo(74, 108); x.stroke();
 }
 function drawHen(x) {
   // A hen in profile: body, head with comb and beak, tail, legs.

@@ -73,7 +73,7 @@ export default {
   plural: "Sheep barns",
   category: "animals",
   walkIn: true,
-  glyph: "cow",
+  glyph: "sheep",
   defaults: {sheep: 20, pastureWall: "back", fenceDepth: 14, winStyle: "stall", doorStyle: "xbrace"},
   sections: [
     {title: "Sheep", side: "build", hint: "Sheep graze in the pasture and come in through a doorway in the pasture side; they eat hay and drink at troughs along that wall. Fill feed (or drop bales) at the feed place outside the fence; water is automatic. Wool comes out on pallets beside the barn. The pasture, the feed pad, the wool pallets and the rest are under Game objects.", fields: [
