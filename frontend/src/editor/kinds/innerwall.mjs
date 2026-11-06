@@ -2,6 +2,7 @@
 // skirting boards and a cornice, and, if wanted, a doorway with casings. A catalog entry for every walk-in kind
 // (see layout.mjs); drawn with the kit in props.mjs in its own frame: x along the wall, z across it, y up.
 import { tone } from "./props.mjs";
+import { DOOR_STYLES } from "../openings.mjs";
 
 /** What a side can be: [name, colour, surface]. The surfaces are in surfaces.mjs. */
 export const WALLPAPERS = [
@@ -16,6 +17,8 @@ export const WALLPAPERS = [
 ];
 const CORE = "#D8D2C4", TRIM = "#F2EFE8", CORE_T = 0.045, SHEET = 0.005, DOOR_W = 0.9, DOOR_H = 2.05, CASING = 0.07;
 const options = WALLPAPERS.map(w => w[0]);
+/** The doors an inner wall can have: the building's own style, or one of the swinging styles (not the sliding barn door). */
+const DOOR_LOOKS = DOOR_STYLES.filter(s => s.id !== "sliding");
 
 /** The doorway [x0, x1] of a wall, or null: where it is along the wall (doorAt 0..1), when the wall has room for one. */
 export function doorwayOf(it) {
@@ -38,10 +41,11 @@ export const INNER_WALL = {
     {k: "door", label: "Doorway", min: 0, max: 3, step: 1, options: ["No doorway", "Open doorway", "Door that opens", "Door that stays shut"]},
     {k: "doorAt", label: "Doorway place along the wall", min: 0, max: 1, step: 0.05, when: it => it.door >= 1},
     {k: "hinge", label: "Hinges", min: 0, max: 1, step: 1, options: ["On the left (seen from one side)", "On the right (seen from one side)"], when: it => it.door >= 2},
+    {k: "look", label: "Door", min: 0, max: DOOR_LOOKS.length, step: 1, options: ["Like the building's doors", ...DOOR_LOOKS.map(s => s.name)], when: it => it.door >= 2},
     {k: "swing", label: "Opens towards", min: 0, max: 1, step: 1, options: ["One side", "The other side"], when: it => it.door >= 2},
     {k: "paperA", label: "One side", min: 0, max: WALLPAPERS.length - 1, step: 1, options},
     {k: "paperB", label: "Other side", min: 0, max: WALLPAPERS.length - 1, step: 1, options}],
-  defaults: {length: 3, door: 1, doorAt: 0.5, hinge: 0, swing: 1, paperA: 2, paperB: 4},
+  defaults: {length: 3, door: 1, doorAt: 0.5, hinge: 0, swing: 1, look: 0, paperA: 2, paperB: 4},
   size: it => [it.length, 0.15], height: () => 2.6,
   /** The stretches along the wall [x0, x1] that things can stand against: all of it, or each side of the doorway. */
   runs: it => { const d = doorwayOf(it); return d ? [[-it.length / 2, d[0]], [d[1], it.length / 2]] : [[-it.length / 2, it.length / 2]]; },
@@ -55,7 +59,9 @@ export const INNER_WALL = {
   leafOf(it) {
     const d = doorwayOf(it), kind = Math.round(it.door);
     if (!d || kind < 2) return null;
-    return {s0: d[0], s1: d[1], h: DOOR_H, hingeAt: Math.round(it.hinge) === 0 ? "s1" : "s0", swing: Math.round(it.swing) === 0 ? -1 : 1, opens: kind === 2};
+    return {s0: d[0], s1: d[1], h: DOOR_H, hingeAt: Math.round(it.hinge) === 0 ? "s1" : "s0", swing: Math.round(it.swing) === 0 ? -1 : 1, opens: kind === 2,
+      // the door's style: one of DOOR_LOOKS, or null for the building's own
+      style: Math.round(it.look) > 0 ? DOOR_LOOKS[Math.min(DOOR_LOOKS.length, Math.round(it.look)) - 1].id : null};
   },
   build(c, it) {
     const hh = c.ceil ?? c.H, d = doorwayOf(it), L = it.length, T = CORE_T;

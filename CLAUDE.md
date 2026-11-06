@@ -280,7 +280,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   The inner door's wood is the material "doorIn" (setting innerDoorColor, in Colors), apart from "door" (doorColor).
 ## Status
   The inner door's wood is the material "doorIn" (setting innerDoorColor, in Colors), apart from "door" (doorColor).
-- Go tests (60) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (451) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
+- Go tests (60) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (452) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
   The inner door's wood is the material "doorIn" (setting innerDoorColor, in Colors), apart from "door" (doorColor).
 - Cow barn (kinds/cow.mjs): cowHusbandryPasture (no milk, like cowBarnSmall), automatic water, feed
   The inner door's wood is the material "doorIn" (setting innerDoorColor, in Colors), apart from "door" (doorColor).

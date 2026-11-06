@@ -29,7 +29,7 @@ test("inner wall: every walk-in kind can have one, with choices in lists and a s
     const def = catalogFor({kind}).innerwall;
     assert.ok(def, kind);
     assert.deepEqual(def.size({length: 5}), [5, 0.15]);
-    assert.ok(def.params.filter(f => f.options).map(f => f.k).join() === "door,hinge,swing,paperA,paperB");
+    assert.ok(def.params.filter(f => f.options).map(f => f.k).join() === "door,hinge,look,swing,paperA,paperB");
   }
   // saved choices stay as saved and are clamped
   const [it] = cleanItems([wall({length: 99, paperA: 40, paperB: -3, door: 5})], catalogFor({kind: "house"}));
@@ -276,4 +276,22 @@ test("inner door: its colour is its own setting (Colors), apart from the outer d
   // changing the outer door colour leaves the inner doors alone
   const q = sanitize({items: [wall({door: 2})], doorColor: "#FF0000", innerDoorColor: "#AABBCC"});
   assert.equal(colorFor(q, "doorIn"), colorFor(p, "doorIn"));
+});
+
+test("inner door: the door can be chosen: the building's own style or any swinging style, each drawn differently", () => {
+  const def = catalogFor(house([])).innerwall, look = def.params.find(f => f.k === "look");
+  assert.deepEqual(look.options.slice(0, 2), ["Like the building's doors", "Plain"]);
+  assert.ok(!look.options.some(o => /sliding/i.test(o)), "no sliding barn door in a house's rooms");
+  const sizes = [];
+  for (let i = 0; i <= look.options.length - 1; i++) {
+    const g = buildGeometry(house([wall({door: 2, look: i})]));
+    assert.equal(g.doors.filter(d => d.wall === null).length, 1, "look " + i);
+    sizes.push(g.G.doorIn.p.length + g.G.trim.p.length + g.G.glass.p.length + g.G.iron.p.length);
+  }
+  assert.ok(new Set(sizes).size >= 4, "the styles differ: " + sizes.join(","));
+  // 0 = like the building's: a barn with a sliding door still gets a swinging inner door
+  assert.deepEqual(buildGeometry(barn([wall({door: 2, look: 0})])).doors.filter(d => d.wall === null).map(d => d.slide), [false]);
+  assert.equal(def.leafOf(wall({door: 2, look: 2})).style, "plank");
+  assert.equal(def.leafOf(wall({door: 2, look: 0})).style, null);
+  assert.ok(buildI3d(house([wall({door: 2, look: 5})])).includes("</i3D>"));
 });

@@ -1270,7 +1270,7 @@ function buildInnerDoor(it, L, F) {
   const o = toWorld(it, 0, 0), ex = toWorld(it, 1, 0), ez = toWorld(it, 0, 1);
   const u = [ex[0] - o[0], 0, ex[1] - o[1]], n = [ez[0] - o[0], 0, ez[1] - o[1]];
   const fw = {o: [o[0], F, o[1]], u, n}, bw = {o: [o[0], F, o[1]], u: neg(u), n: neg(n)};
-  const style = p.doorStyle === "sliding" ? "zbrace" : p.doorStyle, hs = 0.008, half = 0.016, g = 0.012;
+  const style = L.style || (p.doorStyle === "sliding" ? "zbrace" : p.doorStyle), hs = 0.008, half = 0.016, g = 0.012;
   const s0 = L.s0 + g, s1 = L.s1 - g, t0 = 0.02, t1 = L.h - 0.01, hingeLeft = L.hingeAt === "s1";
   const before = vcount();
   // (the inner doors have their own colour: the leaf's wood is the material "doorIn")
