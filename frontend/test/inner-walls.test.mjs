@@ -81,7 +81,7 @@ test("inner wall: it follows the ceiling in a house and the walls' top in a barn
   assert.equal(problems([wall({x: 30})], cat, room).size, 1, "outside");
 });
 
-import { snapItem, placeNew } from "../src/editor/layout.mjs";
+import { snapItem, placeNew, rotateItem } from "../src/editor/layout.mjs";
 test("inner wall: its ends are drawn to the walls of the room, and both ends fill it", () => {
   const p = house([]), room = roomOf(p), cat = catalogFor(p), def = cat.innerwall;
   // along z (turned a quarter), near the left wall? no: its ends are at the back and front walls
@@ -195,4 +195,21 @@ test("fine positions: the sliders move a piece to the centimetre, without the gr
   // an inner wall near a wall keeps where the slider put it
   const w = snapItem(wall({id: 3, rot: 90, x: 1, z: -1.75, length: 3, door: 0}), cat.innerwall, room, [], cat, true);
   assert.equal(w.z, -1.75);
+});
+
+test("turning a wall piece moves it to the next wall round the room, and round an inner wall's faces", () => {
+  const p = house([]), room = roomOf(p), cat = catalogFor(p), d = cat.sofa.size({})[1];
+  let it = snapItem({id: 1, type: "sofa", x: 0, z: -3, rot: 0}, cat.sofa, room);            // on the back wall (z0), facing +z
+  assert.equal(it.rot, 0);
+  const seen = [it.rot];
+  for (let k = 0; k < 4; k++) { it = rotateItem(it, cat.sofa, room); seen.push(it.rot); assert.equal(problems([it], cat, room).size, 0, JSON.stringify(it)); }
+  assert.deepEqual(seen, [0, 90, 180, 270, 0]);
+  // on the left wall after the first turn: against x0
+  const left = rotateItem(snapItem({id: 1, type: "sofa", x: 0, z: -3, rot: 0}, cat.sofa, room), cat.sofa, room);
+  assert.ok(Math.abs(left.x - (room.x0 + d / 2)) < 1e-9, JSON.stringify(left));
+  // with an inner wall in the room, a wall piece can end up against its faces
+  const w = wall({id: 9, rot: 90, x: 0, z: 0, length: 4, door: 0});
+  let q = snapItem({id: 2, type: "sofa", x: 0.6, z: 0, rot: 270}, cat.sofa, room, [w], cat), faces = new Set();
+  for (let k = 0; k < 8; k++) { q = rotateItem(q, cat.sofa, room, [w], cat); faces.add(Math.abs(q.x) < 1 && Math.abs(q.z) < 2.5 ? "inner" : "outer"); }
+  assert.ok(faces.has("inner") && faces.has("outer"), [...faces].join());
 });

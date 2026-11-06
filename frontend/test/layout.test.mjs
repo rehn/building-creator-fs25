@@ -116,14 +116,16 @@ test("placeNew: a new piece lands snapped, inside, clear of the door and the oth
   assert.ok(on(shelf.x, [room.x0 + 0.2, room.x1 - 0.2]) || on(shelf.z, [room.z0 + 0.2, room.z1 - 0.2]), "against a wall");
 });
 
-test("rotateItem: floor pieces turn a quarter and stay inside; wall pieces keep facing the room", () => {
+test("rotateItem: floor pieces turn a quarter and stay inside; a wall piece moves to the next wall", () => {
   const room = roomOf(P);
   const c = rotateItem({ id: 1, type: "crate", x: room.x1 - 0.4, z: 0, rot: 0 }, CATALOG.crate, room);
   assert.equal(c.rot, 90);
   assert.ok(footprint(c, CATALOG.crate).x1 <= room.x1 + 1e-9);
   assert.equal(rotateItem({ ...c, rot: 270 }, CATALOG.crate, room).rot, 0);
   const s = { id: 2, type: "shelf", x: 0, z: room.z0 + 0.2, rot: 0, length: 2 };
-  assert.deepEqual(rotateItem(s, CATALOG.shelf, room), s);
+  const r = rotateItem(s, CATALOG.shelf, room);
+  assert.equal(r.rot, 90);
+  assert.ok(Math.abs(r.x - (room.x0 + CATALOG.shelf.size(s)[1] / 2)) < 1e-9, JSON.stringify(r));
 });
 
 test("History: undo and redo through edits; a new edit drops the redo", () => {

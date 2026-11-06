@@ -1260,7 +1260,7 @@ function renderInsideUI() {
             ? `<div class="field"><div class="fl"><label for="pc-${f.k}">${f.label}</label></div><select id="pc-${f.k}" data-k="${f.k}">${f.options.map((nm, i) => `<option value="${i}" ${i === Math.round(it[f.k]) ? "selected" : ""}>${esc(nm)}</option>`).join("")}</select></div>`
             : `<div class="field"><div class="fl"><label for="pc-${f.k}">${f.label}</label><output id="pc-${f.k}-o">${fmtP(f, it[f.k])}</output></div><input type="range" id="pc-${f.k}" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}" value="${it[f.k]}"></div>`).join("")
           + posSliders(it, def)
-          + `<div class="row"><button type="button" id="pcTurn" ${def.mount === "wall" ? "disabled title=\"Wall pieces always face the room\"" : ""}>Turn</button><button type="button" id="pcRemove" class="danger">Remove</button></div></div>`
+          + `<div class="row"><button type="button" id="pcTurn" ${def.mount === "wall" ? "title=\"Moves it to the next wall round the room\"" : ""}>${def.mount === "wall" ? "Next wall" : "Turn"}</button><button type="button" id="pcRemove" class="danger">Remove</button></div></div>`
         : `<p class="hint">Click a piece in the building to change or move it.</p>`)
       + (pr.size ? `<p class="warn">${pr.size} piece${pr.size > 1 ? "s have" : " has"} a problem (red).</p>` : "")
       + fillRow;
@@ -1303,8 +1303,8 @@ function posSliders(it, def) {
   if (def.missing) return "";
   const r = roomBox(roomNow()), alongX = it.rot % 180 === 0;
   const axes = def.mount === "wall" ? (alongX ? ["x"] : ["z"]) : ["x", "z"];
-  const lab = {x: "Left / right", z: "Back / front"}, range = {x: [r.x0, r.x1], z: [r.z0, r.z1]};
-  return axes.map(k => `<div class="field"><div class="fl"><label for="pp-${k}">${lab[k]} (position)</label><output id="pp-${k}-o">${(+it[k]).toFixed(2)} m</output></div><input type="range" id="pp-${k}" data-pos="${k}" min="${range[k][0].toFixed(2)}" max="${range[k][1].toFixed(2)}" step="0.01" value="${it[k]}"></div>`).join("");
+  const lab = {x: "Left / right", z: "Back / front"}, along = def.mount === "wall" ? " along the wall" : "", range = {x: [r.x0, r.x1], z: [r.z0, r.z1]};
+  return axes.map(k => `<div class="field"><div class="fl"><label for="pp-${k}">${lab[k]} (position${along})</label><output id="pp-${k}-o">${(+it[k]).toFixed(2)} m</output></div><input type="range" id="pp-${k}" data-pos="${k}" min="${range[k][0].toFixed(2)}" max="${range[k][1].toFixed(2)}" step="0.01" value="${it[k]}"></div>`).join("");
 }
 function renderDormUI() {
   const ed = $("dormEditor");

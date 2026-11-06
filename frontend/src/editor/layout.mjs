@@ -364,9 +364,21 @@ export function placeNew(type, items, catalog, room) {
   return snapItem({...base, x: cx, z: cz}, def, room, items, catalog);
 }
 
-/** A floor piece turned a quarter (and kept inside); a wall piece always faces the room, so stays as is. */
+/**
+ * A floor piece turned a quarter (and kept inside). A wall piece faces away from its wall, so "turning" it moves it on
+ * to the next wall a quarter turn round (the room's, or an inner wall's face), at the same place along it as near as it gets.
+ */
 export function rotateItem(item, def, room, others = [], catalog = {}) {
-  if (def.mount === "wall") return item;
+  if (def.mount === "wall") {
+    const rot = (item.rot + 90) % 360, [w, d] = def.size(item);
+    const dist = wl => Math.hypot(Math.max(wl.x0 - item.x, 0, item.x - wl.x1), Math.max(wl.z0 - item.z, 0, item.z - wl.z1));
+    const to = [...room.walls, ...innerFaces(room, others, catalog)].filter(w => w.rot === rot);
+    if (!to.length) return item;
+    const wl = to.reduce((best, w) => dist(w) < dist(best) ? w : best);
+    // against that wall, as far along it as it was (kept within the stretch)
+    const at = wl.x0 === wl.x1 ? {x: wl.x0 + wl.into[0] * d / 2, z: clamp(item.z, wl.z0 + w / 2, wl.z1 - w / 2)} : {x: clamp(item.x, wl.x0 + w / 2, wl.x1 - w / 2), z: wl.z0 + wl.into[1] * d / 2};
+    return {...item, x: +at.x.toFixed(3), z: +at.z.toFixed(3), rot};
+  }
   return snapItem({...item, rot: (item.rot + 90) % 360}, def, room, others, catalog);
 }
 
