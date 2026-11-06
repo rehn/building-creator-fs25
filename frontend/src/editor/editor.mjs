@@ -14,7 +14,7 @@ import { WALLPAPERS } from "./kinds/innerwall.mjs";
 import { evalNumber } from "./calc.mjs";
 import { DOUBLE_DOOR_FROM } from "./openings.mjs";
 import { cleanPapers, wallBreaks, pieceGroups, roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, History, roomBox, wingsOf, liveWings, wingFloors, wingHalf, wingIdOf, wingWallKey, WING_PARTS, wallsOf, eaveWalls, autoPipes, pipePositions } from "./layout.mjs";
-import { OBJECT_TYPES, objectInfo, OBJECT_LIMITS, objectOf, pastureOf, snapBox, snapPasture, objectProblems } from "./objects.mjs";
+import { OBJECT_TYPES, objectInfo, OBJECT_LIMITS, objectOf, pastureOf, snapBox, snapPasture, objectProblems, fencePoints, snapFencePoint, MAX_FENCE_POINTS } from "./objects.mjs";
 import { setAssets, catalogFor, usedAssets } from "./model.mjs";
 import { readObj, assetFolder, flattenI3d } from "./assets.mjs";
 import { paintInterior, paintGlass } from "./interior.mjs";
@@ -483,6 +483,12 @@ function setupOrbit() {
       const q = groundPoint(e), hit = q && objectAt(q);
       if (hit) {
         const o = objectsNow().find(x => x.id === hit.id);
+        if (hit.handle && /^m[0-9]+$/.test(hit.handle) && o.points) {
+          // a pale dot between two posts: a new post there, to drag
+          const i = +hit.handle.slice(1), pts = o.points.slice(), m = [(pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2];
+          pts.splice(i + 1, 0, m); o.points = pts; p.objects = objectsNow().map(x => x.id === o.id ? {...x, points: pts} : x);
+          hit.handle = "p" + (i + 1); ob.pt = i + 1; rebuild(false);
+        } else if (hit.handle && /^p[0-9]+$/.test(hit.handle)) ob.pt = +hit.handle.slice(1);
         ob.sel = hit.id; ob.drag = {...hit, off: o.type === "pasture" ? [0, 0] : [q[0] - o.x, q[1] - o.z], moved: false, before: p.objects};
         renderObjectsUI(); updatePlacesMarker();
       }
@@ -944,7 +950,7 @@ function renderWingsUI() {
 /* ---------- Game objects ---------- */
 // The game's boxes and icons and the pasture's fence (objects.mjs): a list in the Game objects section, and
 // a plan view of the yard to drag them in (ob.on).
-const ob = {on: false, sel: null, drag: null, pan: [0, 0], saved: null};
+const ob = {on: false, sel: null, drag: null, pan: [0, 0], saved: null, pt: null};
 /** A box object's sliders: [key, label, step]. */
 const BOX_SLIDERS = [["x", "Left / right (+ to the right)", 0.25], ["z", "Back / front (+ to the front)", 0.25], ["w", "Width (left to right)", 0.05],
   ["d", "Depth (back to front)", 0.05], ["h", "Height", 0.05], ["ix", "Icon left / right", 0.05], ["iz", "Icon back / front", 0.05]];
@@ -977,12 +983,20 @@ function renderObjectsUI() {
     if (o.type === "pasture") {
       const pa = pastureOf(p), ps = spec.pasture;
       html += `<div class="field"><div class="fl"><label for="ob-wall">Wall</label></div><select id="ob-wall">${WALLS.map(k => opt(k, WALL_NAMES[k], o.wall)).join("")}</select></div>`;
-      html += range("a", "Start, from the wall’s left end (0: the corner)", OBJECT_LIMITS.end[0], pa.L, 0.25, o.a);
-      html += range("b", "End, from the wall’s right end (0: the corner)", OBJECT_LIMITS.end[0], pa.L, 0.25, o.b);
-      html += range("depth", "Depth, out from the wall", ps.depth[0], ps.depth[1], 0.5, o.depth);
-      html += `<div class="field"><div class="fl"><label for="ob-wrap">Round a corner too</label></div><select id="ob-wrap">${opt(0, "No: along one wall", o.wrap || 0)}${opt(1, "Yes, past the left end (seen from outside)", o.wrap || 0)}${opt(2, "Yes, past the right end", o.wrap || 0)}</select></div>`;
-      if (o.wrap) html += range("wrapLen", "Along the next wall (from the corner)", 1, o.wrap === 1 || o.wrap === 2 ? (o.wall === "front" || o.wall === "back" ? p.depth : p.width) : 1, 0.25, o.wrapLen);
-      html += `<p class="hint">At least ${ps.minWidth} m wide. Below 0 it runs past the corner and back along the wall to the building. Round a corner, the fence goes on past the end of the wall and along the next one, so the pasture lies round two walls (the end you go round is then the wall's whole end).</p>`;
+      if (o.points) {
+        const n = o.points.length, sel = ob.pt !== null && ob.pt < n ? ob.pt : null;
+        html += `<p class="hint"><b>The fence is drawn by hand: ${n} posts.</b> Drag a post in the plan view; press a small dot between two posts to make a new one. The green post is where it starts, the red where it stops: put them at corners of the building (they snap there).</p>`
+          + `<p class="hint">${sel === null ? "Press a post to choose it." : `Post ${sel + 1} of ${n}${sel === 0 ? " (the start)" : sel === n - 1 ? " (the stop)" : ""} at ${o.points[sel][0].toFixed(2)}, ${o.points[sel][1].toFixed(2)}.`}</p>`
+          + `<div class="row"><button type="button" id="ob-addpt" ${n >= MAX_FENCE_POINTS ? "disabled" : ""}>+ Add a post</button><button type="button" id="ob-rmpt" ${sel === null || n <= 2 ? "disabled" : ""}>Remove this post</button><button type="button" id="ob-rect">Back to a rectangle</button></div>`;
+        html += range("a", "Animals go out from the wall’s left end (0: the corner)", OBJECT_LIMITS.end[0], pa.L, 0.25, o.a);
+        html += range("b", "…to the wall’s right end (0: the corner)", OBJECT_LIMITS.end[0], pa.L, 0.25, o.b);
+      } else {
+        html += range("a", "Start, from the wall’s left end (0: the corner)", OBJECT_LIMITS.end[0], pa.L, 0.25, o.a);
+        html += range("b", "End, from the wall’s right end (0: the corner)", OBJECT_LIMITS.end[0], pa.L, 0.25, o.b);
+        html += range("depth", "Depth, out from the wall", ps.depth[0], ps.depth[1], 0.5, o.depth);
+        html += `<p class="hint">At least ${ps.minWidth} m wide. Below 0 it runs past the corner and back along the wall to the building.</p>`
+          + `<div class="row"><button type="button" id="ob-draw">Draw the fence myself</button></div><p class="hint">Draw it with posts in the plan view: any shape, from one corner of the building round to another.</p>`;
+      }
     } else for (const [k, label, step] of BOX_SLIDERS) {
       if ((k === "ix" || k === "iz") && !t.icon) continue;
       const [lo, hi] = OBJECT_LIMITS[k];
@@ -1013,7 +1027,22 @@ function renderObjectsUI() {
     inp.onchange = () => swap(snapObj(selObject()));
   });
   if ($("ob-wall")) $("ob-wall").onchange = e => swap(snapObj({...selObject(), wall: e.target.value}));
-  if ($("ob-wrap")) $("ob-wrap").onchange = e => swap(snapObj({...selObject(), wrap: +e.target.value}));
+  // a fence drawn by hand: start it from the rectangle, add and remove posts, go back
+  if ($("ob-draw")) $("ob-draw").onclick = () => { ob.pt = null; swap(snapObj({...selObject(), points: fencePoints(p)})); };
+  if ($("ob-rect")) $("ob-rect").onclick = () => { const c = {...selObject()}; delete c.points; ob.pt = null; swap(snapObj(c)); };
+  if ($("ob-addpt")) $("ob-addpt").onclick = () => {
+    const c = selObject(), pts = c.points.slice(), i = ob.pt !== null && ob.pt < pts.length ? ob.pt : pts.length - 1;
+    let q;
+    if (i < pts.length - 1) q = [(pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2];
+    else { const a = pts[i - 1] || pts[i], dx = pts[i][0] - a[0], dz = pts[i][1] - a[1], l = Math.hypot(dx, dz) || 1; q = [pts[i][0] + dx / l * 3, pts[i][1] + dz / l * 3]; }
+    pts.splice(i + 1, 0, q); ob.pt = i + 1;
+    swap({...c, points: pts});
+  };
+  if ($("ob-rmpt")) $("ob-rmpt").onclick = () => {
+    const c = selObject(); if (ob.pt === null || c.points.length <= 2) return;
+    const pts = c.points.filter((_, j) => j !== ob.pt); ob.pt = null;
+    swap({...c, points: pts});
+  };
   if ($("objTurn")) $("objTurn").onclick = () => { const c = selObject(); swap(snapObj({...c, w: c.d, d: c.w, ix: -c.iz, iz: c.ix})); };
   $("objRemove").onclick = () => setObjects(list.filter(x => x.id !== o.id), null);
 }
@@ -1059,8 +1088,14 @@ function groundPoint(e) {
 }
 /** The pasture's handles: its two ends (the fence's sides) and its outer edge, [{k, at: [x, z]}]. */
 function pastureHandles() {
-  const pa = pastureOf(p);
+  const pa = pastureOf(p), fo = objectOf(p, "pasture");
   if (!pa) return [];
+  if (fo && fo.points) {
+    // a fence drawn by hand: its posts (the first green, the last red) and a pale dot between each two
+    const pts = fo.points;
+    return [...pts.map((q, i) => ({k: "p" + i, at: [q[0], q[1]], style: i === 0 ? "start" : i === pts.length - 1 ? "end" : "pt", sel: i === ob.pt})),
+      ...pts.slice(0, -1).map((q, i) => ({k: "m" + i, at: [(q[0] + pts[i + 1][0]) / 2, (q[1] + pts[i + 1][1]) / 2], style: "mid"}))];
+  }
   const at = (s, d) => { const q = pa.at(s, d); return [q[0], q[2]]; };
   return [{k: "a", at: at(pa.s0, pa.depth / 2)}, {k: "b", at: at(pa.s1, pa.depth / 2)}, {k: "depth", at: at((pa.s0 + pa.s1) / 2, pa.depth)}];
 }
@@ -1077,6 +1112,7 @@ function objectAt(q) {
 function dragTo(d, q) {
   const o = objectsNow().find(x => x.id === d.id);
   if (!d.handle) return snapBox({...o, x: q[0] - d.off[0], z: q[1] - d.off[1]}, p);
+  if (/^p[0-9]+$/.test(d.handle) && o.points) { const i = +d.handle.slice(1), at = snapFencePoint(p, q); return {...o, points: o.points.map((r, j) => j === i ? at : r)}; }
   const pa = pastureOf(p), w = pa.w, s = (q[0] - w.o[0]) * w.u[0] + (q[1] - w.o[2]) * w.u[2], dd = (q[0] - w.o[0]) * w.n[0] + (q[1] - w.o[2]) * w.n[2];
   const next = d.handle === "a" ? {...o, a: s} : d.handle === "b" ? {...o, b: pa.L - s} : {...o, depth: dd};
   return snapPasture(next, kindOf(p), p);
@@ -1599,15 +1635,17 @@ function makePlacesMarker() {
   };
   // the pasture's handles in the yard's plan view: its two ends and its outer edge
   const handleGeo = new THREE.CylinderGeometry(0.45, 0.45, 0.06, 24), handleMat = new THREE.MeshBasicMaterial({color: 0x2f6fd0, depthTest: false});
-  const handles = [0, 1, 2].map(() => { const m = new THREE.Mesh(handleGeo, handleMat); m.visible = false; m.renderOrder = 11; group.add(m); return m; });
+  // (a fence drawn by hand: a handle for each post, green at the start, red at the stop, and a small pale one between two posts to make a new one)
+  const handleMats = {pt: handleMat, start: new THREE.MeshBasicMaterial({color: 0x3f9a43, depthTest: false}), end: new THREE.MeshBasicMaterial({color: 0xd03a2a, depthTest: false}), mid: new THREE.MeshBasicMaterial({color: 0xffffff, transparent: true, opacity: 0.85, depthTest: false})};
+  const handles = Array.from({length: 3 + 2 * MAX_FENCE_POINTS}, () => { const m = new THREE.Mesh(handleGeo, handleMat); m.visible = false; m.renderOrder = 11; group.add(m); return m; });
   const dispose = () => {
     boxGeo.dispose(); edgeGeo.dispose();
-    handleGeo.dispose(); handleMat.dispose();
+    handleGeo.dispose(); Object.values(handleMats).forEach(m => m.dispose());
     Object.values(boxes).forEach(b => { b.mesh.material.dispose(); b.edges.material.dispose(); });
     Object.values(icons).forEach(s => s.material.dispose());
     Object.values(textures).forEach(t => t.dispose());
   };
-  return {group, boxes, icons, handles, boxFor, iconFor, dispose};
+  return {group, boxes, icons, handles, handleMats, boxFor, iconFor, dispose};
 }
 function updatePlacesMarker() {
   if (!placesObj) return;
@@ -1627,7 +1665,12 @@ function updatePlacesMarker() {
     s.position.set(at[0], at[1] + 1.3, at[2]);
   }
   const hs = ob.on ? pastureHandles() : [];
-  placesObj.handles.forEach((m, i) => { m.visible = !!hs[i]; if (hs[i]) m.position.set(hs[i].at[0], 0.05, hs[i].at[1]); });
+  placesObj.handles.forEach((m, i) => {
+    m.visible = !!hs[i];
+    if (!hs[i]) return;
+    m.position.set(hs[i].at[0], 0.05, hs[i].at[1]); m.material = placesObj.handleMats[hs[i].style || "pt"];
+    const sc = hs[i].style === "mid" ? 0.5 : hs[i].sel ? 1.5 : 1; m.scale.set(sc, 1, sc);
+  });
   needs = true;
 }
 function drawBed(x) {

@@ -74,10 +74,10 @@ function cleanPasture(o, ps = {minWidth: 0, depth: [2, 60]}, p) {
   if (a > L - b - 1) { const m = (a + L - b) / 2; a = m - 0.5; b = L - m - 0.5; }
   const short = ps.minWidth - (L - a - b);
   if (short > 0) { a -= short / 2; b -= short / 2; }
-  // around a corner too: the fence goes on past the end of the wall (0 no, 1 the left end, 2 the right end, seen from outside) and along the wall
-  // there for wrapLen m, so the pasture lies round two walls
-  const side = wall === "front" || wall === "back" ? p.depth : p.width, wrap = [1, 2].includes(Math.round(num(o.wrap, 0))) ? Math.round(num(o.wrap, 0)) : 0;
-  return {type: "pasture", wall, a: round(a), b: round(b), depth: round(clamp(num(o.depth, ps.depth[0]), ps.depth)), ...(wrap ? {wrap, wrapLen: round(clamp(num(o.wrapLen, side), [1, side]))} : {})};
+  // a fence drawn by hand: its posts [[x, z] ...] from where it starts to where it stops (the wall, a and b then only say where the animals go out)
+  const pts = Array.isArray(o.points) ? o.points.filter(q => Array.isArray(q) && Number.isFinite(+q[0]) && Number.isFinite(+q[1]) && q[0] !== null && q[1] !== null).slice(0, MAX_FENCE_POINTS)
+    .map(q => [round(clamp(+q[0], OBJECT_LIMITS.x)), round(clamp(+q[1], OBJECT_LIMITS.z))]) : [];
+  return {type: "pasture", wall, a: round(a), b: round(b), depth: round(clamp(num(o.depth, ps.depth[0]), ps.depth)), ...(pts.length >= 2 ? {points: pts} : {})};
 }
 
 /** The building's object of a type, or null. */
@@ -95,8 +95,8 @@ export function boxFrom(type, box, icon = null) {
 /**
  * The pasture in the building: its wall's frame w, the stretch of the wall it encloses [ea, eb] and its
  * middle (where the animals go out), and the fence posts from one end round to the other (the base
- * game's winding: when it runs past a corner, back along the wall's line to the building). A pasture with wrap (1: round the left corner,
- * 2: round the right one) goes on past the end of its wall and along the next wall for wrapLen m: round two walls.
+ * game's winding: when it runs past a corner, back along the wall's line to the building). A pasture with points is a fence the player drew:
+ * those posts in that order (its wall, a and b still say where the animals go out).
  */
 export function pastureOf(p, o = objectOf(p, "pasture")) {
   if (!o) return null;
@@ -104,19 +104,18 @@ export function pastureOf(p, o = objectOf(p, "pasture")) {
   if (!w) return null;
   const L = w.L, s0 = o.a, s1 = L - o.b, post = 0.15, d = o.depth;
   const at = (s, dd) => [w.o[0] + w.u[0] * s + w.n[0] * dd, 0, w.o[2] + w.u[2] * s + w.n[2] * dd];
-  const wrap = o.wrap === 1 || o.wrap === 2 ? o.wrap : 0, wl = wrap ? Math.max(1, o.wrapLen || 1) : 0;
+  const free = Array.isArray(o.points) && o.points.length >= 2;
   let fence = [];
-  if (wrap === 2) fence = [at(L + post, -wl), at(L + d, -wl), at(L + d, d), at(s0, d), at(s0, post)];
-  else if (wrap === 1) fence = [at(s1, post), at(s1, d), at(-d, d), at(-d, -wl), at(-post, -wl)];
+  if (free) fence = o.points.map(([x, z]) => [x, 0, z]);
   else {
     if (s1 > L + 1e-6) fence.push(at(L, post));
     fence.push(at(s1, post), at(s1, d), at(s0, d), at(s0, post));
     if (s0 < -1e-6) fence.push(at(0, post));
   }
-  const ea = wrap === 1 ? 0 : Math.max(0, s0), eb = wrap === 2 ? L : Math.min(L, s1);
+  const ea = Math.max(0, s0), eb = Math.min(L, s1);
   const pts = [at(s0, 0), at(s1, d), ...fence];
   const rect = {x0: Math.min(...pts.map(q => q[0])), x1: Math.max(...pts.map(q => q[0])), z0: Math.min(...pts.map(q => q[2])), z1: Math.max(...pts.map(q => q[2]))};
-  return {wall: o.wall, w, L, s0, s1, ea, eb, mid: (ea + eb) / 2, depth: d, fence, rect, at, wrap, wrapLen: wl};
+  return {wall: o.wall, w, L, s0, s1, ea, eb, mid: (ea + eb) / 2, depth: d, fence, rect, at, free};
 }
 
 /** Box objects snap to a 25 cm grid and are kept out of the building (pushed out the shortest way). */
@@ -131,10 +130,39 @@ export function snapBox(o, p) {
   }
   return {...o, x: round(x), z: round(z)};
 }
+/** Most posts of a fence drawn by hand. */
+export const MAX_FENCE_POINTS = 40;
+/** The fence as it is now, as posts [[x, z] ...] to start drawing it by hand from. */
+export const fencePoints = p => { const pa = pastureOf(p); return pa ? pa.fence.map(q => [round(q[0]), round(q[2])]) : []; };
+/**
+ * Where a fence post dragged to q = [x, z] goes: a corner of the building within 80 cm (a fence starts and stops at a corner), else onto the line of
+ * a wall within 40 cm, else the 25 cm grid; never inside the building.
+ */
+export function snapFencePoint(p, q) {
+  const rects = footprints(p);
+  let best = null;
+  for (const r of rects) for (const c of [[r.x0, r.z0], [r.x1, r.z0], [r.x0, r.z1], [r.x1, r.z1]]) {
+    const dd = Math.hypot(c[0] - q[0], c[1] - q[1]);
+    if (dd < 0.8 && (!best || dd < best.dd)) best = {dd, at: c};
+  }
+  if (best) return [round(best.at[0]), round(best.at[1])];
+  let x = snap(q[0]), z = snap(q[1]);
+  for (const r of rects) {
+    // onto a wall's line, along it
+    if (q[0] > r.x0 - 0.4 && q[0] < r.x1 + 0.4) { if (Math.abs(q[1] - r.z0) < 0.4) z = r.z0; else if (Math.abs(q[1] - r.z1) < 0.4) z = r.z1; }
+    if (q[1] > r.z0 - 0.4 && q[1] < r.z1 + 0.4) { if (Math.abs(q[0] - r.x0) < 0.4) x = r.x0; else if (Math.abs(q[0] - r.x1) < 0.4) x = r.x1; }
+  }
+  // not inside the building: out through the nearest side
+  for (const r of rects) if (x > r.x0 + 1e-6 && x < r.x1 - 1e-6 && z > r.z0 + 1e-6 && z < r.z1 - 1e-6) {
+    const moves = [[r.x0 - x, 0], [r.x1 - x, 0], [0, r.z0 - z], [0, r.z1 - z]], [mx, mz] = moves.reduce((m, v) => Math.hypot(...v) < Math.hypot(...m) ? v : m);
+    x += mx; z += mz;
+  }
+  return [round(x), round(z)];
+}
 /** A pasture's ends snap to the wall's corners (within 60 cm), else to the grid; it keeps its minimum width. */
 export function snapPasture(o, kind, p) {
   const L = (wallsOf(p)[o.wall] || {L: 0}).L, end = v => Math.abs(v) < CORNER_SNAP ? 0 : snap(v);
-  return {...cleanPasture({...o, a: end(o.a), b: end(o.b), depth: snap(o.depth)}, specOf(kind).pasture, p), id: o.id};
+  return {...cleanPasture({...o, a: end(o.a), b: end(o.b), depth: snap(o.depth), points: o.points}, specOf(kind).pasture, p), id: o.id};
 }
 
 /** The building's footprints on the ground: its rectangle and its wing's. */

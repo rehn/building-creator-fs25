@@ -109,34 +109,50 @@ test("objects: egg pallet rows stay inside their box, the teleport point goes wi
   assert.ok(lo);
 });
 
-/* ---------- A pasture round two walls ---------- */
-const withPasture = (extra, base = {}) => { const p = sanitize({kind: "cow", width: 20, depth: 7, ...base}), o = p.objects.find(x => x.type === "pasture"); return sanitize({...p, objects: p.objects.map(x => x === o ? {...o, wall: "back", a: 0, b: 0, depth: 15, ...extra} : x)}); };
+/* ---------- A fence drawn by hand ---------- */
+import { fencePoints, snapFencePoint, MAX_FENCE_POINTS } from "../src/editor/objects.mjs";
+const withFence = (points, base = {}) => { const p = sanitize({kind: "cow", width: 20, depth: 7, ...base}), o = p.objects.find(x => x.type === "pasture"); return sanitize({...p, objects: p.objects.map(x => x === o ? {...o, points} : x)}); };
 
-test("pasture round a corner: wrap 2 goes on past the right end of the wall and along the next wall", () => {
-  const p = withPasture({wrap: 2, wrapLen: 7}), pa = pastureOf(p), near = (q, x, z) => Math.abs(q[0] - x) < 1e-6 && Math.abs(q[2] - z) < 1e-6;
-  assert.equal(pa.wrap, 2);
-  // the back wall of a 20 x 7 m house (z = -3.5; seen from outside its right end is x = -10): the fence starts 15 cm off the left wall at its front corner, goes
-  // 15 m out, round the back and in to the wall's other corner
-  assert.equal(pa.fence.length, 5);
-  assert.ok(near(pa.fence[0], -10.15, 3.5), JSON.stringify(pa.fence[0]));
-  assert.ok(near(pa.fence[1], -25, 3.5) && near(pa.fence[2], -25, -18.5) && near(pa.fence[3], 10, -18.5) && near(pa.fence[4], 10, -3.65), JSON.stringify(pa.fence));
-  assert.equal(pa.eb, 20, "the animals' way out is still on the back wall, over its whole length");
-  assert.ok(pa.rect.x0 <= -25 && pa.rect.z1 >= 3.5 && pa.rect.z0 <= -18.5 && pa.rect.x1 >= 10);
+test("fence by hand: the posts the player gives, in order, are the fence; junk and too few are not", () => {
+  const pts = [[10, -3.5], [10, -20], [-10, -20], [-10, -3.5]], p = withFence(pts), pa = pastureOf(p);
+  assert.deepEqual(objectOf(p, "pasture").points, pts);
+  assert.deepEqual(pa.fence, pts.map(([x, z]) => [x, 0, z]));
+  assert.equal(pa.free, true);
+  // the animals still go out over the wall's stretch
+  assert.equal(pa.eb - pa.ea > 0, true);
+  assert.equal(objectOf(withFence([[1, 2]]), "pasture").points, undefined, "one post is not a fence");
+  assert.equal(objectOf(withFence("x"), "pasture").points, undefined);
+  assert.deepEqual(objectOf(withFence([[1, 2], ["a", 3], [4, 5], null, [6]]), "pasture").points, [[1, 2], [4, 5]]);
+  assert.equal(objectOf(withFence(Array.from({length: 99}, (_, i) => [i, i])), "pasture").points.length, MAX_FENCE_POINTS);
+  assert.deepEqual(objectOf(withFence([[999, -999], [0, 0.12345]]), "pasture").points, [[80, -80], [0, 0.123]]);
+  // none: the rectangle as before
+  assert.equal(pastureOf(withFence(undefined)).free, false);
+  assert.equal(pastureOf(withFence(undefined)).fence.length, 4);
 });
 
-test("pasture round a corner: wrap 1 is the same on the left end, a shorter side, none is as before, junk is none", () => {
-  const p = withPasture({wrap: 1, wrapLen: 4}), pa = pastureOf(p);
-  assert.equal(pa.fence.length, 5);
-  assert.ok(Math.abs(pa.fence[2][0] - 25) < 1e-6 && Math.abs(pa.fence[3][2] - 0.5) < 1e-6, JSON.stringify(pa.fence));   // 4 m along the right wall from its back corner: z = -3.5 + 4
-  assert.equal(pa.ea, 0);
-  const none = pastureOf(withPasture({})), junk = withPasture({wrap: 7, wrapLen: "x"});
-  assert.equal(none.fence.length, 4);
-  assert.equal(objectOf(junk, "pasture").wrap, undefined);
-  assert.equal(objectOf(withPasture({wrap: 2, wrapLen: 99}), "pasture").wrapLen, 7, "no longer than the wall");
-  assert.equal(objectOf(withPasture({wrap: 2, wrapLen: 0.2}), "pasture").wrapLen, 1);
-  // a hen house too, and the export has all the posts
-  const hen = sanitize({kind: "chicken", objects: sanitize({kind: "chicken"}).objects.map(o => o.type === "pasture" ? {...o, wall: "back", wrap: 2, wrapLen: 5} : o)});
-  assert.equal(pastureOf(hen).fence.length, 5);
-  assert.equal([...buildI3d(hen).matchAll(/name="fence1Node\d+"/g)].length, 5);
-  assert.equal(objectProblems(withPasture({wrap: 2, wrapLen: 7})).size >= 0, true);
+test("fence by hand: starting from the rectangle's posts changes nothing; the export has a node for every post", () => {
+  const base = sanitize({kind: "cow", width: 20, depth: 7}), start = fencePoints(base);
+  assert.equal(start.length, 4);
+  const p = withFence(start);
+  assert.deepEqual(pastureOf(p).fence.map(q => [q[0], q[2]]), start);
+  const five = withFence([...start, [0, -1]]), xml = placeableXml(five, "Barn"), i3d = buildI3d(five);
+  assert.equal([...i3d.matchAll(/name="fence1Node[0-9]+"/g)].length, 5);
+  assert.equal([...xml.matchAll(/<node node="fence1Node[0-9]+"\/>/g)].length, 5);
+  const hen = sanitize({kind: "chicken"}), o = hen.objects.find(x => x.type === "pasture");
+  const hf = sanitize({...hen, objects: hen.objects.map(x => x === o ? {...o, points: [[0, 5], [0, 10], [8, 12], [12, 4]]} : x)});
+  assert.equal([...buildI3d(hf).matchAll(/name="fence1Node[0-9]+"/g)].length, 4);
+  assert.equal(objectProblems(p).size >= 0, true);
+});
+
+test("fence by hand: a post snaps to a corner of the building, onto a wall's line, to the grid, and never inside", () => {
+  const p = sanitize({kind: "cow", width: 20, depth: 7});   // x -10..10, z -3.5..3.5
+  assert.deepEqual(snapFencePoint(p, [10.3, -3.2]), [10, -3.5], "a corner within 80 cm");
+  assert.deepEqual(snapFencePoint(p, [-9.6, 4.1]), [-10, 3.5]);
+  assert.deepEqual(snapFencePoint(p, [3.1, -3.7]), [3, -3.5], "onto the back wall's line, along it on the grid");
+  assert.deepEqual(snapFencePoint(p, [12.1, 0.2]), [12, 0.25], "free: the 25 cm grid");
+  const inside = snapFencePoint(p, [9, 0]);
+  assert.ok(Math.abs(inside[0]) >= 10 - 1e-9 || Math.abs(inside[1]) >= 3.5 - 1e-9, "pushed out: " + inside);
+  // the wing's corners count too
+  const w = sanitize({kind: "cow", width: 20, depth: 7, wings: [{wall: "back", pos: 0.5, width: 6, depth: 6, floors: 0}]}), wr = pastureOf(w) && null;
+  assert.equal(wr, null);
 });
