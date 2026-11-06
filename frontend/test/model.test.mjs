@@ -32,7 +32,7 @@ test("schema: sections are split into building the house and finishing it", () =
   const side = s => SCHEMA.filter(g => g.side === s).map(g => g.title);
   assert.ok(SCHEMA.every(g => g.side === "build" || g.side === "finish"), "every section has a side");
   assert.deepEqual(side("build"), ["Chickens", "Cows", "Sheep", "Size", "Wings", "Roof", "Downpipes", "Kupor (dormers)", "Windows", "Doors", "Inside"]);
-  assert.deepEqual(side("finish"), ["Surfaces", "Colors", "Interior", "Game objects", "Game mod"]);
+  assert.deepEqual(side("finish"), ["Surfaces", "Colors", "Interior", "Inside walls", "Game objects", "Game mod"]);
 });
 
 test("sanitize: unknown keys are dropped", () => {

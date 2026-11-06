@@ -393,6 +393,37 @@ export function pieceGroups(catalog) {
   return [...groups, ...(other ? [["Other", other]] : [])].map(([name, types]) => ({name, types}));
 }
 
+/** Most sections of wallpaper on the inside of the outer walls. */
+export const MAX_PAPERS = 80;
+/**
+ * Sections of wallpaper on the inside of the outer walls, from anything: [{id, wall (a wall of the building), s0, s1 (m along the
+ * wall, from its left end seen from outside), paper (an index into the wallpapers, 0..n-1)}], in range, at least 20 cm long, numbered 1, 2 ...
+ */
+export function cleanPapers(arr, P, n) {
+  const walls = wallsOf(P), num = (v, d) => Number.isFinite(+v) && v !== null && v !== "" ? +v : d;
+  return (Array.isArray(arr) ? arr : []).filter(x => x && typeof x === "object" && walls[x.wall]).map(x => {
+    const L = walls[x.wall].L, a = Math.min(L, Math.max(0, num(x.s0, 0))), b = Math.min(L, Math.max(0, num(x.s1, L)));
+    return {wall: x.wall, s0: +Math.min(a, b).toFixed(2), s1: +Math.max(a, b).toFixed(2), paper: Math.min(n - 1, Math.max(0, Math.round(num(x.paper, 0))))};
+  }).filter(x => x.s1 - x.s0 >= 0.2).slice(0, MAX_PAPERS).map((x, i) => ({id: i + 1, ...x}));
+}
+/**
+ * Where inner walls meet the inside of an outer wall: metres along it (from its left end seen from outside), where the rooms behind it
+ * change. Used to divide a wall into sections for wallpaper.
+ */
+export function wallBreaks(P, key) {
+  const w = wallsOf(P)[key], out = [];
+  if (!w) return out;
+  for (const it of P.items || []) {
+    if (it.type !== "innerwall") continue;
+    const half = it.length / 2, alongX = it.rot % 180 === 0;
+    for (const [x, z] of alongX ? [[it.x - half, it.z], [it.x + half, it.z]] : [[it.x, it.z - half], [it.x, it.z + half]]) {
+      const rx = x - w.o[0], rz = z - w.o[2], d = rx * w.n[0] + rz * w.n[2], s = rx * w.u[0] + rz * w.u[2];
+      if (d < 0.05 && d > -(WALL_T + 0.45) && s > 0.3 && s < w.L - 0.3) out.push(+s.toFixed(2));
+    }
+  }
+  return [...new Set(out)].sort((a, b) => a - b);
+}
+
 /** Undo and redo over copies of a state (the pieces list). */
 export class History {
   constructor(state, limit = 100) { this.past = []; this.future = []; this.now = clone(state); this.limit = limit; }

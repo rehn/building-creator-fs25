@@ -3,11 +3,12 @@
 // Pure functions with no DOM or three.js, so they run (and are tested) in Node.
 import { I3dDoc, tg, shape, refNode, boxMesh, splitByColor, mappingsFor, num, v3 } from "./i3d.mjs";
 import { KINDS, kindOf } from "./kinds/index.mjs";
-import { WALL_T, wallFrames, wallsOf, liveWings, wingsOf, wingHeight, wingFloors, wingHalf, wingIdOf, eaveWalls, autoPipes, cleanPipes, WING_PARTS, MAX_WINGS, WING_WALLS, wingWallKey, openingSpan, roomOf, footprint, toWorld, cleanItems, problems } from "./layout.mjs";
+import { WALL_T, wallFrames, wallsOf, liveWings, wingsOf, wingHeight, wingFloors, wingHalf, wingIdOf, eaveWalls, autoPipes, cleanPipes, cleanPapers, WING_PARTS, MAX_WINGS, WING_WALLS, wingWallKey, openingSpan, roomOf, footprint, toWorld, cleanItems, problems } from "./layout.mjs";
 import { withAssets, placement, assetFolder } from "./assets.mjs";
 import { SURFACES } from "./surfaces.mjs";
 import { agedColor } from "./age.mjs";
 import { cleanObjects, objectOf, boxOf, objectInfo } from "./objects.mjs";
+import { WALLPAPERS } from "./kinds/innerwall.mjs";
 import { WINDOW_STYLES, DOOR_STYLES, WINDOW_STYLE_IDS, DOOR_STYLE_IDS, DOUBLE_DOOR_FROM, isPair, styleOf, drawSash, drawLeaf } from "./openings.mjs";
 export { WINDOW_STYLES, DOOR_STYLES, DOUBLE_DOOR_FROM } from "./openings.mjs";
 export { boxMesh } from "./i3d.mjs";
@@ -27,7 +28,7 @@ export const DEFAULTS = {
   wallCladding:"lockpanel", panelSpacing:0.2, battenWidth:0.06, roofMaterial:"tiles", chimneyStyle:"brick", chimneyColor:"#8A3B2C",
   gutters:true, downpipes:2, gutterColor:"#3B3F42",
   wallColor:"#8E2A1E", trimColor:"#F2EFE8", roofColor:"#2B2D2F", doorColor:"#3E5A4A", innerDoorColor:"#E9E3D3", foundationColor:"#6E6E6A",
-  interior:true, curtainStyle:"sides", curtainColor:"#EFE9DC", ventilators:0, age:0,
+  interior:true, insidePaper:"none", curtainStyle:"sides", curtainColor:"#EFE9DC", ventilators:0, age:0,
   modPrice:75000, modUpkeep:75, modAuthor:"", modDescription:""
 };
 /** Curtain layouts: [id, name]. Windows can pick one or follow the house's choice ("default"). */
@@ -109,6 +110,8 @@ const SHARED_SECTIONS = [
     {k:"curtainColor", label:"Curtains", type:"color"}]},
   {title:"Interior", side:"finish", hint:"The floors above the ground floor are closed: a small furnished room is seen through each of their windows. To pick the room or curtains for one window, choose it under Windows (or a kupa under Kupor). The ground floor's inside is under Inside.", fields:[
     {k:"curtainStyle", label:"Curtains", type:"select", options:CURTAIN_OPTIONS}]},
+  {title:"Inside walls", side:"finish", custom:"papers", hint:"Wallpaper on the inside of the outer walls: one for every wall, or sections along a wall, one for each room behind it.", fields:[
+    {k:"insidePaper", label:"Wallpaper on every inside wall", type:"select", options:[["none", "None (plaster as it is)"], ...WALLPAPERS.map((w, i) => [String(i), w[0]])]}]},
   {title:"Game objects", side:"finish", custom:"objects", hint:"What the game needs around the building: where you sleep, tip feed, drop bales, load animals, collect eggs, and the pasture's fence. Add and remove them here, and drag them into place in the plan view.", fields:[]},
   {title:"Game mod", side:"finish", hint:"Used by \u201CExport game mod\u201D: what the house costs in the shop and who made it. The project name is the name in the shop.", fields:[
     {k:"modPrice", label:"Price", min:0, max:2000000, step:500, money:true},
@@ -303,6 +306,8 @@ export function sanitize(obj) {
   out.dormers = Array.isArray(obj.dormers) ? cleanDormers(obj.dormers) : [];
   // the downpipes: the save's, or placed from the house's count per side (saves from before they were a list)
   out.pipes = Array.isArray(obj.pipes) ? cleanPipes(obj.pipes, out) : autoPipes(out);
+  // sections of wallpaper on the inside of the outer walls
+  out.papers = cleanPapers(obj.papers, out, WALLPAPERS.length);
   // where the player moved the game places (sleep point, feed pad ...), one entry per place of the kind
   // the game objects (sleep point, feed pad, pasture ...): the save's, or where the kind puts them to start with
   // (from the settings of before they were objects: the pasture's wall and depth, the sleep point on or off)
@@ -988,8 +993,14 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
     const Hi = Math.min(H + inner.lift, ceil), tw = WALL_T, lowT = fin.low ? fin.low[2] : 0;
     // (a wing's side wall meets the house's outer face at its start (Left) or its end (Right): its inside face runs right up to it,
     // or a slit shows between it and the house's wall)
+    // (wallpaper on the inside: a section of this wall's, else the one for every inside wall; none: the kind's plaster or whitewash)
+    const paperAt = s => {
+      const sec = (p.papers || []).filter(x => x.wall === key && s > x.s0 && s < x.s1).pop();
+      const i = sec ? sec.paper : p.insidePaper !== "none" ? +p.insidePaper : -1;
+      return i >= 0 && WALLPAPERS[i] ? [WALLPAPERS[i][1], WALLPAPERS[i][2]] : null;
+    };
     const sideOf = /^w[0-9]+(Left|Right)$/.exec(key), s0i = sideOf && sideOf[1] === "Left" ? 0 : tw, s1i = sideOf && sideOf[1] === "Right" ? L : L - tw;
-    const Xi = uniq([s0i, s1i, L/2, ...ops.flatMap(o => [o.s0, o.s1])]).filter(s => s > s0i - 1e-6 && s < s1i + 1e-6);
+    const Xi = uniq([s0i, s1i, L/2, ...ops.flatMap(o => [o.s0, o.s1]), ...(p.papers || []).filter(x => x.wall === key).flatMap(x => [x.s0, x.s1])]).filter(s => s > s0i - 1e-6 && s < s1i + 1e-6);
     // (a barn's: whitewash, greyer and grubbier along the bottom where the animals rub and muck splashes)
     const Ti = uniq([0, ...(lowT ? [lowT] : []), Hi, ...(ceil < Infinity ? [] : [H + gableRise]), ...ops.flatMap(o => [o.t0, o.t1])]);
     for (let i = 0; i < Xi.length - 1; i++) for (let j = 0; j < Ti.length - 1; j++) {
@@ -1001,7 +1012,7 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
         const k = gableRise / (L / 2);
         c = clipPoly(clipPoly(c, -k, 1, H), k, 1, H + 2 * gableRise);
       }
-      const f = fin.low && ct < lowT ? fin.low : fin.wall;
+      const f = paperAt(cs) || (fin.low && ct < lowT ? fin.low : fin.wall);
       paint(f[0], f[1]);
       if (c.length >= 3) poly("fittings", c.map(q => WP(w, q[0], q[1], -tw)), neg(w.n));
     }
