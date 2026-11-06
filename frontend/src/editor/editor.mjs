@@ -1858,6 +1858,24 @@ function renderStoreImage(size) {
     return c;
   } finally { r2.dispose(); r2.forceContextLoss(); needs = true; }
 }
+/**
+ * One building's files for a game mod, into dir (a zip or a folder of one): the placeable XML, the i3d, its textures and imported
+ * items and the shop picture. Returns the 256 px icon as a PNG blob (or null), for the mod's own icon.
+ */
+async function fillMod(dir, name) {
+  dir.file(MOD_FILES.xml, placeableXml(p, name));
+  dir.file(MOD_FILES.i3d, buildI3d(p, {withTex: true}));
+  await addTextures(dir);
+  await addItems(dir);
+  const store = renderStoreImage(512), icon = renderStoreImage(256);
+  if (store) dir.file(MOD_FILES.store, await canvasBlob(store));
+  return icon ? await canvasBlob(icon) : null;
+}
+/** For a mod of several buildings: this one's files into folder dir; {icon, description, author} for the modDesc. */
+async function exportInto(dir, name) {
+  const icon = await fillMod(dir, name);
+  return {icon, description: p.modDescription || defaultModDescription(p), author: p.modAuthor || author};
+}
 /** The house as a game mod: FS25_Name.zip with modDesc, store XML, i3d, textures, icon and shop picture. */
 async function exportMod(name) {
   const mod = modName(name);
@@ -1865,13 +1883,8 @@ async function exportMod(name) {
   try {
     const zip = new JSZip();
     zip.file("modDesc.xml", modDescXml(p, name, {author}));
-    zip.file(MOD_FILES.xml, placeableXml(p, name));
-    zip.file(MOD_FILES.i3d, buildI3d(p, {withTex: true}));
-    await addTextures(zip);
-    await addItems(zip);
-    const store = renderStoreImage(512), icon = renderStoreImage(256);
-    if (store) zip.file(MOD_FILES.store, await canvasBlob(store));
-    if (icon) zip.file(MOD_FILES.icon, await canvasBlob(icon));
+    const icon = await fillMod(zip, name);
+    if (icon) zip.file(MOD_FILES.icon, icon);
     saveFile(`${mod}.zip`, await zip.generateAsync({type: "blob"}), () => toast("The download didn\u2019t start. Try again or use another browser."));
   } catch (e) { toast("Couldn\u2019t pack the mod. Try again."); }
 }
@@ -1935,5 +1948,5 @@ initThree();
 rebuild(true);
 loadAssets();
 
-return {getSettings: () => serialize(p), setSettings, exportModel, exportMod, exportSettings, importSettings, snapshot, toast, destroy};
+return {getSettings: () => serialize(p), setSettings, exportModel, exportMod, exportInto, exportSettings, importSettings, snapshot, toast, destroy};
 }

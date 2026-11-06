@@ -2196,6 +2196,30 @@ ${blocks}</placeable>
 `;
 }
 
+/**
+ * modDesc.xml for a mod with several buildings: entries [{xml: "folder/house.xml"}] (each building in its own folder, with its
+ * own i3d, textures and shop picture), the mod's title, description and author, and the icon's file name.
+ */
+export function modDescXmlMulti(entries, {title = "", description = "", author = "", icon = MOD_FILES.icon} = {}) {
+  return `<?xml version="1.0" encoding="utf-8" standalone="no" ?>
+<modDesc descVersion="${MOD_DESC_VERSION}">
+    <author>${esc(String(author).trim() || "House to i3d")}</author>
+    <version>1.0.0.0</version>
+    <title>
+        <en>${esc(shopName(title))}</en>
+    </title>
+    <description>
+        <en>${cdata(description)}</en>
+    </description>
+    <iconFilename>${icon}</iconFilename>
+    <multiplayer supported="true"/>
+    <storeItems>
+${entries.map(e => `        <storeItem xmlFilename="${esc(e.xml)}"/>`).join("\n")}
+    </storeItems>
+</modDesc>
+`;
+}
+
 /** Author name for a user ({name, email}): their name, else the part of the email before the @. */
 export function authorName(user) {
   if (!user) return "";

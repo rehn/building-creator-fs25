@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { api, type ProjectSummary, type Template } from "@/lib/api";
 import { useUser } from "@/lib/useUser";
 import { TopBar } from "@/components/TopBar";
-import { PRESETS, CATEGORIES, KINDS, groupByKind } from "@/editor/model.mjs";
+import { PRESETS, CATEGORIES, KINDS, groupByKind, modName, slugify, authorName, modDescXmlMulti } from "@/editor/model.mjs";
 
 // A built-in design or a template the admin published (with its preview).
 type Preset = { id: string; name: string; blurb: string; kind: string; category: string; settings: Record<string, unknown>; thumbnail?: string };
@@ -38,6 +38,10 @@ export default function HousesPage() {
   // "New" is open: the templates, grouped by kind of building.
   const [choosing, setChoosing] = useState(false);
   const [templates, setTemplates] = useState<Preset[]>([]);
+  // buildings ticked to be packed together into one game mod, its title, and how far the packing is
+  const [picked, setPicked] = useState<string[]>([]);
+  const [modTitle, setModTitle] = useState("My buildings");
+  const [packing, setPacking] = useState<{ done: number; total: number; name: string } | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -98,11 +102,55 @@ export default function HousesPage() {
       setHouses(list => (list ?? []).map(x => (x.id === p.id ? p : x)));
     });
   };
+  const toggle = (id: string) => setPicked(list => (list.includes(id) ? list.filter(x => x !== id) : [...list, id]));
+  /**
+   * One game mod of the ticked buildings: each is opened in an editor that is not shown (the same code as the editor's own
+   * "Export game mod" makes its i3d, textures and pictures), its files go in a folder of its own and the modDesc lists them all.
+   */
+  const pack = () => run(async () => {
+    const ids = picked.filter(id => houses?.some(h => h.id === id));
+    if (!ids.length) return;
+    const [{ createEditor }, { default: JSZip }] = await Promise.all([import("@/editor/editor.mjs"), import("jszip")]);
+    const zip = new JSZip(), entries: { xml: string }[] = [], notes: string[] = [], used = new Set<string>();
+    let icon: Blob | null = null, author = authorName(user);
+    try {
+      for (let i = 0; i < ids.length; i++) {
+        const h = houses!.find(x => x.id === ids[i])!;
+        setPacking({ done: i, total: ids.length, name: h.name });
+        const proj = await api.project(h.id);
+        let slug = slugify(h.name), n = 2;
+        while (used.has(slug)) slug = slugify(h.name) + "_" + n++;
+        used.add(slug);
+        // an editor that is out of sight but laid out (the renderer needs a size)
+        const host = document.createElement("div");
+        host.className = "editor-host";
+        host.style.cssText = "position:fixed;left:-10000px;top:0;width:900px;height:700px;visibility:hidden;pointer-events:none";
+        document.body.appendChild(host);
+        const ed = createEditor(host, { initial: proj.data as Record<string, unknown>, author, assets: { list: api.assets, file: api.assetFile } });
+        try {
+          const info = await ed.exportInto(zip.folder(slug)!, h.name);
+          entries.push({ xml: slug + "/house.xml" });
+          if (!icon && info.icon) icon = info.icon;
+          if (info.author && !author) author = info.author;
+          notes.push(h.name + (info.description ? ": " + info.description : ""));
+        } finally { ed.destroy(); host.remove(); }
+      }
+      setPacking({ done: ids.length, total: ids.length, name: "" });
+      zip.file("modDesc.xml", modDescXmlMulti(entries, { title: modTitle, description: notes.join("\n\n"), author }));
+      if (icon) zip.file("icon.png", icon);
+      const blob = await zip.generateAsync({ type: "blob" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob); a.download = modName(modTitle) + ".zip";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    } finally { setPacking(null); }
+  });
   const remove = (h: ProjectSummary) => {
     if (!window.confirm(`Delete \u201C${h.name}\u201D? This can\u2019t be undone.`)) return;
     run(async () => {
       await api.deleteProject(h.id);
       setHouses(list => (list ?? []).filter(x => x.id !== h.id));
+      setPicked(list => list.filter(x => x !== h.id));
     });
   };
 
@@ -130,6 +178,9 @@ export default function HousesPage() {
             <div className="grid">
               {g.items.map(h => (
                 <article className="house" key={h.id}>
+                  <label className="pick" title="Tick to pack with others into one game mod">
+                    <input type="checkbox" checked={picked.includes(h.id)} onChange={() => toggle(h.id)} disabled={busy} aria-label={`Pack ${h.name} into a game mod`} />
+                  </label>
                   <Link className="thumb" href={`/projects/${h.id}`} aria-label={`Open ${h.name}`}>
                     {h.thumbnail
                       ? <img src={h.thumbnail} alt="" />
@@ -149,6 +200,16 @@ export default function HousesPage() {
             </div>
           </section>
         ))}
+        {picked.length > 0 && (
+          <div className="packbar" role="region" aria-label="Pack a game mod">
+            <span><b>{picked.length}</b> selected</span>
+            <label>Mod name <input type="text" value={modTitle} onChange={e => setModTitle(e.target.value)} maxLength={60} disabled={busy} /></label>
+            <button className="primary" type="button" onClick={pack} disabled={busy}>
+              {packing ? `Packing ${Math.min(packing.done + 1, packing.total)} of ${packing.total}${packing.name ? ": " + packing.name : ""}…` : "Pack into one game mod"}
+            </button>
+            <button type="button" onClick={() => setPicked([])} disabled={busy}>Clear</button>
+          </div>
+        )}
       </main>
     </>
   );

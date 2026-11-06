@@ -4,6 +4,8 @@ export interface EditorHandle {
   setSettings(settings: Settings): void;
   exportModel(name: string): Promise<void>;
   exportMod(name: string): Promise<void>;
+  /** One building's mod files into a folder of a zip (for a mod of several buildings): the icon blob, description and author for the modDesc. */
+  exportInto(dir: { file(name: string, data: unknown): unknown }, name: string): Promise<{ icon: Blob | null; description: string; author: string }>;
   exportSettings(name: string): void;
   importSettings(file: File): Promise<boolean>;
   snapshot(): string | null;
