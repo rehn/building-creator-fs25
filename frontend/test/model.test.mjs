@@ -701,7 +701,8 @@ for (const [name, settings] of Object.entries(interiorCases)) {
     for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++)
       assert.ok(overlap(boxes[i], boxes[j]) < 1e-6, `rooms ${i} and ${j} overlap`);
     // curtains hang inside the rooms, behind the glass
-    const cur = verts(geo.G.curtain);
+    // (the ground floor's curtains hang in the real room: only the floors above have a pretend one)
+    const cur = verts(geo.G.curtain).filter(q => q[1] > dims.F + p.floorHeight - 0.02);
     assert.ok(cur.length > 0, "no curtains");
     for (const q of cur) assert.ok(boxes.some(b => inAabb(q, b)), `curtain point ${q} outside every room`);
     assertMeshValid(geo.G.interior, "interior");
@@ -821,7 +822,9 @@ test("interior: each window's curtains get its own color, the rest the house col
   assert.equal(g.c.length, g.p.length, "one color per curtain vertex");
   const boxes = geo.rooms.map(r => aabb(roomCorners(r)));
   for (let i = 0; i < g.p.length / 3; i++) {
-    const r = geo.rooms[boxes.findIndex(b => inAabb([g.p[i*3], g.p[i*3+1], g.p[i*3+2]], b))];
+    const at = boxes.findIndex(b => inAabb([g.p[i*3], g.p[i*3+1], g.p[i*3+2]], b));
+    if (at < 0) { assert.ok(g.p[i*3+1] < p.foundation + p.floorHeight, "outside every room only on the ground floor"); continue; }
+    const r = geo.rooms[at];
     const want = r.dormer ? "#2244AA" : r.op.id === p.windows[0].id ? "#AA2233" : "#EEEEEE";
     assert.equal(hexOf(g.c, i), want);
     assert.equal(r.curtainColor, want);

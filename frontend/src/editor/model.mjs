@@ -833,9 +833,13 @@ function pleat(w, s0, s1, t0, t1, d, amp) {
   for (let i = 0; i < n; i++) {
     const a = lerp(s0, s1, i / n), b = lerp(s0, s1, (i + 1) / n);
     const da = d + (i % 2 ? -amp : amp), db = d + (i % 2 ? amp : -amp);
-    quad("curtain", [WP(w, a, t0, da), WP(w, b, t0, db), WP(w, b, t1, db), WP(w, a, t1, da)], [[a, t0], [b, t0], [b, t1], [a, t1]], w.n);
+    const pts = [WP(w, a, t0, da), WP(w, b, t0, db), WP(w, b, t1, db), WP(w, a, t1, da)], uvs = [[a, t0], [b, t0], [b, t1], [a, t1]];
+    quad("curtain", pts, uvs, w.n);
+    if (curtainBoth) quad("curtain", pts, uvs, neg(w.n));   // (in a room you can walk into, the cloth is seen from inside too)
   }
 }
+/** Whether the curtains being built are seen from both sides (a walk-in building's ground floor), not only from outside. */
+let curtainBoth = false;
 /**
  * Curtains for room R in its layout (R.curtain):
  *   sides: side panels and a valance; panels: side panels only; valance: valance (kappa) only;
@@ -1070,7 +1074,12 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
       }
     } else wbox("trim", w, o.s0 - fr - 0.04 * k, o.s1 + fr + 0.04 * k, o.t0 - 0.07 * k, o.t0, 0, out + 0.05 * k);
   });
-  if (p.interior) for (const o of ops) if (o.kind === "window" && o.glass && !(hollow && !dormer && o.t0 < p.floorHeight)) { const R = roomFor(w, o, ops, r, topAt, !!dormer, dormer || p.windows.find(x => x.id === o.id)); rooms.push(R); buildRoom(R); }
+  if (p.interior) for (const o of ops) if (o.kind === "window" && o.glass) {
+    const R = roomFor(w, o, ops, r, topAt, !!dormer, dormer || p.windows.find(x => x.id === o.id));
+    // a ground-floor window of a walk-in building looks into the real room: curtains only, seen from both sides; the rest get a pretend room
+    if (hollow && !dormer && o.t0 < p.floorHeight) { curtainBoth = true; buildCurtains(R); curtainBoth = false; }
+    else { rooms.push(R); buildRoom(R); }
+  }
 }
 
 /** Appends a ready-made mesh (with its own normals) to material mat. */
