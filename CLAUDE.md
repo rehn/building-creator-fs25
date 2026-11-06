@@ -55,6 +55,8 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   Wallpaper on the outer walls' inside: setting insidePaper ("none" | WALLPAPERS index) for every inside wall and p.papers = [{id, wall, s0, s1 (m from the
   wall's left end seen from outside), paper}] sections (layout.mjs cleanPapers, wallBreaks = where inner walls meet a wall); buildWall's inside faces use
   paperAt(s); Inside walls section in Finish (editor.mjs renderPapersUI). A wing's side walls' inside faces run right up to the house (see-through.test.mjs).
+  Number entry: the number beside any slider (an output inside .field .fl) can be clicked and typed over, sums allowed (calc.mjs evalNumber; editor.mjs
+  installNumberEntry; a slider whose number is not its own value has data-scale, e.g. a window's position in metres).
   Palette: catalog entries have `group` (layout.mjs pieceGroups gives the groups in order); each piece has a thumbnail: model.mjs pieceSheet(p) builds one
   of each piece in a big empty room (geo.itemParts[id] = the vertices of each material a piece drew), pieceMeshes(sheet, id) slices one out, and
   editor.mjs makeThumbs() renders each to a small picture (once per kind, ensureThumbs after entering the arranging). A piece's setting must not be
