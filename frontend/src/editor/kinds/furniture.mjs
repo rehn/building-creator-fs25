@@ -120,6 +120,110 @@ export const CATALOG = {
         }
       }
     }},
+  singlebed: {name: "Single bed (enkelsäng)", mount: "wall", collision: true, params: [], defaults: {},
+    size: () => [0.9, 2.0], height: () => 0.95,
+    build(c) {
+      wood(c, C.pine, 0); c.box(-0.45, 0.45, -1.0, -0.96, 0.1, 0.95);                              // headboard
+      c.box(-0.45, 0.45, 0.96, 1.0, 0.1, 0.5);                                                      // foot board
+      wood(c, C.pine, 1); for (const x of [-0.45, 0.41]) c.box(x, x + 0.04, -0.96, 0.96, 0.18, 0.32);  // side rails
+      for (const x of [-0.45, 0.41]) for (const z of [-1.0, 0.96]) c.box(x, x + 0.04, z, z + 0.04, 0, 0.18);   // legs
+      c.paint(C.linen); c.box(-0.41, 0.41, -0.96, 0.96, 0.32, 0.48);                                // mattress
+      c.box(-0.32, 0.32, -0.93, -0.55, 0.48, 0.58);                                                 // pillow
+      c.paint(C.blue); c.box(-0.42, 0.42, -0.4, 0.96, 0.48, 0.55);                                  // the quilt
+      c.paint(shade(C.blue, 0.3)); c.box(-0.42, 0.42, -0.5, -0.4, 0.48, 0.56);                      // turned down
+    }},
+  bookcase: {name: "Bookcase (bokhylla, Billy style)", mount: "wall", collision: true,
+    params: [{k: "count", label: "Sections (80 cm each)", min: 1, max: 4, step: 1}], defaults: {count: 2},
+    size: it => [it.count * 0.8, 0.28], height: () => 2.02,
+    build(c, it) {
+      const w = it.count * 0.8, shelves = [0.03, 0.42, 0.78, 1.14, 1.5, 1.86], white = "#E9E6DD";
+      c.paint(shade(white, -0.5), "wood"); c.box(-w / 2, w / 2, -0.14, -0.125, 0, 2.02);            // the back
+      c.paint(white, "wood");
+      for (let i = 0; i <= it.count; i++) { const x = -w / 2 + i * 0.8; c.box(Math.max(-w / 2, x - 0.012), Math.min(w / 2, x + 0.012), -0.125, 0.14, 0, 2.02); }   // uprights
+      c.box(-w / 2, w / 2, -0.125, 0.14, 2.0, 2.02);                                                // the top
+      for (const y of shelves) c.box(-w / 2 + 0.012, w / 2 - 0.012, -0.12, 0.13, y, y + 0.02);        // shelves
+      // books and a few things, section by section
+      for (let sec = 0; sec < it.count; sec++) for (let sh = 0; sh < 5; sh++) {
+        if ((sec + sh) % 4 === 3) continue;
+        let x = -w / 2 + sec * 0.8 + 0.04;
+        const end = -w / 2 + (sec + 1) * 0.8 - 0.05 - ((sec * 3 + sh) % 4) * 0.12;
+        for (let k = 0; x < end; k++) {
+          const t = 0.03 + ((sec + sh + k) % 3) * 0.012, h = 0.2 + ((sec * 5 + sh * 3 + k) % 4) * 0.03;
+          c.paint(C.spine[(sec + sh + k) % C.spine.length]); c.box(x, Math.min(x + t, end), -0.1, 0.1, shelves[sh] + 0.02, shelves[sh] + 0.02 + h);
+          x += t + 0.004;
+        }
+      }
+    }},
+  tvbench: {name: "TV on a TV bench (tv-bänk)", mount: "wall", collision: true,
+    params: [{k: "width", label: "Bench width", min: 1.2, max: 2.2, step: 0.1, unit: " m"}], defaults: {width: 1.6},
+    size: it => [it.width, 0.46], height: () => 1.3,
+    build(c, it) {
+      const w = it.width, tv = Math.min(1.2, w * 0.78), th = tv * 0.5625;
+      wood(c, C.oak, 0); c.box(-w / 2, w / 2, -0.21, 0.21, 0.41, 0.45);                              // the top
+      c.box(-w / 2, -w / 2 + 0.02, -0.21, 0.21, 0.12, 0.41); c.box(w / 2 - 0.02, w / 2, -0.21, 0.21, 0.12, 0.41);   // ends
+      c.box(-w / 2, w / 2, -0.21, 0.21, 0.12, 0.14);                                                 // the bottom
+      c.box(-w / 2 + 0.02, w / 2 - 0.02, -0.21, -0.19, 0.14, 0.41);                                  // the back
+      wood(c, C.oak, 1); for (const x of [-w / 2 + 0.02, 0.5 * w - 0.06]) for (const z of [-0.19, 0.15]) c.box(x, x + 0.04, z, z + 0.04, 0, 0.12);   // legs
+      // two doors and an open compartment
+      const dw = (w - 0.06) / 3;
+      for (let i = 0; i < 3; i++) {
+        const x0 = -w / 2 + 0.03 + i * dw;
+        if (i === 1) { c.paint(C.iron, "steel"); c.box(x0 + 0.05, x0 + dw - 0.05, 0.0, 0.14, 0.15, 0.27); continue; }      // a box (the player / router) in the open one
+        wood(c, C.oak, 2); c.box(x0 + 0.005, x0 + dw - 0.005, 0.2, 0.22, 0.15, 0.4);
+        c.paint(C.brass); c.box(x0 + dw / 2 - 0.05, x0 + dw / 2 + 0.05, 0.22, 0.235, 0.27, 0.285);
+      }
+      // the television: a flat screen on a foot
+      const y0 = 0.45;
+      c.paint(C.iron, "steel"); c.box(-0.16, 0.16, -0.08, 0.1, y0, y0 + 0.012); c.box(-0.025, 0.025, -0.03, 0.01, y0 + 0.012, y0 + 0.1);
+      c.paint("#111214", "plastic"); c.box(-tv / 2, tv / 2, -0.04, 0.0, y0 + 0.1, y0 + 0.1 + th);   // the frame and case
+      c.paint("#1B2A35", "plastic"); c.box(-tv / 2 + 0.012, tv / 2 - 0.012, 0.0, 0.004, y0 + 0.112, y0 + 0.088 + th);   // the screen
+    }},
+  desk: {name: "Desk (skrivbord)", mount: "wall", collision: true,
+    params: [{k: "width", label: "Width", min: 1.0, max: 1.8, step: 0.1, unit: " m"},
+      {k: "computer", label: "Computer", min: 0, max: 1, step: 1, options: ["No computer", "With a computer"]}], defaults: {width: 1.4, computer: 1},
+    size: it => [it.width, 0.7], height: it => Math.round(it.computer) ? 1.2 : 0.76,
+    build(c, it) {
+      const w = it.width, x1 = w / 2, x0 = -w / 2;
+      wood(c, C.pine, 0); c.box(x0, x1, -0.35, 0.35, 0.72, 0.76);                                    // the top
+      wood(c, C.pine, 1); c.box(x0 + 0.02, x0 + 0.05, -0.32, 0.32, 0, 0.72);                         // the left end panel
+      c.box(x0 + 0.05, x1 - 0.5, -0.33, -0.31, 0.12, 0.7);                                           // a modesty panel at the back
+      // a drawer unit at the right
+      c.box(x1 - 0.48, x1 - 0.45, -0.32, 0.32, 0, 0.72); c.box(x1 - 0.03, x1, -0.32, 0.32, 0, 0.72);
+      c.box(x1 - 0.48, x1, -0.32, 0.32, 0.0, 0.04); c.box(x1 - 0.48, x1, -0.32, -0.3, 0.04, 0.72);
+      for (let i = 0; i < 3; i++) {
+        const y = 0.08 + i * 0.21;
+        wood(c, C.pine, 2 + i); c.box(x1 - 0.445, x1 - 0.035, 0.3, 0.32, y, y + 0.19);
+        c.paint(C.brass); c.box(x1 - 0.29, x1 - 0.19, 0.32, 0.335, y + 0.09, y + 0.1);
+      }
+      if (Math.round(it.computer)) {
+        const cx = Math.max(x0 + 0.34, (x0 + x1 - 0.5) / 2 + 0.05);
+        c.paint(C.iron, "steel"); c.box(cx - 0.12, cx + 0.12, -0.28, -0.08, 0.76, 0.772); c.box(cx - 0.02, cx + 0.02, -0.2, -0.16, 0.772, 0.88);   // the monitor's foot and neck
+        c.paint("#111214", "plastic"); c.box(cx - 0.31, cx + 0.31, -0.2, -0.16, 0.86, 1.2);           // the monitor
+        c.paint("#243846", "plastic"); c.box(cx - 0.295, cx + 0.295, -0.16, -0.155, 0.875, 1.185);    // its screen
+        c.paint("#1E1F21", "plastic"); c.box(cx - 0.22, cx + 0.2, 0.0, 0.17, 0.76, 0.778);            // the keyboard
+        c.paint("#7C8084", "plastic"); for (let k = 0; k < 3; k++) c.box(cx - 0.2, cx + 0.18, 0.015 + k * 0.05, 0.04 + k * 0.05, 0.778, 0.782);   // its keys
+        c.paint("#111214", "plastic"); c.box(cx + 0.3, cx + 0.36, 0.05, 0.13, 0.76, 0.78);            // the mouse
+        c.paint("#2B2D30", "steel"); c.box(x0 + 0.09, x0 + 0.29, -0.26, 0.14, 0, 0.42);              // the computer on the floor
+        c.paint("#7C8084", "steel"); c.box(x0 + 0.1, x0 + 0.28, 0.14, 0.15, 0.3, 0.36);              // its front
+      }
+    }},
+  divan: {name: "Divan sofa (divansoffa)", mount: "wall", collision: true, params: [], defaults: {},
+    size: () => [1.95, 0.9], height: () => 0.78,
+    build(c) {
+      const ochre = "#B8883A";
+      wood(c, C.oak, 0); for (const x of [-0.95, 0.91]) for (const z of [-0.41, 0.37]) c.box(x, x + 0.04, z, z + 0.04, 0, 0.12);   // legs
+      c.box(-0.975, 0.975, -0.44, 0.44, 0.12, 0.2);                                                  // the frame
+      c.paint(ochre); c.box(-0.97, 0.97, -0.44, 0.44, 0.2, 0.36);                                    // the base
+      c.paint(tone(ochre, 1)); c.box(-0.95, 0.95, -0.4, 0.43, 0.36, 0.46);                          // a long seat cushion
+      c.paint(shade(ochre, -0.2)); c.box(-0.97, 0.97, -0.45, -0.28, 0.36, 0.7);                     // the low back
+      c.paint(tone(ochre, 2)); c.box(0.74, 0.97, -0.44, 0.44, 0.36, 0.64);                          // the bolster arm at one end
+      c.paint(C.wool); c.box(-0.78, -0.4, -0.27, -0.14, 0.46, 0.7);                                  // two scatter cushions
+      c.paint(C.cushion); c.box(-0.3, 0.08, -0.27, -0.14, 0.46, 0.66);
+      // seams between the seat cushions, a welt along the front, and buttons in the back
+      c.paint(shade(ochre, -0.4)); for (const x of [-0.32, 0.32]) c.box(x - 0.004, x + 0.004, -0.4, 0.43, 0.46, 0.462);
+      c.box(-0.95, 0.95, 0.43, 0.436, 0.36, 0.46); c.box(0.74, 0.745, -0.44, 0.44, 0.36, 0.64);
+      c.paint(shade(ochre, -0.55)); for (let i = 0; i < 6; i++) c.cyl(-0.8 + i * 0.3, -0.275, 0.5 + (i % 2) * 0.1, 0.014, 0.008, 8);
+    }},
   rug: {name: "Rag rug (trasmatta)", mount: "floor", collision: false, params: [], defaults: {},
     size: () => [2.0, 0.8], height: () => 0.012,
     build(c) {
