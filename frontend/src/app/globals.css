@@ -105,7 +105,10 @@ table.list th { color: var(--muted); font-weight: 500; font-size: 14px; }
 .badge.ok { color: var(--ok); border-color: currentColor; }
 
 /* ---------- Editor page ---------- */
-.editor-page { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+/* The editor fills the window: clip (not hidden) so focus and scrollIntoView cannot scroll the page, and no rubber-banding. */
+.editor-page { height: 100dvh; display: flex; flex-direction: column; overflow: clip; }
+html:has(.editor-page) { overscroll-behavior: none; }
+@media (min-width: 821px) { html:has(.editor-page), html:has(.editor-page) body { overflow: hidden; height: 100%; } }
 .editor-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
 .editor-bar .back { padding: 6px 10px; }
 .editor-bar input.name {
@@ -122,7 +125,7 @@ table.list th { color: var(--muted); font-weight: 500; font-size: 14px; }
 /* Settings in two sides: "build" and "finish". One column with tabs, or on wide screens one panel
    each side of the 3D view. The editor's data-tab says which side the tabs show. */
 .hx-editor { flex: 1; min-height: 0; display: grid; grid-template-columns: 350px 1fr; grid-template-rows: auto 1fr; }
-.hx-panel { overflow-y: auto; min-height: 0; border-right: 1px solid var(--line); background: var(--panel); padding: 4px 16px 32px; }
+.hx-panel { position: relative; overflow-y: auto; min-height: 0; border-right: 1px solid var(--line); background: var(--panel); padding: 4px 16px 32px; }
 .hx-tabs { grid-column: 1; grid-row: 1; display: flex; gap: 4px; padding: 6px 16px 0; background: var(--panel); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .hx-tabs button { flex: 1; justify-content: center; border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: none; padding: 8px 0 7px; font-weight: 600; font-size: 15px; color: var(--muted); }
 .hx-tabs button:hover { color: var(--ink); background: none; }
