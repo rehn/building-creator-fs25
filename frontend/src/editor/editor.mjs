@@ -1259,12 +1259,24 @@ function renderInsideUI() {
             // a choice (wallpaper, a doorway or not): a list
             ? `<div class="field"><div class="fl"><label for="pc-${f.k}">${f.label}</label></div><select id="pc-${f.k}" data-k="${f.k}">${f.options.map((nm, i) => `<option value="${i}" ${i === Math.round(it[f.k]) ? "selected" : ""}>${esc(nm)}</option>`).join("")}</select></div>`
             : `<div class="field"><div class="fl"><label for="pc-${f.k}">${f.label}</label><output id="pc-${f.k}-o">${fmtP(f, it[f.k])}</output></div><input type="range" id="pc-${f.k}" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}" value="${it[f.k]}"></div>`).join("")
+          + posSliders(it, def)
           + `<div class="row"><button type="button" id="pcTurn" ${def.mount === "wall" ? "disabled title=\"Wall pieces always face the room\"" : ""}>Turn</button><button type="button" id="pcRemove" class="danger">Remove</button></div></div>`
         : `<p class="hint">Click a piece in the building to change or move it.</p>`)
       + (pr.size ? `<p class="warn">${pr.size} piece${pr.size > 1 ? "s have" : " has"} a problem (red).</p>` : "")
       + fillRow;
     ed.querySelectorAll("[data-add]").forEach(b => b.onclick = () => addPiece(b.dataset.add));
     if (it) {
+      // position sliders: move the piece without dragging (to the centimetre; wall pieces stay on their wall)
+      ed.querySelectorAll("[data-pos]").forEach(inp => {
+        const axis = inp.dataset.pos;
+        inp.oninput = () => {
+          const cur = selected(), next = snapItem({...cur, [axis]: +inp.value}, def, roomNow(), p.items, catalogNow(), true);
+          p.items = p.items.map(x => x.id === cur.id ? next : x);
+          for (const k of ["x", "z"]) { const o = $(`pp-${k}`); if (o) { o.value = next[k]; $(`pp-${k}-o`).textContent = next[k].toFixed(2) + " m"; } }
+          ins.keep = true; rebuild(false); ins.keep = false;
+        };
+        inp.onchange = () => { ins.hist.push(p.items); persist(); rebuild(false); };
+      });
       $("pcTurn").onclick = turnSelected; $("pcRemove").onclick = removeSelected;
       ed.querySelectorAll("[data-k]").forEach(inp => {
         const f = def.params.find(x => x.k === inp.dataset.k);
@@ -1285,6 +1297,14 @@ function renderInsideUI() {
     toast("Filled to match the building");
   };
   $("insideClear").onclick = () => { if (ins.on) commitItems([], null); else { p.items = []; persist(); rebuild(false); } };
+}
+/** Sliders for where a piece stands: left/right (x) and back/front (z); a wall piece only slides along its wall. */
+function posSliders(it, def) {
+  if (def.missing) return "";
+  const r = roomBox(roomNow()), alongX = it.rot % 180 === 0;
+  const axes = def.mount === "wall" ? (alongX ? ["x"] : ["z"]) : ["x", "z"];
+  const lab = {x: "Left / right", z: "Back / front"}, range = {x: [r.x0, r.x1], z: [r.z0, r.z1]};
+  return axes.map(k => `<div class="field"><div class="fl"><label for="pp-${k}">${lab[k]} (position)</label><output id="pp-${k}-o">${(+it[k]).toFixed(2)} m</output></div><input type="range" id="pp-${k}" data-pos="${k}" min="${range[k][0].toFixed(2)}" max="${range[k][1].toFixed(2)}" step="0.01" value="${it[k]}"></div>`).join("");
 }
 function renderDormUI() {
   const ed = $("dormEditor");

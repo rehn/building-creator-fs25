@@ -219,9 +219,10 @@ const snap = v => Math.round(v / GRID) * GRID + 0; // (+ 0 turns -0 into 0)
 const clamp = (v, lo, hi) => lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v));
 /**
  * Where an item ends up when dropped: a wall item against the nearest inside wall, facing the room,
- * slid along it to the grid; a floor item on the grid. Both kept inside the room.
+ * slid along it to the grid; a floor item on the grid (to the centimetre when `fine`). Both kept inside the room.
  */
-export function snapItem(item, def, room, others = [], catalog = {}) {
+export function snapItem(item, def, room, others = [], catalog = {}, fine = false) {
+  const sn = fine ? v => +v.toFixed(2) + 0 : snap;   // (fine: to the centimetre, for the position sliders)
   const [w, d] = def.size(item);
   if (def.mount === "wall") {
     // the nearest stretch of wall (its distance from the point to the stretch, not to its line)
@@ -232,16 +233,16 @@ export function snapItem(item, def, room, others = [], catalog = {}) {
     const inner = innerFaces(room, others, catalog).filter(f => dist(f) < INNER_NEAR + d / 2);
     const wl = nearest(inner.length ? inner : room.walls);
     if (wl.x0 === wl.x1) {
-      const z = clamp(snap(item.z), wl.z0 + w/2, wl.z1 - w/2);
+      const z = clamp(sn(item.z), wl.z0 + w/2, wl.z1 - w/2);
       return {...item, rot: wl.rot, x: wl.x0 + wl.into[0] * d/2, z};
     }
-    const x = clamp(snap(item.x), wl.x0 + w/2, wl.x1 - w/2);
+    const x = clamp(sn(item.x), wl.x0 + w/2, wl.x1 - w/2);
     return {...item, rot: wl.rot, x, z: wl.z0 + wl.into[1] * d/2};
   }
   // a floor piece, kept in the part of the room nearest to it
-  const f = footprint({...item, x: 0, z: 0}, def), at = r => ({...item, x: clamp(snap(item.x), r.x0 - f.x0, r.x1 - f.x1), z: clamp(snap(item.z), r.z0 - f.z0, r.z1 - f.z1)});
+  const f = footprint({...item, x: 0, z: 0}, def), at = r => ({...item, x: clamp(sn(item.x), r.x0 - f.x0, r.x1 - f.x1), z: clamp(sn(item.z), r.z0 - f.z0, r.z1 - f.z1)});
   // where it is put if that is inside the room (it may straddle two parts), else the nearest spot in each part
-  const bx = roomBox(room), here = {...item, x: clamp(snap(item.x), bx.x0 - f.x0, bx.x1 - f.x1), z: clamp(snap(item.z), bx.z0 - f.z0, bx.z1 - f.z1)};
+  const bx = roomBox(room), here = {...item, x: clamp(sn(item.x), bx.x0 - f.x0, bx.x1 - f.x1), z: clamp(sn(item.z), bx.z0 - f.z0, bx.z1 - f.z1)};
   const tries = [here, ...(room.rects || [room]).map(at)], fits = tries.filter(q => inRoom(room, footprint(q, def)));
   if (def.snapWalls && !inRoom(room, footprint(here, def))) {
     // too long for the part it is put in: as long as that part is there (a wall into a wing narrower than it)
@@ -251,7 +252,7 @@ export function snapItem(item, def, room, others = [], catalog = {}) {
   }
   const far = q => Math.hypot(q.x - item.x, q.z - item.z);
   const placed = (fits.length ? fits : tries).reduce((best, q) => far(q) < far(best) ? q : best);
-  return def.snapWalls ? endsToWalls(placed, def, room, others, catalog) : placed;
+  return def.snapWalls && !fine ? endsToWalls(placed, def, room, others, catalog) : placed;
 }
 
 /** The two faces of every inner wall (def.snapWalls, with def.runs: the solid stretches along it) as wall stretches like room.walls'. */

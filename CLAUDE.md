@@ -52,7 +52,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   has it) and wallpaper per side from WALLPAPERS (limewash, plain, striped, flowers, painted boards; surfaces
   paperPlain/paperStripe/paperFlower in surfaces.mjs, aged by age.mjs). Piece params can be choices (params[].options:
   an index, a list in the editor; def.snapWalls: layout.mjs endsToWalls draws a wall's ends to the room's walls within 0.25 m, and both
-  ends fill the room there, wall pieces (mount wall) also stand against inner walls (innerFaces, def.runs), and it also meets other inner walls (their faces, T-junctions: snapItem(item, def, room, others, catalog)); length step 0.01). The wall goes up to c.ceil (kit field): the ceiling of a house, the walls' top in a barn.
+  ends fill the room there (snapItem(..., fine = true) is for the editor's position sliders: centimetres, no end snapping), wall pieces (mount wall) also stand against inner walls (innerFaces, def.runs), and it also meets other inner walls (their faces, T-junctions: snapItem(item, def, room, others, catalog)); length step 0.01). The wall goes up to c.ceil (kit field): the ceiling of a house, the walls' top in a barn.
   Walk-in everywhere (PLAN step 3, done): the farmhouse is walkIn too, with kind.ceiling (a ceiling over the ground
   floor; inside walls stop there; no roof frame; roof underside a soffit), doorsIn (its doors swing in), entrance
   ("porch" for a new first door), insideWalls {wall, low, kick} (barns default BARN_WALLS), furnish (board floor),

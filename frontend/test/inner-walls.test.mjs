@@ -182,3 +182,17 @@ test("a wall piece put near an inner wall stands against it even when a room wal
   const t = snapItem({id: 2, type: "sofa", x: 0, z: -1, rot: 0}, cat.sofa, room, [w], cat);
   assert.ok(Math.abs(t.z - (room.z0 + d / 2)) < 1e-9, JSON.stringify(t));
 });
+
+test("fine positions: the sliders move a piece to the centimetre, without the grid or the wall ends pulling", () => {
+  const p = house([]), room = roomOf(p), cat = catalogFor(p);
+  const t = snapItem({id: 1, type: "table", x: 0.43, z: -0.27, rot: 0}, cat.table, room, [], cat, true);
+  assert.deepEqual([t.x, t.z], [0.43, -0.27]);
+  assert.notDeepEqual([snapItem({id: 1, type: "table", x: 0.43, z: -0.27, rot: 0}, cat.table, room).x], [0.43]);
+  // a wall piece slides along its wall by centimetres and stays against it
+  const s = snapItem({id: 2, type: "sofa", x: 0.43, z: 0, rot: 0}, cat.sofa, room, [], cat, true);
+  assert.equal(s.x, 0.43);
+  assert.equal(Math.abs(s.z) > 2, true);
+  // an inner wall near a wall keeps where the slider put it
+  const w = snapItem(wall({id: 3, rot: 90, x: 1, z: -1.75, length: 3, door: 0}), cat.innerwall, room, [], cat, true);
+  assert.equal(w.z, -1.75);
+});
