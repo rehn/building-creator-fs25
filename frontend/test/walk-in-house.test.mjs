@@ -71,3 +71,22 @@ test("doors: a door can be set not to open: no animation, the wall's collision c
   assert.equal(roomOf(q).keepOut.length, 0, "nothing kept clear behind a door that doesn't open");
   assert.ok(roomOf(p).keepOut.length > 0);
 });
+
+test("doors: the hinges are on the left (seen from outside) unless set to the right; a pair keeps its outer hinges", () => {
+  const set = (extra, w) => { const b = sanitize({}); return sanitize({...b, windows: b.windows.map(x => x.type === "door" ? {...x, ...extra, ...(w ? {w} : {})} : x)}); };
+  const leaf = p => { const g = buildGeometry(p), d = g.doors[0]; return {leaf: d.leaves[0], span: d.op, w: g.opsByWall[d.wall].w, n: d.leaves.length}; };
+  const dflt = set({}), left = leaf(dflt), right = leaf(set({hinge: "right"}));
+  assert.equal(dflt.windows.find(w => w.type === "door").hinge, "left");
+  assert.equal(set({hinge: "sideways"}).windows.find(w => w.type === "door").hinge, "left");
+  const along = (l, h) => (h[0] - l.w.o[0]) * l.w.u[0] + (h[2] - l.w.o[2]) * l.w.u[2];
+  assert.ok(Math.abs(along(left, left.leaf.hinge) - left.span.s0) < 0.05 && Math.abs(along(right, right.leaf.hinge) - right.span.s1) < 0.05, `${along(left, left.leaf.hinge)} / ${along(right, right.leaf.hinge)}`);
+  assert.equal(left.leaf.motion.rotation, -right.leaf.motion.rotation, "swings the same way, hinged at the other end");
+  // wide doors are a pair: two leaves, hinged at the outer edges whatever hinge says
+  const pair = leaf(set({hinge: "right"}, 2));
+  assert.equal(pair.n, 2);
+  assert.ok(Math.abs(along(pair, geoHinge(set({hinge: "right"}, 2), 0)) - pair.span.s0) < 0.05 && Math.abs(along(pair, geoHinge(set({hinge: "right"}, 2), 1)) - pair.span.s1) < 0.05);
+  // a sliding door on the right slides to the right
+  const slide = (h) => { const p = set({hinge: h, style: "sliding"}), g = buildGeometry(p), d = g.doors[0]; return d.leaves[0].motion.translation; };
+  assert.notDeepEqual(slide("left"), slide("right"));
+});
+function geoHinge(p, k) { return buildGeometry(p).doors[0].leaves[k].hinge; }

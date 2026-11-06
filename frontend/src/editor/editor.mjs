@@ -12,6 +12,7 @@ import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDesc
 import { cowYard } from "./kinds/cow.mjs";
 import { WALLPAPERS } from "./kinds/innerwall.mjs";
 import { evalNumber } from "./calc.mjs";
+import { DOUBLE_DOOR_FROM } from "./openings.mjs";
 import { cleanPapers, wallBreaks, pieceGroups, roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, History, roomBox, wingsOf, liveWings, wingFloors, wingHalf, wingIdOf, wingWallKey, WING_PARTS, wallsOf, eaveWalls, autoPipes, pipePositions } from "./layout.mjs";
 import { OBJECT_TYPES, objectInfo, OBJECT_LIMITS, objectOf, pastureOf, snapBox, snapPasture, objectProblems } from "./objects.mjs";
 import { setAssets, catalogFor, usedAssets } from "./model.mjs";
@@ -753,6 +754,7 @@ function renderWinUI() {
       html += `<div class="field"><div class="fl"><label for="wf-porch">In front of the door</label></div><select id="wf-porch">${PORCH_OPTIONS.map(o => opt(o[0], o[1], s.porch)).join("")}</select></div>`;
       if (s.porch !== "none") html += PORCH_FIELDS.map(f => range(f)).join("");
       html += `<label class="check"><input type="checkbox" id="wf-opens" ${s.opens !== false ? "checked" : ""}> Opens (you can walk through it in the game)</label>`;
+      if (s.opens !== false && !(s.w > DOUBLE_DOOR_FROM)) html += `<div class="field"><div class="fl"><label for="wf-hinge">Hinges</label></div><select id="wf-hinge">${opt("left", "On the left (seen from outside)", s.hinge || "left")}${opt("right", "On the right (seen from outside)", s.hinge || "left")}</select></div>`;
       if (s.opens !== false) html += `<div class="field"><div class="fl"><label for="wf-swing">Swings</label></div><select id="wf-swing">${opt("out", "Outwards", s.swing || "out")}${opt("in", "Inwards", s.swing || "out")}</select></div>`;
     }
     if (!door) html += choiceFields("wc", s);
@@ -794,6 +796,7 @@ function renderWinUI() {
     if ($("wf-porch")) $("wf-porch").onchange = e => { s.porch = e.target.value; winChanged(); renderWinUI(); };
     if ($("wf-opens")) $("wf-opens").onchange = e => { s.opens = e.target.checked; winChanged(); renderWinUI(); };
     if ($("wf-swing")) $("wf-swing").onchange = e => { s.swing = e.target.value; winChanged(); };
+    if ($("wf-hinge")) $("wf-hinge").onchange = e => { s.hinge = e.target.value; winChanged(); };
     if ($("winRemove")) $("winRemove").onclick = () => { p.windows = p.windows.filter(w => w.id !== selId); selId = null; winChanged(); renderWinUI(); };
   }
 }

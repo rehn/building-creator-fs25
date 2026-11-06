@@ -236,7 +236,7 @@ function cleanWindows(arr, legacy = {}) {
     return {
       id: i + 1, wall: w.wall, floor: Math.round(clampN(w.floor, 0, 2, 0)), pos: clampN(w.pos, 0, 1, 0.5),
       w: clampN(w.w, 0.3, 3, 1), h: clampN(w.h, 0.3, door ? 2.6 : 2.4, 1.25), sill: clampN(w.sill, 0, 2, 0.85),
-      ...k, ...porch, ...(door ? {opens: w.opens !== false, swing: w.swing === "in" ? "in" : "out"} : {}),
+      ...k, ...porch, ...(door ? {opens: w.opens !== false, swing: w.swing === "in" ? "in" : "out", hinge: w.hinge === "right" ? "right" : "left"} : {}),
       room: pickRoom(w.room), curtain: pickCurtain(w.curtain), curtainColor: pickColor(w.curtainColor)
     };
   });
@@ -725,7 +725,7 @@ function layoutWall(key, L, fh, topAt, cover = null) {
     // a door made from a window stands on the floor, no taller than the floor allows
     const t0 = door ? 0 : win.floor * fh + win.sill;
     const t1 = door ? Math.min(win.h, fh - 0.25) : win.floor < wf ? Math.min(t0 + win.h, (win.floor + 1) * fh - 0.25) : t0 + win.h;
-    const op = {s0, s1, t0, t1, kind: door ? "door" : "window", id: win.id, style: styleOf(p, win), ...(door ? {opens: win.opens !== false, swingIn: win.swing === "in"} : {})};
+    const op = {s0, s1, t0, t1, kind: door ? "door" : "window", id: win.id, style: styleOf(p, win), ...(door ? {opens: win.opens !== false, swingIn: win.swing === "in", hingeRight: win.hinge === "right"} : {})};
     if (door) op.porch = {type: win.porch || "none", w: win.porchW || PORCH_W[2], d: win.porchD || PORCH_D[2]};
     const g = 0.18;
     if (t1 - t0 < 0.3 || s1 - s0 < 0.3 || ops.some(q => q.s0 < op.s1 + g && op.s0 < q.s1 + g && q.t0 < op.t1 + g && op.t0 < q.t1 + g)
@@ -941,7 +941,8 @@ function buildDoor(w, o, kit, inner, r, out, key) {
   }
   const leaves = [];
   spans.forEach(([s0, s1], k) => {
-    const before = vcount(), right = k === 1;
+    // (a pair: each leaf is hinged at its outer edge; a single door at the left (seen from outside) or, if set, the right)
+    const before = vcount(), right = pair ? k === 1 : !!o.hingeRight;
     drawLeaf(kit, o.style, {s0, s1, t0, t1, dIn, dOut, right});
     if (slide) for (const u of [0.15, s1 - s0 - 0.2]) kit.box("iron", s0 + u, s0 + u + 0.05, t1, t1 + 0.06, dIn + 0.015, dOut - 0.015);   // hangers up to the rail
     // (a door that doesn't open is drawn the same, but stays put: no leaves for the game to move)
