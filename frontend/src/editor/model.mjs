@@ -2160,8 +2160,11 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
 const cdata = s => "<![CDATA[" + String(s).replace(/]]>/g, "]]]]><![CDATA[>") + "]]>";
 const shopName = name => String(name || "").trim() || "House";
 
-/** The placeable (store item) XML for the mod: shop data and the same blocks as placeableSnippet. */
-export function placeableXml(p, name) {
+/**
+ * The placeable (store item) XML for the mod: shop data and the same blocks as placeableSnippet. The game reads the shop picture and the i3d
+ * relative to the mod's root, not to the XML: in a mod of several buildings each is in a folder, so dir ("farmhouse/") goes in front of them.
+ */
+export function placeableXml(p, name, {dir = ""} = {}) {
   const {kind, blocks, p: q} = exportParts(p), {type, fn, shop} = kind.placeable(q);
   return `<?xml version="1.0" encoding="utf-8" standalone="no" ?>
 <placeable type="${type}">
@@ -2171,7 +2174,7 @@ export function placeableXml(p, name) {
         <functions>
 ${[].concat(fn).map(f => `            <function>${f}</function>`).join("\n")}
         </functions>
-        <image>${MOD_FILES.store}</image>
+        <image>${dir}${MOD_FILES.store}</image>
         <canBeSold>true</canBeSold>
         <showInStore>true</showInStore>
         <price>${Math.round(q.modPrice)}</price>
@@ -2189,7 +2192,7 @@ ${[].concat(fn).map(f => `            <function>${f}</function>`).join("\n")}
     </storeData>
 
     <base>
-        <filename>${MOD_FILES.i3d}</filename>
+        <filename>${dir}${MOD_FILES.i3d}</filename>
         <canBeRenamed>true</canBeRenamed>
     </base>
 ${blocks}</placeable>

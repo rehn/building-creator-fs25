@@ -1862,8 +1862,8 @@ function renderStoreImage(size) {
  * One building's files for a game mod, into dir (a zip or a folder of one): the placeable XML, the i3d, its textures and imported
  * items and the shop picture. Returns the 256 px icon as a PNG blob (or null), for the mod's own icon.
  */
-async function fillMod(dir, name) {
-  dir.file(MOD_FILES.xml, placeableXml(p, name));
+async function fillMod(dir, name, prefix = "") {
+  dir.file(MOD_FILES.xml, placeableXml(p, name, {dir: prefix}));
   dir.file(MOD_FILES.i3d, buildI3d(p, {withTex: true}));
   await addTextures(dir);
   await addItems(dir);
@@ -1871,9 +1871,9 @@ async function fillMod(dir, name) {
   if (store) dir.file(MOD_FILES.store, await canvasBlob(store));
   return icon ? await canvasBlob(icon) : null;
 }
-/** For a mod of several buildings: this one's files into folder dir; {icon, description, author} for the modDesc. */
-async function exportInto(dir, name) {
-  const icon = await fillMod(dir, name);
+/** For a mod of several buildings: this one's files into folder dir (named prefix, "folder/": the game reads the XML's paths from the mod's root); {icon, description, author} for the modDesc. */
+async function exportInto(dir, name, prefix = "") {
+  const icon = await fillMod(dir, name, prefix);
   return {icon, description: p.modDescription || defaultModDescription(p), author: p.modAuthor || author};
 }
 /** The house as a game mod: FS25_Name.zip with modDesc, store XML, i3d, textures, icon and shop picture. */

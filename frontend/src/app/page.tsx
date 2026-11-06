@@ -128,7 +128,7 @@ export default function HousesPage() {
         document.body.appendChild(host);
         const ed = createEditor(host, { initial: proj.data as Record<string, unknown>, author, assets: { list: api.assets, file: api.assetFile } });
         try {
-          const info = await ed.exportInto(zip.folder(slug)!, h.name);
+          const info = await ed.exportInto(zip.folder(slug)!, h.name, slug + "/");
           entries.push({ xml: slug + "/house.xml" });
           if (!icon && info.icon) icon = info.icon;
           if (info.author && !author) author = info.author;
