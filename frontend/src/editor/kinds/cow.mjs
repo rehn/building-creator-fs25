@@ -30,6 +30,7 @@ export const COW = {count: cowsOf, minWidth: MIN_PASTURE_WIDTH, pallets: false, 
 /* ---------- The doorway and the troughs ---------- */
 /** The cows' doorway: an open hole in the pasture wall (1.6 x 2.2 m in the middle of the stretch it encloses, unless the pasture says where and how big), kept clear inside. */
 export function openings(p) {
+  if (p.pastureNoGap) return [];
   const L = wallLength(p, p.pastureWall), m = p.pastureMid ?? L / 2, w = p.pastureGapW ?? 1.6, h = Math.min(p.pastureGapH ?? 2.2, p.floors * p.floorHeight - 0.3);
   return [{wall: p.pastureWall, s0: m - w / 2, s1: m + w / 2, t1: h, clear: w, what: "the cows' doorway", plain: true}];
 }

@@ -728,7 +728,8 @@ function layoutWall(key, L, fh, topAt, cover = null) {
     const t0 = door ? 0 : win.floor * fh + win.sill;
     const t1 = door ? Math.min(win.h, fh - 0.25) : win.floor < wf ? Math.min(t0 + win.h, (win.floor + 1) * fh - 0.25) : t0 + win.h;
     const op = {s0, s1, t0, t1, kind: door ? "door" : "window", id: win.id, style: styleOf(p, win), ...(door ? {opens: win.opens !== false, swingIn: win.swing === "in", hingeRight: win.hinge === "right"} : {})};
-    if (door) op.porch = {type: win.porch || "none", w: win.porchW || PORCH_W[2], d: win.porchD || PORCH_D[2]};
+    if (door && op.style === "hole") { op.kind = "hatch"; op.plain = true; op.hole = true; delete op.opens; delete op.swingIn; delete op.hingeRight; }   // an empty doorway: the framed hole
+    else if (door) op.porch = {type: win.porch || "none", w: win.porchW || PORCH_W[2], d: win.porchD || PORCH_D[2]};
     const g = 0.18;
     if (t1 - t0 < 0.3 || s1 - s0 < 0.3 || ops.some(q => q.s0 < op.s1 + g && op.s0 < q.s1 + g && q.t0 < op.t1 + g && op.t0 < q.t1 + g)
         || (cover && t0 < cover(op.s0, op.s1))
@@ -1722,7 +1723,7 @@ function build() {
     if (F > 0.01) for (const {wing: wg} of WINGS) { const a = wg.at(wg.s0, 0), b = wg.at(wg.s1, wg.wd); abox("collision", [Math.min(a[0], b[0]), 0, Math.min(a[2], b[2])], [Math.max(a[0], b[0]), F, Math.max(a[2], b[2])]); }
     for (const key of Object.keys(opsByWall)) {
       const wid = wingIdOf(key), Hh = wid ? WINGS.find(x => x.wing.id === wid).wing.H : H;
-      const w = opsByWall[key].w, gaps = opsByWall[key].ops.filter(o => (o.kind === "door" && o.opens) || o.kind === "open" || (o.kind === "hatch" && o.t1 >= 1.8)).sort((a, b) => a.s0 - b.s0);
+      const w = opsByWall[key].w, gaps = opsByWall[key].ops.filter(o => (o.kind === "door" && o.opens) || o.kind === "open" || (o.kind === "hatch" && (o.t1 >= 1.8 || o.hole))).sort((a, b) => a.s0 - b.s0);
       const slab = (s0, s1, t0, t1) => { if (s1 - s0 > 1e-6 && t1 - t0 > 1e-6) wbox("collision", w, s0, s1, t0, t1, -WALL_T, 0); };
       let s = 0;
       for (const g of gaps) { slab(s, g.s0, 0, Hh); slab(g.s0, g.s1, g.t1, Hh); s = g.s1; }

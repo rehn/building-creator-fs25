@@ -20,6 +20,7 @@ export const DOOR_STYLES = [
   {id: "xbrace", name: "Barn door with an X brace"},
   {id: "panel", name: "Panelled, glass at the top"},
   {id: "sliding", name: "Sliding barn door"},
+  {id: "hole", name: "Open doorway, framed (no door)"},
 ];
 /** Doors for the rooms of a house (inner walls): lighter and finer than the outer doors; not offered as the building's door style. */
 // (the glazed door of the rooms is drawn with a hole for its glass, like the panelled outer door)

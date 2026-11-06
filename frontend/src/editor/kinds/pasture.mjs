@@ -72,7 +72,7 @@ export function teleportFor(l, {W, D}) {
  */
 export function withPasture(q) {
   const pa = pastureOf(q);
-  return pa ? {...q, pastureWall: pa.wall, fenceDepth: pa.depth, pastureMid: pa.mid, pastureGapW: pa.gapW, pastureGapH: pa.gapH} : q;
+  return pa ? {...q, pastureWall: pa.wall, fenceDepth: pa.depth, pastureMid: pa.mid, pastureGapW: pa.gapW, pastureGapH: pa.gapH, pastureNoGap: pa.noGap} : q;
 }
 
 /** Two pallet spawn lines inside a pallet trigger box, along its longer side: 50 cm in from its ends and 80 cm either side of its middle. */

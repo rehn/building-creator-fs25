@@ -1045,9 +1045,11 @@ function renderObjectsUI() {
           + `<div class="row"><button type="button" id="ob-draw">Draw the fence myself</button></div><p class="hint">Draw it with posts in the plan view: any shape, from one corner of the building round to another.</p>`;
       }
       // the opening to the pasture, like a door that is only a hole: where along the wall and how big
-      html += `<p class="hint"><b>The opening to the pasture</b> (the animals walk through it; the hen hatch for hens). Its middle is measured from the wall’s left end seen from outside.</p>`;
-      html += range("gapAt", "Opening: position (m from the left end)", 0, pa.L, 0.05, pa.mid);
-      if (ps.gapSize) {
+      html += `<label class="check"><input type="checkbox" id="ob-nogap" ${o.noGap ? "" : "checked"}> The building’s own opening to the pasture</label>`;
+      html += o.noGap ? `<p class="hint">No opening: add a door in the Openings tab and choose the style “Open doorway, framed (no door)” for an empty hole with a frame, wherever you want it.</p>`
+        : `<p class="hint">The animals walk through it (a small hatch for hens). Its middle is measured from the wall’s left end seen from outside.</p>`;
+      if (!o.noGap) html += range("gapAt", "Opening: position (m from the left end)", 0, pa.L, 0.05, pa.mid);
+      if (ps.gapSize && !o.noGap) {
         html += range("gapW", "Opening: width", GAP_LIMITS.w[0], GAP_LIMITS.w[1], 0.05, pa.gapW);
         html += range("gapH", "Opening: height", GAP_LIMITS.h[0], GAP_LIMITS.h[1], 0.05, pa.gapH);
       }
@@ -1080,6 +1082,7 @@ function renderObjectsUI() {
     };
     inp.onchange = () => swap(snapObj(selObject()));
   });
+  if ($("ob-nogap")) $("ob-nogap").onchange = e => { const c = {...selObject()}; if (e.target.checked) delete c.noGap; else c.noGap = true; swap(snapObj(c)); };
   if ($("ob-wall")) $("ob-wall").onchange = e => swap(snapObj({...selObject(), wall: e.target.value}));
   // a fence drawn by hand: start it from the rectangle, add and remove posts, go back
   if ($("ob-draw")) $("ob-draw").onclick = () => { ob.pt = null; swap(snapObj({...selObject(), points: fencePoints(p)})); if (!ob.on) { setTab("game"); enterObjects(); } };

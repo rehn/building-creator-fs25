@@ -95,3 +95,25 @@ test("opening: a door on the stretch where the doorway is warns", () => {
   const q = sanitize({...p, windows: [...p.windows, {id: 99, type: "door", floor: 0, wall: po.wall, pos: 3 / pastureOf(p).L, w: 1, h: 2}]});
   assert.match(objectProblems(q).get(objectOf(q, "pasture").id) || "", /door/i);
 });
+
+test("opening: the pasture's opening can be taken away", () => {
+  const p0 = barn(), po = objectOf(p0, "pasture");
+  const p = withObjects(p0, o => o.type === "pasture" && {...o, noGap: true});
+  assert.ok(objectOf(p, "pasture").noGap);
+  assert.ok(!buildGeometry(p).opsByWall[po.wall].ops.some(o => o.kind === "hatch"));
+  for (const kind of ["chicken", "sheep"]) {
+    const q = sanitize({kind}), pw = objectOf(q, "pasture"), r = sanitize({...q, objects: q.objects.map(o => o.type === "pasture" ? {...o, noGap: true} : o)});
+    assert.ok(buildGeometry(q).opsByWall[pw.wall].ops.some(o => o.kind === "hatch"), kind);
+    assert.ok(!buildGeometry(r).opsByWall[pw.wall].ops.some(o => o.kind === "hatch"), kind);
+  }
+});
+
+test("doors: an empty doorway with a frame (style hole) is a hole you can walk through, with no leaf", () => {
+  const p0 = barn({winBack: 0, winFront: 0, winLeft: 0, winRight: 0}), wall = objectOf(p0, "pasture").wall;
+  const p = sanitize({...p0, windows: [...p0.windows, {id: 77, type: "door", floor: 0, wall, pos: 0.1, w: 1.6, h: 2.2, style: "hole"}]});
+  const g = buildGeometry(p), op = g.opsByWall[wall].ops.find(o => o.hole), id = op && op.id;
+  assert.ok(op, "not hidden");
+  assert.ok(op.kind === "hatch" && op.plain && op.hole, "drawn as a framed hole");
+  assert.ok(!g.doors.some(d => d.op && d.op.id === id), "no leaves");
+  assert.ok(!new RegExp("door" + id + "Leaf").test(placeableXml(p, "x")), "no door animation");
+});
