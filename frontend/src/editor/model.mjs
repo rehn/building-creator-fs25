@@ -1852,9 +1852,22 @@ function build() {
   if (hollow && ceilingC) {
     // the ceiling over the ground floor (the floors above are closed from inside)
     const room = roomOf(p, openings), wlist = liveWings(p), y = F + p.floorHeight;
-    paint(ceilingC, "whitewash");
+    // a house's ceiling is painted; a barn's (the kind has none of its own) is boards on beams, as wood is in a barn
+    const wooden = !kind.ceiling;
+    paint(wooden ? "#9C7A52" : ceilingC, wooden ? "boards" : "whitewash");
     // (the rects are the house's, then each wing's: a wing's ceiling is at its own floor height)
     room.rects.forEach((r, i) => { const yy = i ? F + wlist[i - 1].fh : y; poly("fittings", [[r.x0, yy, r.z0], [r.x1, yy, r.z0], [r.x1, yy, r.z1], [r.x0, yy, r.z1]], neg(UP)); });
+    if (wooden) {
+      // beams (bjalkar) 10 x 20 cm about every 90 cm across the shorter way, under the boards
+      room.rects.forEach((r, i) => {
+        const yy = i ? F + wlist[i - 1].fh : y, alongX = (r.x1 - r.x0) >= (r.z1 - r.z0), L = alongX ? r.x1 - r.x0 : r.z1 - r.z0, n = Math.max(1, Math.round(L / 0.9)), sp = L / n;
+        paint("#7A5A38", "timber");
+        for (let k = 0; k < n; k++) {
+          const c = (k + 0.5) * sp, a0 = (alongX ? r.x0 : r.z0) + c - 0.05, a1 = a0 + 0.1;
+          if (alongX) abox("fittings", [a0, yy - 0.2, r.z0], [a1, yy - 0.0001, r.z1]); else abox("fittings", [r.x0, yy - 0.2, a0], [r.x1, yy - 0.0001, a1]);
+        }
+      });
+    }
     // and across the thickness of the house's wall where a wing opens into it, so the ceiling has no seam there
     const mains = wallFrames(W, D, F);
     for (const wg of liveWings(p)) {

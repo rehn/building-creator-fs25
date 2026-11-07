@@ -30,8 +30,12 @@ test("ceiling option: on for a house, off for a barn, to start with; the save's 
 
 test("ceiling option: a barn with a ceiling has one at the walls' top, a house without sees up into the roof", () => {
   const barn = sanitize({kind: "cow", ceiling: true, items: [], width: 12, depth: 8, floors: 1, floorHeight: 3}), F = barn.foundation;
-  const hit = above(buildGeometry(barn).G, 0, F + 0.5, 0);
-  assert.ok(hit && hit.m === "fittings" && Math.abs(hit.y - (F + 3)) < 1e-6, JSON.stringify(hit));
+  // a barn's ceiling is boards on beams (not a white plaster ceiling): the boards at the walls' top, the beams hanging 20 cm below them
+  const G = buildGeometry(barn).G, heights = new Set();
+  for (let x = -5.5; x <= 5.5; x += 0.05) { const h = above(G, x, F + 0.5, 0); if (h && h.m === "fittings") heights.add(h.y.toFixed(3)); }   // (a ventilator duct may hang at the ceiling)
+  assert.ok(heights.has((F + 3).toFixed(3)), "boards at the top: " + [...heights]);
+  assert.ok(heights.has((F + 2.8).toFixed(3)), "beams below: " + [...heights]);
+  assert.ok([...heights].every(y => +y >= F + 2.8 - 1e-6 && +y <= F + 3 + 1e-6), [...heights].join());
   const open = sanitize({kind: "cow", items: [], width: 12, depth: 8, floors: 1, floorHeight: 3}), h2 = above(buildGeometry(open).G, 0, F + 0.5, 0);
   assert.ok(!h2 || h2.y > F + 3 + 0.01, "no ceiling: " + JSON.stringify(h2));
   const house = sanitize({floors: 2, floorHeight: 2.7, items: []}), hh = above(buildGeometry(house).G, 0, house.foundation + 0.5, 0);
