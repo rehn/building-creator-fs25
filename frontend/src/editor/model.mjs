@@ -95,7 +95,7 @@ const SHARED_SECTIONS = [
     {k:"wallSplit", label:"Two materials on the walls", type:"select", options:[["one","No, one material"],["floor","Yes, split at the top of the ground floor"],["height","Yes, split at a height"]]},
     {k:"splitHeight", label:"Split height, above the ground floor's floor", min:0.5, max:10, step:0.05, unit:" m"},
     {k:"lowerCladding", label:"Lower part's cladding", type:"select", options:CLADDING},
-    {k:"innerCladding", label:"Panel on inner walls (a side of an inner wall can be this, with the studs showing)", type:"select", options:CLADDING},
+    {k:"innerCladding", label:"Panel on inner walls (a side of an inner wall can be this, with the studs showing)", type:"select", options:[...CLADDING, ["same", "Same as the facade"], ["sameLow", "Same as the facade’s lower part"]]},
     {k:"panelSpacing", label:"Board width", min:0.12, max:0.4, step:0.005, cm:true},
     {k:"battenWidth", label:"Batten width", min:0.03, max:0.1, step:0.005, cm:true},
     {k:"roofMaterial", label:"Roof covering", type:"select", options:[["tiles","Concrete tiles"],["metal","Standing seam metal"],["plain","Plain color"]]},
@@ -1971,7 +1971,7 @@ export function colorFor(p, m) {
   return agedColor(chosenColor(p, m), p.age || 0, m);
 }
 function chosenColor(p, m) {
-  return {walls:p.wallColor, wallsLow:p.lowerColor, wallsIn:p.innerColor, trim:p.trimColor, roof:p.roofColor, glass:"#7396AB", door:p.doorColor, doorIn:p.innerDoorColor, foundation:p.foundationColor, chimney:p.chimneyColor, gutter:p.gutterColor, iron:"#2C2D2F", interior:"#B8AE9C", curtain:p.curtainColor, fittings:"#E9E4D8"}[m];
+  return {walls:p.wallColor, wallsLow:p.lowerColor, wallsIn:p.innerCladding === "same" ? p.wallColor : p.innerCladding === "sameLow" ? p.lowerColor : p.innerColor, trim:p.trimColor, roof:p.roofColor, glass:"#7396AB", door:p.doorColor, doorIn:p.innerDoorColor, foundation:p.foundationColor, chimney:p.chimneyColor, gutter:p.gutterColor, iron:"#2C2D2F", interior:"#B8AE9C", curtain:p.curtainColor, fittings:"#E9E4D8"}[m];
 }
 /** The texture of material m (null: plain colour): its kind, the metres one copy covers (w, h) and the building's age. */
 export function surfaceSpec(p, m) {
@@ -1981,7 +1981,7 @@ export function surfaceSpec(p, m) {
 function baseSpec(p, m) {
   const kind = m === "walls" ? p.wallCladding
     : m === "wallsLow" ? p.lowerCladding
-    : m === "wallsIn" ? p.innerCladding
+    : m === "wallsIn" ? (p.innerCladding === "same" ? p.wallCladding : p.innerCladding === "sameLow" ? p.lowerCladding : p.innerCladding)
     : m === "roof" ? (p.roofType === "flat" ? "felt" : p.roofMaterial === "plain" ? null : p.roofMaterial)
     : m === "chimney" ? (p.chimneyStyle === "brick" ? "brick" : null)
     : m === "trim" || m === "door" || m === "doorIn" ? "paintedwood"

@@ -49,3 +49,15 @@ test("inner panel: it exports (the panel is a material of its own with a texture
   assert.ok(placeableXml(p, "x").length > 100);
   assert.notEqual(colorFor(p, "wallsIn"), "#335577");
 });
+
+test("inner panel: it can be the same as the facade (its texture and colour), or as the facade's lower part", () => {
+  const p = sanitize({innerCladding: "same", wallCladding: "horizontal", wallColor: "#aa2211", wallSplit: "floor", lowerCladding: "plaster", lowerColor: "#ddeedd", innerColor: "#000000"});
+  assert.equal(p.innerCladding, "same");
+  assert.equal(surfaceSpec(p, "wallsIn").kind, "horizontal");
+  assert.equal(colorFor({...p, age: 0}, "wallsIn"), "#aa2211");
+  assert.equal(surfaceSpec(p, "wallsIn").w, surfaceSpec(p, "walls").w);
+  const q = sanitize({...p, innerCladding: "sameLow"});
+  assert.equal(q.innerCladding, "sameLow");
+  assert.equal(surfaceSpec(q, "wallsIn").kind, "plaster");
+  assert.equal(colorFor({...q, age: 0}, "wallsIn"), "#ddeedd");
+});

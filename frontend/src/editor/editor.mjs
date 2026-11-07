@@ -296,11 +296,12 @@ function syncOutputs() {
   const off = (k, v) => { if (inputs[k]) { inputs[k].disabled = v; const row = inputs[k].closest("[data-k]"); if (row) row.classList.toggle("na", v); } };
   off("ridge", p.roofType !== "gable");
   // the walls' zones: board settings apply when either zone has boards
-  const clads = [p.wallCladding, p.innerCladding, ...(zonesUsed() ? [p.lowerCladding] : [])];
+  const clads = [p.wallCladding, ...(p.innerCladding === "same" || p.innerCladding === "sameLow" ? [] : [p.innerCladding]), ...(zonesUsed() || p.innerCladding === "sameLow" ? [p.lowerCladding] : [])];
+  off("innerColor", p.innerCladding === "same" || p.innerCladding === "sameLow");
   off("panelSpacing", clads.every(c => c === "plaster"));
   off("battenWidth", !clads.includes("lockpanel"));
   off("splitHeight", p.wallSplit !== "height");
-  off("lowerCladding", !zonesUsed()); off("lowerColor", !zonesUsed());
+  { const low = zonesUsed() || p.innerCladding === "sameLow"; off("lowerCladding", !low); off("lowerColor", !low); }
   for (const k of ["studSpacing", "studWidth", "studIrregular"]) off(k, !p.insideSame);
   off("roofMaterial", p.roofType === "flat");
   off("chimneyStyle", !p.chimney);
