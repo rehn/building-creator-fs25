@@ -3,7 +3,7 @@
 // Pure functions with no DOM or three.js, so they run (and are tested) in Node.
 import { I3dDoc, tg, shape, refNode, boxMesh, splitByColor, mappingsFor, num, v3 } from "./i3d.mjs";
 import { KINDS, kindOf } from "./kinds/index.mjs";
-import { WALL_T, wallFrames, wallsOf, liveWings, wingsOf, wingHeight, wingFloors, wingHalf, wingIdOf, eaveWalls, autoPipes, cleanPipes, cleanPapers, WING_PARTS, MAX_WINGS, WING_WALLS, wingWallKey, openingSpan, roomOf, footprint, toWorld, cleanItems, problems } from "./layout.mjs";
+import { WALL_T, wallFrames, wallsOf, liveWings, wingsOf, wingHeight, wingFloorHeight, wingFloors, wingHalf, wingIdOf, eaveWalls, autoPipes, cleanPipes, cleanPapers, WING_PARTS, MAX_WINGS, WING_WALLS, wingWallKey, openingSpan, roomOf, footprint, toWorld, cleanItems, problems } from "./layout.mjs";
 import { withAssets, placement, assetFolder } from "./assets.mjs";
 import { SURFACES } from "./surfaces.mjs";
 import { agedColor } from "./age.mjs";
@@ -166,7 +166,7 @@ function cleanWings(obj) {
     let id = Number.isInteger(w.id) && w.id >= 1 && w.id <= MAX_WINGS && !used.has(w.id) ? w.id : 0;
     if (!id) for (let i = 1; i <= MAX_WINGS; i++) if (!used.has(i)) { id = i; break; }
     used.add(id);
-    out.push({id, wall: WALLS.includes(w.wall) ? w.wall : "back", pos: clampN(w.pos, 0, 1, 0.15), width: clampN(w.width, 2.5, 30, 6), depth: clampN(w.depth, 2, 30, 5), floors: Math.round(clampN(w.floors, 0, 3, 0)), half: w.half === true, pitch: +w.pitch > 0 ? Math.round(clampN(w.pitch, 5, 60, 5)) : 0});
+    out.push({id, wall: WALLS.includes(w.wall) ? w.wall : "back", pos: clampN(w.pos, 0, 1, 0.15), width: clampN(w.width, 2.5, 30, 6), depth: clampN(w.depth, 2, 30, 5), floors: Math.round(clampN(w.floors, 0, 3, 0)), half: w.half === true, floorHeight: +w.floorHeight > 0 ? Math.round(clampN(w.floorHeight, 2.3, 9, 2.7) * 100) / 100 : 0, pitch: +w.pitch > 0 ? Math.round(clampN(w.pitch, 5, 60, 5)) : 0});
   }
   return out;
 }
@@ -664,6 +664,8 @@ const refs = [];
 const hollow = kind.walkIn;
 // Openings the kind adds to its walls, [{wall, s0, s1, t1, clear, what}] (a hen hatch ...).
 const openings = kind.openings ? kind.openings(p) : [];
+// a wall's floor height: the wing's own on a wing's wall, else the house's
+const fhOf = key => { const wid = wingIdOf(key), wg = wid && liveWings(p).find(x => x.id === wid); return wg ? wg.fh : p.floorHeight; };
 
 function poly(mat, pts, hint, uvf) {
   pts = pts.filter((q,i) => { const r = pts[(i+1) % pts.length]; return Math.hypot(...sub(q,r)) > 1e-6; });
@@ -734,7 +736,8 @@ function layoutWall(key, L, fh, topAt, cover = null) {
   // door is hidden, not the door.
   for (const h of openings) if (h.wall === key) ops.push({s0: h.s0, s1: h.s1, t0: 0, t1: h.t1, kind: "hatch", plain: !!h.plain, ...(h.ramp ? {ramp: true} : {})});
   // a wing opens into this wall: a passage through it, from the floor to under the wing's ceiling (a window in it is hidden)
-  if (hollow) for (const w of liveWings(p)) if (w.wall === key) ops.push({s0: w.s0 + WALL_T, s1: w.s1 - WALL_T, t0: 0, t1: kind.ceiling ? Math.min(p.floorHeight, w.H) : w.H - 0.25, kind: "open"});   // (under a ceiling: right up to it, no lintel)
+  if (hollow) for (const w of liveWings(p)) if (w.wall === key) { const tc = Math.min(p.floorHeight, w.fh), t1 = kind.ceiling ? Math.min(tc, w.H) : w.H - 0.25;
+    ops.push({s0: w.s0 + WALL_T, s1: w.s1 - WALL_T, t0: 0, t1, kind: "open", ...(kind.ceiling && t1 >= tc - 1e-6 ? {toCeiling: true} : {})}); }   // (under a ceiling: right up to it, no lintel)
   const list = p.windows.filter(w => w.wall === key);
   for (const win of [...list.filter(w => w.type === "door"), ...list.filter(w => w.type !== "door")]) {
     win._hidden = false;
@@ -803,8 +806,8 @@ const ROOM_D = 0.75, ROOM_SIDE = 0.45, ROOM_UP = 0.35, ROOM_DOWN = 0.95;
  * Room box behind window o: as wide as the space to its neighbours allows (half the gap each),
  * down to the floor, up towards the ceiling, but never through the roof or past the wall's ends.
  */
-function roomFor(w, o, ops, r, topAt, dormer, choice) {
-  const fh = p.floorHeight, L = w.L;
+function roomFor(w, o, ops, r, topAt, dormer, choice, fhw) {
+  const fh = fhw ?? p.floorHeight, L = w.L;
   const exp = q => q.kind === "door" ? q : {s0: q.s0 - ROOM_SIDE, s1: q.s1 + ROOM_SIDE, t0: q.t0 - ROOM_DOWN, t1: q.t1 + ROOM_UP};
   const me = exp(o);
   let lo = me.s0, hi = me.s1, bot = me.t0, top = me.t1;
@@ -1022,7 +1025,7 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
   }
   if (inner) {
     // the kind's finish (a barn's by default); under a ceiling (kind.ceiling) only up to it, the floors above closed
-    const fin = kind.insideWalls || BARN_WALLS, ceil = kind.ceiling ? p.floorHeight : Infinity;
+    const fin = kind.insideWalls || BARN_WALLS, ceil = kind.ceiling ? fhOf(key) : Infinity;
     const Hi = Math.min(H + inner.lift, ceil), tw = WALL_T, lowT = fin.low ? fin.low[2] : 0;
     // (a wing's side wall meets the house's outer face at its start (Left) or its end (Right): its inside face runs right up to it,
     // or a slit shows between it and the house's wall)
@@ -1071,7 +1074,7 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
     // (no bottom lining on an opening down at the floor: it would lie on the plinth top and flicker)
     if (!isDoor && o.t0 > 0.01) poly("trim", [WP(w,o.s0,o.t0,0), WP(w,o.s1,o.t0,0), WP(w,o.s1,o.t0,-r), WP(w,o.s0,o.t0,-r)], UP);
     // (a passage up to the ceiling has none: the ceiling runs on through the wall's thickness)
-    if (!(o.kind === "open" && kind.ceiling && o.t1 >= p.floorHeight - 1e-6)) poly("trim", [WP(w,o.s0,o.t1,0), WP(w,o.s1,o.t1,0), WP(w,o.s1,o.t1,-r), WP(w,o.s0,o.t1,-r)], neg(UP));
+    if (!(o.kind === "open" && o.toCeiling)) poly("trim", [WP(w,o.s0,o.t1,0), WP(w,o.s1,o.t1,0), WP(w,o.s1,o.t1,-r), WP(w,o.s0,o.t1,-r)], neg(UP));
     poly("trim", [WP(w,o.s0,o.t0,0), WP(w,o.s0,o.t1,0), WP(w,o.s0,o.t1,-r), WP(w,o.s0,o.t0,-r)], w.u);
     poly("trim", [WP(w,o.s1,o.t0,0), WP(w,o.s1,o.t1,0), WP(w,o.s1,o.t1,-r), WP(w,o.s1,o.t0,-r)], neg(w.u));
     if (o.kind === "open") return;   // a passage: just the hole and its linings
@@ -1106,9 +1109,9 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
     } else wbox("trim", w, o.s0 - fr - 0.04 * k, o.s1 + fr + 0.04 * k, o.t0 - 0.07 * k, o.t0, 0, out + 0.05 * k);
   });
   if (p.interior) for (const o of ops) if (o.kind === "window" && o.glass) {
-    const R = roomFor(w, o, ops, r, topAt, !!dormer, dormer || p.windows.find(x => x.id === o.id));
+    const R = roomFor(w, o, ops, r, topAt, !!dormer, dormer || p.windows.find(x => x.id === o.id), fhOf(key));
     // a ground-floor window of a walk-in building looks into the real room: curtains only, seen from both sides; the rest get a pretend room
-    if (hollow && !dormer && o.t0 < p.floorHeight) { curtainBoth = true; buildCurtains(R); curtainBoth = false; }
+    if (hollow && !dormer && o.t0 < fhOf(key)) { curtainBoth = true; buildCurtains(R); curtainBoth = false; }
     else { rooms.push(R); buildRoom(R); }
   }
 }
@@ -1330,7 +1333,8 @@ function buildInside(kind, F, H) {
     // points of the piece's frame ([x, y, z], y up from the floor) in the world
     const at = ([x, y, z]) => { const q = toWorld(it, x, z); return [q[0], F + y, q[1]]; };
     // (ceil: how high an inner wall goes: the ceiling of a house, the walls' top in a barn)
-    const ceil = kind.ceiling ? p.floorHeight : H;
+    const wgIn = liveWings(p).find(wg => it.x > wg.rect.x0 && it.x < wg.rect.x1 && it.z > wg.rect.z0 && it.z < wg.rect.z1);
+    const ceil = kind.ceiling ? (wgIn ? wgIn.fh : p.floorHeight) : H;
     const pieceKit = {H, ceil, paint, box, cyl: round,
       cone: (x, z, y, r0, r1, h, seg) => { const q = toWorld(it, x, z); cone([q[0], F + y, q[1]], r0, r1, h, seg); },
       rod: (a, b, r, seg) => rod(at(a), at(b), r, seg),
@@ -1639,7 +1643,7 @@ function build() {
     const key = wingWallKey(wing.id, part), w = wing.frames[key], Lw = w.L, Hw = wing.H;
     const R = part === "End" && wing.type !== "flat" ? Math.max(0, wing.ww / 2 * wing.tanW - th) : 0;
     const topAt = sv => Hw + R * Math.max(0, 1 - Math.abs(sv - Lw/2) / (Lw/2));
-    const ops = layoutWall(key, Lw, fh, topAt);
+    const ops = layoutWall(key, Lw, wing.fh, topAt);
     // (inside faces in a walk-in building, with the same lift under the wing's roof slab as the house's eave walls)
     const inner = hollow ? {lift: R > 0 || p.roofType === "flat" ? 0 : Math.min(WALL_T * wing.tanW, th - 0.02)} : null;
     buildWall(w, ops, Hw, R, F, {topAt, key, split: splitFor(Hw, key), inner});
@@ -1658,7 +1662,7 @@ function build() {
     // and under the windows of the floor above it
     const k = entr.key, cs = (entr.o.s0 + entr.o.s1) / 2, hw = Math.max(pw, entr.o.s1 - entr.o.s0 + 0.5) / 2 + 0.2;
     const above = p.windows.filter(x => x.wall === k && x.floor === 1 && x.type !== "door" && (([a, b]) => a < cs + hw && b > cs - hw)(openingSpan(x, entr.w.L)));
-    if (nf > 1 && above.length) limit = Math.min(limit, fh + Math.min(...above.map(x => x.sill)) - 0.1);
+    if (nf > 1 && above.length) limit = Math.min(limit, fhOf(entr.key) + Math.min(...above.map(x => x.sill)) - 0.1);
     const mainEave = !entr.gable && p.roofType !== "flat" ? {H: Hh, tanP} : null;
     buildEntrance(entr.w, entr.o, limit, F, mainEave);
   }
@@ -1844,14 +1848,16 @@ function build() {
   if (p.ventilators > 0 && p.roofType !== "flat") buildVentilators(Lr, ridgeY, tanP, M, ridgeHalf, th, F);
   if (hollow && kind.ceiling) {
     // the ceiling over the ground floor (the floors above are closed from inside)
-    const room = roomOf(p, openings), y = F + p.floorHeight;
+    const room = roomOf(p, openings), wlist = liveWings(p), y = F + p.floorHeight;
     paint(kind.ceiling, "whitewash");
-    for (const r of room.rects) poly("fittings", [[r.x0, y, r.z0], [r.x1, y, r.z0], [r.x1, y, r.z1], [r.x0, y, r.z1]], neg(UP));
+    // (the rects are the house's, then each wing's: a wing's ceiling is at its own floor height)
+    room.rects.forEach((r, i) => { const yy = i ? F + wlist[i - 1].fh : y; poly("fittings", [[r.x0, yy, r.z0], [r.x1, yy, r.z0], [r.x1, yy, r.z1], [r.x0, yy, r.z1]], neg(UP)); });
     // and across the thickness of the house's wall where a wing opens into it, so the ceiling has no seam there
     const mains = wallFrames(W, D, F);
     for (const wg of liveWings(p)) {
       const m = mains[wg.wall];
-      if (m) poly("fittings", [WP(m, wg.s0 + WALL_T, y - F, -WALL_T), WP(m, wg.s1 - WALL_T, y - F, -WALL_T), WP(m, wg.s1 - WALL_T, y - F, 0), WP(m, wg.s0 + WALL_T, y - F, 0)], neg(UP));
+      const yp = Math.min(p.floorHeight, wg.fh);
+      if (m) poly("fittings", [WP(m, wg.s0 + WALL_T, yp, -WALL_T), WP(m, wg.s1 - WALL_T, yp, -WALL_T), WP(m, wg.s1 - WALL_T, yp, 0), WP(m, wg.s0 + WALL_T, yp, 0)], neg(UP));
     }
   } else if (hollow && p.roofType !== "flat") {
     // (the tie beams at the ends are 12 cm thick: kept clear of the gable walls)

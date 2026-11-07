@@ -998,6 +998,7 @@ function renderWingsUI() {
       + `<div class="field"><div class="fl"><label for="wg-floors">Floors</label></div><select id="wg-floors">${opt(0, `As the house (${p.floors}${p.halfStorey ? "½" : ""})`, w.floors)}${[1, 2, 3].map(n => opt(n, `${n}${n < p.floors ? " (lower than the house)" : n > p.floors ? " (taller than the house)" : ""}`, w.floors)).join("")}</select></div>`
       + `<label class="check"><input type="checkbox" id="wg-half" ${wingHalf(p, w) ? "checked" : ""} ${w.floors ? "" : "disabled"}> Half floor in the roof (1½-plan)</label>`
       + `<div class="field"><div class="fl"><label for="wg-pitch">Roof angle</label><output id="wg-pitch-o">${w.pitch ? w.pitch + "°" : "as the house (" + p.roofPitch + "°)"}</output></div><input type="range" id="wg-pitch" min="0" max="60" step="1" value="${w.pitch}"></div>`
+      + `<div class="field"><div class="fl"><label for="wg-fh">Floor height</label><output id="wg-fh-o">${w.floorHeight ? w.floorHeight.toFixed(2) + " m" : "as the house (" + p.floorHeight.toFixed(2) + " m)"}</output></div><input type="range" id="wg-fh" min="2.2" max="9" step="0.05" value="${w.floorHeight || 2.2}"></div>`
       + `<p class="hint">A wing with fewer floors, or a flatter roof, has a lower roof. Roof angle 0 follows the house.</p><div class="row"><button type="button" id="wingRemove" class="danger">Remove this wing</button></div></div>`;
   }
   ed.innerHTML = html;
@@ -1026,6 +1027,9 @@ function renderWingsUI() {
   $("wg-half").onchange = e => { w.half = e.target.checked; changed(); };
   $("wg-pitch").oninput = e => { w.pitch = +e.target.value; $("wg-pitch-o").textContent = w.pitch ? w.pitch + "°" : `as the house (${p.roofPitch}°)`; persist(); rebuild(false); };
   $("wg-pitch").onchange = () => changed();
+  const fhOut = () => { $("wg-fh-o").textContent = w.floorHeight ? w.floorHeight.toFixed(2) + " m" : `as the house (${p.floorHeight.toFixed(2)} m)`; };
+  $("wg-fh").oninput = e => { w.floorHeight = +e.target.value < 2.3 ? 0 : +(+e.target.value).toFixed(2); fhOut(); persist(); rebuild(false); };
+  $("wg-fh").onchange = () => changed();
   $("wingRemove").onclick = () => {
     p.wings = wings.filter(x => x.id !== w.id);
     p.windows = p.windows.filter(x => wingIdOf(x.wall) !== w.id);

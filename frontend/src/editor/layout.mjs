@@ -46,7 +46,9 @@ export const wingHalf = (P, w) => !!(+w.floors ? w.half : P.halfStorey);
 /** A wing's roof pitch in degrees: its own (5 to 60), or the house's when 0. */
 export const wingPitch = (P, w) => +w.pitch > 0 ? Math.min(60, Math.max(5, +w.pitch)) : P.roofPitch;
 /** A wing's wall height: its floors, and the knee wall when it has a half floor. */
-export const wingHeight = (P, w) => wingFloors(P, w) * P.floorHeight + (wingHalf(P, w) ? P.kneeWall : 0);
+export const wingHeight = (P, w) => wingFloors(P, w) * wingFloorHeight(P, w) + (wingHalf(P, w) ? P.kneeWall : 0);
+/** A wing's floor height: its own (2.3 to 9 m), or the house's when 0. */
+export const wingFloorHeight = (P, w) => +w.floorHeight > 0 ? Math.min(9, Math.max(2.3, +w.floorHeight)) : P.floorHeight;
 /**
  * The house's wings (P.wings: {id, wall, pos, width, depth, floors}), each as {id, ...} or {id, off: why}.
  * A wing that fits has: type, wall, s0, s1 (along that wall), sc, ww (width), wd (length out), floors,
@@ -96,7 +98,7 @@ export function wingsOf(P) {
     // one that overlaps an earlier wing, eaves and all (two on one wall too close, or two meeting at a corner), isn't built
     const g = o - 0.05, clash = out.find(q => q.rect && q.rect.x0 - o < rect.x1 + g && rect.x0 - o < q.rect.x1 + g && q.rect.z0 - o < rect.z1 + g && rect.z0 - o < q.rect.z1 + g);
     if (clash) { out.push({id, off: "It is too close to another wing (their eaves would touch): move it along the wall or onto another wall."}); continue; }
-    out.push({id, type, wall: key, s0, s1, sc, ww, wd, floors, half: wingHalf(P, w), pitch, tanW, H: Hw, frames, rect, at});
+    out.push({id, type, wall: key, s0, s1, sc, ww, wd, floors, fh: wingFloorHeight(P, w), half: wingHalf(P, w), pitch, tanW, H: Hw, frames, rect, at});
   }
   return out;
 }
