@@ -20,6 +20,7 @@ export const DOOR_STYLES = [
   {id: "xbrace", name: "Barn door with an X brace"},
   {id: "panel", name: "Panelled, glass at the top"},
   {id: "sliding", name: "Sliding barn door"},
+  {id: "gate", name: "Fence gate (stängselgrind)"},
   {id: "hole", name: "Open doorway, framed (no door)"},
 ];
 /** Doors for the rooms of a house (inner walls): lighter and finer than the outer doors; not offered as the building's door style. */
@@ -131,7 +132,7 @@ export function drawLeaf(kit, style, L) {
     box("door", 0, hu0, L.t0, L.t1, L.dIn, L.dOut); box("door", hu1, W, L.t0, L.t1, L.dIn, L.dOut);
     box("door", hu0, hu1, L.t0, ha, L.dIn, L.dOut); box("door", hu0, hu1, hb, L.t1, L.dIn, L.dOut);
     box("glass", hu0 + 0.001, hu1 - 0.001, ha + 0.001, hb - 0.001, mid - 0.002, mid + 0.002);   // (1 mm clear of the leaf all round: flush faces flicker)
-  } else kit.box("door", L.s0, L.s1, L.t0, L.t1, L.dIn, L.dOut);
+  } else if (style !== "gate") kit.box("door", L.s0, L.s1, L.t0, L.t1, L.dIn, L.dOut);
   const boards = () => { for (let u = 0.13; u < W - 0.08; u += 0.13) on("door", u - 0.012, u + 0.012, L.t0 + 0.02, L.t1 - 0.02, f, f + 0.008); };
   // rail: the braced doors' top and bottom boards; iron: strap hinges' heights, resting at f + ironAt
   const rail = 0.13, iron = [];
@@ -164,7 +165,15 @@ export function drawLeaf(kit, style, L) {
     if (W - 2 * st > 0.6) { const c = W / 2; box("door", c - 0.015, c + 0.015, tm - 0.01, tg + 0.01, L.dIn - 0.008, L.dOut + 0.018); }   // a bar through the glass
     handleU = W - st / 2; handleAt = 0.02;
   }
-  else if (style === "flush") {
+  else if (style === "gate") {
+    // a fence gate: a stile each side, horizontal rails between them (every 40 cm or so) and a diagonal brace, open between the rails
+    const st = 0.08, rh = 0.09, k = Math.max(3, Math.round(H / 0.4)), at = j => L.t0 + 0.1 + j * (H - 0.2) / (k - 1);
+    box("door", 0, st, L.t0, L.t1, L.dIn, L.dOut); box("door", W - st, W, L.t0, L.t1, L.dIn, L.dOut);
+    for (let j = 0; j < k; j++) box("door", st, W - st, at(j) - rh / 2, at(j) + rh / 2, L.dIn, L.dOut);
+    brace(st, at(0), W - st, at(k - 1), 0.1, f, f + 0.02);
+    iron.push(at(0), at(k - 1)); ironAt = 0.0;
+    handleU = W - st / 2; handleAt = 0;
+  } else if (style === "flush") {
     // a smooth leaf: just the lever and its rosette
     handleU = W - 0.06; handleAt = 0;
   } else if (style === "mirror") {

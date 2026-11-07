@@ -19,7 +19,7 @@ test("styles: every style has an id and a name, ids are unique", () => {
     for (const s of list) assert.ok(s.id && s.name);
   }
   for (const id of ["casement", "sprojs", "stall", "single", "hatch"]) assert.ok(WINDOW_STYLES.some(s => s.id === id), id);
-  for (const id of ["plain", "plank", "zbrace", "xbrace", "panel", "sliding"]) assert.ok(DOOR_STYLES.some(s => s.id === id), id);
+  for (const id of ["plain", "plank", "zbrace", "xbrace", "panel", "sliding", "gate"]) assert.ok(DOOR_STYLES.some(s => s.id === id), id);
 });
 
 test("styleOf: an opening's own style, else the building's", () => {
@@ -60,6 +60,14 @@ for (const st of DOOR_STYLES) for (const right of [false, true]) test(`door styl
     assert.ok(body.length >= 4, "the leaf round the glass");
     const glass = parts.find(q => q.mat === "glass");
     assert.ok(glass && glass.d[0] > leaf.dIn && glass.d[1] < leaf.dOut, "glass in the thickness of the leaf (seen through from both sides)");
+  } else if (st.id === "gate") {
+    // (a fence gate is open: two stiles the leaf's whole height and rails between them, with gaps, not a solid leaf)
+    const full = q => q.mat === "door" && q.d[0] <= leaf.dIn + 1e-9 && q.d[1] >= leaf.dOut - 1e-9;
+    assert.equal(parts.filter(q => full(q) && q.t[1] - q.t[0] >= leaf.t1 - leaf.t0 - 1e-9).length, 2, "two stiles");
+    const rails = parts.filter(q => full(q) && q.t[1] - q.t[0] < 0.2).sort((a, b) => a.t[0] - b.t[0]);
+    assert.ok(rails.length >= 3, "rails");
+    assert.ok(rails.slice(1).every((q, i) => q.t[0] - rails[i].t[1] > 0.1), "gaps between the rails");
+    assert.ok(!parts.some(q => full(q) && q.s[1] - q.s[0] > leaf.s1 - leaf.s0 - 0.3 && q.t[1] - q.t[0] > 0.3), "no solid leaf");
   } else assert.ok(parts.some(q => q.mat === "door" && q.s[0] <= leaf.s0 + 1e-9 && q.s[1] >= leaf.s1 - 1e-9 && q.d[0] <= leaf.dIn + 1e-9 && q.d[1] >= leaf.dOut - 1e-9));
   for (const q of parts) {
     assert.ok(MATS.includes(q.mat), q.mat);
