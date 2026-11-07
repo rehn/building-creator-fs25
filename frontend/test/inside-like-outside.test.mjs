@@ -99,3 +99,10 @@ test("studs: older barns have heavier studs, further apart and uneven", () => {
   assert.ok(spread(even) < 0.03, "regular: " + spread(even));
   assert.ok(spread(rough) > 0.1, "uneven: " + spread(rough));
 });
+
+test("inside like the outside: the backs of the boards are the outside's own material (same texture and colour, not another wood)", () => {
+  const p = barn({wallCladding: "lockpanel", wallSplit: "height", splitHeight: 1.2, lowerCladding: "horizontal", insideSame: true}), G = buildGeometry(p).G, wall = -p.depth / 2 + 0.03;
+  const onBack = g => { let n = 0; for (let t = 0; t < g.i.length; t += 3) { const k = g.i[t] * 3; if (Math.abs(g.p[k + 2] - wall) < 1e-6 && g.n[k + 2] > 0.9) n++; } return n; };
+  assert.ok(onBack(G.walls) > 0, "the upper material's back");
+  assert.ok(onBack(G.wallsLow) > 0, "the lower material's back");
+});

@@ -1118,9 +1118,10 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
       }
       const paper = paperAt(cs), timber = same && !paper && WOOD.includes(cladOf(ct));
       const f = paper || (same ? [colOf(ct), "whitewash"] : fin.low && ct < lowT ? fin.low : fin.wall);
-      // (timber: the backs of the boards, a little in from the outside; the studs come after)
-      if (timber) paint("#B09468", "boards"); else paint(f[0], f[1]);
-      if (c.length >= 3) poly("fittings", c.map(q => WP(w, q[0], q[1], timber ? -BACK : -tw)), neg(w.n));
+      // (timber: the backs of the boards, a little in from the outside, in the outside's own material: the same texture and colour; the studs come after)
+      if (timber) { if (c.length >= 3) poly(split && ct < split ? "wallsLow" : "walls", c.map(q => WP(w, q[0], q[1], -BACK)), neg(w.n)); continue; }
+      paint(f[0], f[1]);
+      if (c.length >= 3) poly("fittings", c.map(q => WP(w, q[0], q[1], -tw)), neg(w.n));
     }
     if (same) buildStuds(w, ops, {L, tw, BACK, s0i, s1i, split, Hi, ceil, topAt, spacing: p.studSpacing, studW: p.studWidth, irr: p.studIrregular, wood: t => WOOD.includes(cladOf(t)), bare: s => !paperAt(s)});
     // A kickboard (a barn's tarred, a house's skirting) along the bottom, except across openings that come down to it.
