@@ -27,7 +27,7 @@ const toHex = ([h, s, l]) => {
   return "#" + [r, g, b].map(v => Math.round(Math.min(1, Math.max(0, v + m)) * 255).toString(16).padStart(2, "0")).join("");
 };
 // per material: [saturation lost, lightness moved towards 0.5 (paint chalking), lightness lost (dirt)]
-const FADE = {walls: [0.4, 0.18, 0.04], wallsLow: [0.4, 0.18, 0.04], trim: [0.3, 0, 0.12], door: [0.35, 0.12, 0.06], doorIn: [0.35, 0.12, 0.06], roof: [0.25, 0, 0.12],
+const FADE = {walls: [0.4, 0.18, 0.04], wallsLow: [0.4, 0.18, 0.04], wallsIn: [0.4, 0.18, 0.04], trim: [0.3, 0, 0.12], door: [0.35, 0.12, 0.06], doorIn: [0.35, 0.12, 0.06], roof: [0.25, 0, 0.12],
   foundation: [0.2, 0, 0.16], chimney: [0.2, 0, 0.1], gutter: [0.25, 0.1, 0.05]};
 /** The colour a part (material mat) has after years: paint fades and chalks, roofs and plinths darken with dirt. */
 export function agedColor(hex, years, mat) {

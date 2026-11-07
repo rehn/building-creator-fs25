@@ -24,7 +24,7 @@ export const DEFAULTS = {
   roofType:"gable", ridge:"width", roofPitch:38, overhang:0.5, chimney:true,
   winFront:2, winBack:3, winLeft:1, winRight:1, winW:1.0, winH:1.25, sill:0.85, winStyle:"casement",
   doorStyle:"panel",
-  wallSplit:"one", splitHeight:2.7, lowerCladding:"plaster", lowerColor:"#EAE6DC",
+  wallSplit:"one", splitHeight:2.7, lowerCladding:"plaster", lowerColor:"#EAE6DC", innerCladding:"vertical", innerColor:"#B08E62",
   wallCladding:"lockpanel", panelSpacing:0.2, battenWidth:0.06, roofMaterial:"tiles", chimneyStyle:"brick", chimneyColor:"#8A3B2C",
   gutters:true, downpipes:2, gutterColor:"#3B3F42",
   wallColor:"#8E2A1E", trimColor:"#F2EFE8", roofColor:"#2B2D2F", doorColor:"#3E5A4A", innerDoorColor:"#E9E3D3", foundationColor:"#6E6E6A",
@@ -95,6 +95,7 @@ const SHARED_SECTIONS = [
     {k:"wallSplit", label:"Two materials on the walls", type:"select", options:[["one","No, one material"],["floor","Yes, split at the top of the ground floor"],["height","Yes, split at a height"]]},
     {k:"splitHeight", label:"Split height, above the ground floor's floor", min:0.5, max:10, step:0.05, unit:" m"},
     {k:"lowerCladding", label:"Lower part's cladding", type:"select", options:CLADDING},
+    {k:"innerCladding", label:"Panel on inner walls (a side of an inner wall can be this, with the studs showing)", type:"select", options:CLADDING},
     {k:"panelSpacing", label:"Board width", min:0.12, max:0.4, step:0.005, cm:true},
     {k:"battenWidth", label:"Batten width", min:0.03, max:0.1, step:0.005, cm:true},
     {k:"roofMaterial", label:"Roof covering", type:"select", options:[["tiles","Concrete tiles"],["metal","Standing seam metal"],["plain","Plain color"]]},
@@ -103,6 +104,7 @@ const SHARED_SECTIONS = [
   {title:"Colors", tab:"look", colors:true, fields:[
     {k:"wallColor", label:"Walls", type:"color"},
     {k:"lowerColor", label:"Lower walls", type:"color"},
+    {k:"innerColor", label:"Inner wall panels", type:"color"},
     {k:"trimColor", label:"Trim", type:"color"},
     {k:"roofColor", label:"Roof", type:"color"},
     {k:"doorColor", label:"Door", type:"color"},
@@ -395,7 +397,7 @@ export function slugify(name) {
 export const WP = (w,s,t,d) => [w.o[0] + w.u[0]*s + w.n[0]*d, w.o[1] + t, w.o[2] + w.u[2]*s + w.n[2]*d];
 // fittings: a walk-in barn's inside (whitewashed walls, litter, nests, perches, feeders), vertex
 // colored like the curtains and exported as one plain part per color.
-export const MATS = ["walls","wallsLow","trim","roof","glass","door","doorIn","foundation","chimney","gutter","iron","interior","curtain","fittings"];
+export const MATS = ["walls","wallsLow","wallsIn","trim","roof","glass","door","doorIn","foundation","chimney","gutter","iron","interior","curtain","fittings"];
 /**
  * Texture atlas for the rooms behind the windows (u, v from the bottom left, as [u0, v0, u1, v1]).
  * Four room types (living room, bedroom, kitchen, study), each with its own back wall,
@@ -1396,10 +1398,10 @@ function buildInside(kind, F, H) {
     // (a box turned to any other angle than a quarter is drawn as a turned box)
     const o0 = toWorld(it, 0, 0), ex = toWorld(it, 1, 0), ez = toWorld(it, 0, 1);
     const axX = [ex[0] - o0[0], 0, ex[1] - o0[1]], axZ = [ez[0] - o0[0], 0, ez[1] - o0[1]];
-    const box = (x0, x1, z0, z1, y0, y1) => {
-      if (it.rot % 90 === 0) { const a = toWorld(it, x0, z0), b = toWorld(it, x1, z1); abox("fittings", [a[0], F + y0, a[1]], [b[0], F + y1, b[1]]); return; }
+    const box = (x0, x1, z0, z1, y0, y1, mat = "fittings") => {
+      if (it.rot % 90 === 0) { const a = toWorld(it, x0, z0), b = toWorld(it, x1, z1); abox(mat, [a[0], F + y0, a[1]], [b[0], F + y1, b[1]]); return; }
       const [xa, xb] = [Math.min(x0, x1), Math.max(x0, x1)], [za, zb] = [Math.min(z0, z1), Math.max(z0, z1)];
-      meshBox("fittings", (a, b, c) => { const q = toWorld(it, lerp(xa, xb, a), lerp(za, zb, c)); return [q[0], F + lerp(y0, y1, b), q[1]]; }, axX, UP, axZ);
+      meshBox(mat, (a, b, c) => { const q = toWorld(it, lerp(xa, xb, a), lerp(za, zb, c)); return [q[0], F + lerp(y0, y1, b), q[1]]; }, axX, UP, axZ);
     };
     const round = (x, z, y, r, h, seg) => { const q = toWorld(it, x, z); cyl([q[0], F + y, q[1]], r, h, seg); };
     // points of the piece's frame ([x, y, z], y up from the floor) in the world
@@ -1407,7 +1409,8 @@ function buildInside(kind, F, H) {
     // (ceil: how high an inner wall goes: the ceiling of a house, the walls' top in a barn)
     const wgIn = liveWings(p).find(wg => it.x > wg.rect.x0 && it.x < wg.rect.x1 && it.z > wg.rect.z0 && it.z < wg.rect.z1);
     const ceil = ceilingC ? (wgIn ? wgIn.fh : p.floorHeight) : H;
-    const pieceKit = {H, ceil, paint, box, cyl: round,
+    // (panel: a box in the inner-wall panel material; studs: the building's stud settings, for a panel side's studs)
+    const pieceKit = {H, ceil, paint, box, cyl: round, panel: (...a) => box(...a, "wallsIn"), studs: {spacing: p.studSpacing, width: p.studWidth, irr: p.studIrregular},
       cone: (x, z, y, r0, r1, h, seg) => { const q = toWorld(it, x, z); cone([q[0], F + y, q[1]], r0, r1, h, seg); },
       rod: (a, b, r, seg) => rod(at(a), at(b), r, seg),
       pipe: (pts, r, seg) => tube(pts.map(at), r, seg),
@@ -1968,7 +1971,7 @@ export function colorFor(p, m) {
   return agedColor(chosenColor(p, m), p.age || 0, m);
 }
 function chosenColor(p, m) {
-  return {walls:p.wallColor, wallsLow:p.lowerColor, trim:p.trimColor, roof:p.roofColor, glass:"#7396AB", door:p.doorColor, doorIn:p.innerDoorColor, foundation:p.foundationColor, chimney:p.chimneyColor, gutter:p.gutterColor, iron:"#2C2D2F", interior:"#B8AE9C", curtain:p.curtainColor, fittings:"#E9E4D8"}[m];
+  return {walls:p.wallColor, wallsLow:p.lowerColor, wallsIn:p.innerColor, trim:p.trimColor, roof:p.roofColor, glass:"#7396AB", door:p.doorColor, doorIn:p.innerDoorColor, foundation:p.foundationColor, chimney:p.chimneyColor, gutter:p.gutterColor, iron:"#2C2D2F", interior:"#B8AE9C", curtain:p.curtainColor, fittings:"#E9E4D8"}[m];
 }
 /** The texture of material m (null: plain colour): its kind, the metres one copy covers (w, h) and the building's age. */
 export function surfaceSpec(p, m) {
@@ -1978,6 +1981,7 @@ export function surfaceSpec(p, m) {
 function baseSpec(p, m) {
   const kind = m === "walls" ? p.wallCladding
     : m === "wallsLow" ? p.lowerCladding
+    : m === "wallsIn" ? p.innerCladding
     : m === "roof" ? (p.roofType === "flat" ? "felt" : p.roofMaterial === "plain" ? null : p.roofMaterial)
     : m === "chimney" ? (p.chimneyStyle === "brick" ? "brick" : null)
     : m === "trim" || m === "door" || m === "doorIn" ? "paintedwood"

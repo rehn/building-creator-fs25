@@ -217,6 +217,8 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Inside like the outside: setting `insideSame` (barns default true, houses false; Inside tab > Inside walls). model.mjs buildWall: each zone as outside (split
   follows the wall's own split): timber cladding = backs of boards at 3 cm + studs (buildStuds: 45 mm, every 60 cm, plates, headers, sills, to the wall's inside
   face), plaster = whitewash surface in the wall colour at the inside face (same thickness, WALL_T, as a stud wall); wallpaper goes over. A barn ceiling is boards on beams.
+- Inner walls: a side can be PANEL (kinds/innerwall.mjs panelSide): the building's own material "wallsIn" (settings innerCladding/innerColor, same CLADDING choices as
+  the facade; kit.panel draws in it) with studs in front (2.5 cm deep, kit.studs = the building's studSpacing/studWidth/studIrregular).
 
 ## Dev environment (WSL)
 - ./dev.sh starts API (:8080) + Next dev server (:3000); data in .dev/ (gitignored),

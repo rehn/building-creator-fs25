@@ -15,8 +15,10 @@ export const WALLPAPERS = [
   ["Red striped wallpaper (rödrandig)", "#C0766B", "paperStripe"],
   ["Green painted boards", "#7F9C8A", "wood"],
 ];
+/** The last choice of a side: the building's inner-wall panel (boards in the facade's choices of cladding) with the studs showing. */
+export const PANEL = WALLPAPERS.length;
 const CORE = "#D8D2C4", TRIM = "#F2EFE8", CORE_T = 0.045, SHEET = 0.005, DOOR_W = 0.9, DOOR_H = 2.05, CASING = 0.07;
-const options = WALLPAPERS.map(w => w[0]);
+const options = [...WALLPAPERS.map(w => w[0]), "Panel, studs showing (Surfaces: panel on inner walls)"];
 /** The doors an inner wall can have: the building's own style, the models for rooms, or one of the outer swinging styles (not the sliding barn door). */
 const DOOR_LOOKS = [...INNER_DOOR_STYLES, ...DOOR_STYLES.filter(s => s.id !== "sliding" && s.id !== "hole")];
 
@@ -32,6 +34,29 @@ function stretches(it, hh) {
   return d ? [[-L / 2, d[0], 0, hh], [d[1], L / 2, 0, hh], [d[0], d[1], Math.min(DOOR_H, hh - 0.1), hh]] : [[-L / 2, L / 2, 0, hh]];
 }
 
+/**
+ * A side that is the building's panel: boards (the "wallsIn" material, as chosen under Surfaces) over the core with the studs showing in front of them:
+ * 2.5 cm deep, the building's width and distance (a little uneven when it says so), a plate along the bottom and top of each stretch.
+ * Posts at the ends of every stretch (so a doorway has its jambs and the part over it a frame).
+ */
+function panelSide(c, it, side, z0, z1, hh, d) {
+  const {spacing = 0.6, width = 0.045, irr = 0} = c.studs || {}, DEEP = 0.025, out = side < 0 ? [z0 - DEEP, z0] : [z1, z1 + DEEP];
+  const rnd = (a, k) => { const v = Math.sin(a * 12.9898 + k * 78.233 + it.length * 3.1) * 43758.5453; return v - Math.floor(v); };
+  for (const [x0, x1, y0, y1] of stretches(it, hh)) {
+    c.panel(x0, x1, z0, z1, y0, y1);
+    c.paint("#B99B6B", "timber");
+    const t = Math.min(width, (y1 - y0) / 4);
+    // plates along the bottom and the top, the studs between them
+    c.box(x0, x1, out[0], out[1], y0, y0 + t); c.box(x0, x1, out[0], out[1], y1 - t, y1);
+    const xs = [x0 + width / 2, x1 - width / 2];
+    for (let x = x0 + spacing, n = 1; x < x1 - spacing / 2; x += spacing, n++) xs.push(x + (rnd(x, n) - 0.5) * 2 * irr * 0.25 * spacing);
+    for (const x of xs.sort((a, b) => a - b)) {
+      const w = x > x0 + width && x < x1 - width ? width * (1 + (rnd(x, 7) - 0.5) * irr * 0.6) : width;
+      c.box(x - w / 2, x + w / 2, out[0], out[1], y0 + t, y1 - t);
+    }
+  }
+}
+
 export const INNER_WALL = {
   name: "Inner wall (innervägg)", mount: "floor", collision: true,
   // its ends are drawn to the room's walls when it is put near them (layout.mjs snapItem)
@@ -45,8 +70,8 @@ export const INNER_WALL = {
     {k: "hinge", label: "Hinges", min: 0, max: 1, step: 1, options: ["On the left (seen from one side)", "On the right (seen from one side)"], when: it => it.door >= 2},
     {k: "look", label: "Door", min: 0, max: DOOR_LOOKS.length, step: 1, options: ["Like the building's doors", ...DOOR_LOOKS.map(s => s.name)], when: it => it.door >= 2},
     {k: "swing", label: "Opens towards", min: 0, max: 1, step: 1, options: ["One side", "The other side"], when: it => it.door >= 2},
-    {k: "paperA", label: "One side", min: 0, max: WALLPAPERS.length - 1, step: 1, options},
-    {k: "paperB", label: "Other side", min: 0, max: WALLPAPERS.length - 1, step: 1, options}],
+    {k: "paperA", label: "One side", min: 0, max: PANEL, step: 1, options},
+    {k: "paperB", label: "Other side", min: 0, max: PANEL, step: 1, options}],
   defaults: {length: 3, door: 1, doorAt: 0.5, hinge: 0, swing: 1, look: 0, paperA: 2, paperB: 4},
   size: it => [it.length, 0.15], height: () => 2.6,
   /** The stretches along the wall [x0, x1] that things can stand against: all of it, or each side of the doorway. */
@@ -71,9 +96,10 @@ export const INNER_WALL = {
     c.paint(CORE, "whitewash");
     for (const [x0, x1, y0, y1] of stretches(it, hh)) c.box(x0, x1, -T, T, y0, y1);
     [[it.paperA, -1], [it.paperB, 1]].forEach(([i, side], k) => {
+      const z0 = side < 0 ? -T - SHEET : T, z1 = side < 0 ? -T : T + SHEET;
+      if (Math.round(i) >= PANEL && c.panel) { panelSide(c, it, side, z0, z1, hh, d); return; }
       const [, color, surf] = WALLPAPERS[Math.max(0, Math.min(WALLPAPERS.length - 1, Math.round(i)))];
       c.paint(color, surf);
-      const z0 = side < 0 ? -T - SHEET : T, z1 = side < 0 ? -T : T + SHEET;
       for (const [x0, x1, y0, y1] of stretches(it, hh)) c.box(x0, x1, z0, z1, y0 + (y0 === 0 ? 0.1 : 0), y1 - (y1 === hh ? 0.04 : 0));
       // skirting boards (taking in the doorway's sides) and the cornice at the top, painted white, on this side
       const out = side < 0 ? [-T - SHEET - 0.012, -T - SHEET] : [T + SHEET, T + SHEET + 0.012];
