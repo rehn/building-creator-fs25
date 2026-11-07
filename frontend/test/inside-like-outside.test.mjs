@@ -70,3 +70,32 @@ test("inside like the outside: wallpaper still goes over it, and no studs show w
   const hatchless = barn({wallCladding: "lockpanel", insideSame: true});
   assert.ok(buildGeometry(hatchless).G.fittings.i.length > buildGeometry(barn({wallCladding: "lockpanel", insideSame: false})).G.fittings.i.length);
 });
+
+/** The studs seen along the back wall at height y: [{from, width}] (where the inside shows the studs' faces). */
+function studsAt(p, y) {
+  const G = buildGeometry(p).G, wall = -p.depth / 2, out = []; let cur = null;
+  for (let x = -6.5; x <= -1.5; x += 0.005) {
+    const z = firstZ(G, x, p.foundation + y), on = z !== null && Math.abs(z - wall - WALL_T) < 1e-3;
+    if (on && !cur) cur = {from: x, to: x}; else if (on) cur.to = x; else if (cur) { out.push({from: cur.from, width: cur.to - cur.from + 0.005}); cur = null; }
+  }
+  if (cur) out.push({from: cur.from, width: cur.to - cur.from + 0.005});
+  return out;
+}
+
+test("studs: older barns have heavier studs, further apart and uneven", () => {
+  const base = barn({wallCladding: "lockpanel", insideSame: true});
+  assert.equal(base.studSpacing, 0.6); assert.equal(base.studWidth, 0.045); assert.equal(base.studIrregular, 0);
+  assert.equal(barn({studSpacing: 9, studWidth: 1, studIrregular: 5}).studSpacing, 1.5);
+  assert.equal(barn({studSpacing: 9, studWidth: 1, studIrregular: 5}).studWidth, 0.12);
+  assert.equal(barn({studSpacing: 9, studWidth: 1, studIrregular: 5}).studIrregular, 1);
+  const tight = studsAt(base, 1.5), wide = studsAt(barn({wallCladding: "lockpanel", insideSame: true, studSpacing: 1.2, studWidth: 0.1}), 1.5);
+  assert.ok(tight.length > wide.length + 2, `${tight.length} studs at 60 cm, ${wide.length} at 120 cm`);
+  assert.ok(wide.every(s => s.width > 0.08), "wider: " + wide.map(s => s.width.toFixed(2)));
+  assert.ok(tight.every(s => s.width < 0.06), "narrow: " + tight.map(s => s.width.toFixed(2)));
+  // even: the gaps between studs are the same; uneven: they are not
+  const gaps = list => list.slice(1).map((s, i) => s.from - list[i].from - list[i].width);
+  const spread = list => { const g = gaps(list); return Math.max(...g) - Math.min(...g); };
+  const even = studsAt(barn({wallCladding: "lockpanel", insideSame: true, studSpacing: 0.9}), 1.5), rough = studsAt(barn({wallCladding: "lockpanel", insideSame: true, studSpacing: 0.9, studIrregular: 0.8}), 1.5);
+  assert.ok(spread(even) < 0.03, "regular: " + spread(even));
+  assert.ok(spread(rough) > 0.1, "uneven: " + spread(rough));
+});

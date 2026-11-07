@@ -68,7 +68,7 @@ function autoFurnish(p) {
   return {style: n <= 15 ? "fahus" : "farstall", items};
 }
 
-const swedishRed = {wallCladding: "lockpanel", wallColor: "#8E2A1E", trimColor: "#F2EFE8"};
+const swedishRed = {wallCladding: "lockpanel", wallColor: "#8E2A1E", trimColor: "#F2EFE8", studSpacing: 0.9, studWidth: 0.08, studIrregular: 0.5};
 export default {
   id: "sheep",
   name: "Sheep barn",

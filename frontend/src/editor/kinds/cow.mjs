@@ -449,7 +449,8 @@ ${y.fence.map((_, i) => `                    <node node="fence1Node${i + 1}"/>`)
 };
 
 /* ---------- The kind ---------- */
-const swedishRed = {wallCladding: "lockpanel", wallColor: "#8E2A1E", trimColor: "#F2EFE8"};
+// (an old red barn: heavy studs, far apart and uneven, seen from inside)
+const swedishRed = {wallCladding: "lockpanel", wallColor: "#8E2A1E", trimColor: "#F2EFE8", studSpacing: 0.9, studWidth: 0.08, studIrregular: 0.5};
 export default {
   id: "cow",
   name: "Cow barn",

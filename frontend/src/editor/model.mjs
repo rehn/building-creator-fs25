@@ -19,7 +19,7 @@ export { henYard, henCap, HENS_PER_M2, MAX_HENS } from "./kinds/chicken.mjs";
 /** Settings every building has. A kind adds its own (kind.defaults). */
 export const DEFAULTS = {
   kind:"house",
-  width:10, depth:7, floors:2, floorHeight:2.7, foundation:0.4, halfStorey:false, ceiling:true, insideSame:false, kneeWall:0.9,
+  width:10, depth:7, floors:2, floorHeight:2.7, foundation:0.4, halfStorey:false, ceiling:true, insideSame:false, studSpacing:0.6, studWidth:0.045, studIrregular:0, kneeWall:0.9,
   wing:false, wingWall:"back", wingPos:0.15, wingWidth:6, wingDepth:5,
   roofType:"gable", ridge:"width", roofPitch:38, overhang:0.5, chimney:true,
   winFront:2, winBack:3, winLeft:1, winRight:1, winW:1.0, winH:1.25, sill:0.85, winStyle:"casement",
@@ -115,6 +115,9 @@ const SHARED_SECTIONS = [
     {k:"curtainStyle", label:"Curtains", type:"select", options:CURTAIN_OPTIONS}]},
   {title:"Inside walls", label:"Inside walls", tab:"inside", custom:"papers", hint:"What the outer walls look like from inside: like the outside (studs behind boards, plaster as plaster, the same split in two materials), or the kind's own finish. Wallpaper goes over either: one for every wall, or sections along a wall, one for each room behind it.", fields:[
     {k:"insideSame", label:"Like the outside (boards show their studs inside)", type:"check"},
+    {k:"studSpacing", label:"Studs: distance between them", min:0.4, max:1.5, step:0.05, unit:" m"},
+    {k:"studWidth", label:"Studs: width of each (older barns: heavier)", min:0.045, max:0.12, step:0.005, cm:true},
+    {k:"studIrregular", label:"Studs: how uneven (older barns: more)", min:0, max:1, step:0.05},
     {k:"insidePaper", label:"Wallpaper on every inside wall", type:"select", options:[["none", "None (plaster as it is)"], ...WALLPAPERS.map((w, i) => [String(i), w[0]])]}]},
   {title:"Game objects", tab:"game", custom:"objects", hint:"What the game needs around the building: where you sleep, tip feed, drop bales, load animals, collect eggs, and the pasture's fence. Add and remove them here, and drag them into place in the plan view.", fields:[]},
   {title:"Game mod", label:"Shop and mod", tab:"game", hint:"Used by \u201CExport game mod\u201D: what the house costs in the shop and who made it. The project name is the name in the shop.", fields:[
@@ -1009,7 +1012,9 @@ function buildDoor(w, o, kit, inner, r, out, key) {
  * c: L, tw, BACK (the boards' backs), s0i..s1i (the stretch the inside covers), split, Hi (top of the inside), ceil, topAt(s), wood(t), bare(s).
  */
 function buildStuds(w, ops, c) {
-  const {tw, BACK, s0i, s1i, split, Hi, ceil, topAt} = c, st = 0.045, g = 0.002, hdr = 0.095;
+  const {tw, BACK, s0i, s1i, split, Hi, ceil, topAt, spacing, studW: st, irr} = c, g = 0.002, hdr = Math.max(0.095, st * 2);
+  // (an old barn's studs are uneven: where they stand and how thick they are vary a little, the same way every time)
+  const rnd = (i, k) => { const v = Math.sin(i * 12.9898 + k * 78.233 + w.L * 3.1) * 43758.5453; return v - Math.floor(v); };
   paint("#B99B6B", "timber");
   const zones = split ? [[0, split, "low"], [split, Infinity, "up"]] : [[0, Infinity, "up"]];
   const top = s => ceil < Infinity ? Hi : topAt(s) - 0.02;
@@ -1029,10 +1034,13 @@ function buildStuds(w, ops, c) {
     }
     // studs: at the ends, every 60 cm, and each side of an opening (a gap of 2 mm to its lining)
     const xs = [s0i + st / 2, s1i - st / 2];
-    for (let s = s0i + 0.6; s < s1i - 0.3; s += 0.6) xs.push(s);
+    for (let s = s0i + spacing, i = 1; s < s1i - spacing / 2; s += spacing, i++) xs.push(s + (rnd(i, 1) - 0.5) * 2 * irr * 0.25 * spacing);
     for (const o of ops) xs.push(o.s0 - g - st / 2, o.s1 + g + st / 2);
     for (const x of [...new Set(xs.map(v => +v.toFixed(4)))].sort((a, b) => a - b)) {
       if (x - st / 2 < s0i - 1e-6 || x + st / 2 > s1i + 1e-6 || !c.bare(x)) continue;
+      // each stud's own width (the ends and the studs at openings keep the plain one)
+      const free = x > s0i + st && x < s1i - st && !ops.some(o => Math.abs(x - o.s0) < st * 2 + 0.01 || Math.abs(x - o.s1) < st * 2 + 0.01);
+      const sw = free ? st * (1 + (rnd(Math.round(x * 100), 2) - 0.5) * irr * 0.6) : st;
       let ranges = [[z0 + st, flatTop ? zTop - st : Math.min(z1, top(x))]];
       for (const o of ops) {
         if (!(x + st / 2 > o.s0 && x - st / 2 < o.s1)) continue;
@@ -1044,7 +1052,7 @@ function buildStuds(w, ops, c) {
         }
         ranges = cut;
       }
-      for (const [a, b] of ranges) box(x - st / 2, x + st / 2, a, b);
+      for (const [a, b] of ranges) box(x - sw / 2, x + sw / 2, a, b);
     }
     // headers over the openings and sills under the windows
     for (const o of ops) {
@@ -1114,7 +1122,7 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
       if (timber) paint("#B09468", "boards"); else paint(f[0], f[1]);
       if (c.length >= 3) poly("fittings", c.map(q => WP(w, q[0], q[1], timber ? -BACK : -tw)), neg(w.n));
     }
-    if (same) buildStuds(w, ops, {L, tw, BACK, s0i, s1i, split, Hi, ceil, topAt, wood: t => WOOD.includes(cladOf(t)), bare: s => !paperAt(s)});
+    if (same) buildStuds(w, ops, {L, tw, BACK, s0i, s1i, split, Hi, ceil, topAt, spacing: p.studSpacing, studW: p.studWidth, irr: p.studIrregular, wood: t => WOOD.includes(cladOf(t)), bare: s => !paperAt(s)});
     // A kickboard (a barn's tarred, a house's skirting) along the bottom, except across openings that come down to it.
     const [kickC, kickS, KT] = fin.kick;
     paint(kickC, kickS);

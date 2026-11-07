@@ -301,6 +301,7 @@ function syncOutputs() {
   off("battenWidth", !clads.includes("lockpanel"));
   off("splitHeight", p.wallSplit !== "height");
   off("lowerCladding", !zonesUsed()); off("lowerColor", !zonesUsed());
+  for (const k of ["studSpacing", "studWidth", "studIrregular"]) off(k, !p.insideSame);
   off("roofMaterial", p.roofType === "flat");
   off("chimneyStyle", !p.chimney);
   off("kneeWall", !p.halfStorey);
