@@ -1406,7 +1406,7 @@ function setInsideView(v) {
   // hang lower than the wall tops by the overhang's drop), so no roof is left over the walls.
   const eaves = r.H - (p.roofType === "flat" ? 0 : p.overhang * Math.tan(p.roofPitch * Math.PI / 180));
   // (under a ceiling: just under it)
-  const cut3d = kindOf(p).ceiling ? p.floorHeight - 0.05 : Math.max(1.4, eaves - 0.12);
+  const cut3d = p.ceiling ? p.floorHeight - 0.05 : Math.max(1.4, eaves - 0.12);
   clipPlane.constant = r.F + (v === "plan" ? 1.3 : cut3d);
   renderer.clippingPlanes = [clipPlane];
   if (v === "3d") {

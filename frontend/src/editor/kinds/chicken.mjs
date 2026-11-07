@@ -423,7 +423,7 @@ export default {
   walkIn: true,
   glyph: "hen",
   yard: (geo, p) => henYard(geo, p),
-  defaults: {hens: 30, pastureWall: "back", fenceDepth: 8, winStyle: "single", doorStyle: "zbrace"},
+  defaults: {ceiling: false, hens: 30, pastureWall: "back", fenceDepth: 8, winStyle: "single", doorStyle: "zbrace"},
   /** Editor sections only this kind has (shown first), and shared ones it doesn't use. */
   sections: [
     {title: "Chickens", tab: "game", hint: "Hens go in and out through a small hatch in the middle of the wall the pasture encloses. The pasture (at least 12 m wide and 6 m deep: the game can't handle a smaller one), the feed pad, the egg pallets and the rest are under Game objects.", fields: [

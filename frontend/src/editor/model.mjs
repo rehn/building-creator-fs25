@@ -19,7 +19,7 @@ export { henYard, henCap, HENS_PER_M2, MAX_HENS } from "./kinds/chicken.mjs";
 /** Settings every building has. A kind adds its own (kind.defaults). */
 export const DEFAULTS = {
   kind:"house",
-  width:10, depth:7, floors:2, floorHeight:2.7, foundation:0.4, halfStorey:false, kneeWall:0.9,
+  width:10, depth:7, floors:2, floorHeight:2.7, foundation:0.4, halfStorey:false, ceiling:true, kneeWall:0.9,
   wing:false, wingWall:"back", wingPos:0.15, wingWidth:6, wingDepth:5,
   roofType:"gable", ridge:"width", roofPitch:38, overhang:0.5, chimney:true,
   winFront:2, winBack:3, winLeft:1, winRight:1, winW:1.0, winH:1.25, sill:0.85, winStyle:"casement",
@@ -67,6 +67,7 @@ const SHARED_SECTIONS = [
     {k:"floors", label:"Full floors", min:1, max:3, step:1},
     {k:"halfStorey", label:"Half floor in the roof (1\u00BD-plan)", type:"check"},
     {k:"kneeWall", label:"Knee wall height", min:0.2, max:1.6, step:0.05, unit:" m"},
+    {k:"ceiling", label:"Ceiling over the ground floor (closes the roof space, so you don’t see up to the ridge)", type:"check"},
     {k:"floorHeight", label:"Floor height", min:2.3, max:9, step:0.05, unit:" m"},
     {k:"foundation", label:"Foundation height", min:0, max:1.2, step:0.05, unit:" m"}]},
   {title:"Wings", tab:"shape", custom:"wings", hint:"Wings make an L-, T- or U-shaped house: up to four, each on a wall with its own width, length and number of floors. On a long side a wing's roof meets the house's in a valley; a wing with fewer floors runs up to the wall under the eaves; on a gable end it is a lower annex. It has the house's roof pitch and overhang. Its windows and doors are under Windows.", fields:[]},
@@ -664,6 +665,8 @@ const refs = [];
 const hollow = kind.walkIn;
 // Openings the kind adds to its walls, [{wall, s0, s1, t1, clear, what}] (a hen hatch ...).
 const openings = kind.openings ? kind.openings(p) : [];
+// the ceiling over the ground floor: the colour (the kind's, or a plain white), or null where there is none
+const ceilingC = p.ceiling ? (kind.ceiling || "#EDE9DF") : null;
 // a wall's floor height: the wing's own on a wing's wall, else the house's
 const fhOf = key => { const wid = wingIdOf(key), wg = wid && liveWings(p).find(x => x.id === wid); return wg ? wg.fh : p.floorHeight; };
 
@@ -736,8 +739,8 @@ function layoutWall(key, L, fh, topAt, cover = null) {
   // door is hidden, not the door.
   for (const h of openings) if (h.wall === key) ops.push({s0: h.s0, s1: h.s1, t0: 0, t1: h.t1, kind: "hatch", plain: !!h.plain, ...(h.ramp ? {ramp: true} : {})});
   // a wing opens into this wall: a passage through it, from the floor to under the wing's ceiling (a window in it is hidden)
-  if (hollow) for (const w of liveWings(p)) if (w.wall === key) { const tc = Math.min(p.floorHeight, w.fh), t1 = kind.ceiling ? Math.min(tc, w.H) : w.H - 0.25;
-    ops.push({s0: w.s0 + WALL_T, s1: w.s1 - WALL_T, t0: 0, t1, kind: "open", ...(kind.ceiling && t1 >= tc - 1e-6 ? {toCeiling: true} : {})}); }   // (under a ceiling: right up to it, no lintel)
+  if (hollow) for (const w of liveWings(p)) if (w.wall === key) { const tc = Math.min(p.floorHeight, w.fh), t1 = ceilingC ? Math.min(tc, w.H) : w.H - 0.25;
+    ops.push({s0: w.s0 + WALL_T, s1: w.s1 - WALL_T, t0: 0, t1, kind: "open", ...(ceilingC && t1 >= tc - 1e-6 ? {toCeiling: true} : {})}); }   // (under a ceiling: right up to it, no lintel)
   const list = p.windows.filter(w => w.wall === key);
   for (const win of [...list.filter(w => w.type === "door"), ...list.filter(w => w.type !== "door")]) {
     win._hidden = false;
@@ -1025,7 +1028,7 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
   }
   if (inner) {
     // the kind's finish (a barn's by default); under a ceiling (kind.ceiling) only up to it, the floors above closed
-    const fin = kind.insideWalls || BARN_WALLS, ceil = kind.ceiling ? fhOf(key) : Infinity;
+    const fin = kind.insideWalls || BARN_WALLS, ceil = ceilingC ? fhOf(key) : Infinity;
     const Hi = Math.min(H + inner.lift, ceil), tw = WALL_T, lowT = fin.low ? fin.low[2] : 0;
     // (a wing's side wall meets the house's outer face at its start (Left) or its end (Right): its inside face runs right up to it,
     // or a slit shows between it and the house's wall)
@@ -1334,7 +1337,7 @@ function buildInside(kind, F, H) {
     const at = ([x, y, z]) => { const q = toWorld(it, x, z); return [q[0], F + y, q[1]]; };
     // (ceil: how high an inner wall goes: the ceiling of a house, the walls' top in a barn)
     const wgIn = liveWings(p).find(wg => it.x > wg.rect.x0 && it.x < wg.rect.x1 && it.z > wg.rect.z0 && it.z < wg.rect.z1);
-    const ceil = kind.ceiling ? (wgIn ? wgIn.fh : p.floorHeight) : H;
+    const ceil = ceilingC ? (wgIn ? wgIn.fh : p.floorHeight) : H;
     const pieceKit = {H, ceil, paint, box, cyl: round,
       cone: (x, z, y, r0, r1, h, seg) => { const q = toWorld(it, x, z); cone([q[0], F + y, q[1]], r0, r1, h, seg); },
       rod: (a, b, r, seg) => rod(at(a), at(b), r, seg),
@@ -1477,7 +1480,7 @@ function build() {
   const W = p.width, D = p.depth, F = p.foundation, fh = p.floorHeight, H = p.floors * fh + (p.halfStorey ? p.kneeWall : 0), top = F + H;
   // two materials on the walls: where the lower one ends (none at the walls' top or above: the gables are the upper's)
   // (under a ceiling the roof's underside is never seen from inside: a soffit, not raw boards)
-  boardsFrom = hollow && !kind.ceiling ? top + 0.05 : Infinity;
+  boardsFrom = hollow && !ceilingC ? top + 0.05 : Infinity;
   const tanP = Math.tan(p.roofPitch * Math.PI / 180), o = p.overhang, th = 0.16;
   const ridgeX = p.roofType === "hip" ? W >= D : p.ridge === "width";
   const Lr = ridgeX ? W : D, span = ridgeX ? D : W;
@@ -1796,7 +1799,7 @@ function build() {
     abox("collision", [-W/2 - oo, top, -D/2 - oo], [W/2 + oo, top + 0.3, D/2 + oo]);
   }
 
-  WINGS.forEach(item => { rawUnder = hollow && !kind.ceiling; buildWingRoof(item); rawUnder = false; });
+  WINGS.forEach(item => { rawUnder = hollow && !ceilingC; buildWingRoof(item); rawUnder = false; });
   for (const s of [1, -1]) for (const X of DORMS[s]) buildDormer(X);
 
   if (p.gutters && p.roofType !== "flat") {
@@ -1846,10 +1849,10 @@ function build() {
   }
   const ridgeHalf = p.roofType === "hip" ? Math.max(0, Lr/2 - span/2) : Lr/2;
   if (p.ventilators > 0 && p.roofType !== "flat") buildVentilators(Lr, ridgeY, tanP, M, ridgeHalf, th, F);
-  if (hollow && kind.ceiling) {
+  if (hollow && ceilingC) {
     // the ceiling over the ground floor (the floors above are closed from inside)
     const room = roomOf(p, openings), wlist = liveWings(p), y = F + p.floorHeight;
-    paint(kind.ceiling, "whitewash");
+    paint(ceilingC, "whitewash");
     // (the rects are the house's, then each wing's: a wing's ceiling is at its own floor height)
     room.rects.forEach((r, i) => { const yy = i ? F + wlist[i - 1].fh : y; poly("fittings", [[r.x0, yy, r.z0], [r.x1, yy, r.z0], [r.x1, yy, r.z1], [r.x0, yy, r.z1]], neg(UP)); });
     // and across the thickness of the house's wall where a wing opens into it, so the ceiling has no seam there

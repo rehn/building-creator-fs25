@@ -458,7 +458,7 @@ export default {
   walkIn: true,
   glyph: "cow",
   yard: (geo, p) => cowYard(geo, p),
-  defaults: {cows: 12, pastureWall: "back", fenceDepth: 15, winStyle: "stall", doorStyle: "xbrace"},
+  defaults: {ceiling: false, cows: 12, pastureWall: "back", fenceDepth: 15, winStyle: "stall", doorStyle: "xbrace"},
   sections: [
     {title: "Cows", tab: "game", hint: "Cows graze in the pasture and come in through a wide doorway in the pasture side; they eat and drink at troughs along that wall. Fill feed (or drop bales) at the feed place outside the fence; water is automatic. The pasture, the feed pad and the rest are under Game objects. This is a barn without milking (like the game’s small cow barn).", fields: [
       {k: "cows", label: "Cows", min: 1, max: MAX_COWS, step: 1}]},
