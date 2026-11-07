@@ -64,7 +64,11 @@ export function makeWalker(col, {radius = 0.28, step = 0.45, head = 1.8, cell = 
       }
       if (!pushed) break;
     }
-    return {x, y: groundAt(x, z, pos.y + step), z};
+    // (the ground under the feet: the highest within 10 cm, so a narrow gap between two slabs, like the strip between a wall and its doorstep, isn't a hole)
+    const top = pos.y + step;
+    let y = groundAt(x, z, top);
+    for (const [ox, oz] of [[0.1, 0], [-0.1, 0], [0, 0.1], [0, -0.1]]) y = Math.max(y, groundAt(x + ox, z + oz, top));
+    return {x, y, z};
   }
   return {move, groundAt};
 }

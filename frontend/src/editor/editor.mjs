@@ -2007,7 +2007,8 @@ function walkLook() {
 }
 /** The person's start: out in front of the first door looking at it (or in the middle of the building). */
 function walkStart() {
-  const door = Object.values(lastGeo.opsByWall).map(e => ({e, o: e.ops.find(x => x.kind === "door" || (x.kind === "hatch" && x.t1 >= 1.8))})).find(x => x.o);
+  const find = f => Object.values(lastGeo.opsByWall).map(e => ({e, o: e.ops.find(f)})).find(x => x.o);
+  const door = find(x => x.kind === "door") || find(x => x.kind === "hatch" && x.t1 >= 1.8);
   if (door) {
     const {w} = door.e, q = WP(w, (door.o.s0 + door.o.s1) / 2, 0, 3.2);
     walk.pos = {x: q[0], y: 0, z: q[2]}; walk.yaw = Math.atan2(w.n[0], w.n[2]);

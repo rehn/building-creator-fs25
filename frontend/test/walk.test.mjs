@@ -56,3 +56,10 @@ test("walk: furniture and the ground are handled: standing on the terrain is hei
   const q = wk.move({x: 30, y: 0, z: 30}, 1, 0);
   assert.deepEqual([q.x, q.y, q.z], [31, 0, 30]);
 });
+
+test("walk: a door on a high foundation is entered by its steps (the strip between wall and doorstep is no hole)", () => {
+  const p = sanitize({foundation: 0.6}), geo = buildGeometry(p), wk = makeWalker(geo.collision), {o, w} = doorOf(geo);
+  const from = WP(w, (o.s0 + o.s1) / 2, 0, 3.2), end = walk(wk, {x: from[0], y: 0, z: from[2]}, -w.n[0], -w.n[2], 60);
+  assert.ok(inside(p, end), `${end.x.toFixed(2)}, ${end.z.toFixed(2)}`);
+  assert.ok(Math.abs(end.y - 0.6) < 0.02, "on the floor: " + end.y);
+});

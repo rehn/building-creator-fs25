@@ -527,7 +527,7 @@ test("coop: nests, perches, feeders and drinkers for the hens", () => {
 });
 
 test("coop: everything is inside the walls, on or above the floor, and the doorway is clear", () => {
-  for (const [id, p] of chickenPresets()) {
+  for (const [id, p0] of chickenPresets()) { const p = { ...p0, insideSame: false };   // (studs and the backs of boards sit in the wall's thickness)
     const geo = buildGeometry(p), g = geo.G.fittings, { W, D, ridgeY } = geo.dims, F = p.foundation, t = 0.15;
     for (let k = 0; k < g.p.length; k += 3) {
       const [x, y, z] = g.p.slice(k, k + 3);

@@ -39,7 +39,7 @@ test("schema: every section is in a tab, in the order of what you do", () => {
   assert.deepEqual(inTab("game"), ["Chickens", "Cows", "Sheep", "Game objects", "Game mod"]);
   // the names shown say what the section is for
   const label = t => { const g = SCHEMA.find(x => x.title === t); return g.label || g.title; };
-  assert.deepEqual(["Inside", "Interior", "Inside walls", "Game mod"].map(label), ["Furniture and pieces", "Rooms and curtains", "Wallpaper", "Shop and mod"]);
+  assert.deepEqual(["Inside", "Interior", "Inside walls", "Game mod"].map(label), ["Furniture and pieces", "Rooms and curtains", "Inside walls", "Shop and mod"]);
 });
 
 test("sanitize: unknown keys are dropped", () => {

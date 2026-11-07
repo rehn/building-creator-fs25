@@ -19,7 +19,7 @@ export { henYard, henCap, HENS_PER_M2, MAX_HENS } from "./kinds/chicken.mjs";
 /** Settings every building has. A kind adds its own (kind.defaults). */
 export const DEFAULTS = {
   kind:"house",
-  width:10, depth:7, floors:2, floorHeight:2.7, foundation:0.4, halfStorey:false, ceiling:true, kneeWall:0.9,
+  width:10, depth:7, floors:2, floorHeight:2.7, foundation:0.4, halfStorey:false, ceiling:true, insideSame:false, kneeWall:0.9,
   wing:false, wingWall:"back", wingPos:0.15, wingWidth:6, wingDepth:5,
   roofType:"gable", ridge:"width", roofPitch:38, overhang:0.5, chimney:true,
   winFront:2, winBack:3, winLeft:1, winRight:1, winW:1.0, winH:1.25, sill:0.85, winStyle:"casement",
@@ -113,7 +113,8 @@ const SHARED_SECTIONS = [
     {k:"curtainColor", label:"Curtains", type:"color"}]},
   {title:"Interior", label:"Rooms and curtains", tab:"inside", hint:"The floors above the ground floor are closed: a small furnished room is seen through each of their windows. To pick the room or curtains for one window, choose it under Windows (or a kupa under Kupor). The ground floor's inside is under Inside.", fields:[
     {k:"curtainStyle", label:"Curtains", type:"select", options:CURTAIN_OPTIONS}]},
-  {title:"Inside walls", label:"Wallpaper", tab:"inside", custom:"papers", hint:"Wallpaper on the inside of the outer walls: one for every wall, or sections along a wall, one for each room behind it.", fields:[
+  {title:"Inside walls", label:"Inside walls", tab:"inside", custom:"papers", hint:"What the outer walls look like from inside: like the outside (studs behind boards, plaster as plaster, the same split in two materials), or the kind's own finish. Wallpaper goes over either: one for every wall, or sections along a wall, one for each room behind it.", fields:[
+    {k:"insideSame", label:"Like the outside (boards show their studs inside)", type:"check"},
     {k:"insidePaper", label:"Wallpaper on every inside wall", type:"select", options:[["none", "None (plaster as it is)"], ...WALLPAPERS.map((w, i) => [String(i), w[0]])]}]},
   {title:"Game objects", tab:"game", custom:"objects", hint:"What the game needs around the building: where you sleep, tip feed, drop bales, load animals, collect eggs, and the pasture's fence. Add and remove them here, and drag them into place in the plan view.", fields:[]},
   {title:"Game mod", label:"Shop and mod", tab:"game", hint:"Used by \u201CExport game mod\u201D: what the house costs in the shop and who made it. The project name is the name in the shop.", fields:[
@@ -1001,6 +1002,59 @@ function buildDoor(w, o, kit, inner, r, out, key) {
  * split: the height (from the wall's foot) where the walls' lower material ends (two zones, see
  * wallSplitAt); below it the face is "wallsLow", above it "walls", with a drip board along the join.
  */
+/**
+ * Studs (reglar, 45 mm wide) every 60 cm on the inside of a timber-clad wall, from the backs of the boards to the wall's inside face,
+ * with a bottom plate, a top plate under a flat top, jamb studs and a header over each opening (and a sill under a window), and short studs above and
+ * below an opening. Only where the zone (below / above the split) is timber and there is no wallpaper.
+ * c: L, tw, BACK (the boards' backs), s0i..s1i (the stretch the inside covers), split, Hi (top of the inside), ceil, topAt(s), wood(t), bare(s).
+ */
+function buildStuds(w, ops, c) {
+  const {tw, BACK, s0i, s1i, split, Hi, ceil, topAt} = c, st = 0.045, g = 0.002, hdr = 0.095;
+  paint("#B99B6B", "timber");
+  const zones = split ? [[0, split, "low"], [split, Infinity, "up"]] : [[0, Infinity, "up"]];
+  const top = s => ceil < Infinity ? Hi : topAt(s) - 0.02;
+  const box = (s0, s1, t0, t1) => { if (s1 - s0 > 1e-4 && t1 - t0 > 1e-4) wbox("fittings", w, s0, s1, t0, t1, -tw, -BACK); };
+  for (const [z0, z1, name] of zones) {
+    const mid = (z0 + Math.min(z1, Hi)) / 2;
+    if (!c.wood(mid + 0.001) || z0 >= Hi) continue;
+    const flatTop = name === "low" || ceil < Infinity, zTop = name === "low" ? z1 : Hi;
+    // plates: along the bottom (broken where an opening comes down to it) and, under a flat top, along the top
+    const breaks = ops.filter(o => o.t0 < z0 + st + 1e-6 && o.t1 > z0).map(o => [o.s0, o.s1]).sort((a, b) => a[0] - b[0]);
+    let s = s0i;
+    for (const [a, b] of [...breaks, [s1i, s1i]]) { box(s, Math.min(a, s1i), z0, z0 + st); s = Math.max(s, b); }
+    if (flatTop) {
+      const tb = ops.filter(o => o.t1 > zTop - st - 1e-6 && o.t0 < zTop).map(o => [o.s0, o.s1]).sort((a, b) => a[0] - b[0]);
+      s = s0i;
+      for (const [a, b] of [...tb, [s1i, s1i]]) { box(s, Math.min(a, s1i), zTop - st, zTop); s = Math.max(s, b); }
+    }
+    // studs: at the ends, every 60 cm, and each side of an opening (a gap of 2 mm to its lining)
+    const xs = [s0i + st / 2, s1i - st / 2];
+    for (let s = s0i + 0.6; s < s1i - 0.3; s += 0.6) xs.push(s);
+    for (const o of ops) xs.push(o.s0 - g - st / 2, o.s1 + g + st / 2);
+    for (const x of [...new Set(xs.map(v => +v.toFixed(4)))].sort((a, b) => a - b)) {
+      if (x - st / 2 < s0i - 1e-6 || x + st / 2 > s1i + 1e-6 || !c.bare(x)) continue;
+      let ranges = [[z0 + st, flatTop ? zTop - st : Math.min(z1, top(x))]];
+      for (const o of ops) {
+        if (!(x + st / 2 > o.s0 && x - st / 2 < o.s1)) continue;
+        const cut = [];
+        for (const [a, b] of ranges) {
+          const below = Math.min(b, o.t0 - st), above = Math.max(a, o.t1 + hdr);
+          if (below - a > 0.02) cut.push([a, below]);
+          if (b - above > 0.02) cut.push([above, b]);
+        }
+        ranges = cut;
+      }
+      for (const [a, b] of ranges) box(x - st / 2, x + st / 2, a, b);
+    }
+    // headers over the openings and sills under the windows
+    for (const o of ops) {
+      if (o.t1 + hdr > Math.min(z1, Hi) || o.t1 < z0 || o.t0 > Math.min(z1, Hi)) continue;
+      if (o.s0 < s0i || o.s1 > s1i) continue;
+      box(o.s0 + g, o.s1 - g, o.t1 + g, o.t1 + hdr);
+      if (o.t0 > z0 + st + 0.1) box(o.s0 + g, o.s1 - g, o.t0 - st, o.t0 - g);
+    }
+  }
+}
 function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inner = null, key = null, split = null} = {}) {
   const L = w.L, xs = [0, L, L/2], ts = [0, H, H + gableRise];
   if (split) ts.push(split);
@@ -1041,7 +1095,10 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
     const sideOf = /^w[0-9]+(Left|Right)$/.exec(key), s0i = sideOf && sideOf[1] === "Left" ? 0 : tw, s1i = sideOf && sideOf[1] === "Right" ? L : L - tw;
     const Xi = uniq([s0i, s1i, L/2, ...ops.flatMap(o => [o.s0, o.s1]), ...(p.papers || []).filter(x => x.wall === key).flatMap(x => [x.s0, x.s1])]).filter(s => s > s0i - 1e-6 && s < s1i + 1e-6);
     // (a barn's: whitewash, greyer and grubbier along the bottom where the animals rub and muck splashes)
-    const Ti = uniq([0, ...(lowT ? [lowT] : []), Hi, ...(ceil < Infinity ? [] : [H + gableRise]), ...ops.flatMap(o => [o.t0, o.t1])]);
+    // (like the outside: each zone as it is outside: boards show studs, plaster is plaster, the split is where it is outside)
+    const same = !!p.insideSame, WOOD = ["lockpanel", "horizontal", "vertical"], BACK = 0.03;
+    const cladOf = t => split && t < split ? p.lowerCladding : p.wallCladding, colOf = t => split && t < split ? p.lowerColor : p.wallColor;
+    const Ti = uniq([0, ...(lowT && !same ? [lowT] : []), ...(same && split ? [split] : []), Hi, ...(ceil < Infinity ? [] : [H + gableRise]), ...ops.flatMap(o => [o.t0, o.t1])]);
     for (let i = 0; i < Xi.length - 1; i++) for (let j = 0; j < Ti.length - 1; j++) {
       const cs = (Xi[i] + Xi[i+1]) / 2, ct = (Ti[j] + Ti[j+1]) / 2;
       if (ops.some(o => cs > o.s0 && cs < o.s1 && ct > o.t0 && ct < o.t1)) continue;
@@ -1051,14 +1108,17 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
         const k = gableRise / (L / 2);
         c = clipPoly(clipPoly(c, -k, 1, H), k, 1, H + 2 * gableRise);
       }
-      const f = paperAt(cs) || (fin.low && ct < lowT ? fin.low : fin.wall);
-      paint(f[0], f[1]);
-      if (c.length >= 3) poly("fittings", c.map(q => WP(w, q[0], q[1], -tw)), neg(w.n));
+      const paper = paperAt(cs), timber = same && !paper && WOOD.includes(cladOf(ct));
+      const f = paper || (same ? [colOf(ct), "whitewash"] : fin.low && ct < lowT ? fin.low : fin.wall);
+      // (timber: the backs of the boards, a little in from the outside; the studs come after)
+      if (timber) paint("#B09468", "boards"); else paint(f[0], f[1]);
+      if (c.length >= 3) poly("fittings", c.map(q => WP(w, q[0], q[1], timber ? -BACK : -tw)), neg(w.n));
     }
+    if (same) buildStuds(w, ops, {L, tw, BACK, s0i, s1i, split, Hi, ceil, topAt, wood: t => WOOD.includes(cladOf(t)), bare: s => !paperAt(s)});
     // A kickboard (a barn's tarred, a house's skirting) along the bottom, except across openings that come down to it.
     const [kickC, kickS, KT] = fin.kick;
     paint(kickC, kickS);
-    for (let i = 0; i < Xi.length - 1; i++) {
+    for (let i = 0; i < Xi.length - 1 && !same; i++) {
       const cs = (Xi[i] + Xi[i+1]) / 2;
       if (Xi[i+1] - Xi[i] < 0.02 || ops.some(o => cs > o.s0 && cs < o.s1 && o.t0 < KT)) continue;
       wbox("fittings", w, Xi[i], Xi[i+1], 0, KT, -tw - 0.025, -tw);

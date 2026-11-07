@@ -43,7 +43,7 @@ test("surfaces: a normal map from a height map is unit length and flat where the
 });
 
 test("inside a cow barn: concrete floor, whitewashed walls, timber frame, roof boards and steel pieces have surfaces", () => {
-  const {G} = buildGeometry(preset("ladugard"));
+  const {G} = buildGeometry({...preset("ladugard"), insideSame: false});
   const surfs = new Set(splitByColor(G.fittings).map(g => g.surf));
   for (const s of ["concrete", "whitewash", "grime", "timber", "boards", "galv", "rubber"]) assert.ok(surfs.has(s), `no ${s}: ${[...surfs]}`);
   for (const s of surfs) assert.ok(s === undefined || SURFACES[s], `unknown surface ${s}`);

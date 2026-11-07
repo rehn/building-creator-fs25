@@ -70,7 +70,7 @@ test("roof frame: a walk-in barn shows rafters and beams under its roof, a farmh
 });
 
 test("inside walls: a darker band and a kickboard at the bottom, none across the door", () => {
-  const p = preset("fahus"), geo = buildGeometry(p);
+  const p = {...preset("fahus"), insideSame: false}, geo = buildGeometry(p);
   const g = geo.G.fittings, colors = new Set();
   for (let k = 0; k < g.c.length; k += 3) colors.add(g.c.slice(k, k + 3).map(v => v.toFixed(3)).join(","));
   assert.ok(colors.size >= 4, "whitewash, grime, kickboard, floor ...");

@@ -214,6 +214,9 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - First-person walk in the preview ("Walk around" button, editor.mjs "Walking around"): walk.mjs makeWalker(geo.collision) (pure: ground from faces that lead up,
   walls from steep faces, cylinder 28 cm, step 45 cm); W A S D/arrows, Shift runs, drag looks, Esc leaves. Closed doors and furniture block. Ceiling over the
   ground floor: setting `ceiling` (house default true, barns false; ceilingC in model.mjs). A wing has its own floor height (wing.floorHeight, wing.fh).
+- Inside like the outside: setting `insideSame` (barns default true, houses false; Inside tab > Inside walls). model.mjs buildWall: each zone as outside (split
+  follows the wall's own split): timber cladding = backs of boards at 3 cm + studs (buildStuds: 45 mm, every 60 cm, plates, headers, sills, to the wall's inside
+  face), plaster = whitewash surface in the wall colour at the inside face (same thickness, WALL_T, as a stud wall); wallpaper goes over. A barn ceiling is boards on beams.
 
 ## Dev environment (WSL)
 - ./dev.sh starts API (:8080) + Next dev server (:3000); data in .dev/ (gitignored),
