@@ -144,7 +144,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   suggestion; GET /api/admin/vision says whether the API way is on. src/editor/fromPhotos.mjs builds the guide + JSON schema per kind (photoRequest)
   and turns the answer {seen, settings, openings, notes} into settings (applyAnswer -> sanitize). The admin adjusts
   in an ordinary project opened with ?template=ID (photo strip, Claude's notes, Publish template = settings +
-  snapshot). Chart: claude.apiKey / claude.existingSecret. Not yet tried with a real key.
+  snapshot). Chart: claude.apiKey / claude.existingSecret. Tried with a real key by the user (a template came out OK).
 - charts/house-to-i3d = Helm chart (SQLite on a PVC, or Postgres in-release/external);
   charts/test.sh renders and checks every setup.
 - docker-compose.yml runs api + web; CI in .github/workflows/ci.yml pushes
