@@ -211,6 +211,9 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Per-wall split: p.wallZones = {wall: {split: one|floor|height, height}} (any key of wallsOf, wings too) overrides wallSplit/splitHeight for that wall;
   model.mjs splitAtOf(p, key); the two materials stay the building's. Editor: renderZonesUI under Surfaces. Vertical boards: wallCladding "vertical".
   Door style "hole" = empty framed doorway (a plain hatch op); doors and the pasture opening can have a ramp (buildRamp).
+- First-person walk in the preview ("Walk around" button, editor.mjs "Walking around"): walk.mjs makeWalker(geo.collision) (pure: ground from faces that lead up,
+  walls from steep faces, cylinder 28 cm, step 45 cm); W A S D/arrows, Shift runs, drag looks, Esc leaves. Closed doors and furniture block. Ceiling over the
+  ground floor: setting `ceiling` (house default true, barns false; ceilingC in model.mjs). A wing has its own floor height (wing.floorHeight, wing.fh).
 
 ## Dev environment (WSL)
 - ./dev.sh starts API (:8080) + Next dev server (:3000); data in .dev/ (gitignored),

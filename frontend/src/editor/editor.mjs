@@ -14,6 +14,7 @@ import { WALLPAPERS } from "./kinds/innerwall.mjs";
 import { evalNumber } from "./calc.mjs";
 import { DOUBLE_DOOR_FROM } from "./openings.mjs";
 import { cleanPapers, wallBreaks, pieceGroups, roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, History, roomBox, wingsOf, liveWings, wingFloors, wingHalf, wingIdOf, wingWallKey, WING_PARTS, wallsOf, eaveWalls, autoPipes, pipePositions } from "./layout.mjs";
+import { makeWalker } from "./walk.mjs";
 import { OBJECT_TYPES, objectInfo, OBJECT_LIMITS, GAP_LIMITS, objectOf, pastureOf, snapBox, snapPasture, objectProblems, objectWarnings, fencePoints, snapFencePoint, MAX_FENCE_POINTS } from "./objects.mjs";
 import { setAssets, catalogFor, usedAssets } from "./model.mjs";
 import { readObj, assetFolder, flattenI3d } from "./assets.mjs";
@@ -41,6 +42,7 @@ const MARKUP = `<div class="hx-editor" data-tab="shape">
     <canvas id="view"></canvas>
     <div class="readout" id="readout"></div>
     <div class="orbit-hint" id="orbitHint">Drag to orbit, scroll to zoom</div>
+    <button type="button" class="hx-walk" id="walkBtn" title="See the building as a person walking round and in it">Walk around</button>
     <div class="hx-inside-bar" id="insideBar" hidden>
       <div class="seg" role="group" aria-label="View">
         <button type="button" id="viewPlan" aria-pressed="true">Plan</button><button type="button" id="view3d" aria-pressed="false">3D</button>
@@ -437,6 +439,9 @@ function ensureSurface(m) {
 const canvas = $("view");
 const stage = $("stage");
 const readout = $("readout");
+// first-person walking (see "Walking around" below)
+let lastGeo = null;
+const walk = {on: false, pos: {x: 0, y: 0, z: 0}, yaw: 0, pitch: 0, keys: new Set(), last: 0, walker: null, eye: 1.65, ey: 0};
 let interiorTex = null, interiorCv = null, groundObj = null, gridObj = null;
 const interiorCanvas = () => interiorCv || (interiorCv = paintInterior(document));
 let renderer, scene, camera, groundMat, selMesh = null, placesObj = null, yardObj = null, meshes = {}, matObjs = {}, needs = true, sunLight = null;
@@ -517,10 +522,11 @@ function resize() {
   if (ins.on && ins.view === "plan") fitOrtho();
   needs = true;
 }
-function loop() { if (destroyed) return; if (needs) { renderer.render(scene, activeCam()); needs = false; } raf = requestAnimationFrame(loop); }
+function loop() { if (destroyed) return; if (walk.on) walkStep(); if (needs) { renderer.render(scene, activeCam()); needs = false; } raf = requestAnimationFrame(loop); }
 
 const view = {theta:0.75, phi:1.15, r:26, target:[0,3,0]};
 function updateCam() {
+  if (walk.on) return;
   const {theta, phi, r, target} = view;
   camera.position.set(target[0] + r*Math.sin(phi)*Math.sin(theta), target[1] + r*Math.cos(phi), target[2] + r*Math.sin(phi)*Math.cos(theta));
   camera.lookAt(target[0], target[1], target[2]);
@@ -557,6 +563,7 @@ function setupOrbit() {
     }
   });
   canvas.addEventListener("pointerup", e => {
+    if (walk.on) { downAt = null; return; }
     const click = downAt && ptrs.size === 1 && Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) < 5;
     if (ob.drag) {
       const d = ob.drag; ob.drag = null;
@@ -575,6 +582,7 @@ function setupOrbit() {
   canvas.addEventListener("pointermove", e => {
     if (!ptrs.has(e.pointerId)) return;
     const prev = ptrs.get(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+    if (walk.on) { walk.yaw -= (e.clientX - prev[0]) * 0.005; walk.pitch = Math.max(-1.4, Math.min(1.4, walk.pitch - (e.clientY - prev[1]) * 0.005)); walkLook(); return; }
     if (ob.drag && ptrs.size === 1) {
       // where it would go, snapped as it moves (the pasture rebuilds the fence, doorway and troughs as it goes)
       const q = groundPoint(e);
@@ -633,6 +641,7 @@ function setupOrbit() {
   canvas.addEventListener("pointerup", end); canvas.addEventListener("pointercancel", end);
   canvas.addEventListener("wheel", e => {
     e.preventDefault();
+    if (walk.on) return;
     if (ins.on && ins.view === "plan") { zoomPlan(Math.exp(-e.deltaY * 0.001)); return; }
     view.r = Math.min(120, Math.max(3, view.r * Math.exp(e.deltaY * 0.001))); updateCam();
   }, {passive:false});
@@ -1925,6 +1934,7 @@ function updateYardMarker(geo) {
 }
 function rebuild(fit) {
   const geo = buildGeometry(p);
+  lastGeo = geo;
   ({G, dims, opsByWall} = geo);
   const wingsNow = geo.wings || [];
   let tris = 0;
@@ -1953,7 +1963,8 @@ function rebuild(fit) {
     drawFittingSurfaces();
     scheduleSurfaces();
     drawItems(geo.refs);
-    if (!ins.on) {
+    if (walk.on) walkRebuilt();
+    else if (!ins.on) {
       view.target = [0, dims.ridgeY * 0.45, 0];
       if (fit) view.r = Math.max(dims.W, dims.D, dims.ridgeY) * 2.3 + 6;
       updateCam();
@@ -1984,6 +1995,78 @@ $("dlgCopy").onclick = async () => {
   const ta = $("dlgText");
   try { await navigator.clipboard.writeText(ta.value); toast("Copied"); } catch (e) { ta.select(); toast("Press Ctrl+C or Cmd+C to copy"); }
 };
+
+/* ---------- Walking around (first person) ---------- */
+// "Walk around": the camera becomes a person of 1.65 m eye height: W A S D or the arrows to walk (Shift runs), drag to look,
+// Esc to stop. It stands on the building's collision (floors, steps, ramps) and can't pass walls, closed doors or furniture (walk.mjs).
+const WALK_KEYS = {KeyW: "f", ArrowUp: "f", KeyS: "b", ArrowDown: "b", KeyA: "l", ArrowLeft: "l", KeyD: "r", ArrowRight: "r"};
+function walkLook() {
+  camera.rotation.set(walk.pitch, walk.yaw, 0, "YXZ");
+  camera.position.set(walk.pos.x, walk.ey, walk.pos.z);
+  needs = true;
+}
+/** The person's start: out in front of the first door looking at it (or in the middle of the building). */
+function walkStart() {
+  const door = Object.values(lastGeo.opsByWall).map(e => ({e, o: e.ops.find(x => x.kind === "door" || (x.kind === "hatch" && x.t1 >= 1.8))})).find(x => x.o);
+  if (door) {
+    const {w} = door.e, q = WP(w, (door.o.s0 + door.o.s1) / 2, 0, 3.2);
+    walk.pos = {x: q[0], y: 0, z: q[2]}; walk.yaw = Math.atan2(w.n[0], w.n[2]);
+  } else { walk.pos = {x: 0, y: 0, z: 0}; walk.yaw = 0; }
+  walk.pitch = -0.05;
+  walk.pos.y = walk.walker.groundAt(walk.pos.x, walk.pos.z, 0.5);
+}
+function walkRebuilt() {
+  walk.walker = makeWalker(lastGeo.collision);
+  walk.pos = walk.walker.move(walk.pos, 0, 0); walk.ey = walk.pos.y + walk.eye; walkLook();
+}
+function walkKey(e) {
+  if (!walk.on || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement && document.activeElement.tagName)) return;
+  if (e.code === "Escape") { e.preventDefault(); leaveWalk(); return; }
+  const k = WALK_KEYS[e.code];
+  if (e.code === "ShiftLeft" || e.code === "ShiftRight") { if (e.type === "keydown") walk.keys.add("run"); else walk.keys.delete("run"); return; }
+  if (!k) return;
+  e.preventDefault();
+  if (e.type === "keydown") walk.keys.add(k); else walk.keys.delete(k);
+}
+function walkStep() {
+  const now = performance.now(), dt = Math.min(0.05, (now - (walk.last || now)) / 1000); walk.last = now;
+  const K = walk.keys, f = (K.has("f") ? 1 : 0) - (K.has("b") ? 1 : 0), r = (K.has("r") ? 1 : 0) - (K.has("l") ? 1 : 0);
+  if (f || r) {
+    const v = (K.has("run") ? 4 : 1.8) * dt / Math.hypot(f, r), sy = Math.sin(walk.yaw), cy = Math.cos(walk.yaw);
+    walk.pos = walk.walker.move(walk.pos, (-sy * f + cy * r) * v, (-cy * f - sy * r) * v);
+  }
+  // the eyes follow the ground smoothly (steps, ramps)
+  const want = walk.pos.y + walk.eye;
+  if (Math.abs(walk.ey - want) > 1e-3) walk.ey += (want - walk.ey) * Math.min(1, dt * 14); else walk.ey = want;
+  if (f || r || walk.ey !== want) walkLook();
+}
+function enterWalk() {
+  if (walk.on || !renderer || !lastGeo) return;
+  if (ins.on) leaveInside();
+  if (ob.on) leaveObjects();
+  walk.on = true; walk.keys.clear(); walk.last = 0;
+  walk.walker = makeWalker(lastGeo.collision); walkStart(); walk.ey = walk.pos.y + walk.eye;
+  camera.fov = 70; camera.near = 0.05; camera.updateProjectionMatrix();
+  for (const o of [placesObj && placesObj.group, selMesh, gridObj]) if (o) o.visible = false;
+  window.addEventListener("keydown", walkKey); window.addEventListener("keyup", walkKey);
+  $("walkBtn").textContent = "Leave walk (Esc)"; $("walkBtn").setAttribute("aria-pressed", "true");
+  $("orbitHint").textContent = "W A S D or arrows to walk, Shift to run, drag to look";
+  $("view").style.cursor = "crosshair";
+  walkLook();
+}
+function leaveWalk() {
+  if (!walk.on) return;
+  walk.on = false; walk.keys.clear();
+  window.removeEventListener("keydown", walkKey); window.removeEventListener("keyup", walkKey);
+  camera.fov = 38; camera.near = 0.1; camera.updateProjectionMatrix();
+  if (gridObj) gridObj.visible = true;
+  $("walkBtn").textContent = "Walk around"; $("walkBtn").setAttribute("aria-pressed", "false");
+  $("orbitHint").textContent = "Drag to orbit, scroll to zoom";
+  $("view").style.cursor = "";
+  updateCam(); updateHighlight(); updatePlacesMarker();
+}
+$("walkBtn").onclick = () => walk.on ? leaveWalk() : enterWalk();
+cleanups.push(() => { window.removeEventListener("keydown", walkKey); window.removeEventListener("keyup", walkKey); });
 
 /* ---------- Files ---------- */
 function saveFile(name, data, fallback) {
