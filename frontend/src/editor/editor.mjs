@@ -1004,15 +1004,17 @@ function renderWingsUI() {
   if (wings.length < MAX_WINGS) html += `<div class="addrow"><button type="button" id="wingAdd">+ Add a wing</button></div>`;
   const w = wings.find(x => x.id === wSel);
   if (w) {
-    const wallL = w.wall === "front" || w.wall === "back" ? p.width : p.depth;   // (the place along the wall is shown in metres)
+    const wallL = (wallsOf(p)[w.wall] || {L: w.wall === "front" || w.wall === "back" ? p.width : p.depth}).L;   // (the place along the wall is shown in metres)
+    // the walls it can stand on: the house's and those of the parts before it in the list (its parent is one of them)
+    const before = wings.slice(0, wings.findIndex(x => x.id === w.id)), onWalls = [...["front", "back", "left", "right"], ...before.flatMap(e => WING_PARTS.map(s => wingWallKey(e.id, s)))];
     const range = f => `<div class="field"><div class="fl"><label for="wg-${f.k}">${f.label}</label><output id="wg-${f.k}-o">${f.k === "pos" ? (w.pos * wallL).toFixed(2) : (+w[f.k]).toFixed(2)} m</output></div><input type="range" id="wg-${f.k}" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}" value="${w[f.k]}" ${f.k === "pos" ? `data-scale="${wallL}"` : ""}></div>`;
-    html += `<div class="wincard"><div class="field"><div class="fl"><label for="wg-wall">On the wall</label></div><select id="wg-wall">${["front", "back", "left", "right"].map(k => opt(k, WALL_NAMES[k], w.wall)).join("")}</select></div>`
+    html += `<div class="wincard"><div class="field"><div class="fl"><label for="wg-wall">On the wall</label></div><select id="wg-wall">${onWalls.map(k => opt(k, WALL_NAMES[k], w.wall)).join("")}</select></div>`
       + WING_FIELDS.map(range).join("")
       + `<div class="field"><div class="fl"><label for="wg-floors">Floors</label></div><select id="wg-floors">${opt(0, `As the house (${p.floors}${p.halfStorey ? "½" : ""})`, w.floors)}${[1, 2, 3].map(n => opt(n, `${n}${n < p.floors ? " (lower than the house)" : n > p.floors ? " (taller than the house)" : ""}`, w.floors)).join("")}</select></div>`
       + `<label class="check"><input type="checkbox" id="wg-half" ${wingHalf(p, w) ? "checked" : ""} ${w.floors ? "" : "disabled"}> Half floor in the roof (1½-plan)</label>`
       + `<div class="field"><div class="fl"><label for="wg-pitch">Roof angle</label><output id="wg-pitch-o">${w.pitch ? w.pitch + "°" : "as the house (" + p.roofPitch + "°)"}</output></div><input type="range" id="wg-pitch" min="0" max="60" step="1" value="${w.pitch}"></div>`
       + `<div class="field"><div class="fl"><label for="wg-fh">Floor height</label><output id="wg-fh-o">${w.floorHeight ? w.floorHeight.toFixed(2) + " m" : "as the house (" + p.floorHeight.toFixed(2) + " m)"}</output></div><input type="range" id="wg-fh" min="2.2" max="9" step="0.05" value="${w.floorHeight || 2.2}"></div>`
-      + `<p class="hint">A wing with fewer floors, or a flatter roof, has a lower roof. Roof angle 0 follows the house.</p><div class="row"><button type="button" id="wingRemove" class="danger">Remove this wing</button></div></div>`;
+      + `<p class="hint">A wing with fewer floors, or a flatter roof, has a lower roof. Roof angle 0 follows the house.</p><div class="row">${wings.length < MAX_WINGS ? `<button type="button" id="wingAddChild">+ Add a part on this wing</button>` : ""}<button type="button" id="wingRemove" class="danger">Remove this wing</button></div></div>`;
   }
   ed.innerHTML = html;
   const changed = (renderToo = true) => {
@@ -1023,7 +1025,7 @@ function renderWingsUI() {
   };
   ed.querySelectorAll("[data-wing]").forEach(b => b.onclick = () => { wSel = +b.dataset.wing; renderWingsUI(); });
   if ($("wingAdd")) $("wingAdd").onclick = () => {
-    const id = [1, 2, 3, 4].find(i => !wings.some(x => x.id === i));
+    const id = Array.from({length: MAX_WINGS}, (_, i) => i + 1).find(i => !wings.some(x => x.id === i));
     // on the first wall without a wing (the back first), at an end
     const wall = ["back", "front", "right", "left"].find(k => !wings.some(x => x.wall === k)) || "back";
     p.wings = [...wings, {id, wall, pos: wall === "back" || wall === "front" ? 0.15 : 0.5, width: 6, depth: 5, floors: 0}];
@@ -1043,6 +1045,13 @@ function renderWingsUI() {
   const fhOut = () => { $("wg-fh-o").textContent = w.floorHeight ? w.floorHeight.toFixed(2) + " m" : `as the house (${p.floorHeight.toFixed(2)} m)`; };
   $("wg-fh").oninput = e => { w.floorHeight = +e.target.value < 2.3 ? 0 : +(+e.target.value).toFixed(2); fhOut(); persist(); rebuild(false); };
   $("wg-fh").onchange = () => changed();
+  if ($("wingAddChild")) $("wingAddChild").onclick = () => {
+    // a part on this wing: on a side wall (or its end) where there is none yet, in the middle
+    const id = Array.from({length: MAX_WINGS}, (_, i) => i + 1).find(i => !wings.some(x => x.id === i));
+    const wall = ["Left", "Right", "End"].map(s => wingWallKey(w.id, s)).find(k => !wings.some(x => x.wall === k)) || wingWallKey(w.id, "Left");
+    p.wings = [...wings, {id, wall, pos: 0.5, width: 3, depth: 3, floors: 0}];
+    wSel = id; changed();
+  };
   $("wingRemove").onclick = () => {
     p.wings = wings.filter(x => x.id !== w.id);
     p.windows = p.windows.filter(x => wingIdOf(x.wall) !== w.id);
