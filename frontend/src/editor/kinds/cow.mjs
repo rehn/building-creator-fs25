@@ -36,11 +36,12 @@ export function openings(p) {
 }
 // Troughs are game objects (feedTrough, waterTrough: a box on the ground, its height the top edge). A trough is a plank box
 // with a wall round a hollow; the fill plane floats in the hollow.
-const TROUGH = {wall: 0.08, stand: 0.7, spacing: 1.4};
+// body: how far behind the head (the stand point) an animal reaches, so a place with a wall or the fence just behind it isn't used
+const TROUGH = {wall: 0.08, stand: 0.7, spacing: 1.4, body: 2.3};
 
 /**
  * A trough from its object {x, z, w, d, h}: its outer and inner rectangles, the heights of its floor and fill, and
- * where animals stand: along its long sides, 70 cm out, on each side that is inside the fence (and not in the building),
+ * where animals stand: along its long sides, 70 cm out, on each side where the animal fits (it and its body behind it inside the fence and not in the building),
  * or else on the side away from the building. Null where the building has none.
  */
 function troughFrom(o, fence, rects) {
@@ -52,17 +53,19 @@ function troughFrom(o, fence, rects) {
   const out = (alongX ? o.d : o.w) / 2 + TROUGH.stand;
   const spots = sign => Array.from({length: k}, (_, i) => {
     const s = -len / 2 + (i + 0.5) * len / k, n = alongX ? [0, sign] : [sign, 0];
-    return {pos: [o.x + (alongX ? s : n[0] * out), 0, o.z + (alongX ? n[1] * out : s)], rot: Math.atan2(-n[0], -n[1]) * 180 / Math.PI};
+    const pos = [o.x + (alongX ? s : n[0] * out), 0, o.z + (alongX ? n[1] * out : s)];
+    return {pos, rot: Math.atan2(-n[0], -n[1]) * 180 / Math.PI, back: [pos[0] + n[0] * TROUGH.body, 0, pos[2] + n[1] * TROUGH.body]};
   });
   const free = q => !rects.some(r => q[0] > r.x0 - 0.3 && q[0] < r.x1 + 0.3 && q[2] > r.z0 - 0.3 && q[2] < r.z1 + 0.3) && (!fence || insidePoly(fence, q[0], q[2]));
-  let sides = [1, -1].map(spots).filter(list => list.every(q => free(q.pos)));
+  let sides = [1, -1].map(spots).filter(list => list.every(q => free(q.pos) && free(q.back)));
   if (!sides.length) { // not reachable (the warning says so): at least the side away from the building
     const c = rects[0] ? [(rects[0].x0 + rects[0].x1) / 2, (rects[0].z0 + rects[0].z1) / 2] : [0, 0];
     const away = sign => { const q = spots(sign)[0].pos; return Math.hypot(q[0] - c[0], q[2] - c[1]); };
     sides = [spots(away(1) >= away(-1) ? 1 : -1)];
   }
+  const strip = list => list.map(({pos, rot}) => ({pos, rot}));
   return {outer, inner, top, bottom, planeMin: bottom + (top - bottom) * 0.15, planeMax: top - (top - bottom) * 0.2,
-    plane: [o.x, o.z], size: [inner.x1 - inner.x0, inner.z1 - inner.z0], box: {center: [o.x, top / 2, o.z], size: [o.w, top, o.d]}, places: sides.flat()};
+    plane: [o.x, o.z], size: [inner.x1 - inner.x0, inner.z1 - inner.z0], box: {center: [o.x, top / 2, o.z], size: [o.w, top, o.d]}, places: strip(sides.flat())};
 }
 /** The troughs to start with: against the pasture wall outside, feed on one side of the doorway, water on the other (the longer stretch gets the feed). */
 function startTroughs(yf, p, cfg) {
