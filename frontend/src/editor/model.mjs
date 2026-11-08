@@ -332,11 +332,20 @@ export function wallItems(p, key) {
 /**
  * The building as a tree for the editor: {type: "main", children: [walls], lost: [parts]}; a wall {type: "wall", key, children}, whose children are the
  * windows and doors on it ({type: "window" | "door", id, floor, s0, s1, hidden}) and the parts that stand on it ({type: "part", id, off?, children: that part's walls}), in order from its
- * left end. A part that is left out has no walls; the parts on one that isn't reachable (its parent was left out) are in lost.
+ * left end; a wall with several floors has the parts and then a level for each floor ({type: "floor", key, floor, children: its windows and doors}). A part that is left out has no walls; the parts on one that isn't reachable (its parent was left out) are in lost.
  */
 export function buildingTree(p) {
   const walls = wallsOf(p), seen = new Set();
-  const wallNode = key => ({type: "wall", key, children: wallItems(p, key).map(it => it.kind === "part" ? partNode(it) : {type: it.kind, id: it.id, floor: it.floor, s0: it.s0, s1: it.s1, hidden: !!it.hidden})});
+  const live = wingsOf(p);
+  const wallNode = key => {
+    const items = wallItems(p, key), wid = wingIdOf(key), wg = wid && live.find(x => x.id === wid);
+    const floors = (wg ? wg.floors : p.floors) + ((wg ? wg.half : p.halfStorey) ? 1 : 0);
+    const thing = it => it.kind === "part" ? partNode(it) : {type: it.kind, id: it.id, floor: it.floor, s0: it.s0, s1: it.s1, hidden: !!it.hidden};
+    if (floors <= 1) return {type: "wall", key, children: items.map(thing)};
+    // a wall with several floors has a level for each: what is on it, floor by floor (a part stands on the wall itself)
+    return {type: "wall", key, children: [...items.filter(i => i.kind === "part").map(thing),
+      ...Array.from({length: floors}, (_, f) => ({type: "floor", key, floor: f, children: items.filter(i => i.kind !== "part" && i.floor === f).map(thing)}))]};
+  };
   const partNode = it => {
     seen.add(it.id);
     return {type: "part", id: it.id, s0: it.s0, s1: it.s1, ...(it.off ? {off: it.off} : {}), children: it.off ? [] : ["End", "Left", "Right"].map(s => wingWallKey(it.id, s)).filter(k => walls[k]).map(wallNode)};
