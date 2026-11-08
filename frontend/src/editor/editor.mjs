@@ -252,7 +252,7 @@ SCHEMA.forEach(g => {
       if (ruled) syncControls(); else syncOutputs();
       persist(); rebuild(false);
       if (["floors", "halfStorey", "roofType", "ridge", "interior", "curtainStyle", "curtainColor", "winStyle", "doorStyle"].includes(f.k)) { renderWinUI(); renderDormUI(); renderWingsUI(); }
-      renderPipesUI(); renderPapersUI(); renderZonesUI();
+      renderPipesUI(); renderPapersAll(); renderZonesAll();
       if (ob.sel || ob.on) renderObjectsUI();
     });
   });
@@ -285,7 +285,7 @@ function syncControls() {
   renderDormUI();
   renderObjectsUI();
   renderWingsUI();
-  renderPipesUI(); renderPapersUI(); renderZonesUI();
+  renderPipesUI(); renderPapersAll(); renderZonesAll();
 }
 function syncOutputs() {
   for (const k in inputs) {
@@ -865,67 +865,71 @@ const pipeLabel = (x, list) => `${wallLabel(p, x.wall)}, ${list.filter(y => y.wa
 // p.wallZones: a wall with a split of its own instead of the building's (the two materials themselves are the building's).
 let zoneWall = "front";
 const zonesUsed = () => p.wallSplit !== "one" || Object.values(p.wallZones || {}).some(z => z.split !== "one");
-function renderZonesUI() {
-  const ed = $("zonesEditor");
+const renderZonesAll = () => { renderZonesUI(); if ($("zonesEditorW")) renderZonesUI("zonesEditorW", wvWall); };
+const renderPapersAll = () => { renderPapersUI(); if ($("papersEditorW")) renderPapersUI("papersEditorW", wvWall); };
+function renderZonesUI(host = "zonesEditor", fixed = null) {
+  const ed = $(host), sx = host === "zonesEditor" ? "" : "W";
   if (!ed) return;
+  if (fixed) zoneWall = fixed;
   const walls = wallsOf(p), keys = Object.keys(walls);
   if (!walls[zoneWall]) zoneWall = keys[0];
   const z = (p.wallZones || {})[zoneWall], mode = z ? z.split : "same";
   const opt = (v, label, cur) => `<option value="${v}" ${v === cur ? "selected" : ""}>${esc(label)}</option>`;
   const own = Object.keys(p.wallZones || {});
-  let html = `<p class="hint">The split above is for every wall. Choose a wall to give it its own: one material, or split at the top of the ground floor or at a height. The two materials (cladding and colour) are the same on every wall.${own.length ? ` Walls with their own: ${own.map(k => esc(wallLabel(p, k))).join(", ")}.` : ""}</p>`;
-  html += `<div class="field"><div class="fl"><label for="znWall">Wall</label></div><select id="znWall">${keys.map(k => opt(k, wallLabel(p, k), zoneWall)).join("")}</select></div>`;
-  html += `<div class="field"><div class="fl"><label for="znMode">Materials on this wall</label></div><select id="znMode">${opt("same", "Same as the building", mode)}${opt("one", "One material", mode)}${opt("floor", "Split at the top of the ground floor", mode)}${opt("height", "Split at a height", mode)}</select></div>`;
-  if (mode === "height") html += `<div class="field"><div class="fl"><label for="znHeight">Split height, above the ground floor’s floor</label><output id="znHeight-o">${(+z.height).toFixed(2)} m</output></div><input type="range" id="znHeight" min="0.5" max="10" step="0.05" value="${z.height}"></div>`;
+  let html = `<p class="hint">The split in Look is for every wall. A wall can have its own: one material, or split at the top of the ground floor or at a height. The two materials (cladding and colour) are the same on every wall.${own.length ? ` Walls with their own: ${own.map(k => esc(wallLabel(p, k))).join(", ")}.` : ""}</p>`;
+  if (!fixed) html += `<div class="field"><div class="fl"><label for="znWall${sx}">Wall</label></div><select id="znWall${sx}">${keys.map(k => opt(k, wallLabel(p, k), zoneWall)).join("")}</select></div>`;
+  html += `<div class="field"><div class="fl"><label for="znMode${sx}">Materials on this wall</label></div><select id="znMode${sx}">${opt("same", "Same as the building", mode)}${opt("one", "One material", mode)}${opt("floor", "Split at the top of the ground floor", mode)}${opt("height", "Split at a height", mode)}</select></div>`;
+  if (mode === "height") html += `<div class="field"><div class="fl"><label for="znHeight${sx}">Split height, above the ground floor’s floor</label><output id="znHeight-o${sx}">${(+z.height).toFixed(2)} m</output></div><input type="range" id="znHeight${sx}" min="0.5" max="10" step="0.05" value="${z.height}"></div>`;
   ed.innerHTML = html;
-  const save = (again = true) => { persist(); rebuild(false); syncOutputs(); applyKindRules(); if (again) renderZonesUI(); };
-  $("znWall").onchange = e => { zoneWall = e.target.value; renderZonesUI(); };
-  $("znMode").onchange = e => {
+  const save = (again = true) => { persist(); rebuild(false); syncOutputs(); applyKindRules(); if (again) renderZonesAll(); };
+  if ($("znWall"+sx)) $("znWall"+sx).onchange = e => { zoneWall = e.target.value; renderZonesAll(); };
+  $("znMode"+sx).onchange = e => {
     const v = e.target.value, zones = {...(p.wallZones || {})};
     if (v === "same") delete zones[zoneWall]; else zones[zoneWall] = v === "height" ? {split: "height", height: p.splitHeight} : {split: v};
     p.wallZones = zones; syncControls(); save();
   };
-  if ($("znHeight")) {
-    $("znHeight").oninput = e => { p.wallZones = {...p.wallZones, [zoneWall]: {split: "height", height: +e.target.value}}; $("znHeight-o").textContent = `${(+e.target.value).toFixed(2)} m`; rebuild(false); };
-    $("znHeight").onchange = () => save(false);
+  if ($("znHeight"+sx)) {
+    $("znHeight"+sx).oninput = e => { p.wallZones = {...p.wallZones, [zoneWall]: {split: "height", height: +e.target.value}}; $("znHeight-o"+sx).textContent = `${(+e.target.value).toFixed(2)} m`; rebuild(false); };
+    $("znHeight"+sx).onchange = () => save(false);
   }
 }
 /* ---------- Wallpaper on the inside of the outer walls ---------- */
 // Sections along each wall (p.papers), one per room behind it; the setting "every inside wall" is in the section's own field.
 let paperWall = "front";
-function renderPapersUI() {
-  const ed = $("papersEditor");
+function renderPapersUI(host = "papersEditor", fixed = null) {
+  const ed = $(host), sx = host === "papersEditor" ? "" : "W";
   if (!ed) return;
+  if (fixed) paperWall = fixed;
   const walls = wallsOf(p), keys = Object.keys(walls);
   if (!walls[paperWall]) paperWall = keys[0];
   const L = walls[paperWall].L, list = (p.papers || []).filter(x => x.wall === paperWall).sort((a, b) => a.s0 - b.s0 || a.id - b.id);
   const opt = (v, label, cur) => `<option value="${v}" ${String(v) === String(cur) ? "selected" : ""}>${esc(label)}</option>`;
-  const range = (sec, f, label) => `<div class="field"><div class="fl"><label for="pp${sec.id}${f}">${label}</label><output id="pp${sec.id}${f}-o">${(+sec[f]).toFixed(2)} m</output></div><input type="range" id="pp${sec.id}${f}" data-sec="${sec.id}" data-f="${f}" min="0" max="${L}" step="0.05" value="${sec[f]}"></div>`;
-  let html = `<div class="field"><div class="fl"><label for="ppWall">Sections along the wall</label></div><select id="ppWall">${keys.map(k => opt(k, wallLabel(p, k), paperWall)).join("")}</select></div>`
+  const range = (sec, f, label) => `<div class="field"><div class="fl"><label for="pp${sec.id}${f}${sx}">${label}</label><output id="pp${sec.id}${f}-o${sx}">${(+sec[f]).toFixed(2)} m</output></div><input type="range" id="pp${sec.id}${f}${sx}" data-sec="${sec.id}" data-f="${f}" min="0" max="${L}" step="0.05" value="${sec[f]}"></div>`;
+  let html = (fixed ? "" : `<div class="field"><div class="fl"><label for="ppWall${sx}">Sections along the wall</label></div><select id="ppWall${sx}">${keys.map(k => opt(k, wallLabel(p, k), paperWall)).join("")}</select></div>`)
     + `<p class="hint">Measured from the wall’s left end, seen from outside. Where no section is set, the wallpaper for every inside wall (or the plaster) shows. A later section lies over an earlier one.</p>`
-    + list.map(sec => `<div class="wincard"><div class="field"><div class="fl"><label for="pp${sec.id}p">Wallpaper</label></div><select id="pp${sec.id}p" data-sec="${sec.id}" data-f="paper">${WALLPAPERS.map((w, i) => opt(i, w[0], sec.paper)).join("")}</select></div>${range(sec, "s0", "From")}${range(sec, "s1", "To")}<div class="row"><button type="button" class="danger" data-rm="${sec.id}">Remove this section</button></div></div>`).join("");
-  html += `<div class="addrow"><button type="button" id="ppAdd">+ Add a section</button><button type="button" id="ppDivide" title="One section for each room the inner walls make behind this wall">Divide at the inner walls</button>${list.length ? `<button type="button" id="ppClear">Clear this wall</button>` : ""}</div>`;
+    + list.map(sec => `<div class="wincard"><div class="field"><div class="fl"><label for="pp${sec.id}p${sx}">Wallpaper</label></div><select id="pp${sec.id}p${sx}" data-sec="${sec.id}" data-f="paper">${WALLPAPERS.map((w, i) => opt(i, w[0], sec.paper)).join("")}</select></div>${range(sec, "s0", "From")}${range(sec, "s1", "To")}<div class="row"><button type="button" class="danger" data-rm="${sec.id}">Remove this section</button></div></div>`).join("");
+  html += `<div class="addrow"><button type="button" id="ppAdd${sx}">+ Add a section</button><button type="button" id="ppDivide${sx}" title="One section for each room the inner walls make behind this wall">Divide at the inner walls</button>${list.length ? `<button type="button" id="ppClear${sx}">Clear this wall</button>` : ""}</div>`;
   ed.innerHTML = html;
-  const n = WALLPAPERS.length, save = (again = true) => { persist(); rebuild(false); if (again) renderPapersUI(); };
+  const n = WALLPAPERS.length, save = (again = true) => { persist(); rebuild(false); if (again) renderPapersAll(); };
   const others = () => (p.papers || []).filter(x => x.wall !== paperWall);
-  $("ppWall").onchange = e => { paperWall = e.target.value; renderPapersUI(); };
-  $("ppAdd").onclick = () => {
+  if ($("ppWall"+sx)) $("ppWall"+sx).onchange = e => { paperWall = e.target.value; renderPapersAll(); };
+  $("ppAdd"+sx).onclick = () => {
     const from = list.length ? Math.min(L - 0.2, Math.max(...list.map(x => x.s1))) : 0;
     p.papers = cleanPapers([...(p.papers || []), {wall: paperWall, s0: from, s1: L, paper: (list.length ? list[list.length - 1].paper + 1 : 4) % n}], p, n); save();
   };
-  $("ppDivide").onclick = () => {
+  $("ppDivide"+sx).onclick = () => {
     const cuts = [0, ...wallBreaks(p, paperWall), L], start = p.insidePaper !== "none" ? +p.insidePaper : 4;
     p.papers = cleanPapers([...others(), ...cuts.slice(0, -1).map((s0, i) => ({wall: paperWall, s0, s1: cuts[i + 1], paper: (start + i * 2) % n}))], p, n); save();
     toast(cuts.length > 2 ? `Divided into ${cuts.length - 1} sections` : "No inner walls meet this wall: one section for all of it");
   };
-  if ($("ppClear")) $("ppClear").onclick = () => { p.papers = cleanPapers(others(), p, n); save(); };
+  if ($("ppClear"+sx)) $("ppClear"+sx).onclick = () => { p.papers = cleanPapers(others(), p, n); save(); };
   ed.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { p.papers = cleanPapers((p.papers || []).filter(x => x.id !== +b.dataset.rm), p, n); save(); });
   ed.querySelectorAll("[data-sec]").forEach(inp => {
     const f = inp.dataset.f, sec = () => (p.papers || []).find(x => x.id === +inp.dataset.sec);
     inp.oninput = () => {
       const s = sec(); if (!s) return;
       s[f] = f === "paper" ? +inp.value : +inp.value;
-      if (f !== "paper") { const o = $(`pp${s.id}${f}-o`); if (o) o.textContent = s[f].toFixed(2) + " m"; }
+      if (f !== "paper") { const o = $(`pp${s.id}${f}-o${sx}`); if (o) o.textContent = s[f].toFixed(2) + " m"; }
       persist(); rebuild(false);
     };
     inp.onchange = () => { const s = sec(); if (s && f !== "paper" && s.s1 < s.s0) [s.s0, s.s1] = [s.s1, s.s0]; save(); };
@@ -955,13 +959,13 @@ function renderPipesUI() {
   }
   html += `<button type="button" id="pipeAuto">Place them again from “Downpipes per long side”</button>`;
   ed.innerHTML = html;
-  const save = () => { persist(); rebuild(false); renderPipesUI(); renderPapersUI(); renderZonesUI(); };
+  const save = () => { persist(); rebuild(false); renderPipesUI(); renderPapersAll(); renderZonesAll(); };
   ed.querySelectorAll("[data-pw]").forEach(b => b.onclick = () => {
     const k = b.dataset.pw, n = pipes.filter(x => x.wall === k).length + (+b.dataset.d);
     p.pipes = renumber([...(p.pipes || []).filter(x => x.wall !== k), ...pipePositions(walls[k].L, n).map(pos => ({wall: k, pos: +pos.toFixed(3)}))]);
     pipeSel = null; save();
   });
-  $("pipeSel").onchange = e => { pipeSel = +e.target.value || null; renderPipesUI(); renderPapersUI(); renderZonesUI(); };
+  $("pipeSel").onchange = e => { pipeSel = +e.target.value || null; renderPipesUI(); renderPapersAll(); renderZonesAll(); };
   $("pipeAuto").onclick = () => { p.pipes = autoPipes(p); pipeSel = null; save(); toast("Downpipes placed again"); };
   if (!s) return;
   const mine = () => (p.pipes || []).find(x => x.id === pipeSel);
@@ -984,7 +988,7 @@ function partsChanged(renderToo = true) {
   // (a removed part takes its downpipes with it)
   const ids = new Set(liveWings(p).map(x => x.id));
   p.pipes = (p.pipes || []).filter(x => !wingIdOf(x.wall) || ids.has(wingIdOf(x.wall)));
-  persist(); rebuild(false); if (renderToo) { renderWingsUI(); renderWinUI(); renderPipesUI(); renderPapersUI(); renderZonesUI(); }
+  persist(); rebuild(false); if (renderToo) { renderWingsUI(); renderWinUI(); renderPipesUI(); renderPapersAll(); renderZonesAll(); }
 }
 /* ---------- A part's materials ---------- */
 // Each is "as the parent" (the building for a part on the building) until the part sets its own.
@@ -1193,7 +1197,9 @@ function wallCardHtml() {
   const opt = (v, label, cur) => `<option value="${v}" ${String(v) === String(cur) ? "selected" : ""}>${esc(label)}</option>`;
   return `<div class="wincard"><p class="hint">${esc(wallLabel(p, wvWall))}, ${L.toFixed(1)} m long. Add something on it:</p><div class="addrow"><button type="button" data-wvadd="window">+ Window</button><button type="button" data-wvadd="door">+ Door</button>`
     + `<button type="button" data-wvadd="part" ${(p.wings || []).length >= MAX_WINGS ? "disabled" : ""}>+ Part</button>`
-    + (floorsHere > 1 ? `<label class="inline">window on <select id="wvFloor">${Array.from({length: floorsHere}, (_, f) => opt(f, floorName(f), wvFloor)).join("")}</select></label>` : "") + `</div></div>`;
+    + (floorsHere > 1 ? `<label class="inline">window on <select id="wvFloor">${Array.from({length: floorsHere}, (_, f) => opt(f, floorName(f), wvFloor)).join("")}</select></label>` : "") + `</div></div>`
+    + `<div class="wincard"><h3 class="sub">Look of this wall</h3><div id="zonesEditorW"></div></div>`
+    + `<div class="wincard"><h3 class="sub">Wallpaper on the inside</h3><div id="papersEditorW"></div></div>`;
 }
 /** Just the tree (not the card under it). */
 function renderTreeNav() {
@@ -1235,6 +1241,7 @@ function renderTreeUI() {
     };
     bindMyParts(main);
   }
+  if (treeKind === "wall") { renderZonesUI("zonesEditorW", wvWall); renderPapersUI("papersEditorW", wvWall); }
   if (treeKind === "wall" || treeKind === "floor") {
     if ($("wvFloor")) $("wvFloor").onchange = e => { wvFloor = +e.target.value; };
     wall.querySelectorAll("[data-wvadd]").forEach(b => b.onclick = () => {
