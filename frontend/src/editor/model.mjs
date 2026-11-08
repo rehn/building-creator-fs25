@@ -2010,7 +2010,7 @@ function build() {
       const eR = eW - 0.02;
       // (a valley reaching the end of the house's overhang before the wing's eave: along it, then the wing's roof as far in as the overhang)
       const zc = valley ? Math.min(eR, cutHalf) : 0;
-      const S = valley ? (zc < eR - 1e-6 ? [[k, 0], [xF, 0], [xF, sg * eR], [xCap, sg * eR], [xCap, sg * zc]] : [[k, 0], [xF, 0], [xF, sg * eR], [xE, sg * eR]]) : [[x0, 0], [xF, 0], [xF, sg * eR], [x0, sg * eR]];
+      const S = valley ? (zc < eR - 1e-6 ? [[k, 0], [xF, 0], [xF, sg * eR], [xCap, sg * eR], [xCap, sg * zc]] : [[k, 0], [xF, 0], [xF, sg * eR], [k + eR * slopeR, sg * eR]]) : [[x0, 0], [xF, 0], [xF, sg * eR], [x0, sg * eR]];
       const T = S.map(([x, z]) => Mw(x, yR - Math.abs(z) * tanW, z)), up = Ml(0, 1, sg * tanW);
       const pieces = kids.length ? notchLocal(sg, [S.map(([x, z]) => [x, sg * z])]).map(q => q.map(([x, b]) => [x, sg * b])) : [S];
       for (const Sq of pieces) {
