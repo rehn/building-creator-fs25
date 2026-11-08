@@ -723,5 +723,9 @@
   "Downpipe {n}": "Stuprör {n}",
   "Spread them evenly": "Fördela dem jämnt",
   "Boards behind the upper windows (so you can't see out through the building)": "Bräder bakom fönstren på övervåningen (så att man inte ser rakt ut genom byggnaden)",
-  "Rooms and curtains behind the windows are only in houses. In a barn the windows on the upper floors have boards behind them (Inside → Inside walls).": "Rum och gardiner bakom fönstren finns bara i hus. I en lada har fönstren på övervåningarna bräder bakom sig (Inside → Inside walls)."
+  "Rooms and curtains behind the windows are only in houses. In a barn the windows on the upper floors have boards behind them (Inside → Inside walls).": "Rum och gardiner bakom fönstren finns bara i hus. I en lada har fönstren på övervåningarna bräder bakom sig (Inside → Inside walls).",
+  "Show where the animals can walk": "Visa var djuren kan gå",
+  "Hide where the animals can walk": "Dölj var djuren kan gå",
+  "Where the animals can walk: inside the fence, less the building and the troughs": "Var djuren kan gå: innanför stängslet, utom byggnaden och grytorna",
+  "Animals can walk on about {n} m²: inside the fence, less the building and the troughs": "Djuren kan gå på cirka {n} m²: innanför stängslet, utom byggnaden och grytorna"
 }

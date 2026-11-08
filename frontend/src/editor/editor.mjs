@@ -3,6 +3,7 @@
 import * as THREE from "three";
 import JSZip from "jszip";
 import { t } from "../i18n/index.mjs";
+import { walkArea, areaOf } from "./walkarea.mjs";
 import {
   SCHEMA, TABS, fieldsFor, WALLS, WALL_NAMES, DTYPES, DORM_DEF, MATS, fittingTextures,
   genRow, sanitize, serialize, slugify, buildGeometry, buildI3d, placeableSnippet, gamePlaces, surfaceSpec, scaledUV, colorFor, WP
@@ -45,6 +46,7 @@ const MARKUP = `<div class="hx-editor" data-tab="shape">
     <div class="readout" id="readout"></div>
     <div class="orbit-hint" id="orbitHint">Drag to orbit, scroll to zoom</div>
     <button type="button" class="hx-walk" id="walkBtn" title="See the building as a person walking round and in it">Walk around</button>
+    <button type="button" class="hx-walk hx-walk2" id="walkAreaBtn" aria-pressed="false" hidden title="Where the animals can walk: inside the fence, less the building and the troughs">Show where the animals can walk</button>
     <div class="hx-inside-bar" id="insideBar" hidden>
       <div class="seg" role="group" aria-label="View">
         <button type="button" id="viewPlan" aria-pressed="true">Plan</button><button type="button" id="view3d" aria-pressed="false">3D</button>
@@ -447,6 +449,7 @@ const stage = $("stage");
 const readout = $("readout");
 // first-person walking (see "Walking around" below)
 let lastGeo = null;
+let showWalkArea = false;   // (paint where the animals can walk on the ground)
 let mainChosen = false;   // (the main building is chosen in the tree)
 /** The Shape tab's sections live under the main building in the tree while it is chosen (and the Shape tab isn't shown), else in the Shape tab. */
 function placeShape() {
@@ -2072,8 +2075,12 @@ function makeYardMarker() {
   const wireMat = new THREE.LineBasicMaterial({color:0x2f3a2a});
   const wires = new THREE.LineSegments(new THREE.BufferGeometry(), wireMat);
   group.add(posts, wires, net);
-  const dispose = () => { for (const m of [net, posts, wires]) { m.geometry.dispose(); m.material.dispose(); } };
-  return {group, net, posts, wires, dispose};
+  // where the animals can walk: a see-through green picture of the ground (walkarea.mjs), when asked for
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({transparent: true, depthWrite: false, side: THREE.DoubleSide}));
+  ground.rotation.x = -Math.PI / 2; ground.position.y = 0.03; ground.visible = false; ground.renderOrder = 2;
+  group.add(ground);
+  const dispose = () => { for (const m of [net, posts, wires, ground]) { m.geometry.dispose(); if (m.material.map) m.material.map.dispose(); m.material.dispose(); } };
+  return {group, net, posts, wires, ground, dispose};
 }
 /* Icon glyphs, drawn in white on a 128 px circle. */
 function drawFeed(x) {
@@ -2139,8 +2146,9 @@ function updateYardMarker(geo) {
   if (!yardObj) return;
   const kind = kindOf(p);
   yardObj.group.visible = !!kind.yard;
+  $("walkAreaBtn").hidden = !kind.yard;
   if (!yardObj.group.visible) return;
-  const fence = kind.yard(geo, p).fence;
+  const yard = kind.yard(geo, p), fence = yard.fence;
   const h = 1.1, pos = [], wire = [], postAt = [];
   for (let i = 0; i + 1 < fence.length; i++) {
     const a = fence[i], b = fence[i + 1];
@@ -2159,6 +2167,28 @@ function updateYardMarker(geo) {
   wg.setAttribute("position", new THREE.Float32BufferAttribute(wire, 3));
   set(yardObj.wires, wg);
   set(yardObj.posts, postsGeometry(postAt, h + 0.1));
+  paintWalkArea(yard);
+}
+/** Paints where the animals can walk (inside the fence, less the building and the troughs) on the ground, if that is switched on. */
+function paintWalkArea(yard) {
+  const g = yardObj.ground, btn = $("walkAreaBtn");
+  g.visible = false;
+  if (!showWalkArea) return;
+  const span = Math.max(...yard.fence.map(q => q[0])) - Math.min(...yard.fence.map(q => q[0])), cell = Math.max(0.2, span / 700);
+  const w = walkArea(yard.fence, yard.blockers || [], cell);
+  if (!w) return;
+  const cv = document.createElement("canvas"); cv.width = w.nx; cv.height = w.nz;
+  const ctx = cv.getContext("2d"), img = ctx.createImageData(w.nx, w.nz);
+  // (the top row of the picture is the smallest z)
+  for (let i = 0; i < w.nx; i++) for (let k = 0; k < w.nz; k++) if (w.cells[i * w.nz + k]) { const o = (k * w.nx + i) * 4; img.data[o] = 70; img.data[o + 1] = 190; img.data[o + 2] = 90; img.data[o + 3] = 120; }
+  ctx.putImageData(img, 0, 0);
+  if (g.material.map) g.material.map.dispose();
+  g.material.map = new THREE.CanvasTexture(cv); g.material.map.magFilter = THREE.NearestFilter; g.material.needsUpdate = true;
+  g.scale.set(w.nx * w.cell, w.nz * w.cell, 1);
+  g.position.set(w.x0 + w.nx * w.cell / 2, 0.03, w.z0 + w.nz * w.cell / 2);
+  g.visible = true;
+  btn.title = t("Animals can walk on about {n} m²: inside the fence, less the building and the troughs", {n: Math.round(areaOf(w))});
+  needs = true;
 }
 function rebuild(fit) {
   const geo = buildGeometry(p);
@@ -2299,6 +2329,7 @@ function leaveWalk() {
   updateCam(); updateHighlight(); updatePlacesMarker();
 }
 $("walkBtn").onclick = () => walk.on ? leaveWalk() : enterWalk();
+$("walkAreaBtn").onclick = () => { showWalkArea = !showWalkArea; $("walkAreaBtn").setAttribute("aria-pressed", String(showWalkArea)); $("walkAreaBtn").textContent = showWalkArea ? "Hide where the animals can walk" : "Show where the animals can walk"; if (lastGeo) updateYardMarker(lastGeo); needs = true; };
 cleanups.push(() => { window.removeEventListener("keydown", walkKey); window.removeEventListener("keyup", walkKey); });
 
 /* ---------- Files ---------- */
