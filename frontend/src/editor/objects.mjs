@@ -187,6 +187,9 @@ export function footprints(p) {
   return out;
 }
 
+/** The building's footprints as boxes the animals' walking area is cut by (2 m high): the main rectangle and every part. */
+export const blockersOf = p => footprints(p).map(r => ({center: [(r.x0 + r.x1) / 2, 1, (r.z0 + r.z1) / 2], size: [r.x1 - r.x0, 2, r.z1 - r.z0]}));
+
 const overlap = (a, b, m = 0) => a.x0 < b.x1 - m && b.x0 < a.x1 - m && a.z0 < b.z1 - m && b.z0 < a.z1 - m;
 const rectOf = o => ({x0: o.x - o.w / 2, x1: o.x + o.w / 2, z0: o.z - o.d / 2, z1: o.z + o.d / 2});
 

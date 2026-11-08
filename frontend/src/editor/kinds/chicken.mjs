@@ -4,7 +4,7 @@
 import { tg, shape } from "../i3d.mjs";
 import { roomOf, furnisher } from "../layout.mjs";
 import { OPPOSITE, wallLength, yardFrame, shellOf, teleportFor, withPasture, pastureWallFor, cornerStripes, palletLines } from "./pasture.mjs";
-import { objectOf, boxOf, iconOf, boxFrom, pastureOf } from "../objects.mjs";
+import { objectOf, boxOf, iconOf, boxFrom, pastureOf, blockersOf } from "../objects.mjs";
 import { tone, shade, strawBale } from "./props.mjs";
 import { INNER_WALL } from "./innerwall.mjs";
 import { placeOnWall, placeOnBuilding } from "../places.mjs";
@@ -47,7 +47,7 @@ export function henYard(geo, p) {
     pallet: {lines, trigger: pallets.box, stripes: cornerStripes(rectOf(pallets.box))},
     loading: {...loading.box, marker: loading.icon, teleport: teleportFor(loading, geo.dims)},
     info: info.box,
-    blocker: {center: [0, 1, 0], size: [geo.dims.W, 2, geo.dims.D]},
+    blockers: blockersOf(p),
     areas: [food.box, pallets.box].map(rectOf),
   };
 }
@@ -356,7 +356,7 @@ function scene(c) {
     c.box("palletTrigger", y.pallet.trigger, c.trigger("0x20000000", "0x10000")),
     ...y.pallet.lines.map(([a, b], i) => tg(`palletAreaStart0${i + 1}`, a, [tg(`palletAreaEnd0${i + 1}`, b.map((v, k) => v - a[k]))])),
     // Like the base game's horse barn: the footprint is cut out of the walking area made from the fence.
-    tg("navigationRootNode", [0, 0, 0], [c.box("navmeshBlocker", y.blocker, {static: true, collisionFilterGroup: "0x800000", collisionFilterMask: "0x1", buildNavMeshMask: "0xfe"})]),
+    tg("navigationRootNode", [0, 0, 0], y.blockers.map((b, i) => c.box(i ? `navmeshBlocker${i + 1}` : "navmeshBlocker", b, {static: true, collisionFilterGroup: "0x800000", collisionFilterMask: "0x1", buildNavMeshMask: "0xfe"}))),
     tg("fence1", [0, 0, 0], y.fence.map((q, i) => tg(`fence1Node${i + 1}`, q))),
     // Hidden until the game's trigger marker setting shows it; projected onto the terrain.
     shape("warningStripes01", {translation: [0, 0.02, 0], shapeId: doc.shape("warningStripes", y.pallet.stripes), castsShadows: false, receiveShadows: true,

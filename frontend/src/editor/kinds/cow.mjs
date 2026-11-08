@@ -6,7 +6,7 @@
 import { tg, shape } from "../i3d.mjs";
 import { roomOf, furnisher } from "../layout.mjs";
 import { wallLength, yardFrame, shellOf, teleportFor, withPasture, pastureWallFor, cornerStripes, palletLines } from "./pasture.mjs";
-import { objectOf, boxOf, iconOf, boxFrom, pastureOf, insidePoly } from "../objects.mjs";
+import { objectOf, boxOf, iconOf, boxFrom, pastureOf, insidePoly, footprints, blockersOf } from "../objects.mjs";
 import { placeOnWall, placeOnBuilding } from "../places.mjs";
 import { tone, shade, arc, strawBale, strawLitter } from "./props.mjs";
 import { INNER_WALL } from "./innerwall.mjs";
@@ -90,7 +90,7 @@ export function cowYard(geo, p, cfg = COW) {
   const pa = pastureOf(p), past = pa ? pa.w : yf.past, fence = pa ? pa.fence : yf.fence;
   const {feedTrough: ft, waterTrough: wt} = cowObjects(geo, p, yf, cfg);
   const fromObj = e => e && (({center: [x, , z], size: [w, h, d]}) => ({x, z, w, d, h}))(e.box);
-  const rects = geo.footprints || [{x0: -geo.dims.W / 2, x1: geo.dims.W / 2, z0: -geo.dims.D / 2, z1: geo.dims.D / 2}];
+  const rects = footprints(p);
   const feedTrough = troughFrom(fromObj(ft), fence, rects), waterTrough = troughFrom(fromObj(wt), fence, rects);
   const foodPlaces = feedTrough ? feedTrough.places : [], waterPlaces = waterTrough ? waterTrough.places : [];
   // The game objects: where the building has them (objects.mjs); to start with, the feed pad and bales
@@ -99,7 +99,7 @@ export function cowYard(geo, p, cfg = COW) {
   return {
     ...(pallets && {pallet: {lines: palletLines(pallets.box), trigger: pallets.box, stripes: cornerStripes(rectOf(pallets.box))}}),
     fence, feedTrough, waterTrough, foodPlaces, waterPlaces, food: food.box, bales: bales && bales.box, loading: loading.box, info: info.box,
-    blockers: [{center: [0, 1, 0], size: [geo.dims.W, 2, geo.dims.D]}, ...[feedTrough, waterTrough].filter(Boolean).map(t => t.box)],
+    blockers: [...blockersOf(p), ...[feedTrough, waterTrough].filter(Boolean).map(t => t.box)],
     markers: {food: food.icon, bales: bales && bales.icon, animals: loading.icon, teleport: teleportFor(loading, geo.dims)},
     areas: [food.box, ...(bales ? [bales.box] : []), ...(pallets ? [pallets.box] : []), ...[feedTrough, waterTrough].filter(Boolean).map(t => t.box)].map(rectOf),
   };
