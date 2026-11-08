@@ -327,13 +327,13 @@ export function wallItems(p, key) {
   }
   return out.sort((a, b) => a.s0 - b.s0 || a.s1 - b.s1);
 }
-/** The free stretches of a wall [s0, s1] on a floor: 30 cm from its ends and 20 cm from what stands there (a part blocks the floors it covers). */
-function freeStretches(p, key, floor, forPart = false) {
+/** The free stretches of a wall [s0, s1] on a floor: 30 cm from its ends and 20 cm from what stands there (a part blocks the floors it covers). forPart: for a part, which may stand over windows. */
+export function freeStretches(p, key, floor, forPart = false) {
   const L = wallsOf(p)[key].L, blocked = [], eaves = 2 * p.overhang + 0.05;   // (two parts must be this far apart: their eaves would touch)
   for (const it of wallItems(p, key)) {
     const m = forPart && it.kind === "part" ? eaves : 0.2;
     if (it.kind === "part") { if (it.off || floor < it.floors || forPart) blocked.push([it.s0 - m, it.s1 + m]); }
-    else if (it.floor === floor) blocked.push([it.s0 - m, it.s1 + m]);
+    else if (it.floor === floor && !(forPart && it.kind === "window")) blocked.push([it.s0 - m, it.s1 + m]);   // (a part may stand over windows: they are hidden; not over a door)
   }
   const gaps = []; let at = 0.3;
   for (const [a, b] of blocked.sort((x, y) => x[0] - y[0])) { if (a > at) gaps.push([at, a]); at = Math.max(at, b); }

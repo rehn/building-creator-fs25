@@ -15,6 +15,7 @@ import { evalNumber } from "./calc.mjs";
 import { DOUBLE_DOOR_FROM } from "./openings.mjs";
 import { cleanPapers, wallBreaks, pieceGroups, roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, History, roomBox, wingsOf, liveWings, wingFloors, wingHalf, wingIdOf, wingWallKey, WING_PARTS, wallsOf, eaveWalls, autoPipes, pipePositions } from "./layout.mjs";
 import { makeWalker } from "./walk.mjs";
+import { exportPart, importPart } from "./partfile.mjs";
 import { OBJECT_TYPES, objectInfo, OBJECT_LIMITS, GAP_LIMITS, objectOf, pastureOf, snapBox, snapPasture, objectProblems, objectWarnings, fencePoints, snapFencePoint, MAX_FENCE_POINTS } from "./objects.mjs";
 import { setAssets, catalogFor, usedAssets } from "./model.mjs";
 import { readObj, assetFolder, flattenI3d } from "./assets.mjs";
@@ -446,7 +447,7 @@ const readout = $("readout");
 // first-person walking (see "Walking around" below)
 let lastGeo = null;
 // the wall the "Things on a wall" view shows, and the floor a new window goes on
-let wvWall = "front", wvFloor = 0, wSel = null;
+let wvWall = "front", wvFloor = 0, wSel = null, partImportWall = "back";
 const walk = {on: false, pos: {x: 0, y: 0, z: 0}, yaw: 0, pitch: 0, keys: new Set(), last: 0, walker: null, eye: 1.65, ey: 0};
 let interiorTex = null, interiorCv = null, groundObj = null, gridObj = null;
 const interiorCanvas = () => interiorCv || (interiorCv = paintInterior(document));
@@ -1106,6 +1107,9 @@ function renderWingsUI() {
     + order.map(w => { const l = live.find(x => x.id === w.id); return `<li style="--d:${depthOf(w)}"><button type="button" data-wing="${w.id}" aria-pressed="${w.id === wSel}">${esc(partName(p, w.id))} <span class="muted">on ${esc(wallLabel(p, w.wall))}</span></button>${l && l.off ? ` <span class="warn">${esc(l.off)}</span>` : ""}</li>`; }).join("") + `</ul>`;
   if (!wings.length) html += `<p class="hint">No parts: the building is a rectangle.</p>`;
   if (wings.length < MAX_WINGS) html += `<div class="addrow"><button type="button" id="wingAdd">+ Add a part</button></div>`;
+  // a part from a file (made with "Export this part") on a wall of this building
+  const wallsLive = wallsOf(p), importWalls = [["Main building", ["front", "back", "left", "right"]], ...liveWings(p).map(g => [partName(p, g.id), ["End", "Left", "Right"].map(s2 => wingWallKey(g.id, s2))])];
+  html += `<div class="addrow"><button type="button" id="partImport">Import a part…</button><label class="inline">onto <select id="partImportWall">${importWalls.map(([n, ks]) => `<optgroup label="${esc(n)}">${ks.filter(k => wallsLive[k]).map(k => opt(k, wallLabel(p, k), partImportWall)).join("")}</optgroup>`).join("")}</select></label><input type="file" id="partFile" accept=".json,application/json" hidden></div>`;
   const w = wings.find(x => x.id === wSel);
   if (w) {
     const wallL = (wallsOf(p)[w.wall] || {L: w.wall === "front" || w.wall === "back" ? p.width : p.depth}).L;   // (the place along the wall is shown in metres)
@@ -1120,7 +1124,7 @@ function renderWingsUI() {
       + `<div class="field"><div class="fl"><label for="wg-pitch">Roof angle</label><output id="wg-pitch-o">${w.pitch ? w.pitch + "°" : "as the house (" + p.roofPitch + "°)"}</output></div><input type="range" id="wg-pitch" min="0" max="60" step="1" value="${w.pitch}"></div>`
       + `<div class="field"><div class="fl"><label for="wg-fh">Floor height</label><output id="wg-fh-o">${w.floorHeight ? w.floorHeight.toFixed(2) + " m" : "as the house (" + p.floorHeight.toFixed(2) + " m)"}</output></div><input type="range" id="wg-fh" min="2.2" max="9" step="0.05" value="${w.floorHeight || 2.2}"></div>`
       + partLookHtml(w)
-      + `<p class="hint">A wing with fewer floors, or a flatter roof, has a lower roof. Roof angle 0 follows the house.</p><div class="row">${wings.length < MAX_WINGS ? `<button type="button" id="wingAddChild">+ Add a part on ${esc(partName(p, w.id))}</button>` : ""}<button type="button" id="wingRemove" class="danger">Remove ${esc(partName(p, w.id))} and what stands on it</button></div></div>`;
+      + `<p class="hint">A wing with fewer floors, or a flatter roof, has a lower roof. Roof angle 0 follows the house.</p><div class="row">${wings.length < MAX_WINGS ? `<button type="button" id="wingAddChild">+ Add a part on ${esc(partName(p, w.id))}</button>` : ""}<button type="button" id="partExport">Export this part</button><button type="button" id="wingRemove" class="danger">Remove ${esc(partName(p, w.id))} and what stands on it</button></div></div>`;
   }
   ed.innerHTML = html;
   const changed = partsChanged;
@@ -1129,7 +1133,24 @@ function renderWingsUI() {
     // on the first wall of the main building where there is room (the back first); the selected part's own walls are in its card
     if (!["back", "front", "right", "left"].some(k => addPart(k))) toast("No room for another part on the main building");
   };
+  $("partImportWall").onchange = e => { partImportWall = e.target.value; };
+  $("partImport").onclick = () => $("partFile").click();
+  $("partFile").onchange = async e => {
+    const file = e.target.files && e.target.files[0]; e.target.value = "";
+    if (!file) return;
+    let data; try { data = JSON.parse(await file.text()); } catch { toast("That file isn't a part file (it isn't JSON)"); return; }
+    const r = importPart(p, partImportWall, data);
+    if (r.error) { toast(r.error); return; }
+    const q = sanitize({...p, ...r.settings});
+    p.wings = q.wings; p.windows = q.windows; if (r.settings.items) p.items = q.items;
+    wSel = r.settings.wings[wings.length].id;
+    partsChanged(); toast(["Part imported.", ...r.notes].join(" "));
+  };
   if (!w) return;
+  if ($("partExport")) $("partExport").onclick = () => {
+    const f = exportPart(p, w.id);
+    if (f) saveFile(`${slugify(f.name) || "part"}.part.json`, JSON.stringify(f, null, 1), () => showText(`${f.name}.part.json`, JSON.stringify(f, null, 1)));
+  };
   ed.querySelectorAll(".wincard input[type=range]").forEach(inp => {
     inp.oninput = () => { w[inp.dataset.k] = +inp.value; $(`wg-${inp.dataset.k}-o`).textContent = `${(+inp.value * (inp.dataset.k === "pos" ? +inp.dataset.scale : 1)).toFixed(2)} m`; persist(); rebuild(false); };
     inp.onchange = () => changed();

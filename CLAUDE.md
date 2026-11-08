@@ -230,6 +230,8 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Materials per part (step 3b): a part may set wallCladding, wallColor, wallSplit, splitHeight, lowerCladding, lowerColor, roofMaterial, roofColor, trimColor (empty = as the parent);
   model.mjs partStyle (inherits up to the building), matTable (variants "wallsP1" "roofP1" ... shared by equal values, none for the building's own), matList; poly/addMesh map walls,
   wallsLow, roof, trim through partMats while a part is built (usePart); the editor makes meshes/textures for variants on demand (makeMesh, texturedNow). Not cached: the editor changes p in place.
+- Parts to share (step 5): partfile.mjs exportPart(p, id) -> {format "house-to-i3d-part", version, name, parts (renumbered, local walls), windows, items (a, b, rot in the part's frame)}; importPart(p, wall, file) ->
+  {settings: {wings, windows, items}, notes} or {error}; the editor: Parts > "Export this part" / "Import a part...". Parts may stand over windows (not doors): model.mjs freeStretches(forPart).
 
 ## Dev environment (WSL)
 - ./dev.sh starts API (:8080) + Next dev server (:3000); data in .dev/ (gitignored),
