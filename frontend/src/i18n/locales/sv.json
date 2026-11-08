@@ -606,7 +606,6 @@
   "Turn": "Vrid",
   "Turn it so its back is against the wall in the picture.": "Vrid den så att baksidan är mot väggen i bilden.",
   "Turn it so its front faces you.": "Vrid den så att framsidan vetter mot dig.",
-  "Turn on “Rooms behind the windows” under Interior to choose the room and curtains.": "Slå på ”Rum bakom fönstren” under Interiör för att välja rum och gardiner.",
   "Turn on Rain gutters under Roof to place downpipes.": "Slå på Hängrännor under Tak för att placera stuprör.",
   "Turn the model": "Vrid modellen",
   "TV on a TV bench (tv-bänk)": "TV på tv-bänk",
@@ -723,5 +722,6 @@
   "Downpipes on this wall": "Stuprör på den här väggen",
   "Downpipe {n}": "Stuprör {n}",
   "Spread them evenly": "Fördela dem jämnt",
-  "Boards behind the upper windows (so you can't see out through the building)": "Bräder bakom fönstren på övervåningen (så att man inte ser rakt ut genom byggnaden)"
+  "Boards behind the upper windows (so you can't see out through the building)": "Bräder bakom fönstren på övervåningen (så att man inte ser rakt ut genom byggnaden)",
+  "Rooms and curtains behind the windows are only in houses. In a barn the windows on the upper floors have boards behind them (Inside → Inside walls).": "Rum och gardiner bakom fönstren finns bara i hus. I en lada har fönstren på övervåningarna bräder bakom sig (Inside → Inside walls)."
 }

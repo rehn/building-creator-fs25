@@ -779,7 +779,7 @@ function choiceFields(prefix, obj) {
   const house = (CURTAIN_OPTIONS.find(o => o[0] === p.curtainStyle) || CURTAIN_OPTIONS[0])[1].toLowerCase();
   const own = obj.curtainColor && obj.curtainColor !== "default";
   const opt = (v, label, cur) => `<option value="${v}" ${v === cur ? "selected" : ""}>${label}</option>`;
-  return (p.interior ? "" : `<p class="hint">Turn on “Rooms behind the windows” under Interior to choose the room and curtains.</p>`)
+  return (p.interior ? "" : `<p class="hint">Rooms and curtains behind the windows are only in houses. In a barn the windows on the upper floors have boards behind them (Inside → Inside walls).</p>`)
     + `<div class="field"><div class="fl"><label for="${prefix}-room">Room behind the glass</label></div><select id="${prefix}-room" ${dis}>${opt("auto", "Automatic", obj.room)}${ROOM_OPTIONS.map(o => opt(o[0], o[1], obj.room)).join("")}</select></div>`
     + `<div class="field"><div class="fl"><label for="${prefix}-curtain">Curtains</label></div><select id="${prefix}-curtain" ${dis}>${opt("default", `Same as the house (${house})`, obj.curtain)}${CURTAIN_OPTIONS.map(o => opt(o[0], o[1], obj.curtain)).join("")}</select></div>`
     + `<label class="check"><input type="checkbox" id="${prefix}-owncol" ${own ? "checked" : ""} ${dis}> Own curtain color</label>`
