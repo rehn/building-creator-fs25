@@ -404,14 +404,18 @@ export function addOpening(P, key, kind, floor = 0) {
   if (door) Object.assign(item, {porch: "none", opens: true, swing: "out", hinge: "left"});
   return [...list, item];
 }
-/** A part more on a wall (the house's or a part's): in the middle of the widest free stretch of its ground floor, up to 6 m wide, 4 m out. The new list of parts, or null (no room, no such wall, too many). */
+/** A part more on a wall (the house's or a part's): in the middle of the widest free stretch of its ground floor, up to 6 m wide, 4 m out, with the look of the wall if that has one of its own. The new list of parts, or null (no room, no such wall, too many). */
 export function addPartOn(P, key) {
   if (!wallsOf(P)[key]) return null;
   const id = Array.from({length: MAX_WINGS}, (_, i) => i + 1).find(i => !(P.wings || []).some(x => x.id === i));
   if (!id) return null;
   const {L, gaps} = freeStretches(P, key, 0, true), fit = gaps.filter(([a, b]) => b - a >= 2.5).sort((x, y) => (y[1] - y[0]) - (x[1] - x[0]))[0];
   if (!fit) return null;
-  return [...(P.wings || []), {id, wall: key, pos: (fit[0] + fit[1]) / 2 / L, width: Math.min(6, fit[1] - fit[0]), depth: 4, floors: 0}];
+  // (a wall with a look of its own (its panel, colour, split): the part standing on it starts with it, so it matches the wall it grows out of)
+  const look = {}, own = P.wallStyles && P.wallStyles[key], zone = P.wallZones && P.wallZones[key];
+  if (own) Object.assign(look, own);
+  if (zone) { look.wallSplit = zone.split; if (zone.split === "height") look.splitHeight = zone.height; }
+  return [...(P.wings || []), {id, wall: key, pos: (fit[0] + fit[1]) / 2 / L, width: Math.min(6, fit[1] - fit[0]), depth: 4, floors: 0, ...look}];
 }
 /** An entry of the window list's type ("window" or, on the ground floor, "door") and style ("default" or one of its type's). */
 function openingKind(w) {
