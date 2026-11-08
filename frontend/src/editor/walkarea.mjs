@@ -22,11 +22,11 @@ export function walkArea(fence, blockers = [], cell = 0.15, margin = 0) {
 export const areaOf = w => w ? w.cells.reduce((s, v) => s + v, 0) * w.cell * w.cell : 0;
 
 /** The rectangles (cell-aligned, merged: runs along z, then runs of equal runs along x) of the cells of a walkArea grid that are set. */
-export function cellRects(w, y = 0) {
+export function cellRects(w, y = 0, inside = false) {
   if (!w) return [];
   const {x0, z0, nx, nz, cell, cells} = w, out = [];
   const open = new Map();   // "k0:k1" -> {i0, k0, k1}: a run of cells along z that has been growing along x
-  const flush = (key, i) => { const r = open.get(key); open.delete(key); out.push({x0: x0 + r.i0 * cell, x1: x0 + i * cell, z0: z0 + r.k0 * cell, z1: z0 + (r.k1 + 1) * cell, y}); };
+  const flush = (key, i) => { const r = open.get(key); open.delete(key); out.push({x0: x0 + r.i0 * cell, x1: x0 + i * cell, z0: z0 + r.k0 * cell, z1: z0 + (r.k1 + 1) * cell, y, ...(inside ? {inside: true} : {})}); };
   for (let i = 0; i <= nx; i++) {
     const runs = [];
     if (i < nx) for (let k = 0; k < nz; k++) if (cells[i * nz + k]) { let e = k; while (e + 1 < nz && cells[i * nz + e + 1]) e++; runs.push([k, e]); k = e; }
@@ -60,7 +60,7 @@ export function animalNav({fence, blockers = [], rooms = [], items = [], door = 
       const x = x0 + (i + 0.5) * cell, z = z0 + (k + 0.5) * cell;
       if (rooms.some(r => x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1) && !items.some(b => x > b.x0 && x < b.x1 && z > b.z0 && z < b.z1)) cells[i * nz + k] = 1;
     }
-    rects.push(...cellRects({x0, z0, nx, nz, cell, cells}, floorY));
+    rects.push(...cellRects({x0, z0, nx, nz, cell, cells}, floorY, true));
   }
   return {rects, ramp: door ? {points: [door.a, door.b, door.c, door.d], y0: 0, y1: floorY} : null};
 }

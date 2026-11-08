@@ -2197,8 +2197,8 @@ function paintWalkArea(yard) {
     mesh.position.set(x0 + nx * cell / 2, y + 0.03, z0 + nz * cell / 2);
     mesh.visible = true;
   };
-  paint(yardObj.ground, rects.filter(r => !r.y), 0, yard.nav && yard.nav.ramp);
-  paint(yardObj.groundIn, rects.filter(r => r.y > 0), (rects.find(r => r.y > 0) || {y: 0}).y, null);
+  paint(yardObj.ground, rects.filter(r => !r.inside), 0, yard.nav && yard.nav.ramp);
+  paint(yardObj.groundIn, rects.filter(r => r.inside), (rects.find(r => r.inside) || {y: 0}).y, null);
   const m2 = rects.reduce((sum, r) => sum + (r.x1 - r.x0) * (r.z1 - r.z0), 0);
   btn.title = t("Animals can walk on about {n} m²: in the yard, and inside the building where they can go in", {n: Math.round(m2)});
   needs = true;
