@@ -907,25 +907,20 @@ test("opening counts: windows and doors are counted apart, per wall and floor", 
   assert.deepEqual(c.back[0], { windows: 0, doors: 0 });
 });
 
-test("doors in the table: add one where there is room (like the wall's doors), remove the last one, keep at least one in the building", async () => {
-  const { addDoor, removeDoor, openingCounts } = await import("../src/editor/model.mjs");
-  const p = sanitize({ width: 12, depth: 8, windows: [{ wall: "front", floor: 0, pos: 0.5, type: "door", w: 1.4, h: 2.3 }, { wall: "back", floor: 0, pos: 0.5, type: "window", w: 1, h: 1.2, sill: 0.9 }] });
-  const withDoor = sanitize({ ...p, windows: addDoor(p, p.windows, "front") });
-  const c = openingCounts(withDoor);
-  assert.equal(c.front[0].doors, 2);
-  const [d1, d2] = withDoor.windows.filter(w => w.type === "door" && w.wall === "front");
-  assert.equal(d2.w, d1.w, "the same size as the wall's door");
-  const geo = buildGeometry(withDoor);
-  assert.ok(!withDoor.windows.some(w => w._hidden), "not on top of anything");
-  // a new door on a wall with a window goes beside it
-  const back = sanitize({ ...p, windows: addDoor(p, p.windows, "back") }), bd = back.windows.find(w => w.type === "door" && w.wall === "back");
-  assert.ok(bd && Math.abs(bd.pos - 0.5) > 0.05, "beside the window");
-  // no room: null
-  const full = sanitize({ width: 3, depth: 3, windows: [{ wall: "front", floor: 0, pos: 0.5, type: "door", w: 1.5, h: 2.1 }] });
-  assert.equal(addDoor(full, full.windows, "front"), null);
-  // removing: the last one on the wall, but not the building's only door
-  assert.equal(removeDoor(p.windows, "front"), null, "the only door stays");
-  const two = removeDoor(withDoor.windows, "front");
-  assert.equal(two.filter(w => w.type === "door").length, 1);
-  assert.equal(removeDoor(withDoor.windows, "back"), null, "no door on that wall");
+test("the table steps windows and doors together: + adds an opening, - takes one away, a building keeps a door", async () => {
+  const { stepOpenings, openingCounts } = await import("../src/editor/model.mjs");
+  const p = sanitize({ width: 12, depth: 8, windows: [{ wall: "front", floor: 0, pos: 0.5, type: "door", w: 1.4, h: 2.3 }, { wall: "front", floor: 0, pos: 0.2, type: "window", w: 1, h: 1.2, sill: 0.9 }] });
+  const total = (q, wall, f) => { const c = openingCounts(q)[wall][f]; return c.windows + c.doors; };
+  assert.equal(total(p, "front", 0), 2);
+  const more = sanitize({ ...p, windows: stepOpenings(p, p.windows, "front", 0, 1) });
+  assert.equal(total(more, "front", 0), 3);
+  assert.equal(openingCounts(more).front[0].doors, 1, "the door stays");
+  const less = sanitize({ ...p, windows: stepOpenings(more, more.windows, "front", 0, -1) });
+  assert.equal(total(less, "front", 0), 2);
+  const onlyDoor = sanitize({ ...p, windows: p.windows.filter(w => w.type === "door") });
+  assert.equal(stepOpenings(onlyDoor, onlyDoor.windows, "front", 0, -1), null, "the only door stays");
+  const two = sanitize({ ...p, windows: [...p.windows.filter(w => w.type === "door"), { wall: "back", floor: 0, pos: 0.5, type: "door", w: 1, h: 2.1 }] });
+  assert.equal(openingCounts(sanitize({ ...two, windows: stepOpenings(two, two.windows, "back", 0, -1) })).back[0].doors, 0, "with doors left on another wall a door can go");
+  let q = p; for (let i = 0; i < 12; i++) { const n = stepOpenings(q, q.windows, "back", 0, 1); if (n) q = sanitize({ ...q, windows: n }); }
+  assert.ok(total(q, "back", 0) <= 8, "at most 8 in a cell");
 });
