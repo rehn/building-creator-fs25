@@ -82,7 +82,7 @@ const SHARED_SECTIONS = [
     {k:"ventilators", label:"Roof ventilators (lanterns on the ridge)", min:0, max:4, step:1}]},
   {title:"Downpipes", tab:"shape", custom:"pipes", hint:"Where the downpipes go: how many on each wall with a gutter, and where along it. Change \"Downpipes per long side\" under Roof to place them again.", fields:[]},
   {title:"Kupor (dormers)", tab:"shape", custom:"dormers", fields:[]},
-  {title:"Windows", tab:"openings", custom:"windows", hint:"Set how many windows each floor has (the doors on a wall are counted under its ground floor). To change one window or door, move it to another wall, turn a window into a door or give a door a porch, choose it below or tap it in the preview.", fields:[
+  {title:"Windows", label:"Windows and doors", tab:"openings", custom:"windows", hint:"Set how many windows each floor has and how many doors each wall has. To change one window or door, move it to another wall, turn a window into a door or give a door a porch, choose it below or tap it in the preview.", fields:[
     {k:"winStyle", label:"Style", type:"select", options:WINDOW_STYLES.map(s => [s.id, s.name])},
     {k:"winW", label:"Width", min:0.4, max:2.5, step:0.05, unit:" m"},
     {k:"winH", label:"Height", min:0.4, max:2.2, step:0.05, unit:" m"},
@@ -239,6 +239,31 @@ export function openingCounts(p) {
   const out = {};
   for (const wall of Object.keys(wallsOf(p))) out[wall] = [0, 1, 2].map(f => ({windows: p.windows.filter(w => w.wall === wall && w.floor === f && w.type !== "door").length, doors: p.windows.filter(w => w.wall === wall && w.floor === f && w.type === "door").length}));
   return out;
+}
+/**
+ * A door more on a wall, for the table: in the middle of the widest free stretch of the ground floor (clear of what stands there), as big as the wall's
+ * (or any) door, or 1 x 2.1 m. The new list, or null where there is no room.
+ */
+export function addDoor(P, list, wall) {
+  const frame = wallsOf(P)[wall];
+  if (!frame) return null;
+  const L = frame.L, ref = list.find(w => w.type === "door" && w.wall === wall) || list.find(w => w.type === "door");
+  const w = ref ? ref.w : 1, h = ref ? ref.h : 2.1;
+  const taken = list.filter(x => x.wall === wall && x.floor === 0).map(x => openingSpan(x, L)).sort((a, b) => a[0] - b[0]), gaps = [];
+  let at = 0.3;
+  for (const [a, b] of taken) { if (a - 0.2 > at) gaps.push([at, a - 0.2]); at = Math.max(at, b + 0.2); }
+  if (L - 0.3 > at) gaps.push([at, L - 0.3]);
+  const fit = gaps.filter(([a, b]) => b - a >= w + 0.01).sort((x, y) => (y[1] - y[0]) - (x[1] - x[0]))[0];
+  if (!fit) return null;
+  return [...list, {id: list.reduce((m, x) => Math.max(m, x.id), 0) + 1, wall, floor: 0, pos: (fit[0] + fit[1]) / 2 / L, w, h, sill: 0, type: "door", style: "default", porch: "none", opens: true, swing: "out", hinge: "left", room: "auto", curtain: "default", curtainColor: "default"}];
+}
+/** The list without the wall's last door, or null if it has none or it is the building's only door (a building keeps one). */
+export function removeDoor(list, wall) {
+  const doors = list.filter(w => w.type === "door");
+  const mine = doors.filter(w => w.wall === wall);
+  if (!mine.length || doors.length < 2) return null;
+  const last = mine[mine.length - 1];
+  return list.filter(w => w !== last);
 }
 /** An entry of the window list's type ("window" or, on the ground floor, "door") and style ("default" or one of its type's). */
 function openingKind(w) {

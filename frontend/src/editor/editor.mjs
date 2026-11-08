@@ -7,7 +7,7 @@ import {
   genRow, sanitize, serialize, slugify, buildGeometry, buildI3d, placeableSnippet, gamePlaces, surfaceSpec, scaledUV, colorFor, WP
 } from "./model.mjs";
 import { WINDOW_STYLES, DOOR_STYLES, PORCH_OPTIONS, PORCH_W, PORCH_D, WING_FIELDS, MAX_WINGS } from "./model.mjs";
-import { pieceSheet, pieceMeshes, openingCounts } from "./model.mjs";
+import { pieceSheet, pieceMeshes, openingCounts, addDoor, removeDoor } from "./model.mjs";
 import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, henYard, henCap, seeThroughGlass, kindOf } from "./model.mjs";
 import { cowYard } from "./kinds/cow.mjs";
 import { WALLPAPERS } from "./kinds/innerwall.mjs";
@@ -785,16 +785,17 @@ function renderWinUI() {
   const ed = $("winEditor");
   if (!ed) return;
   const floors = p.floors + (p.halfStorey || (p.wings || []).some(w => wingHalf(p, w)) ? 1 : 0);
-  let html = `<table class="wgrid"><thead><tr><th scope="col"><span class="sr">Wall</span></th>${Array.from({length: floors}, (_, f) => `<th scope="col">${floorName(f)}</th>`).join("")}</tr></thead><tbody>`;
+  let html = `<table class="wgrid"><thead><tr><th scope="col"><span class="sr">Wall</span></th>${Array.from({length: floors}, (_, f) => `<th scope="col">${floorName(f)}</th>`).join("")}<th scope="col">Doors</th></tr></thead><tbody>`;
   const counts = openingCounts(p);
   for (const wall of wallKeys()) {
     html += `<tr><th scope="row">${WALL_NAMES[wall]}</th>`;
     for (let f = 0; f < floors; f++) {
       if (!floorOk(f, wall)) { html += `<td><span aria-label="No windows on this floor of this wall">\u2013</span></td>`; continue; }
       const cnt = counts[wall][f], n = cnt.windows, nd = cnt.doors, nm = `${WALL_NAMES[wall]}, ${floorName(f).toLowerCase()}`;
-      html += `<td><div class="step"><button type="button" data-w="${wall}" data-f="${f}" data-d="-1" aria-label="Fewer windows: ${nm}" ${n ? "" : "disabled"}>\u2212</button><span>${n}</span><button type="button" data-w="${wall}" data-f="${f}" data-d="1" aria-label="More windows: ${nm}" ${n >= 8 ? "disabled" : ""}>+</button></div>${nd ? `<div class="wdoors">+ ${nd} door${nd > 1 ? "s" : ""}</div>` : ""}</td>`;
+      html += `<td><div class="step"><button type="button" data-w="${wall}" data-f="${f}" data-d="-1" aria-label="Fewer windows: ${nm}" ${n ? "" : "disabled"}>\u2212</button><span>${n}</span><button type="button" data-w="${wall}" data-f="${f}" data-d="1" aria-label="More windows: ${nm}" ${n >= 8 ? "disabled" : ""}>+</button></div></td>`;
     }
-    html += `</tr>`;
+    const nd = counts[wall][0].doors, nmd = WALL_NAMES[wall], onlyDoor = p.windows.filter(w => w.type === "door").length < 2;
+    html += `<td><div class="step"><button type="button" data-dw="${wall}" data-dd="-1" aria-label="Fewer doors: ${nmd}" ${nd && !onlyDoor ? "" : "disabled"}>−</button><span>${nd}</span><button type="button" data-dw="${wall}" data-dd="1" aria-label="More doors: ${nmd}" ${nd >= 4 ? "disabled" : ""}>+</button></div></td></tr>`;
   }
   html += `</tbody></table>`;
   const list = sortedWindows();
@@ -835,7 +836,12 @@ function renderWinUI() {
     html += `</div>`;
   }
   ed.innerHTML = html;
-  ed.querySelectorAll(".step button").forEach(b => b.onclick = () => {
+  ed.querySelectorAll("button[data-dw]").forEach(b => b.onclick = () => {
+    const wall = b.dataset.dw, next = +b.dataset.dd > 0 ? addDoor(p, p.windows, wall) : removeDoor(p.windows, wall);
+    if (!next) { toast(+b.dataset.dd > 0 ? "No room for another door on this wall: remove or move a window first" : "A building keeps at least one door"); return; }
+    p.windows = next; winChanged(); renderWinUI();
+  });
+  ed.querySelectorAll(".step button[data-w]").forEach(b => b.onclick = () => {
     const wall = b.dataset.w, f = +b.dataset.f;
     const n = p.windows.filter(w => w.wall === wall && w.floor === f && w.type !== "door").length + (+b.dataset.d);
     p.windows = genRow(p, p.windows, wall, f, Math.max(0, Math.min(8, n)));
