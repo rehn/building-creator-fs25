@@ -210,3 +210,69 @@ test("part on a part: a window on the parent's wall where the part stands is hid
   assert.deepEqual(hidden, [true, false], "the one under the part is hidden, the one beside it is shown");
   assert.equal(geo.opsByWall.w1Left.ops.filter(o => o.kind === "window").length, 1);
 });
+
+/* ---------- Step 3: the roofs of a part on a part meet only their parent's ---------- */
+/** The height of the highest triangle of mesh g at (x, z), or null. */
+function topAt(g, x, z) {
+  let best = null;
+  for (let t = 0; t < g.i.length; t += 3) {
+    const v = k => [g.p[g.i[t + k] * 3], g.p[g.i[t + k] * 3 + 1], g.p[g.i[t + k] * 3 + 2]], a = v(0), b = v(1), c = v(2);
+    const d = (b[2] - c[2]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[2] - c[2]);
+    if (Math.abs(d) < 1e-12) continue;
+    const l1 = ((b[2] - c[2]) * (x - c[0]) + (c[0] - b[0]) * (z - c[2])) / d, l2 = ((c[2] - a[2]) * (x - c[0]) + (a[0] - c[0]) * (z - c[2])) / d, l3 = 1 - l1 - l2;
+    if (l1 < -1e-9 || l2 < -1e-9 || l3 < -1e-9) continue;
+    const y = l1 * a[1] + l2 * b[1] + l3 * c[1];
+    if (best === null || y > best) best = y;
+  }
+  return best;
+}
+const roofTop = (geo, x, z) => { const a = topAt(geo.G.roof, x, z); return a; };
+
+// house 16 x 9, ridge along x (the width); wing 1 on the back wall: 6 wide, ridge along z; wing 2 on wing 1's left wall (x < 0 side or x > 0, whichever "left" is)
+const roofed = (w2 = {}, w1 = {}, extra = {}) => sanitize({width: 16, depth: 9, floors: 1, floorHeight: 3, foundation: 0.3, roofPitch: 35, ridge: "width", overhang: 0.5, chimney: false, gutters: false,
+  wings: [{...W1, ...w1}, {id: 2, wall: "w1Left", pos: 0.5, width: 4, depth: 3, floors: 0, ...w2}], windows: [{wall: "front", floor: 0, pos: 0.5, type: "door", w: 1.4, h: 2.3}], ...extra});
+
+test("roofs of a part on a part: a valley where its ridge meets its parent's slope, the parent's ridge above it", () => {
+  const p = roofed(), geo = buildGeometry(p), [w1, w2] = liveWings(p), F = p.foundation, tan = Math.tan(35 * Math.PI / 180);
+  assert.equal(w2.type, "valley");
+  const yR1 = F + w1.H + w1.ww / 2 * tan, yR2 = F + w2.H + w2.ww / 2 * tan, xc = (w1.rect.x0 + w1.rect.x1) / 2, zc2 = (w2.rect.z0 + w2.rect.z1) / 2;
+  const side = Math.sign((w2.rect.x0 + w2.rect.x1) / 2 - xc), k = (yR1 - yR2) / tan;
+  let n = 0;
+  for (let d = 0.3; d < 5.6; d += 0.35) for (let dz = -2.2; dz <= 2.2; dz += 0.4) {
+    const x = xc + side * d, z = zc2 + dz;
+    // the parent's slope here, and the part's (where its roof is: from the valley out, within its eaves)
+    const parent = d <= w1.ww / 2 + 0.5 ? yR1 - d * tan : null, kid = d >= k + Math.abs(dz) * 1 && Math.abs(dz) <= w2.ww / 2 + 0.5 && d <= w1.ww / 2 + w2.wd + 0.5 ? yR2 - Math.abs(dz) * tan : null;
+    const want = Math.max(...[parent, kid].filter(v => v !== null));
+    if (!Number.isFinite(want)) continue;
+    const got = roofTop(geo, x, z);
+    assert.ok(got !== null && Math.abs(got - want) < 0.03, `at ${d.toFixed(2)} out, ${dz.toFixed(1)} across: roof ${got && got.toFixed(2)}, expected ${want.toFixed(2)}`);
+    n++;
+  }
+  assert.ok(n > 40, "enough points: " + n);
+});
+
+test("roofs of a part on a part: a lower part runs up to its parent's wall under the eaves", () => {
+  const p = roofed({width: 2.5, floorHeight: 2.3}, {floorHeight: 5}), geo = buildGeometry(p), [w1, w2] = liveWings(p), F = p.foundation, tan = Math.tan(35 * Math.PI / 180);
+  assert.equal(w2.type, "eave");
+  const xc = (w1.rect.x0 + w1.rect.x1) / 2, zc2 = (w2.rect.z0 + w2.rect.z1) / 2, side = Math.sign((w2.rect.x0 + w2.rect.x1) / 2 - xc), yR2 = F + w2.H + w2.ww / 2 * tan;
+  for (const d of [3.8, 4.5, 5.5]) {   // (beyond the parent's overhang: nearer the wall the parent's eaves are above it)
+    assert.ok(Math.abs(roofTop(geo, xc + side * d, zc2 + 0.3) - (yR2 - 0.3 * tan)) < 0.03, `its roof by the ridge at ${d} m out: ${roofTop(geo, xc + side * d, zc2 + 0.3)} vs ${yR2 - 0.3 * tan}`);
+    assert.ok(Math.abs(roofTop(geo, xc + side * d, zc2 + 1) - (yR2 - tan)) < 0.03, `its slope at ${d} m out`);
+  }
+});
+
+test("roofs of a part on a part: a part on a gable end is a lower annex with its ridge along its parent's", () => {
+  const p = roofed({wall: "w1End", width: 3, depth: 3, floorHeight: 2.3}, {}, {}), geo = buildGeometry(p), [w1, w2] = liveWings(p), F = p.foundation, tan = Math.tan(35 * Math.PI / 180);
+  assert.equal(w2.type, "gable");
+  const zc = (w2.rect.z0 + w2.rect.z1) / 2, xc = (w2.rect.x0 + w2.rect.x1) / 2, yR2 = F + w2.H + w2.ww / 2 * tan;
+  assert.ok(Math.abs(roofTop(geo, xc + 0.3, zc) - (yR2 - 0.3 * tan)) < 0.03, "its roof beside the ridge: " + roofTop(geo, xc + 0.3, zc) + " vs " + (yR2 - 0.3 * tan));
+  assert.ok(Math.abs(roofTop(geo, xc + 1, zc) - (yR2 - tan)) < 0.03, "its slope");
+});
+
+test("roofs of a part on a part: every part's eaves line up with its parent's, and nothing but its parent's roof is cut", () => {
+  const p = roofed(), geo = buildGeometry(p), [w1] = liveWings(p);
+  // the house's roof is as before where wing 2 stands: untouched slope on the house's far side
+  const houseOnly = sanitize({...p, wings: [p.wings[0]]}), g1 = buildGeometry(houseOnly);
+  for (const [x, z] of [[-6, 3.8], [6, 3.9], [0, 3.5], [5, -2]]) assert.equal(roofTop(geo, x, z), roofTop(g1, x, z), `the house's roof at ${x}, ${z}`);
+  assert.ok(w1.type);
+});

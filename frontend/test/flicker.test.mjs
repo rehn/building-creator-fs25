@@ -135,6 +135,30 @@ test("no flickering faces on a house with wings (L, T, U, lower, against a gable
   }
 });
 
+test("no flickering faces on parts on parts (a valley, a lower part under the eaves, a gable end, three levels, own pitch, flat)", async () => {
+  const { genRow } = await import("../src/editor/model.mjs");
+  const w1 = (extra = {}) => ({id: 1, wall: "back", pos: 0.5, width: 6, depth: 8, floors: 0, ...extra});
+  const kid = (id, wall, extra = {}) => ({id, wall, pos: 0.5, width: 4, depth: 3, floors: 0, ...extra});
+  const base = {width: 16, depth: 9, floors: 1, floorHeight: 3, gutters: true};
+  const cases = [
+    {...base, wings: [w1(), kid(2, "w1Left")]}, {...base, wings: [w1(), kid(2, "w1Right", {width: 3})]},
+    {...base, wings: [w1({floorHeight: 5}), kid(2, "w1Left", {width: 2.5, floorHeight: 2.3})]},
+    {...base, wings: [w1(), kid(2, "w1End", {width: 3, floorHeight: 2.3})]},
+    {...base, wings: [w1(), kid(2, "w1Left"), kid(3, "w2End", {width: 2.5, depth: 2.5, floorHeight: 2.4})]},
+    {...base, wings: [w1({depth: 12, width: 8}), kid(2, "w1Left", {pos: 0.3, pitch: 25}), kid(3, "w1Right", {pos: 0.7, pitch: 45, width: 3})]},
+    {...base, wings: [w1({depth: 12}), kid(2, "w1Left", {pos: 0.2}), kid(3, "w1Left", {pos: 0.8, floorHeight: 2.3, width: 3})]},
+    {...base, roofType: "flat", wings: [w1(), kid(2, "w1Left")]},
+    {...base, foundation: 0.8, overhang: 0.9, wings: [w1(), kid(2, "w1Left")]},
+  ];
+  for (const c of cases) {
+    let p = sanitize({...c});
+    for (const w of p.wings) for (const part of ["End", "Left", "Right"]) p.windows = genRow(p, p.windows, `w${w.id}${part}`, 0, 1);
+    p = sanitize(p);
+    const f = flickers(buildGeometry(p), SHELL, {F: p.foundation});
+    assert.equal(f.length, 0, `${JSON.stringify(c)}: ` + f.map(show).join(" / "));
+  }
+});
+
 test("no flickering faces on a hip roof (its end gutters meet the eaves)", () => {
   for (const s of [{roofType: "hip"}, {roofType: "hip", width: 12, downpipes: 1}, {roofType: "hip", ridge: "depth", depth: 12}]) {
     const p = sanitize(s), f = flickers(buildGeometry(p), SHELL, {F: p.foundation});

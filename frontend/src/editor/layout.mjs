@@ -529,7 +529,7 @@ export function eaveWalls(P) {
   if (P.roofType === "flat") return [];
   const ridgeX = P.roofType === "hip" ? P.width >= P.depth : P.ridge === "width";
   const main = P.roofType === "hip" ? ["front", "back", "left", "right"] : ridgeX ? ["front", "back"] : ["left", "right"];
-  return [...main, ...liveWings(P).filter(w => w.type !== "flat" && !w.parent).flatMap(w => [wingWallKey(w.id, "Left"), wingWallKey(w.id, "Right")])];
+  return [...main, ...liveWings(P).filter(w => w.type !== "flat").flatMap(w => [wingWallKey(w.id, "Left"), wingWallKey(w.id, "Right")])];
 }
 /** n downpipes spread along a wall of length L as fractions 0..1: at the ends (30 cm in), then evenly between; one goes at the right end. */
 export function pipePositions(L, n) {

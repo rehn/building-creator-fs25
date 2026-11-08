@@ -1593,24 +1593,31 @@ function build() {
   const ext = b => p.roofType === "hip" ? rhx + b * (hAx - rhx) / hBx : Lr / 2;
   // The wings (an L, T or U; houses only) in the roof's terms. A wing's roof is built in its own axes: x out along its
   // ridge from the house's middle, z across it from its ridge; Mw maps those to the world, Ml directions.
-  const WINGS = liveWings(p).map(wing => {
+  // The roof a part meets, in the terms its own roof is built in: the house's, or its parent's (a gable roof along the parent's length): M, Ml map
+  // (along, y, across) to the world (a point, a direction), Ap and Bp give the along and across of a world point, ridgeY and tan, half the span, endX
+  // where a part on the far end starts.
+  const houseRoof = {M, Ml: M, Ap: A, Bp: B, ridgeY, tan: tanP, half: span / 2, endX: Lr / 2};
+  const WINGS = [];
+  for (const wing of liveWings(p)) {
     const topW = F + wing.H, tanW = wing.tanW, yR = topW + wing.ww / 2 * tanW, eW = wing.ww / 2 + o;
-    // (a part on a part has no roof of its own yet: flat, until the roofs meet their parents'; docs/PLAN_PARTS.md step 3)
-    if (wing.type === "flat" || wing.parent) return {wing, WG: null, topW};
-    const m = wallFrames(W, D, F)[wing.wall], cpt = wing.at(wing.sc, 0);
+    const par = wing.parent ? WINGS.find(x => x.wing.id === wing.parent) : null;
+    if (wing.type === "flat" || (par && !par.WG)) { WINGS.push({wing, WG: null, topW}); continue; }
+    const pr = par ? {M: par.WG.Mw, Ml: par.WG.Ml, Ap: q => par.WG.local(q)[0], Bp: q => par.WG.local(q)[1], ridgeY: par.WG.yR, tan: par.WG.tanW, half: par.wing.ww / 2, endX: par.WG.x0 + par.wing.wd} : houseRoof;
+    const dirA = v => pr.Ap(v) - pr.Ap([0, 0, 0]), dirB = v => pr.Bp(v) - pr.Bp([0, 0, 0]);
+    const m = wallsOf(p)[wing.wall], cpt = wing.at(wing.sc, 0);
     let WG;
-    if ((Math.abs(m.u[0]) > 0.5) === ridgeX) {
-      // on a side of the roof: its ridge runs into the house's slope (a valley, k from the ridge line) or, lower, up to the wall
-      const s = Math.sign(B(m.n)), aC = A(cpt), valley = wing.type === "valley";
-      WG = {valley, s, aC, yR, k: valley ? (ridgeY - yR) / tanP : span / 2, r: tanW / tanP, x0: span / 2, Mw: (x, y, z) => M(aC + z, y, s * x), Ml: (x, y, z) => M(z, y, s * x), local: q => [s * B(q), A(q) - aC]};
+    if (wing.type !== "gable") {
+      // on a side of the roof: its ridge runs into the parent's slope (a valley, k from the ridge line) or, lower, up to the wall
+      const s = Math.sign(dirB(m.n)), aC = pr.Ap(cpt), valley = wing.type === "valley";
+      WG = {valley, s, aC, yR, k: valley ? (pr.ridgeY - yR) / pr.tan : pr.half, r: tanW / pr.tan, x0: pr.half, Mw: (x, y, z) => pr.M(aC + z, y, s * x), Ml: (x, y, z) => pr.Ml(z, y, s * x), local: q => [s * pr.Bp(q), pr.Ap(q) - aC]};
     } else {
-      // against a gable: its ridge runs along the house's, lower, from the gable wall out
-      const sA = Math.sign(A(m.n)), bC = B(cpt);
-      WG = {valley: false, yR, k: Lr / 2, x0: Lr / 2, Mw: (x, y, z) => M(sA * x, y, bC + z), Ml: (x, y, z) => M(sA * x, y, z), local: q => [sA * A(q), B(q) - bC]};
+      // against a gable: its ridge runs along the parent's, lower, from the gable wall out
+      const sA = Math.sign(dirA(m.n)), bC = pr.Bp(cpt);
+      WG = {valley: false, yR, k: pr.endX, x0: pr.endX, Mw: (x, y, z) => pr.M(sA * x, y, bC + z), Ml: (x, y, z) => pr.Ml(sA * x, y, z), local: q => [sA * pr.Ap(q), pr.Bp(q) - bC]};
     }
-    WG.eW = eW; WG.tanW = tanW; WG.cosW = Math.cos(wing.pitch * Math.PI / 180); WG.r = tanW / tanP; WG.eaveW = yR - eW * tanW;
-    // where the house's roof is cut for the wing's, along its eaves (eaves, gutter and dormers stop there)
-    // (the valley line runs out from the house's slope at the same pitch (45°), but the slope only reaches the end of its overhang: a wing whose
+    WG.eW = eW; WG.tanW = tanW; WG.cosW = Math.cos(wing.pitch * Math.PI / 180); WG.r = tanW / pr.tan; WG.eaveW = yR - eW * tanW;
+    // where the parent's roof is cut for the wing's, along its eaves (eaves, gutter and dormers stop there)
+    // (the valley line runs out from the parent's slope at the same pitch (45°), but the slope only reaches the end of its overhang: a wing whose
     // ridge is just over the eaves meets it only there, and the rest of its roof runs on to the wall)
     if (WG.valley) {
       WG.xCap = WG.x0 + o;
@@ -1618,9 +1625,9 @@ function build() {
       WG.xE = Math.min(WG.k + eW * WG.r, WG.xCap);
     }
     WG.cut = WG.valley && WG.cutHalf > 0.01 ? [WG.aC - WG.cutHalf, WG.aC + WG.cutHalf] : null;
-    return {wing, WG, topW};
-  });
-  const sideWGs = s => WINGS.map(x => x.WG).filter(g => g && g.cut && g.s === s);
+    WINGS.push({wing, WG, topW});
+  }
+  const sideWGs = s => WINGS.filter(x => !x.wing.parent).map(x => x.WG).filter(g => g && g.cut && g.s === s);   // (the house's roof is cut for its own parts only)
   const DORMS = {"1": [], "-1": []};
   for (const d of p.dormers) {
     d._hidden = true;
@@ -1766,10 +1773,13 @@ function build() {
     buildEntrance(entr.w, entr.o, limit, F, mainEave);
   }
   // Under a wing's roof at (x, z), where it is the roof on top (the house's and the wing's meet in valleys).
-  const wingUnder = ({WG, topW}) => (x, z) => {
-    if (!WG) return topW;
-    const y = WG.yR - th - Math.abs(WG.local([x, 0, z])[1]) * WG.tanW - 0.01;
-    return WG.valley ? Math.max(y, roofUnder(x, z)) : y;
+  const wingUnder = item => {
+    const {WG, topW} = item, par = item.wing.parent ? WINGS.find(x => x.wing.id === item.wing.parent) : null;
+    return (x, z) => {
+      if (!WG) return topW;
+      const y = WG.yR - th - Math.abs(WG.local([x, 0, z])[1]) * WG.tanW - 0.01;
+      return WG.valley ? Math.max(y, par ? wingUnder(par)(x, z) : roofUnder(x, z)) : y;
+    };
   };
   function buildWingBody(item) {
     const {wing} = item, under = wingUnder(item), {at, s0, s1, wd} = wing, Lm = (WS[wing.wall] || wallsOf(p)[wing.wall]).L, c = 0.09;
@@ -1794,7 +1804,7 @@ function build() {
   }
   function buildWingRoof(item) {
     const {wing, WG, topW} = item;
-    if (wing.type === "flat" || wing.parent) {   // (a part on a part: flat for now)
+    if (!WG) {   // (a flat roof)
       const oo = Math.min(o, 0.4), a = wing.at(wing.s0 - oo, oo), b = wing.at(wing.s1 + oo, wing.wd + oo);
       abox("roof", [a[0], topW, a[2]], [b[0], topW + 0.3, b[2]]);
       abox("collision", [a[0], topW, a[2]], [b[0], topW + 0.3, b[2]]);
@@ -1803,6 +1813,11 @@ function build() {
     const {valley, yR, k, r: slopeR, x0, eW, eaveW, Mw, Ml, local, tanW, cosW, xCap, cutHalf} = WG;
     const xWall = x0 + wing.wd, xF = xWall + Math.min(o, 0.5), xE = valley ? WG.xE : x0;
     const uvW = q => { const [x, z] = local(q); return [x, -Math.abs(z) / cosW]; };
+    // the parts that stand on this one and meet its slope in valleys: its slope, eaves and gutter are cut for them
+    const kids = WINGS.filter(x => x.wing.parent === wing.id && x.WG && x.WG.valley && x.WG.cut);
+    const kidCuts = sg => kids.filter(x => x.WG.s === sg).map(x => x.WG.cut);
+    const notchLocal = (sg, pieces) => kids.filter(x => x.WG.s === sg).reduce((ps, {WG: g}) => ps.flatMap(q => [
+      clipPoly(clipPoly(q, 1, 0, g.aC), g.r, 1, g.k + g.r * g.aC), clipPoly(clipPoly(q, -1, 0, -g.aC), -g.r, 1, g.k - g.r * g.aC)]).filter(q => q.length >= 3), pieces);
     for (const sg of [1, -1]) {
       // a slope from the valley (or the wall) out to the far end
       // (2 cm in from the eave line: flush with the house's end its boards would lie in the barge board's plane and flicker)
@@ -1811,10 +1826,16 @@ function build() {
       const zc = valley ? Math.min(eR, cutHalf) : 0;
       const S = valley ? (zc < eR - 1e-6 ? [[k, 0], [xF, 0], [xF, sg * eR], [xCap, sg * eR], [xCap, sg * zc]] : [[k, 0], [xF, 0], [xF, sg * eR], [xE, sg * eR]]) : [[x0, 0], [xF, 0], [xF, sg * eR], [x0, sg * eR]];
       const T = S.map(([x, z]) => Mw(x, yR - Math.abs(z) * tanW, z)), up = Ml(0, 1, sg * tanW);
-      poly("roof", T, up, uvW); poly("roof", T.map(dn), neg(up), uvW);
+      const pieces = kids.length ? notchLocal(sg, [S.map(([x, z]) => [x, sg * z])]).map(q => q.map(([x, b]) => [x, sg * b])) : [S];
+      for (const Sq of pieces) {
+        const Tq = Sq.map(([x, z]) => Mw(x, yR - Math.abs(z) * tanW, z));
+        poly("roof", Tq, up, uvW); poly("roof", Tq.map(dn), neg(up), uvW);
+      }
       poly("trim", [T[1], T[2], dn(T[2]), dn(T[1])], Ml(1, 0, 0));
-      const E = [Mw(xE, eaveW + 0.02 * tanW, sg * eR), Mw(xF, eaveW + 0.02 * tanW, sg * eR)];
-      poly("trim", [E[0], E[1], dn(E[1]), dn(E[0])], Ml(0, 0, sg));
+      for (const [a0, a1] of segs(xE, xF, kidCuts(sg))) {
+        const E = [Mw(a0, eaveW + 0.02 * tanW, sg * eR), Mw(a1, eaveW + 0.02 * tanW, sg * eR)];
+        poly("trim", [E[0], E[1], dn(E[1]), dn(E[0])], Ml(0, 0, sg));
+      }
     }
     const det = dot(Ml(1, 0, 0), cross(Ml(0, 1, 0), Ml(0, 0, 1)));
     ridgeCap(valley ? k : x0, xF, yR, tanW, Mw, det > 0, Ml);
@@ -1825,7 +1846,7 @@ function build() {
         const bg = sg * (eW + r - 0.02);
         // from just outside the house's gutter, which runs through the corner (crossing, their bottoms would
         // flicker), or from the wall
-        gutterRun(Mw(valley ? xE + 2 * r - 0.015 : x0 + 0.01, yT, bg), Mw(xF - 0.01, yT, bg), Ml(0, 0, sg), r);
+        for (const [a0, a1] of segs(valley ? xE + 2 * r - 0.015 : x0 + 0.01, xF - 0.01, kidCuts(sg))) gutterRun(Mw(a0, yT, bg), Mw(a1, yT, bg), Ml(0, 0, sg), r);
       }
     }
   }
