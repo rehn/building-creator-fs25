@@ -176,7 +176,7 @@ function cleanWings(obj) {
     let id = Number.isInteger(w.id) && w.id >= 1 && w.id <= MAX_WINGS && !used.has(w.id) ? w.id : 0;
     if (!id) for (let i = 1; i <= MAX_WINGS; i++) if (!used.has(i)) { id = i; break; }
     used.add(id);
-    out.push({id, wall: WALLS.includes(w.wall) || nested ? w.wall : "back", pos: clampN(w.pos, 0, 1, 0.15), width: clampN(w.width, 2.5, 30, 6), depth: clampN(w.depth, 2, 30, 5), floors: Math.round(clampN(w.floors, 0, 3, 0)), half: w.half === true, ...cleanPartStyle(w), name: typeof w.name === "string" ? w.name.trim().slice(0, 40) : "", floorHeight: +w.floorHeight > 0 ? Math.round(clampN(w.floorHeight, 2.3, 9, 2.7) * 100) / 100 : 0, pitch: +w.pitch > 0 ? Math.round(clampN(w.pitch, 5, 60, 5)) : 0});
+    out.push({id, wall: WALLS.includes(w.wall) || nested ? w.wall : "back", pos: clampN(w.pos, 0, 1, 0.15), width: clampN(w.width, 2.5, 30, 6), depth: clampN(w.depth, 2, 30, 5), floors: Math.round(clampN(w.floors, 0, 3, 0)), half: w.half === true, ...cleanPartStyle(w), name: typeof w.name === "string" ? w.name.trim().slice(0, 40) : "", floorHeight: +w.floorHeight > 0 ? Math.round(clampN(w.floorHeight, 2.3, 9, 2.7) * 100) / 100 : 0, pitch: +w.pitch > 0 ? Math.round(clampN(w.pitch, 5, 60, 5)) : 0, ventilators: Math.round(clampN(w.ventilators, 0, 4, 0))});
   }
   return out;
 }
@@ -1433,15 +1433,15 @@ function cyl(c, r, h, seg = 12) {
  */
 /** Where the ventilators go along the ridge (a), for n of them on a ridge reaching +-half. */
 const ventSpots = (n, half) => { const reach = Math.max(0, half - 0.8); return Array.from({length: n}, (_, k) => n === 1 ? 0 : -reach + 2 * reach * k / (n - 1)); };
-function buildVentilators(Lr, ridgeY, tanP, M, half, th, F) {
-  const hw = 0.35;
+function buildVentilators(Lr, ridgeY, tanP, M, half, th, F, count = p.ventilators) {
+  const hw = 0.35, Dir = (a, y, b) => sub(M(a, y, b), M(0, 0, 0));
   // The box's bottom follows the roof (a low V, 5 cm under the tiles), so it stays in the roof slab
   // and never shows under it; a walk-in barn gets a duct inside instead (ventDuct).
   const y0 = ridgeY - tanP * hw - 0.05, yC = ridgeY - 0.05, y1 = ridgeY + 0.75, rise = 0.3, ro = 0.5;
   // (ranges sorted: a box given back to front would come out inside-out)
   const mbox = (mat, a0, a1, yA, yB, b0, b1) => { [a0, a1] = [Math.min(a0, a1), Math.max(a0, a1)]; [b0, b1] = [Math.min(b0, b1), Math.max(b0, b1)];
-    box(mat, (i, j, k) => M(lerp(a0, a1, i), lerp(yA, yB, j), lerp(b0, b1, k)), M(1, 0, 0), UP, M(0, 0, 1)); };
-  for (const a of ventSpots(p.ventilators, half)) {
+    box(mat, (i, j, k) => M(lerp(a0, a1, i), lerp(yA, yB, j), lerp(b0, b1, k)), Dir(1, 0, 0), UP, Dir(0, 0, 1)); };
+  for (const a of ventSpots(count, half)) {
     for (const s of [-1, 1]) prism("walls", [[s * hw, y0], [0, yC], [0, y1], [s * hw, y1]], ([b, y], k) => M(k ? a + hw : a - hw, y, b));
     abox("collision", M(a - hw, y0, -hw), M(a + hw, y1 + rise, hw));
     if (hollow) ventDuct(a, ridgeY, tanP, M, th, F);
@@ -1456,12 +1456,12 @@ function buildVentilators(Lr, ridgeY, tanP, M, half, th, F) {
     // the little roof: two slopes from the eaves at b = +-ro up to a ridge over the middle
     for (const s of [-1, 1]) {
       const q = [M(a - hw - 0.1, y1, s * ro), M(a + hw + 0.1, y1, s * ro), M(a + hw + 0.1, y1 + rise, 0), M(a - hw - 0.1, y1 + rise, 0)];
-      poly("roof", q, M(0, 1, s * rise / ro));
-      poly("trim", q.map(v => [v[0], v[1] - 0.03, v[2]]), M(0, -1, -s * rise / ro));
+      poly("roof", q, Dir(0, 1, s * rise / ro));
+      poly("trim", q.map(v => [v[0], v[1] - 0.03, v[2]]), Dir(0, -1, -s * rise / ro));
     }
     for (const sa of [-1, 1]) {
       const yb = y1 + rise * (1 - hw / ro);
-      poly("walls", [M(a + sa * hw, y1, -hw), M(a + sa * hw, y1, hw), M(a + sa * hw, yb, hw), M(a + sa * hw, y1 + rise, 0), M(a + sa * hw, yb, -hw)], M(sa, 0, 0));
+      poly("walls", [M(a + sa * hw, y1, -hw), M(a + sa * hw, y1, hw), M(a + sa * hw, yb, hw), M(a + sa * hw, y1 + rise, 0), M(a + sa * hw, yb, -hw)], Dir(sa, 0, 0));
     }
   }
 }
@@ -2036,6 +2036,12 @@ function build() {
     }
     const det = dot(Ml(1, 0, 0), cross(Ml(0, 1, 0), Ml(0, 0, 1)));
     ridgeCap(valley ? k : x0, xF, yR, tanW, Mw, det > 0, Ml);
+    // the part's own roof ventilators, along its ridge (from where it meets the roof it stands against to its end wall)
+    const nv = (p.wings || []).find(x => x.id === wing.id)?.ventilators | 0;
+    if (nv > 0) {
+      const xs = valley ? k + 0.9 : x0, xe = xWall - 0.1;
+      if (xe - xs > 1.6) { const xc = (xs + xe) / 2; buildVentilators(0, yR, tanW, (a, y, b) => Mw(xc + a, y, b), (xe - xs) / 2, th, F, nv); }
+    }
     prism("collision", [[-eW, eaveW], [eW, eaveW], [0, yR]], ([z, y], e) => Mw(e ? xF : (valley ? k : x0), y, z));
     if (p.gutters) {
       const r = 0.065, yT = eaveW - 0.06;

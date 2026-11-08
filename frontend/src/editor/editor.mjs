@@ -1093,6 +1093,7 @@ function renderPartCard() {
       + `<div class="field"><div class="fl"><label for="wg-floors">Floors</label></div><select id="wg-floors">${opt(0, `As the house (${p.floors}${p.halfStorey ? "½" : ""})`, w.floors)}${[1, 2, 3].map(n => opt(n, `${n}${n < p.floors ? " (lower than the house)" : n > p.floors ? " (taller than the house)" : ""}`, w.floors)).join("")}</select></div>`
       + `<label class="check"><input type="checkbox" id="wg-half" ${(liveWings(p).find(x => x.id === w.id) || w).half ? "checked" : ""} ${w.floors ? "" : "disabled"}> Half floor in the roof (1½-plan)</label>`
       + `<div class="field"><div class="fl"><label for="wg-pitch">Roof angle</label><output id="wg-pitch-o">${w.pitch ? w.pitch + "°" : "as the house (" + p.roofPitch + "°)"}</output></div><input type="range" id="wg-pitch" min="0" max="60" step="1" value="${w.pitch}"></div>`
+      + `<div class="field"><div class="fl"><label for="wg-vent">Roof ventilators (lanterns on the ridge)</label><output id="wg-vent-o">${w.ventilators || 0}</output></div><input type="range" id="wg-vent" min="0" max="4" step="1" value="${w.ventilators || 0}"></div>`
       + `<div class="field"><div class="fl"><label for="wg-fh">Floor height</label><output id="wg-fh-o">${w.floorHeight ? w.floorHeight.toFixed(2) + " m" : "as the house (" + p.floorHeight.toFixed(2) + " m)"}</output></div><input type="range" id="wg-fh" min="2.2" max="9" step="0.05" value="${w.floorHeight || 2.2}"></div>`
       + partLookHtml(w)
       + `<p class="hint">A wing with fewer floors, or a flatter roof, has a lower roof. Roof angle 0 follows the house.</p><div class="row">${wings.length < MAX_WINGS ? `<button type="button" id="wingAddChild">+ Add a part on ${esc(partName(p, w.id))}</button>` : ""}${partSource ? `<button type="button" id="partSave">Save to My parts</button>` : ""}<button type="button" id="partExport">Export this part</button><button type="button" id="wingRemove" class="danger">Remove ${esc(partName(p, w.id))} and what stands on it</button></div></div>`;
@@ -1117,6 +1118,8 @@ function renderPartCard() {
   const fhOut = () => { $("wg-fh-o").textContent = w.floorHeight ? w.floorHeight.toFixed(2) + " m" : `as the house (${p.floorHeight.toFixed(2)} m)`; };
   $("wg-fh").oninput = e => { w.floorHeight = +e.target.value < 2.3 ? 0 : +(+e.target.value).toFixed(2); fhOut(); persist(); rebuild(false); };
   $("wg-fh").onchange = () => changed();
+  $("wg-vent").oninput = e => { w.ventilators = +e.target.value; $("wg-vent-o").textContent = String(w.ventilators); persist(); rebuild(false); };
+  $("wg-vent").onchange = () => changed();
   if ($("wingAddChild")) $("wingAddChild").onclick = () => {
     // a part on this one: on a side wall (or its end) where there is room
     const parent = w.id;
