@@ -2079,7 +2079,7 @@ function makeYardMarker() {
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({transparent: true, depthWrite: false, side: THREE.DoubleSide}));
   ground.rotation.x = -Math.PI / 2; ground.position.y = 0.03; ground.visible = false; ground.renderOrder = 2;
   group.add(ground);
-  const groundIn = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({transparent: true, depthWrite: false, side: THREE.DoubleSide}));
+  const groundIn = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({transparent: true, depthWrite: false, depthTest: false, side: THREE.DoubleSide}));   // (seen through the walls and roof)
   groundIn.rotation.x = -Math.PI / 2; groundIn.visible = false; groundIn.renderOrder = 3;
   group.add(groundIn);
   const dispose = () => { for (const m of [net, posts, wires, ground, groundIn]) { m.geometry.dispose(); if (m.material.map) m.material.map.dispose(); m.material.dispose(); } };
