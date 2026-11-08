@@ -187,7 +187,9 @@ export function genRow(P, list, wall, floor, n) {
   const keep = list.filter(w => !(w.wall === wall && w.floor === floor && w.type !== "door"));
   const pos = [];
   if (n > 0) {
-    const doors = floor === 0 ? list.filter(w => w.type === "door" && w.wall === wall).map(d => openingSpan(d, L)) : [];
+    // what a window keeps clear of: a ground-floor wall's doors, and the stretch of the wall a wing stands against (where it covers this floor: it hides windows)
+    const doors = [...(floor === 0 ? list.filter(w => w.type === "door" && w.wall === wall).map(d => openingSpan(d, L)) : []),
+      ...liveWings(P).filter(g => g.wall === wall && floor < g.floors).map(g => [g.s0, g.s1])];
     // Evenly spaced, one slot more per door and the slot nearest each door left out (a door in the
     // middle gets a window either side) ...
     const slots = Array.from({length: n + doors.length}, (_, i) => (i + 0.5) / (n + doors.length) * L);

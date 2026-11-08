@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULTS, SCHEMA, sanitize, buildGeometry, buildI3d, serialize, MATS, placementAreas, placeableSnippet, sleepPoint, boxMesh, WP, ROOM_TYPES, CURTAIN_STYLES, rgb, pipeMesh, gutterMesh, surfaceSpec, scaledUV, ridgeCapMesh , TABS } from "../src/editor/model.mjs";
+import { genRow, DEFAULTS, SCHEMA, sanitize, buildGeometry, buildI3d, serialize, MATS, placementAreas, placeableSnippet, sleepPoint, boxMesh, WP, ROOM_TYPES, CURTAIN_STYLES, rgb, pipeMesh, gutterMesh, surfaceSpec, scaledUV, ridgeCapMesh , TABS } from "../src/editor/model.mjs";
 
 const cross3 = (a, b) => [a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0]];
 const countOn = (p, wall, floor) => p.windows.filter(w => w.wall === wall && w.floor === floor && w.type !== "door").length;
@@ -923,4 +923,14 @@ test("the table steps windows and doors together: + adds an opening, - takes one
   assert.equal(openingCounts(sanitize({ ...two, windows: stepOpenings(two, two.windows, "back", 0, -1) })).back[0].doors, 0, "with doors left on another wall a door can go");
   let q = p; for (let i = 0; i < 12; i++) { const n = stepOpenings(q, q.windows, "back", 0, 1); if (n) q = sanitize({ ...q, windows: n }); }
   assert.ok(total(q, "back", 0) <= 8, "at most 8 in a cell");
+});
+
+test("new windows keep out of a wing: not on the stretch of the wall it stands against (only where it covers that floor)", () => {
+  const p = sanitize({ width: 14, depth: 8, floors: 2, wings: [{ wall: "back", pos: 0.5, width: 5, depth: 5, floors: 1 }], windows: [{ wall: "front", floor: 0, pos: 0.5, type: "door", w: 1, h: 2.1 }] });
+  const wg = buildGeometry(p).wings[0];
+  const spots = (floor, n) => genRow(p, p.windows, "back", floor, n).filter(w => w.wall === "back" && w.floor === floor).map(w => w.pos * 14);
+  for (const n of [1, 2, 3, 4, 5]) for (const s of spots(0, n)) assert.ok(s < wg.s0 - 0.2 || s > wg.s1 + 0.2, `floor 0, ${n}: window at ${s.toFixed(2)} in the wing's ${wg.s0.toFixed(1)}-${wg.s1.toFixed(1)}`);
+  assert.equal(spots(0, 4).length, 4);
+  // the floor above the wing's roof is free along the whole wall
+  assert.ok(spots(1, 3).some(s => s > wg.s0 && s < wg.s1), "upper floor: the middle is free");
 });
