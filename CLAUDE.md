@@ -224,6 +224,9 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   builds a nested part with walls, floor, inside (own ceiling at its fh, passages up to the lower ceiling of parent and part, windows hidden under a child) and a flat roof for now (roofs: step 3); the editor can't create nested parts yet (step 4).
   The most parts is a setting: the web container's MAX_PARTS variable (12 if not set, at most HARD_MAX_PARTS = 40; Helm web.maxParts, docker-compose MAX_PARTS), served by
   the web app's /config route and applied at start by AppConfig.tsx (layout.mjs setMaxParts; MAX_WINGS is a live binding).
+- Saves must keep building: test/golden-saves.test.mjs builds representative saves (every preset, wing types, old formats) and compares a summary (parts, openings, triangles per material, size)
+  with test/golden-saves.json, made with the code from before the parts tree. A change that should alter old saves updates it on purpose (UPDATE_GOLDEN=1 npm test). Saves are migrated when
+  loaded (sanitize), nothing in the database changes.
 
 ## Dev environment (WSL)
 - ./dev.sh starts API (:8080) + Next dev server (:3000); data in .dev/ (gitignored),
