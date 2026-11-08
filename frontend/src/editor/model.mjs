@@ -3,7 +3,7 @@
 // Pure functions with no DOM or three.js, so they run (and are tested) in Node.
 import { I3dDoc, tg, shape, refNode, boxMesh, splitByColor, mappingsFor, num, v3 } from "./i3d.mjs";
 import { KINDS, kindOf } from "./kinds/index.mjs";
-import { WALL_T, wallFrames, wallsOf, liveWings, wingsOf, wingHeight, wingFloorHeight, wingFloors, wingHalf, wingIdOf, eaveWalls, autoPipes, cleanPipes, cleanPapers, WING_PARTS, MAX_WINGS, HARD_MAX_PARTS, setMaxParts, WING_WALLS, wingWallKey, openingSpan, roomOf, footprint, toWorld, cleanItems, problems } from "./layout.mjs";
+import { WALL_T, wallFrames, wallsOf, liveWings, wingsOf, wingIdOf, eaveWalls, autoPipes, cleanPipes, cleanPapers, WING_PARTS, MAX_WINGS, HARD_MAX_PARTS, setMaxParts, WING_WALLS, wingWallKey, openingSpan, roomOf, footprint, toWorld, cleanItems, problems } from "./layout.mjs";
 import { withAssets, placement, assetFolder } from "./assets.mjs";
 import { SURFACES } from "./surfaces.mjs";
 import { agedColor } from "./age.mjs";

@@ -47,17 +47,6 @@ export const WING_WALLS = Array.from({length: HARD_MAX_PARTS}, (_, i) => WING_PA
 export const wingIdOf = key => { const m = /^w(\d+)(End|Left|Right)$/.exec(key || ""); return m ? +m[1] : 0; };
 /** The roof's thickness (the model's too): a gable-end wing's roof stays under the house's gable overhang. */
 const ROOF_T = 0.16;
-/** A wing's own number of floors: the house's, or fewer (a lower wing). */
-export const wingFloors = (P, w) => Math.max(1, Math.min(P.floors, Math.round(+w.floors || P.floors)));
-/** A wing's wall height (the house's own floors' and knee wall when it is as tall as the house). */
-/** Whether a wing has a half floor in its roof (1½-plan): its own setting, or the house's when it follows the house (floors 0). */
-export const wingHalf = (P, w) => !!(+w.floors ? w.half : P.halfStorey);
-/** A wing's roof pitch in degrees: its own (5 to 60), or the house's when 0. */
-export const wingPitch = (P, w) => +w.pitch > 0 ? Math.min(60, Math.max(5, +w.pitch)) : P.roofPitch;
-/** A wing's wall height: its floors, and the knee wall when it has a half floor. */
-export const wingHeight = (P, w) => wingFloors(P, w) * wingFloorHeight(P, w) + (wingHalf(P, w) ? P.kneeWall : 0);
-/** A wing's floor height: its own (2.3 to 9 m), or the house's when 0. */
-export const wingFloorHeight = (P, w) => +w.floorHeight > 0 ? Math.min(9, Math.max(2.3, +w.floorHeight)) : P.floorHeight;
 /**
  * The house's parts besides the main building (P.wings: {id, wall, pos, width, depth, floors ...}), each as {id, ...} or {id, off: why}. They form a tree:
  * a wing's wall is a wall of the house ("front" ...) or of an earlier wing ("w1Left" ...), so wingIdOf(wall) is its parent's id (0: the house).

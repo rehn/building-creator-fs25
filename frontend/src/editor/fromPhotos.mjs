@@ -66,16 +66,23 @@ export function photoRequest(kindId) {
   if (!kind) throw new Error("unknown kind " + kindId);
   const fields = photoFields(kindId);
   const wing = !kind.hides.includes("Wings");
+  const wingWalls = WING_WALLS.slice(0, 3 * MAX_WINGS), claddings = ((SCHEMA.flatMap(g => g.fields).find(f => f.k === "wallCladding") || {}).options || []).map(o => o[0]);
   const settings = {type: "object", additionalProperties: false, required: fields.map(([f]) => f.k), properties: {}};
   for (const [f] of fields) settings.properties[f.k] = fieldSchema(f);
   // the parts: wings (an L, T or U, a small annex ...), each with its place, size, floors and roof
-  const wings = wing ? {type: "array", description: "The parts besides the main building: the other arms of an L, T or U, and small annexes against a wall (none for a plain rectangle)", items: {type: "object", additionalProperties: false, required: ["wall", "along", "width", "depth", "floors", "half", "pitch"], properties: {
-    wall: {type: "string", enum: WALLS, description: "The main building's wall it stands against"},
+  const wings = wing ? {type: "array", description: "The parts besides the main building: the other arms of an L, T or U, and small annexes against a wall (none for a plain rectangle)", items: {type: "object", additionalProperties: false, required: ["wall", "along", "width", "depth", "floors", "half", "pitch", "name", "wallCladding", "wallColor", "roofMaterial", "roofColor", "trimColor"], properties: {
+    wall: {type: "string", enum: [...WALLS, ...wingWalls], description: "The wall it stands against: one of the main building's (front, back, left, right), or a wall of a part listed before it (w1End, w1Left, w1Right, w2End ...) when it stands on another part"},
     along: {type: "number", description: "Middle of the part along that wall, 0 = its left end, 1 = its right end, seen from outside"},
     width: {type: "number", description: "metres, along the wall"}, depth: {type: "number", description: "metres, out from the wall"},
     floors: {type: "integer", description: "0 = as many full floors as the main building (and its half floor, if any), else its own number (1 to 3): a lower part has fewer"},
     half: {type: "boolean", description: "A half floor in the roof (1½-plan) on a part with its own floors; false when floors is 0"},
-    pitch: {type: "integer", description: "Roof angle in degrees (5 to 60), or 0 for the main building's"}}}} : null;
+    pitch: {type: "integer", description: "Roof angle in degrees (5 to 60), or 0 for the one of the part it stands on (the main building's for a part on it)"},
+    name: {type: "string", description: "What it is, like Pumphus, Bod or Tvättstuga; empty if you can't tell"},
+    wallCladding: {type: "string", enum: ["", ...claddings], description: "Its wall panel when it differs from the part it stands on; empty: as its parent"},
+    wallColor: {type: "string", description: "Its wall colour #RRGGBB when it differs from its parent; empty: as its parent"},
+    roofMaterial: {type: "string", enum: ["", "tiles", "metal", "plain"], description: "Its roof covering when it differs from its parent; empty: as its parent"},
+    roofColor: {type: "string", description: "Its roof colour #RRGGBB when it differs from its parent; empty: as its parent"},
+    trimColor: {type: "string", description: "The colour of its corner boards and frames #RRGGBB when it differs from its parent; empty: as its parent"}}}} : null;
   // an animal building's pasture: the wall the animals go out on and how far out the fence goes
   const ps = kind.objects && kind.objects.pasture, pasture = ps ? {type: "object", additionalProperties: false, required: ["wall", "depth"], properties: {
     wall: {type: "string", enum: WALLS, description: "The wall the animals go out through to the pasture"},
@@ -91,7 +98,7 @@ export function photoRequest(kindId) {
     properties: {
       seen: {type: "string", description: "What the photos show: the footprint's shape (rectangle, L, T or U) and the parts it is made of, which wall each photo shows, materials, how you judged the sizes"},
       settings,
-      openings: {type: "array", items: opening(wing ? [...WALLS, ...WING_WALLS] : WALLS), description: "Every window and door on the walls"},
+      openings: {type: "array", items: opening(wing ? [...WALLS, ...wingWalls] : WALLS), description: "Every window and door on the walls"},
       notes: {type: "string", description: "For the admin: what the app can't match and what to check"},
       ...(pasture ? {pasture} : {}),
       ...(wings ? {wings} : {}),
@@ -108,13 +115,14 @@ Animals: the app makes the animals' own way out to the pasture (and the fence) o
     ? `
 
 Shape and parts: first decide from the photos what the footprint is made of, and say it in "seen". The longest part is the main building (its long side the front). ` +
-      `Every other part is a "wing" against one of the main building's walls (up to ${MAX_WINGS}, in "wings"): the arm of an L, T or U, or a small annex. ` +
-      `Give its wall, "along" (like an opening's), width along the wall, depth out from it, floors (0 = as many as the main building; fewer = a lower part with a lower roof), ` +
-      `half (1½-plan) and pitch (its own roof angle, 0 = the main building's). Rules the app follows: a wing as wide as the main building, or wider than its roof reaches, on a long side meets the main roof in a valley (an L when it is at an end, a T in the middle); ` +
-      `a lower and narrower one, such as a milk room or porch with its own gable roof, runs up to the wall under the main eaves; on a gable end it is a lower annex under the gable. ` +
-      `The wings must stand at least half a metre apart and can't be on a hip roof's end. ` +
+      `Every other part is a "wing" (up to ${MAX_WINGS}, in "wings"): the arm of an L, T or U, a small annex, a pump house or a shed. It stands against a wall of the main building (front, back, left, right) or, when it stands on another part, against a wall of a part listed before it in "wings" (see below): a pump house on a wing, a wing on a wing. ` +
+      `Give its wall, "along" (like an opening's), width along the wall, depth out from it, floors (0 = as many as the part it stands on; fewer = a lower part with a lower roof), ` +
+      `half (1½-plan) and pitch (its own roof angle, 0 = the one of the part it stands on). Rules the app follows: a wing as wide as the part it stands on, or wider than its roof reaches, on a long side meets that roof in a valley (an L when it is at an end, a T in the middle); ` +
+      `a lower and narrower one, such as a milk room or porch with its own gable roof, runs up to the wall under the eaves; on a gable end it is a lower annex under the gable. ` +
+      `A part meets only the roof of the part it stands on, so it must stand at least half a metre clear of every other part and of the main building's walls (choose the wall where nothing else is near), and can't be on a hip roof's end. ` +
       `Wing number n (in the order of "wings", from 1) has the walls wnEnd (its far end), wnLeft and wnRight (its sides, as you stand outside facing its end): ` +
-      `w1End, w1Left, w1Right, w2End ... Put its windows and doors there. A plain rectangular building has no wings. ` +
+      `w1End, w1Left, w1Right, w2End ... A part on wing 1's left side has the wall "w1Left" and must be listed after wing 1. Put windows and doors on their walls, also on the walls of parts on parts. A plain rectangular building has no wings. ` +
+      `Give each part a short "name" (Pumphus, Bod ...). A part is made of the same materials as the part it stands on (the main building for a part on it) unless it differs, and then you set wallCladding, wallColor, roofMaterial, roofColor and trimColor for it; leave them empty ("") when it looks like its parent: a pump house with its own metal roof and plastered walls, a shed in the house's red. ` +
       `You can walk through a wing into the main building, so a part that is really a separate building (a shed standing apart) isn't a wing.`
     : "";
   const materials = `
@@ -169,7 +177,8 @@ export function applyAnswer(kindId, answer) {
   const settings = {...s, kind: kindId};
   // the pasture: its wall and depth (the rest of the game objects go where the kind puts them)
   if (a.pasture && typeof a.pasture === "object") Object.assign(settings, {pastureWall: a.pasture.wall, fenceDepth: a.pasture.depth});
-  if (Array.isArray(a.wings)) settings.wings = a.wings.filter(w => w && typeof w === "object").map(w => ({wall: w.wall, pos: w.along, width: w.width, depth: w.depth, floors: w.floors, half: w.half, pitch: w.pitch}));
+  if (Array.isArray(a.wings)) settings.wings = a.wings.filter(w => w && typeof w === "object").map(w => ({wall: w.wall, pos: w.along, width: w.width, depth: w.depth, floors: w.floors, half: w.half, pitch: w.pitch,
+    name: w.name, wallCladding: w.wallCladding, wallColor: w.wallColor, roofMaterial: w.roofMaterial, roofColor: w.roofColor, trimColor: w.trimColor}));
   const openings = Array.isArray(a.openings) ? a.openings.filter(o => o && typeof o === "object") : [];
   if (openings.length) {
     settings.windows = openings.map(o => {

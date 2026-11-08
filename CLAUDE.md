@@ -159,7 +159,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Frontend tests: cd frontend && npm test (node --test, no browser needed)
 
 ## Status
-- Go tests (60) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (528) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
+- Go tests (66) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (613) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
 - Cow barn (kinds/cow.mjs): cowHusbandryPasture (no milk, like cowBarnSmall), automatic water, feed
   and water troughs outside on the pasture wall (kind.outside), a plain walk-through doorway for the
   cows (openings with plain: true; tall openings get a collision gap), feed pad + bale trigger
@@ -234,6 +234,8 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   {settings: {wings, windows, items}, notes} or {error}; the editor: Parts > "Export this part" / "Import a part...". Parts may stand over windows (not doors): model.mjs freeStretches(forPart).
 - My parts (the library of saved part files): backend store/parts.go + api/parts.go (table `parts`, /api/parts, only the admin shares, 256 KB per file); the editor gets `parts` (list/get/save/update/remove/isAdmin)
   from Editor.tsx (api.ts parts functions); Parts section: "Save to My parts", the My parts list (editor.mjs myPartsHtml/bindMyParts/applyPart).
+- Photo guide and parts (step 6 done): photoRequest's wings items have wall (the building's or an earlier part's: w1Left ...), name and optional own look (wallCladding, wallColor, roofMaterial,
+  roofColor, trimColor; "" = as its parent); applyAnswer passes them on; the guide says a part meets only its parent's roof. docs/PLAN_PARTS.md is done (steps 1-6).
 
 ## Dev environment (WSL)
 - ./dev.sh starts API (:8080) + Next dev server (:3000); data in .dev/ (gitignored),

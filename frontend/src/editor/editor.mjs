@@ -13,7 +13,7 @@ import { cowYard } from "./kinds/cow.mjs";
 import { WALLPAPERS } from "./kinds/innerwall.mjs";
 import { evalNumber } from "./calc.mjs";
 import { DOUBLE_DOOR_FROM } from "./openings.mjs";
-import { cleanPapers, wallBreaks, pieceGroups, roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, History, roomBox, wingsOf, liveWings, wingFloors, wingHalf, wingIdOf, wingWallKey, WING_PARTS, wallsOf, eaveWalls, autoPipes, pipePositions } from "./layout.mjs";
+import { cleanPapers, wallBreaks, pieceGroups, roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, History, roomBox, wingsOf, liveWings, wingIdOf, wingWallKey, WING_PARTS, wallsOf, eaveWalls, autoPipes, pipePositions } from "./layout.mjs";
 import { makeWalker } from "./walk.mjs";
 import { exportPart, importPart } from "./partfile.mjs";
 import { OBJECT_TYPES, objectInfo, OBJECT_LIMITS, GAP_LIMITS, objectOf, pastureOf, snapBox, snapPasture, objectProblems, objectWarnings, fencePoints, snapFencePoint, MAX_FENCE_POINTS } from "./objects.mjs";
@@ -793,7 +793,7 @@ function bindChoices(prefix, obj) {
 function renderWinUI() {
   const ed = $("winEditor");
   if (!ed) return;
-  const floors = p.floors + (p.halfStorey || (p.wings || []).some(w => wingHalf(p, w)) ? 1 : 0);
+  const floors = p.floors + (p.halfStorey || liveWings(p).some(w => w.half) ? 1 : 0);
   let html = wallViewHtml() + `<table class="wgrid"><thead><tr><th scope="col"><span class="sr">Wall</span></th>${Array.from({length: floors}, (_, f) => `<th scope="col">${floorName(f)}</th>`).join("")}</tr></thead><tbody>`;
   const counts = openingCounts(p);
   for (const wall of wallKeys()) {
@@ -1168,7 +1168,7 @@ function renderWingsUI() {
       + `<div class="field"><div class="fl"><label for="wg-wall">On the wall</label></div><select id="wg-wall">${onWalls.map(k => opt(k, wallLabel(p, k), w.wall)).join("")}</select></div>`
       + WING_FIELDS.map(range).join("")
       + `<div class="field"><div class="fl"><label for="wg-floors">Floors</label></div><select id="wg-floors">${opt(0, `As the house (${p.floors}${p.halfStorey ? "½" : ""})`, w.floors)}${[1, 2, 3].map(n => opt(n, `${n}${n < p.floors ? " (lower than the house)" : n > p.floors ? " (taller than the house)" : ""}`, w.floors)).join("")}</select></div>`
-      + `<label class="check"><input type="checkbox" id="wg-half" ${wingHalf(p, w) ? "checked" : ""} ${w.floors ? "" : "disabled"}> Half floor in the roof (1½-plan)</label>`
+      + `<label class="check"><input type="checkbox" id="wg-half" ${(liveWings(p).find(x => x.id === w.id) || w).half ? "checked" : ""} ${w.floors ? "" : "disabled"}> Half floor in the roof (1½-plan)</label>`
       + `<div class="field"><div class="fl"><label for="wg-pitch">Roof angle</label><output id="wg-pitch-o">${w.pitch ? w.pitch + "°" : "as the house (" + p.roofPitch + "°)"}</output></div><input type="range" id="wg-pitch" min="0" max="60" step="1" value="${w.pitch}"></div>`
       + `<div class="field"><div class="fl"><label for="wg-fh">Floor height</label><output id="wg-fh-o">${w.floorHeight ? w.floorHeight.toFixed(2) + " m" : "as the house (" + p.floorHeight.toFixed(2) + " m)"}</output></div><input type="range" id="wg-fh" min="2.2" max="9" step="0.05" value="${w.floorHeight || 2.2}"></div>`
       + partLookHtml(w)

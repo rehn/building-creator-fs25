@@ -10,7 +10,7 @@ import { api, templatePhotoUrl, type Template } from "@/lib/api";
 import { useUser } from "@/lib/useUser";
 import { shrinkPhoto } from "@/lib/photos";
 import { TopBar } from "@/components/TopBar";
-import { KINDS, PRESETS, FIELD, sanitize } from "@/editor/model.mjs";
+import { KINDS, PRESETS, FIELD, sanitize, wallLabel, partName } from "@/editor/model.mjs";
 import { photoRequest, applyAnswer, answerProblems, chatPrompt, readAnswer } from "@/editor/fromPhotos.mjs";
 import { liveWings } from "@/editor/layout.mjs";
 
@@ -254,8 +254,9 @@ function Summary({ kind, answer }: { kind: string; answer: unknown }) {
   const p = applyAnswer(kind, answer) as Record<string, unknown> & { windows: { type: string }[] };
   const doors = p.windows.filter(w => w.type === "door").length;
   const wings = liveWings(p) as { id: number; wall: string; ww: number; wd: number; floors: number }[];
+  const own = (id: number) => { const w = ((p.wings as Record<string, unknown>[]) || []).find(x => x.id === id) || {}; return [["wallCladding", "wallColor"].some(k => w[k]) ? "walls" : "", ["roofMaterial", "roofColor"].some(k => w[k]) ? "roof" : "", w.trimColor ? "trim" : ""].filter(Boolean); };
   const rows: [string, string][] = [
-    ["Shape", wings.length ? `${wings.length} wing${wings.length > 1 ? "s" : ""}: ${wings.map(w => `${w.ww.toFixed(1)} × ${w.wd.toFixed(1)} m on the ${named("wingWall", w.wall).replace(" side", "")}${w.floors < (p.floors as number) ? " (lower)" : ""}`).join(", ")}` : "rectangle"],
+    ["Shape", wings.length ? `${wings.length} wing${wings.length > 1 ? "s" : ""}: ${wings.map(w => `${partName(p, w.id)} ${w.ww.toFixed(1)} × ${w.wd.toFixed(1)} m on ${wallLabel(p, w.wall).toLowerCase()}${w.floors < (p.floors as number) ? " (lower)" : ""}${own(w.id).length ? ` (own ${own(w.id).join(", ")})` : ""}`).join("; ")}` : "rectangle"],
     ["Size", `${p.width} × ${p.depth} m, ${p.floors} floor${p.floors === 1 ? "" : "s"} of ${p.floorHeight} m${p.halfStorey ? " and a half floor" : ""}`],
     ["Roof", `${named("roofType", p.roofType)}, ${p.roofPitch}°, ${named("roofMaterial", p.roofMaterial)}`],
     ["Walls", p.wallSplit === "one" ? named("wallCladding", p.wallCladding) : `${named("lowerCladding", p.lowerCladding)} below, ${named("wallCladding", p.wallCladding)} above`],
