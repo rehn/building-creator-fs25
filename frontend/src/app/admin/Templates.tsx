@@ -1,5 +1,6 @@
 "use client";
 // The admin's templates: starting designs for everyone's "New", made from photos with the wizard.
+import { t as tr } from "@/i18n/index.mjs";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, templatePhotoUrl, type Template } from "@/lib/api";
@@ -21,14 +22,14 @@ export function Templates() {
   const replace = (t: Template) => setList(l => (l ?? []).map(x => (x.id === t.id ? t : x)));
   const publish = (t: Template, on: boolean) => run(async () => replace(await api.updateTemplate(t.id, { published: on })));
   const rename = (t: Template) => {
-    const name = window.prompt("Name", t.name)?.trim();
+    const name = window.prompt(tr("Name"), t.name)?.trim();
     if (name === undefined || name === "") return;
     const blurb = window.prompt("Short description", t.blurb);
     if (blurb === null) return;
     run(async () => replace(await api.updateTemplate(t.id, { name, blurb: blurb.trim() })));
   };
   const remove = (t: Template) => {
-    if (!window.confirm(`Delete the template “${t.name}” and its photos? Buildings made from it stay.`)) return;
+    if (!window.confirm(tr("Delete the template “{name}” and its photos? Buildings made from it stay.", { name: t.name }))) return;
     run(async () => { await api.deleteTemplate(t.id); setList(l => (l ?? []).filter(x => x.id !== t.id)); });
   };
 
@@ -47,11 +48,11 @@ export function Templates() {
           const img = t.thumbnail || (t.photos ? templatePhotoUrl(t.id, 0) : "");
           return (
             <article className="house" key={t.id}>
-              <Link className="thumb" href={open} aria-label={`Adjust ${t.name}`}>
+              <Link className="thumb" href={open} aria-label={tr("Adjust {name}", { name: t.name })}>
                 {img ? <img src={img} alt="" /> : <span className="none">No preview yet</span>}
               </Link>
               <div className="info">
-                <Link className="name" href={open}>{t.name}</Link>
+                <Link className="name" translate="no" href={open}>{t.name}</Link>
                 <small>{kindName(t.kind)} · {t.published ? <span className="badge ok">Published</span> : <span className="badge">Draft</span>}</small>
                 <div className="actions">
                   <Link className="btn" href={open}>{t.projectId ? "Adjust" : "Continue"}</Link>

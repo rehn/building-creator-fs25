@@ -1,4 +1,5 @@
 "use client";
+import { t, getLang } from "@/i18n/index.mjs";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -17,13 +18,13 @@ const byKind = groupByKind as <T>(list: T[], idOf: (x: T) => string | undefined)
 const comingSoon = (CATEGORIES as { id: string; name: string }[])
   .filter(c => !(KINDS as Kind[]).some(k => k.category === c.id)).map(c => c.name);
 
-const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+const rtfFor = () => new Intl.RelativeTimeFormat(getLang(), { numeric: "auto" });
 function edited(iso: string) {
   const s = (new Date(iso).getTime() - Date.now()) / 1000;
   const steps: [number, Intl.RelativeTimeFormatUnit][] = [[60, "second"], [60, "minute"], [24, "hour"], [7, "day"], [4.35, "week"], [12, "month"], [Infinity, "year"]];
   let v = s;
   for (const [size, unit] of steps) {
-    if (Math.abs(v) < size) return "Edited " + rtf.format(Math.round(v), unit);
+    if (Math.abs(v) < size) return t("Edited {when}", { when: rtfFor().format(Math.round(v), unit) });
     v /= size;
   }
   return "";
@@ -95,7 +96,7 @@ export default function HousesPage() {
     setHouses(list => [p, ...(list ?? [])]);
   });
   const rename = (h: ProjectSummary) => {
-    const name = window.prompt("New name", h.name)?.trim();
+    const name = window.prompt(t("New name"), h.name)?.trim();
     if (!name || name === h.name) return;
     run(async () => {
       const p = await api.updateProject(h.id, { name });
@@ -148,7 +149,7 @@ export default function HousesPage() {
     } finally { setPacking(null); }
   });
   const remove = (h: ProjectSummary) => {
-    if (!window.confirm(`Delete \u201C${h.name}\u201D? This can\u2019t be undone.`)) return;
+    if (!window.confirm(t("Delete \u201C{name}\u201D? This can\u2019t be undone.", { name: h.name }))) return;
     run(async () => {
       await api.deleteProject(h.id);
       setHouses(list => (list ?? []).filter(x => x.id !== h.id));
@@ -190,15 +191,15 @@ export default function HousesPage() {
               {g.items.map(h => (
                 <article className="house" key={h.id}>
                   <label className="pick" title="Tick to pack with others into one game mod">
-                    <input type="checkbox" checked={picked.includes(h.id)} onChange={() => toggle(h.id)} disabled={busy} aria-label={`Pack ${h.name} into a game mod`} />
+                    <input type="checkbox" checked={picked.includes(h.id)} onChange={() => toggle(h.id)} disabled={busy} aria-label={t("Pack {name} into a game mod", { name: h.name })} />
                   </label>
-                  <Link className="thumb" href={`/projects/${h.id}`} aria-label={`Open ${h.name}`}>
+                  <Link className="thumb" href={`/projects/${h.id}`} aria-label={t("Open {name}", { name: h.name })}>
                     {h.thumbnail
                       ? <img src={h.thumbnail} alt="" />
                       : <span className="none">No preview yet</span>}
                   </Link>
                   <div className="info">
-                    <Link className="name" href={`/projects/${h.id}`}>{h.name}</Link>
+                    <Link className="name" translate="no" href={`/projects/${h.id}`}>{h.name}</Link>
                     <small>{edited(h.updatedAt)}</small>
                     <div className="actions">
                       <button type="button" onClick={() => rename(h)} disabled={busy}>Rename</button>

@@ -71,7 +71,7 @@ export default function ProjectPage() {
       setTemplate(t);
       setPublishing(t.published ? "Published: everyone can pick it under New" : "");
     } catch (e) {
-      setPublishing(e instanceof Error ? e.message : "Couldn2019t publish.");
+      setPublishing(e instanceof Error ? e.message : "Couldn’t publish.");
     }
   }
 

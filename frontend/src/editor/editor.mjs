@@ -2,6 +2,7 @@
 // All model logic (settings, geometry, i3d) lives in model.mjs.
 import * as THREE from "three";
 import JSZip from "jszip";
+import { t } from "../i18n/index.mjs";
 import {
   SCHEMA, TABS, fieldsFor, WALLS, WALL_NAMES, DTYPES, DORM_DEF, MATS, fittingTextures,
   genRow, sanitize, serialize, slugify, buildGeometry, buildI3d, placeableSnippet, gamePlaces, surfaceSpec, scaledUV, colorFor, WP
@@ -1059,7 +1060,7 @@ function bindMyParts(ed) {
     try { await partSource.update(b.dataset.sharepart, {shared: b.dataset.shared !== "true"}); myParts = null; renderWingsUI(); } catch { toast("Couldn't change that. Try again."); }
   });
   ed.querySelectorAll("[data-delpart]").forEach(b => b.onclick = async () => {
-    if (!window.confirm("Delete this saved part? Buildings that already have it are not changed.")) return;
+    if (!window.confirm(t("Delete this saved part? Buildings that already have it are not changed."))) return;
     try { await partSource.remove(b.dataset.delpart); myParts = null; renderWingsUI(); toast("Deleted"); } catch { toast("Couldn't delete it. Try again."); }
   });
   if ($("partSave")) $("partSave").onclick = async () => {

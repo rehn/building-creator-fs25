@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, type Asset } from "@/lib/api";
 import { useUser } from "@/lib/useUser";
 import { TopBar } from "@/components/TopBar";
+import { t } from "@/i18n/index.mjs";
 import { KINDS } from "@/editor/model.mjs";
 import { readI3d, missingFiles, readObj, normalizeMeta, assetSize, nameFromFile } from "@/editor/assets.mjs";
 import { createItemView } from "@/editor/itemView.mjs";
@@ -101,8 +102,8 @@ export default function ItemsPage() {
     setDraft(null);
   });
   const remove = (a: Asset) => {
-    const who = a.shared ? "Everyone's buildings" : "Buildings";
-    if (!window.confirm(`Delete “${a.name}”? ${who} that use it keep its place, but it's left out until it's imported again.`)) return;
+    const who = t(a.shared ? "Everyone's buildings" : "Buildings");
+    if (!window.confirm(t("Delete “{name}”? {who} that use it keep its place, but it's left out until it's imported again.", { name: a.name, who }))) return;
     run(async () => {
       await api.deleteAsset(a.id);
       setItems(list => (list ?? []).filter(x => x.id !== a.id));
