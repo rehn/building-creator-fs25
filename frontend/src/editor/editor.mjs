@@ -7,7 +7,7 @@ import {
   genRow, sanitize, serialize, slugify, buildGeometry, buildI3d, placeableSnippet, gamePlaces, surfaceSpec, scaledUV, colorFor, WP
 } from "./model.mjs";
 import { WINDOW_STYLES, DOOR_STYLES, PORCH_OPTIONS, PORCH_W, PORCH_D, WING_FIELDS, MAX_WINGS } from "./model.mjs";
-import { pieceSheet, pieceMeshes, openingCounts, stepOpenings, wallLabel, partName, wallItems, addOpening, addPartOn } from "./model.mjs";
+import { pieceSheet, pieceMeshes, openingCounts, stepOpenings, matList, matTable, slotOf, partStyle, wallLabel, partName, wallItems, addOpening, addPartOn } from "./model.mjs";
 import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, henYard, henCap, seeThroughGlass, kindOf } from "./model.mjs";
 import { cowYard } from "./kinds/cow.mjs";
 import { WALLPAPERS } from "./kinds/innerwall.mjs";
@@ -316,6 +316,8 @@ function syncOutputs() {
 const TEX = 1024;
 /** The materials with a surface texture (surfaceSpec), when their settings give them one. */
 const TEXTURED = ["walls", "wallsLow", "wallsIn", "roof", "chimney", "trim", "foundation", "door", "doorIn"];
+/** Those, and the materials parts with a look of their own have (walls, roof and trim of their own: "roofP1" ...). */
+const texturedNow = () => [...TEXTURED, ...matTable(p).variants.map(v => v.name)];
 function hash(i, j, s) {
   let h = (Math.imul(i, 374761393) + Math.imul(j, 668265263) + Math.imul(s, 982451653)) | 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177);
@@ -450,6 +452,16 @@ let interiorTex = null, interiorCv = null, groundObj = null, gridObj = null;
 const interiorCanvas = () => interiorCv || (interiorCv = paintInterior(document));
 let renderer, scene, camera, groundMat, selMesh = null, placesObj = null, yardObj = null, meshes = {}, matObjs = {}, needs = true, sunLight = null;
 
+/** The mesh and material of one of the building's materials (the shared ones when the editor starts, a part's own when a building has them). */
+function makeMesh(m) {
+  const slot = slotOf(m);
+  // The rooms are unlit and a little dark, so they read as indoors behind the glass.
+  matObjs[m] = slot === "interior" ? new THREE.MeshBasicMaterial({map: interiorTex, color: 0xc8c8c8})
+    : new THREE.MeshStandardMaterial(slot === "glass" ? {roughness:0.05, metalness:0.1} : slot === "gutter" || slot === "iron" ? {roughness:0.45, metalness:0.35} : slot === "curtain" || slot === "fittings" ? {roughness:0.95, metalness:0, vertexColors:true} : {roughness:0.85, metalness:0});
+  const mesh = new THREE.Mesh(new THREE.BufferGeometry(), matObjs[m]);
+  mesh.castShadow = !["glass", "interior", "curtain"].includes(slot); mesh.receiveShadow = slot !== "interior";
+  meshes[m] = mesh; scene.add(mesh);
+}
 function initThree() {
   renderer = new THREE.WebGLRenderer({canvas, antialias:true});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -475,14 +487,7 @@ function initThree() {
   scene.add(grid);
   interiorTex = new THREE.CanvasTexture(interiorCanvas());
   interiorTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-  MATS.forEach(m => {
-    // The rooms are unlit and a little dark, so they read as indoors behind the glass.
-    matObjs[m] = m === "interior" ? new THREE.MeshBasicMaterial({map: interiorTex, color: 0xc8c8c8})
-      : new THREE.MeshStandardMaterial(m === "glass" ? {roughness:0.05, metalness:0.1} : m === "gutter" || m === "iron" ? {roughness:0.45, metalness:0.35} : m === "curtain" || m === "fittings" ? {roughness:0.95, metalness:0, vertexColors:true} : {roughness:0.85, metalness:0});
-    const mesh = new THREE.Mesh(new THREE.BufferGeometry(), matObjs[m]);
-    mesh.castShadow = !["glass", "interior", "curtain"].includes(m); mesh.receiveShadow = m !== "interior";
-    meshes[m] = mesh; scene.add(mesh);
-  });
+  MATS.forEach(makeMesh);
   selMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({transparent:true, opacity:0.45, depthWrite:false, side:THREE.DoubleSide}));
   selMesh.visible = false; scene.add(selMesh);
   placesObj = makePlacesMarker(); scene.add(placesObj.group);
@@ -702,8 +707,9 @@ function drawFittingSurfaces() {
 }
 function applySurfaces() {
   if (!renderer || destroyed) return;
-  for (const m of TEXTURED) {
+  for (const m of texturedNow()) {
     const st = ensureSurface(m), mat = matObjs[m];
+    if (!mat) continue;
     if (!st) continue;
     if (st.dirty || mat.userData.key !== st.key || !mat.map) {
       if (mat.map) mat.map.dispose();
@@ -1048,6 +1054,42 @@ function partsChanged(renderToo = true) {
   p.pipes = (p.pipes || []).filter(x => !wingIdOf(x.wall) || ids.has(wingIdOf(x.wall)));
   persist(); rebuild(false); if (renderToo) { renderWingsUI(); renderWinUI(); renderPipesUI(); renderPapersUI(); renderZonesUI(); }
 }
+/* ---------- A part's materials ---------- */
+// Each is "as the parent" (the building for a part on the building) until the part sets its own.
+let partLookOpen = false;
+const PART_LOOK = [
+  {k: "wallCladding", label: "Wall panel", kind: "select"}, {k: "wallColor", label: "Wall colour", kind: "color"},
+  {k: "wallSplit", label: "Two materials on the walls", kind: "select"}, {k: "splitHeight", label: "Split height", kind: "range"},
+  {k: "lowerCladding", label: "Lower panel", kind: "select", needsSplit: true}, {k: "lowerColor", label: "Lower colour", kind: "color", needsSplit: true},
+  {k: "roofMaterial", label: "Roof covering", kind: "select"}, {k: "roofColor", label: "Roof colour", kind: "color"}, {k: "trimColor", label: "Trim colour (corners, frames, eaves)", kind: "color"}];
+function partLookHtml(w) {
+  const pid = wingIdOf(w.wall), parentName = pid ? partName(p, pid) : "the building", up = partStyle(p, pid), mine = partStyle(p, w.id);
+  const optsOf = k => k === "wallSplit" ? [["one", "No, one material"], ["floor", "Split at the top of the ground floor"], ["height", "Split at a height"]] : (FLD[k] || FLD[k === "lowerCladding" ? "wallCladding" : k]).options;
+  const nameOf = (k, v) => { const o = k === "splitHeight" || FLD[k] && FLD[k].type === "color" ? null : optsOf(k).find(x => x[0] === v); return o ? o[1] : v; };
+  const rows = PART_LOOK.filter(f => !f.needsSplit || mine.wallSplit !== "one").map(f => {
+    const own = w[f.k] !== undefined && w[f.k] !== "", id = `pl-${f.k}`;
+    if (f.k === "splitHeight" && mine.wallSplit !== "height") return "";
+    if (f.kind === "select") return `<div class="field"><div class="fl"><label for="${id}">${f.label}</label></div><select id="${id}" data-pl="${f.k}"><option value="">${esc(`Same as ${parentName} (${nameOf(f.k, up[f.k])})`)}</option>${optsOf(f.k).map(([v, n]) => `<option value="${v}" ${own && w[f.k] === v ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></div>`;
+    if (f.kind === "color") return `<div class="field"><div class="fl"><label for="${id}">${f.label}</label></div><label class="check"><input type="checkbox" data-plown="${f.k}" ${own ? "checked" : ""}> Its own colour${own ? "" : ` (same as ${esc(parentName)})`}</label>${own ? `<input type="color" id="${id}" data-pl="${f.k}" value="${w[f.k]}">` : ""}</div>`;
+    return `<div class="field"><div class="fl"><label for="${id}">${f.label}</label><output id="${id}-o">${(+(own ? w[f.k] : up[f.k])).toFixed(2)} m</output></div><input type="range" id="${id}" data-pl="${f.k}" min="0.5" max="10" step="0.05" value="${own ? w[f.k] : up[f.k]}"></div>`;
+  }).join("");
+  return `<details class="partlook" ${partLookOpen ? "open" : ""}><summary>Materials: the same as ${esc(parentName)} unless set here</summary>${rows}</details>`;
+}
+function bindPartLook(ed, w, changed) {
+  const d = ed.querySelector(".partlook");
+  if (d) d.addEventListener("toggle", () => { partLookOpen = d.open; });
+  ed.querySelectorAll("[data-pl]").forEach(el => {
+    const k = el.dataset.pl;
+    if (el.tagName === "SELECT") el.onchange = () => { if (el.value === "") delete w[k]; else w[k] = el.value; changed(); };
+    else if (el.type === "color") { el.oninput = () => { w[k] = el.value; persist(); rebuild(false); }; el.onchange = () => changed(); }
+    else { el.oninput = () => { w[k] = +el.value; $(`pl-${k}-o`).textContent = `${(+el.value).toFixed(2)} m`; persist(); rebuild(false); }; el.onchange = () => changed(); }
+  });
+  ed.querySelectorAll("[data-plown]").forEach(el => el.onchange = () => {
+    const k = el.dataset.plown;
+    if (el.checked) w[k] = partStyle(p, wingIdOf(w.wall))[k]; else delete w[k];
+    changed();
+  });
+}
 /** A part in lists: its name and the wall it stands on. */
 const wingLabel = w => `${partName(p, w.id)}: ${wallLabel(p, w.wall)}`;
 function renderWingsUI() {
@@ -1077,6 +1119,7 @@ function renderWingsUI() {
       + `<label class="check"><input type="checkbox" id="wg-half" ${wingHalf(p, w) ? "checked" : ""} ${w.floors ? "" : "disabled"}> Half floor in the roof (1½-plan)</label>`
       + `<div class="field"><div class="fl"><label for="wg-pitch">Roof angle</label><output id="wg-pitch-o">${w.pitch ? w.pitch + "°" : "as the house (" + p.roofPitch + "°)"}</output></div><input type="range" id="wg-pitch" min="0" max="60" step="1" value="${w.pitch}"></div>`
       + `<div class="field"><div class="fl"><label for="wg-fh">Floor height</label><output id="wg-fh-o">${w.floorHeight ? w.floorHeight.toFixed(2) + " m" : "as the house (" + p.floorHeight.toFixed(2) + " m)"}</output></div><input type="range" id="wg-fh" min="2.2" max="9" step="0.05" value="${w.floorHeight || 2.2}"></div>`
+      + partLookHtml(w)
       + `<p class="hint">A wing with fewer floors, or a flatter roof, has a lower roof. Roof angle 0 follows the house.</p><div class="row">${wings.length < MAX_WINGS ? `<button type="button" id="wingAddChild">+ Add a part on ${esc(partName(p, w.id))}</button>` : ""}<button type="button" id="wingRemove" class="danger">Remove ${esc(partName(p, w.id))} and what stands on it</button></div></div>`;
   }
   ed.innerHTML = html;
@@ -1105,6 +1148,7 @@ function renderWingsUI() {
     if (!["Left", "Right", "End"].some(s => addPart(wingWallKey(parent, s)))) toast(`No room for a part on ${partName(p, parent)}`);
   };
   $("wg-name").onchange = e => { w.name = e.target.value.trim().slice(0, 40); changed(); };
+  bindPartLook(ed, w, changed);
   $("wingRemove").onclick = () => {
     const gone = new Set([w.id]); for (let again = true; again;) { again = false; for (const x of wings) if (!gone.has(x.id) && gone.has(wingIdOf(x.wall))) { gone.add(x.id); again = true; } }
     p.wings = wings.filter(x => !gone.has(x.id));
@@ -1763,7 +1807,7 @@ function pick(e) {
   const r = canvas.getBoundingClientRect();
   const v = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
   const rc = new THREE.Raycaster(); rc.setFromCamera(v, camera);
-  const hit = rc.intersectObjects(MATS.map(m => meshes[m]))[0];
+  const hit = rc.intersectObjects(Object.values(meshes))[0];
   if (!hit) return;
   const q = hit.point;
   for (const key in opsByWall) {
@@ -2021,7 +2065,11 @@ function rebuild(fit) {
   const wingsNow = geo.wings || [];
   let tris = 0;
   if (renderer) {
-    MATS.forEach(m => {
+    const live = matList(p);
+    // (the materials of parts that no longer have a look of their own go; new ones get a mesh)
+    for (const m of Object.keys(meshes)) if (!live.includes(m)) { scene.remove(meshes[m]); meshes[m].geometry.dispose(); delete meshes[m]; if (matObjs[m]) { if (matObjs[m].map) matObjs[m].map.dispose(); if (matObjs[m].normalMap) matObjs[m].normalMap.dispose(); matObjs[m].dispose(); delete matObjs[m]; } delete surf[m]; }
+    for (const m of live) if (!meshes[m]) makeMesh(m);
+    live.forEach(m => {
       const g = G[m], geo = new THREE.BufferGeometry();
       geo.setAttribute("position", new THREE.Float32BufferAttribute(g.p, 3));
       geo.setAttribute("normal", new THREE.Float32BufferAttribute(g.n, 3));
@@ -2058,7 +2106,7 @@ function rebuild(fit) {
   }
   refreshWin(); refreshDorm(); renderInsideUI();
   if ($("objPlan")) $("objPlan").disabled = !renderer;
-  MATS.forEach(m => tris += G[m].i.length / 3);
+  Object.keys(G).forEach(m => tris += G[m].i.length / 3);
   readout.innerHTML = `<span><b>${dims.W.toFixed(1)} \u00D7 ${dims.D.toFixed(1)} m</b>${wingsNow.map(w => ` + <b>${w.ww.toFixed(1)} × ${w.wd.toFixed(1)} m</b> wing`).join("")} footprint</span><span><b>${dims.ridgeY.toFixed(1)} m</b> to the top</span><span><b>${tris.toLocaleString()}</b> triangles</span>`;
 }
 
@@ -2165,8 +2213,8 @@ function saveFile(name, data, fallback) {
 const canvasBlob = c => new Promise(res => c.toBlob(res, "image/png"));
 /** Adds the texture files that buildI3d(p, {withTex: true}) refers to. */
 async function addTextures(dir) {
-  for (const m of TEXTURED) {
-    if (!G[m].i.length) continue;
+  for (const m of texturedNow()) {
+    if (!G[m] || !G[m].i.length) continue;
     const st = ensureSurface(m); if (!st) continue;
     dir.file(`textures/${m}_diffuse.png`, await canvasBlob(st.diffuse));
     dir.file(`textures/${m}_normal.png`, await canvasBlob(st.base.normal));
@@ -2276,7 +2324,7 @@ function destroy() {
   destroyed = true;
   cancelAnimationFrame(raf);
   cleanups.forEach(f => f());
-  for (const m of MATS) { if (meshes[m]) meshes[m].geometry.dispose(); const mat = matObjs[m]; if (mat) { if (mat.map) mat.map.dispose(); if (mat.normalMap) mat.normalMap.dispose(); mat.dispose(); } }
+  for (const m of Object.keys(meshes)) { if (meshes[m]) meshes[m].geometry.dispose(); const mat = matObjs[m]; if (mat) { if (mat.map) mat.map.dispose(); if (mat.normalMap) mat.normalMap.dispose(); mat.dispose(); } }
   for (const o of Object.values(fitMeshes)) { o.geometry.dispose(); o.material.map.dispose(); o.material.normalMap.dispose(); o.material.dispose(); }
   if (placesObj) placesObj.dispose();
   if (yardObj) yardObj.dispose();

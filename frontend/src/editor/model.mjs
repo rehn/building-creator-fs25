@@ -176,7 +176,7 @@ function cleanWings(obj) {
     let id = Number.isInteger(w.id) && w.id >= 1 && w.id <= MAX_WINGS && !used.has(w.id) ? w.id : 0;
     if (!id) for (let i = 1; i <= MAX_WINGS; i++) if (!used.has(i)) { id = i; break; }
     used.add(id);
-    out.push({id, wall: WALLS.includes(w.wall) || nested ? w.wall : "back", pos: clampN(w.pos, 0, 1, 0.15), width: clampN(w.width, 2.5, 30, 6), depth: clampN(w.depth, 2, 30, 5), floors: Math.round(clampN(w.floors, 0, 3, 0)), half: w.half === true, name: typeof w.name === "string" ? w.name.trim().slice(0, 40) : "", floorHeight: +w.floorHeight > 0 ? Math.round(clampN(w.floorHeight, 2.3, 9, 2.7) * 100) / 100 : 0, pitch: +w.pitch > 0 ? Math.round(clampN(w.pitch, 5, 60, 5)) : 0});
+    out.push({id, wall: WALLS.includes(w.wall) || nested ? w.wall : "back", pos: clampN(w.pos, 0, 1, 0.15), width: clampN(w.width, 2.5, 30, 6), depth: clampN(w.depth, 2, 30, 5), floors: Math.round(clampN(w.floors, 0, 3, 0)), half: w.half === true, ...cleanPartStyle(w), name: typeof w.name === "string" ? w.name.trim().slice(0, 40) : "", floorHeight: +w.floorHeight > 0 ? Math.round(clampN(w.floorHeight, 2.3, 9, 2.7) * 100) / 100 : 0, pitch: +w.pitch > 0 ? Math.round(clampN(w.pitch, 5, 60, 5)) : 0});
   }
   return out;
 }
@@ -236,8 +236,9 @@ function cleanWallZones(z, p) {
 }
 /** Where the lower material ends on wall key (m above the wall's foot; 0: one material): the wall's own split, else the building's. */
 export function splitAtOf(p, key) {
-  const z = p.wallZones && p.wallZones[key], mode = z ? z.split : p.wallSplit;
-  return mode === "floor" ? p.floorHeight : mode === "height" ? (z && z.height !== undefined ? z.height : p.splitHeight) : 0;
+  const z = p.wallZones && p.wallZones[key], st = partStyle(p, wingIdOf(key)), mode = z ? z.split : st.wallSplit;
+  const fh = wingIdOf(key) ? ((liveWings(p).find(x => x.id === wingIdOf(key)) || {}).fh || p.floorHeight) : p.floorHeight;
+  return mode === "floor" ? fh : mode === "height" ? (z && z.height !== undefined ? z.height : st.splitHeight) : 0;
 }
 /** How many windows and doors each wall has on each floor: {wall: {floor: {windows, doors}}} for the house's walls and its wings' (floors 0 to 2). */
 export function openingCounts(p) {
@@ -253,6 +254,55 @@ export function removeDoor(list, wall) {
   const last = mine[mine.length - 1];
   return list.filter(w => w !== last);
 }
+/* ---------- Materials per part ---------- */
+// A part's own settings for how it looks: empty (left out) means as its parent, all the way up to the building.
+const STYLE_KEYS = ["wallCladding", "wallColor", "wallSplit", "splitHeight", "lowerCladding", "lowerColor", "roofMaterial", "roofColor", "trimColor"];
+const HEX = /^#[0-9a-f]{6}$/i;
+function cleanPartStyle(w) {
+  const out = {};
+  if (CLADDING.some(c => c[0] === w.wallCladding)) out.wallCladding = w.wallCladding;
+  if (CLADDING.some(c => c[0] === w.lowerCladding)) out.lowerCladding = w.lowerCladding;
+  for (const k of ["wallColor", "lowerColor", "roofColor", "trimColor"]) if (typeof w[k] === "string" && HEX.test(w[k])) out[k] = w[k];
+  if (["one", "floor", "height"].includes(w.wallSplit)) out.wallSplit = w.wallSplit;
+  if (w.splitHeight !== undefined && w.splitHeight !== "" && Number.isFinite(+w.splitHeight)) out.splitHeight = clampN(w.splitHeight, 0.5, 10, 2.7);
+  if (["tiles", "metal", "plain"].includes(w.roofMaterial)) out.roofMaterial = w.roofMaterial;
+  return out;
+}
+/** What a part looks like: its own settings, else its parent's, else the building's (wallCladding, wallColor, wallSplit, splitHeight, lowerCladding, lowerColor, roofMaterial, roofColor, trimColor). id 0: the building. */
+export function partStyle(p, id) {
+  const wings = p.wings || [], chain = [];
+  let g = id ? wings.find(w => w.id === id) : null;
+  for (let n = 0; g && n < 50; n++) { chain.push(g); const pid = wingIdOf(g.wall); g = pid ? wings.find(w => w.id === pid) : null; }
+  const out = {};
+  for (const k of STYLE_KEYS) { const own = chain.find(w => w[k] !== undefined && w[k] !== ""); out[k] = own ? own[k] : p[k]; }
+  return out;
+}
+/** A material's slot: "wallsP2" is a variant of "walls". */
+export const slotOf = m => m.replace(/P\d+$/, "");
+/**
+ * The materials the parts with a look of their own need: {variants: [{name, slot, kind, color}], of: {part id: {walls, wallsLow, roof, trim}}}. A part's walls, lower walls,
+ * roof and trim are in the building's own material (walls, wallsLow, roof, trim) when its panel/covering and colour are the building's, else in a variant ("wallsP1" ...)
+ * that every part with the same panel and colour shares.
+ */
+export function matTable(p) {
+  const flat = p.roofType === "flat", roofKind = m => flat ? "felt" : m;
+  const base = {walls: [p.wallCladding, p.wallColor], wallsLow: [p.lowerCladding, p.lowerColor], roof: [roofKind(p.roofMaterial), p.roofColor], trim: ["", p.trimColor]};
+  const key = (slot, kind, color) => `${slot}|${kind}|${String(color).toLowerCase()}`, variants = [], names = {}, count = {}, of = {};
+  for (const w of liveWings(p)) {
+    const st = partStyle(p, w.id), want = {walls: [st.wallCladding, st.wallColor], wallsLow: [st.lowerCladding, st.lowerColor], roof: [roofKind(st.roofMaterial), st.roofColor], trim: ["", st.trimColor]};
+    of[w.id] = {};
+    for (const slot of ["walls", "wallsLow", "roof", "trim"]) {
+      const [kind, color] = want[slot], k = key(slot, kind, color);
+      if (k === key(slot, ...base[slot])) { of[w.id][slot] = slot; continue; }
+      if (!names[k]) { count[slot] = (count[slot] || 0) + 1; names[k] = `${slot}P${count[slot]}`; variants.push({name: names[k], slot, kind, color}); }
+      of[w.id][slot] = names[k];
+    }
+  }
+  return {variants, of};   // (not kept: the editor changes p in place)
+}
+const variantOf = (p, m) => /P\d+$/.test(m) ? matTable(p).variants.find(v => v.name === m) : undefined;
+/** Every material the building uses: the shared ones, then the parts' own. */
+export const matList = p => [...MATS, ...matTable(p).variants.map(v => v.name)];
 /** A part's name: its own, else "Wing n". */
 export const partName = (p, id) => { const w = (p.wings || []).find(x => x.id === id); return w && w.name ? w.name : `Wing ${id}`; };
 /** A wall's name for the editor: the house's own, or "<part's name> end | left side | right side". */
@@ -761,6 +811,8 @@ const ceilingC = p.ceiling ? (kind.ceiling || "#EDE9DF") : null;
 const parentHeightOf = key => { const wid = wingIdOf(key), wg = wid && liveWings(p).find(x => x.id === wid); return wg ? wg.H : p.floors * p.floorHeight + (p.halfStorey ? p.kneeWall : 0); };
 const fhOf = key => { const wid = wingIdOf(key), wg = wid && liveWings(p).find(x => x.id === wid); return wg ? wg.fh : p.floorHeight; };
 
+// the materials of the part being built (walls, wallsLow, roof, trim -> its own variants), or null for the building's own
+let partMats = null, MATLIST = MATS;
 function poly(mat, pts, hint, uvf) {
   pts = pts.filter((q,i) => { const r = pts[(i+1) % pts.length]; return Math.hypot(...sub(q,r)) > 1e-6; });
   if (pts.length < 3) return;
@@ -769,17 +821,20 @@ function poly(mat, pts, hint, uvf) {
   // Undersides of the roof, dormer roofs and canopies (eave soffits) are painted boards, not tiles;
   // in a walk-in building, raw roof boards (seen from inside).
   let rgbHere = fitRGB, surf = fitSurf;
-  if (mat === "roof" && n[1] < -0.3) {
+  const slot = mat;
+  if (partMats && partMats[mat]) mat = partMats[mat];   // (what a part with a look of its own is made of)
+  if (slot === "roof" && n[1] < -0.3) {
     const boards = rawUnder || Math.max(...pts.map(q => q[1])) >= boardsFrom;
-    mat = boards ? "fittings" : "trim";
+    mat = boards ? "fittings" : partMats ? partMats.trim : "trim";
     if (boards) { rgbHere = hexRGB(ROOF_BOARDS); surf = "boards"; uvf = null; }
   }
-  if (mat === "trim") uvf = null;
+  const isTrim = slotOf(mat) === "trim";
+  if (isTrim) uvf = null;
   if (mat !== "fittings") surf = undefined;
   const g = G[mat], base = g.p.length / 3, S = surf && SURFACES[surf];
   const ax = Math.abs(n[0]), ay = Math.abs(n[1]), az = Math.abs(n[2]);
   let uvs = pts.map(q => uvf ? uvf(q) : (ay >= ax && ay >= az) ? [q[0], q[2]] : (ax >= az) ? [q[2], q[1]] : [q[0], q[1]]);
-  if (mat === "trim" || (S && S.grain)) {
+  if (isTrim || (S && S.grain)) {
     // Wood: the grain runs along v. Lay v along the face's longest edge, the board's
     // length, whatever its angle (sloped fascia, soffits, frames, beams), and u across it.
     let along = null, best = -1;
@@ -1013,11 +1068,11 @@ function buildHatch(w, o, F, fr, out) {
   }
 }
 /** How many vertices each material has so far, to find what was drawn after (see rangesSince). */
-const vcount = () => Object.fromEntries(MATS.map(m => [m, G[m].p.length / 3]));
+const vcount = () => Object.fromEntries(MATLIST.map(m => [m, G[m].p.length / 3]));
 /** The vertices of each material drawn since vcount() gave before: {mat: [from, to]}. */
 const rangesSince = before => {
   const out = {};
-  for (const m of MATS) { const n = G[m].p.length / 3; if (n > before[m]) out[m] = [before[m], n]; }
+  for (const m of MATLIST) { const n = G[m].p.length / 3; if (n > before[m]) out[m] = [before[m], n]; }
   return out;
 };
 /**
@@ -1192,7 +1247,8 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
     // (a barn's: whitewash, greyer and grubbier along the bottom where the animals rub and muck splashes)
     // (like the outside: each zone as it is outside: boards show studs, plaster is plaster, the split is where it is outside)
     const same = !!p.insideSame, WOOD = ["lockpanel", "horizontal", "vertical"], BACK = 0.03;
-    const cladOf = t => split && t < split ? p.lowerCladding : p.wallCladding, colOf = t => split && t < split ? p.lowerColor : p.wallColor;
+    const ps = partStyle(p, wingIdOf(key));
+    const cladOf = t => split && t < split ? ps.lowerCladding : ps.wallCladding, colOf = t => split && t < split ? ps.lowerColor : ps.wallColor;
     const Ti = uniq([0, ...(lowT && !same ? [lowT] : []), ...(same && split ? [split] : []), Hi, ...(ceil < Infinity ? [] : [H + gableRise]), ...ops.flatMap(o => [o.t0, o.t1])]);
     for (let i = 0; i < Xi.length - 1; i++) for (let j = 0; j < Ti.length - 1; j++) {
       const cs = (Xi[i] + Xi[i+1]) / 2, ct = (Ti[j] + Ti[j+1]) / 2;
@@ -1277,6 +1333,7 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
 
 /** Appends a ready-made mesh (with its own normals) to material mat. */
 function addMesh(mat, m) {
+  if (partMats && partMats[mat]) mat = partMats[mat];   // (a part's own materials)
   const g = G[mat], base = g.p.length / 3;
   g.p.push(...m.p); g.n.push(...m.n); g.uv.push(...m.uv);
   for (const k of m.i) g.i.push(k + base);
@@ -1632,7 +1689,9 @@ function buildEntrance(w, o, limit, F, mainEave) {
 function build() {
   // "collision" collects simple closed solids next to the visual meshes; it is split off at the end.
   rooms = []; downpipes = []; doors = []; itemParts = {};
-  G = {}; [...MATS, "collision"].forEach(m => G[m] = {p:[], n:[], uv:[], i:[]});
+  MATLIST = matList(p); partMats = null;
+  const MT = matTable(p), usePart = id => { partMats = id && MT.of[id] ? MT.of[id] : null; };
+  G = {}; [...MATLIST, "collision"].forEach(m => G[m] = {p:[], n:[], uv:[], i:[]});
   G.curtain.c = []; G.fittings.c = []; G.fittings.s = []; fitSurf = undefined;
   const W = p.width, D = p.depth, F = p.foundation, fh = p.floorHeight, H = p.floors * fh + (p.halfStorey ? p.kneeWall : 0), top = F + H;
   // two materials on the walls: where the lower one ends (none at the walls' top or above: the gables are the upper's)
@@ -1808,6 +1867,7 @@ function build() {
   }
   // Each wing's walls: its far end (a gable, unless the roof is flat) and its sides (eave walls), as tall as the wing.
   for (const {wing} of WINGS) for (const part of WING_PARTS) {
+    usePart(wing.id);
     const key = wingWallKey(wing.id, part), w = wing.frames[key], Lw = w.L, Hw = wing.H;
     const R = part === "End" && wing.type !== "flat" ? Math.max(0, wing.ww / 2 * wing.tanW - th) : 0;
     const topAt = sv => Hw + R * Math.max(0, 1 - Math.abs(sv - Lw/2) / (Lw/2));
@@ -1818,8 +1878,10 @@ function build() {
     opsByWall[key] = {w, ops};
     for (const dOp of ops) if (dOp.kind === "door" && dOp.porch.type !== "none") entrances.push({w, o: dOp, key, gable: R > 0, H: Hw, nf: wing.floors});
   }
+  usePart(0);
   // A porch or canopy at every door that has one.
   for (const entr of entrances) {
+    usePart(wingIdOf(entr.key));
     const {type, w: pw, d: pd} = entr.o.porch, Hh = entr.H ?? H, nf = entr.nf ?? p.floors;
     let limit = 1e9;
     if (p.roofType === "flat") limit = Hh - 0.05;
@@ -1834,6 +1896,7 @@ function build() {
     const mainEave = !entr.gable && p.roofType !== "flat" ? {H: Hh, tanP} : null;
     buildEntrance(entr.w, entr.o, limit, F, mainEave);
   }
+  usePart(0);
   // Under a wing's roof at (x, z), where it is the roof on top (the house's and the wing's meet in valleys).
   const wingUnder = item => {
     const {WG, topW} = item, par = item.wing.parent ? WINGS.find(x => x.wing.id === item.wing.parent) : null;
@@ -1923,7 +1986,7 @@ function build() {
     box("trim", (a, b, c) => { const x = lerp(x0, x1, a), z = lerp(z0, z1, c); return [x, b ? roofUnder(x, z) : F, z]; }, [1,0,0], UP, [0,0,1]);
   }
   if (F > 0.01) abox("foundation", [-W/2 - PLINTH_OUT, 0, -D/2 - PLINTH_OUT], [W/2 + PLINTH_OUT, F, D/2 + PLINTH_OUT]);
-  WINGS.forEach(buildWingBody);
+  WINGS.forEach(item => { usePart(item.wing.id); buildWingBody(item); usePart(0); });
   if (!hollow) abox("collision", [-W/2, 0, -D/2], [W/2, top, D/2]);
   else {
     // Floor, then each wall as slabs with a gap for the door (the door leaf has its own collision)
@@ -1978,7 +2041,7 @@ function build() {
     abox("collision", [-W/2 - oo, top, -D/2 - oo], [W/2 + oo, top + 0.3, D/2 + oo]);
   }
 
-  WINGS.forEach(item => { rawUnder = hollow && !ceilingC; buildWingRoof(item); rawUnder = false; });
+  WINGS.forEach(item => { usePart(item.wing.id); rawUnder = hollow && !ceilingC; buildWingRoof(item); rawUnder = false; usePart(0); });
   for (const s of [1, -1]) for (const X of DORMS[s]) buildDormer(X);
 
   if (p.gutters && p.roofType !== "flat") {
@@ -2075,9 +2138,11 @@ return {G: visual, dims, opsByWall, collision, rooms, downpipes, doors, itemPart
 /* ---------- Materials ---------- */
 /** The colour of material m: the chosen one, aged by the building's years (age.mjs). */
 export function colorFor(p, m) {
-  return agedColor(chosenColor(p, m), p.age || 0, m);
+  return agedColor(chosenColor(p, m), p.age || 0, slotOf(m));
 }
 function chosenColor(p, m) {
+  const v = variantOf(p, m);
+  if (v) return v.color;
   return {walls:p.wallColor, wallsLow:p.lowerColor, wallsIn:p.innerCladding === "same" ? p.wallColor : p.innerCladding === "sameLow" ? p.lowerColor : p.innerColor, trim:p.trimColor, roof:p.roofColor, glass:"#7396AB", door:p.doorColor, doorIn:p.innerDoorColor, foundation:p.foundationColor, chimney:p.chimneyColor, gutter:p.gutterColor, iron:"#2C2D2F", interior:"#B8AE9C", curtain:p.curtainColor, fittings:"#E9E4D8"}[m];
 }
 /** The texture of material m (null: plain colour): its kind, the metres one copy covers (w, h) and the building's age. */
@@ -2086,7 +2151,9 @@ export function surfaceSpec(p, m) {
   return s && {...s, age: p.age || 0};
 }
 function baseSpec(p, m) {
-  const kind = m === "walls" ? p.wallCladding
+  const v = variantOf(p, m);
+  const kind = v ? (v.slot === "trim" ? "paintedwood" : v.slot === "roof" ? (v.kind === "plain" ? null : v.kind) : v.kind)
+    : m === "walls" ? p.wallCladding
     : m === "wallsLow" ? p.lowerCladding
     : m === "wallsIn" ? (p.innerCladding === "same" ? p.wallCladding : p.innerCladding === "sameLow" ? p.lowerCladding : p.innerCladding)
     : m === "roof" ? (p.roofType === "flat" ? "felt" : p.roofMaterial === "plain" ? null : p.roofMaterial)
@@ -2120,7 +2187,7 @@ export function scaledUV(p, m, g) {
 const LEVEL_MARGIN = 0.5;
 export function placementAreas(geo, extra = []) {
   const all = [], ground = [];
-  for (const m of MATS) {
+  for (const m of Object.keys(geo.G)) {
     const g = geo.G[m];
     for (let i = 0; i < g.p.length; i += 3) {
       const v = [g.p[i], g.p[i+1], g.p[i+2]];
@@ -2246,7 +2313,7 @@ function exportParts(p, {withTex = false} = {}) {
   for (const d of doors) for (const leaf of d.leaves) for (const [m, r] of Object.entries(leaf.parts)) (moving[m] = moving[m] || []).push(r);
   // One part per material, except curtains and fittings: one per color (i3d materials have one color).
   const parts = [];
-  for (const m of MATS) {
+  for (const m of matList(p)) {
     const g = moving[m] ? exceptRanges(G[m], moving[m]) : G[m];
     if (!g.i.length) continue;
     if (m === "curtain" || m === "fittings") splitByColor(g).forEach((q, j) => parts.push({name: j ? `${m}${j + 1}` : m, m, g: q}));

@@ -227,6 +227,9 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Saves must keep building: test/golden-saves.test.mjs builds representative saves (every preset, wing types, old formats) and compares a summary (parts, openings, triangles per material, size)
   with test/golden-saves.json, made with the code from before the parts tree. A change that should alter old saves updates it on purpose (UPDATE_GOLDEN=1 npm test). Saves are migrated when
   loaded (sanitize), nothing in the database changes.
+- Materials per part (step 3b): a part may set wallCladding, wallColor, wallSplit, splitHeight, lowerCladding, lowerColor, roofMaterial, roofColor, trimColor (empty = as the parent);
+  model.mjs partStyle (inherits up to the building), matTable (variants "wallsP1" "roofP1" ... shared by equal values, none for the building's own), matList; poly/addMesh map walls,
+  wallsLow, roof, trim through partMats while a part is built (usePart); the editor makes meshes/textures for variants on demand (makeMesh, texturedNow). Not cached: the editor changes p in place.
 
 ## Dev environment (WSL)
 - ./dev.sh starts API (:8080) + Next dev server (:3000); data in .dev/ (gitignored),
