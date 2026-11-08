@@ -44,6 +44,8 @@ det viktiga är ett bra flöde. Varje steg ska vara färdigt, testat (TDD) och k
 
 ## Gränssnittet (efter att modellen fungerar)
 
+**Ändrat (november 2026, efter att användaren föreslog ett träd):** fliken **Building** (först) har ett enda träd: huvudbyggnaden, dess väggar och på varje vägg fönster, dörrar och delar (en del har egna väggar med sina saker). Man väljer en nod och dess inställningar visas under trädet (huvudbyggnad: lägg till/importera delar och My parts; vägg: + Window, + Door, + Part; fönster/dörr; del med material). Tryck på en vägg, ett fönster eller en dörr i 3D väljer noden. Sektionen Parts i Shape och fönsterredigeraren i Openings är borta; Openings har kvar stil och storlek för nya fönster. Beskrivningen nedan är den tidigare första versionen.
+
 - Shape: "Wings" blir "Parts", en trädlista med namn; vald del får samma reglage som vingkortet har idag; "Add a part to this part".
 - Openings: vy per vägg (välj del och vägg, eller klicka på väggen i 3D) med sakerna i ordning från vänster och "+ Add: window · door · doorway · gate · part".
   Tabellen med antal blir kvar som översikt.

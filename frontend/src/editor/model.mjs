@@ -57,9 +57,10 @@ const pickColor = v => typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v) ? v : 
 /** What the walls can be clad in: [id, name]. */
 const CLADDING = [["lockpanel","Board and batten (lockpanel)"],["horizontal","Horizontal boards"],["vertical","Vertical boards (stående plank)"],["plaster","Plaster"]];
 /** The editor's tabs, one for each thing you do: [id, name]. Every section is in one of them (its tab). */
-export const TABS = [["shape", "Shape"], ["openings", "Openings"], ["inside", "Inside"], ["look", "Look"], ["game", "Game"]];
+export const TABS = [["building", "Building"], ["shape", "Shape"], ["openings", "Openings"], ["inside", "Inside"], ["look", "Look"], ["game", "Game"]];
 /** Editor sections every building shares (kinds hide the ones they don't use, see kind.hides). */
 const SHARED_SECTIONS = [
+  {title:"Building", label:"Parts, walls and openings", tab:"building", custom:"tree", hint:"The building as a tree: the main building, its walls, and on each wall its windows, doors and parts (a part has walls of its own, with their things). Choose one to change it, and add a window, a door or a part on a wall. Tap a wall, a window or a door in the preview to find it here.", fields:[]},
   // tab: where the editor shows the section (TABS); label: its name there, when not the title (the title is also its id).
   {title:"Size", tab:"shape", fields:[
     {k:"width", label:"Front wall length", min:2.5, max:60, step:0.1, unit:" m"},
@@ -70,7 +71,6 @@ const SHARED_SECTIONS = [
     {k:"ceiling", label:"Ceiling over the ground floor (closes the roof space, so you don’t see up to the ridge)", type:"check"},
     {k:"floorHeight", label:"Floor height", min:2.3, max:9, step:0.05, unit:" m"},
     {k:"foundation", label:"Foundation height", min:0, max:1.2, step:0.05, unit:" m"}]},
-  {title:"Wings", label:"Parts", tab:"shape", custom:"wings", hint:"Parts make an L-, T- or U-shaped house, and a part can have parts of its own (a pump house on a wing): each stands on a wall of the building or of another part, with its own width, length and number of floors. On a long side a wing's roof meets the house's in a valley; a wing with fewer floors runs up to the wall under the eaves; on a gable end it is a lower annex. It has the house's roof pitch and overhang. Its windows and doors are under Windows.", fields:[]},
   {title:"Roof", tab:"shape", fields:[
     {k:"roofType", label:"Roof type", type:"select", options:[["gable","Gable"],["hip","Hip"],["flat","Flat"]]},
     {k:"ridge", label:"Ridge direction", type:"select", options:[["width","Parallel to the front"],["depth","Front to back"]]},
@@ -82,7 +82,7 @@ const SHARED_SECTIONS = [
     {k:"ventilators", label:"Roof ventilators (lanterns on the ridge)", min:0, max:4, step:1}]},
   {title:"Downpipes", tab:"shape", custom:"pipes", hint:"Where the downpipes go: how many on each wall with a gutter, and where along it. Change \"Downpipes per long side\" under Roof to place them again.", fields:[]},
   {title:"Kupor (dormers)", tab:"shape", custom:"dormers", fields:[]},
-  {title:"Windows", label:"Windows and doors", tab:"openings", custom:"windows", hint:"Choose a wall (or tap it in the preview) to see what stands on it, from its left end, and to add a window, a door or a part. The table gives how many windows and doors each floor of a wall has, together (a door is a window you have turned into a door). To change one window or door, move it to another wall, turn a window into a door or give a door a porch, choose it below or tap it in the preview.", fields:[
+  {title:"Windows", tab:"openings", custom:"windows", hint:"The style and size new windows get. The windows and doors themselves are in the Building tab: choose one there (or tap it in the preview) to move it, resize it or give a door a porch.", fields:[
     {k:"winStyle", label:"Style", type:"select", options:WINDOW_STYLES.map(s => [s.id, s.name])},
     {k:"winW", label:"Width", min:0.4, max:2.5, step:0.05, unit:" m"},
     {k:"winH", label:"Height", min:0.4, max:2.2, step:0.05, unit:" m"},
@@ -328,6 +328,22 @@ export function wallItems(p, key) {
     else { const c = g.pos * L, hw = g.width / 2; out.push({kind: "part", id: g.id, s0: Math.max(0, c - hw), s1: Math.min(L, c + hw), off: (l && l.off) || "It is left out."}); }
   }
   return out.sort((a, b) => a.s0 - b.s0 || a.s1 - b.s1);
+}
+/**
+ * The building as a tree for the editor: {type: "main", children: [walls], lost: [parts]}; a wall {type: "wall", key, children}, whose children are the
+ * windows and doors on it ({type: "window" | "door", id, floor, s0, s1, hidden}) and the parts that stand on it ({type: "part", id, off?, children: that part's walls}), in order from its
+ * left end. A part that is left out has no walls; the parts on one that isn't reachable (its parent was left out) are in lost.
+ */
+export function buildingTree(p) {
+  const walls = wallsOf(p), seen = new Set();
+  const wallNode = key => ({type: "wall", key, children: wallItems(p, key).map(it => it.kind === "part" ? partNode(it) : {type: it.kind, id: it.id, floor: it.floor, s0: it.s0, s1: it.s1, hidden: !!it.hidden})});
+  const partNode = it => {
+    seen.add(it.id);
+    return {type: "part", id: it.id, s0: it.s0, s1: it.s1, ...(it.off ? {off: it.off} : {}), children: it.off ? [] : ["End", "Left", "Right"].map(s => wingWallKey(it.id, s)).filter(k => walls[k]).map(wallNode)};
+  };
+  const children = ["front", "back", "left", "right"].map(wallNode);
+  const lost = (p.wings || []).filter(w => !seen.has(w.id)).map(w => ({type: "part", id: w.id, off: "It is left out: the part it stands on is.", children: []}));
+  return {type: "main", children, lost};
 }
 /** The free stretches of a wall [s0, s1] on a floor: 30 cm from its ends and 20 cm from what stands there (a part blocks the floors it covers). forPart: for a part, which may stand over windows. */
 export function freeStretches(p, key, floor, forPart = false) {

@@ -30,9 +30,10 @@ test("sanitize: invalid selects, colors and booleans fall back to defaults", () 
 // The editor has a tab for each thing you do; every section is in one of them.
 test("schema: every section is in a tab, in the order of what you do", () => {
   const ids = TABS.map(t => t[0]), inTab = t => SCHEMA.filter(g => g.tab === t).map(g => g.title);
-  assert.deepEqual(ids, ["shape", "openings", "inside", "look", "game"]);
+  assert.deepEqual(ids, ["building", "shape", "openings", "inside", "look", "game"]);
   assert.ok(SCHEMA.every(g => ids.includes(g.tab)), "every section has a tab");
-  assert.deepEqual(inTab("shape"), ["Size", "Wings", "Roof", "Downpipes", "Kupor (dormers)"]);
+  assert.deepEqual(inTab("building"), ["Building"]);
+  assert.deepEqual(inTab("shape"), ["Size", "Roof", "Downpipes", "Kupor (dormers)"]);
   assert.deepEqual(inTab("openings"), ["Windows", "Doors"]);
   assert.deepEqual(inTab("inside"), ["Inside", "Interior", "Inside walls"]);
   assert.deepEqual(inTab("look"), ["Surfaces", "Colors"]);

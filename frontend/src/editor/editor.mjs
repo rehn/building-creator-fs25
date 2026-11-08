@@ -7,7 +7,7 @@ import {
   genRow, sanitize, serialize, slugify, buildGeometry, buildI3d, placeableSnippet, gamePlaces, surfaceSpec, scaledUV, colorFor, WP
 } from "./model.mjs";
 import { WINDOW_STYLES, DOOR_STYLES, PORCH_OPTIONS, PORCH_W, PORCH_D, WING_FIELDS, MAX_WINGS } from "./model.mjs";
-import { pieceSheet, pieceMeshes, openingCounts, stepOpenings, matList, matTable, slotOf, partStyle, wallLabel, partName, wallItems, addOpening, addPartOn } from "./model.mjs";
+import { pieceSheet, pieceMeshes, buildingTree, matList, matTable, slotOf, partStyle, wallLabel, partName, wallItems, addOpening, addPartOn } from "./model.mjs";
 import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, henYard, henCap, seeThroughGlass, kindOf } from "./model.mjs";
 import { cowYard } from "./kinds/cow.mjs";
 import { WALLPAPERS } from "./kinds/innerwall.mjs";
@@ -258,12 +258,11 @@ SCHEMA.forEach(g => {
   if (g.custom === "zones") { const ed = document.createElement("div"); ed.id = "zonesEditor"; d.appendChild(ed); }
   if (g.custom === "papers") { const ed = document.createElement("div"); ed.id = "papersEditor"; d.appendChild(ed); }
   if (g.custom === "pipes") { const ed = document.createElement("div"); ed.id = "pipesEditor"; d.appendChild(ed); }
-  if (g.custom === "wings") { const ed = document.createElement("div"); ed.id = "wingsEditor"; d.appendChild(ed); }
   if (g.custom === "dormers") { const ed = document.createElement("div"); ed.id = "dormEditor"; d.appendChild(ed); }
   if (g.custom === "inside") { const ed = document.createElement("div"); ed.id = "insideEditor"; d.appendChild(ed); }
   if (g.custom === "objects") { const ed = document.createElement("div"); ed.id = "objectsEditor"; d.appendChild(ed); }
+  if (g.custom === "tree") { const ed = document.createElement("div"); ed.id = "treeEditor"; ed.innerHTML = `<div id="treeNav"></div><div id="mainCard"></div><div id="wallCard"></div><div id="winEditor"></div><div id="wingsEditor"></div>`; d.appendChild(ed); }
   if (g.custom === "windows") {
-    const ed = document.createElement("div"); ed.id = "winEditor"; d.appendChild(ed);
     const sub = document.createElement("p"); sub.className = "sub"; sub.textContent = "Size for new windows"; d.appendChild(sub);
   }
   d.appendChild(wrap);
@@ -790,27 +789,14 @@ function bindChoices(prefix, obj) {
   };
   if (col) col.oninput = () => { obj.curtainColor = col.value; persist(); rebuild(false); };
 }
-function renderWinUI() {
+/** The card of the selected window or door (Building tab, below the tree). */
+function renderWinCard() {
   const ed = $("winEditor");
   if (!ed) return;
-  const floors = p.floors + (p.halfStorey || liveWings(p).some(w => w.half) ? 1 : 0);
-  let html = wallViewHtml() + `<table class="wgrid"><thead><tr><th scope="col"><span class="sr">Wall</span></th>${Array.from({length: floors}, (_, f) => `<th scope="col">${floorName(f)}</th>`).join("")}</tr></thead><tbody>`;
-  const counts = openingCounts(p);
-  for (const wall of wallKeys()) {
-    html += `<tr><th scope="row">${esc(wallLabel(p, wall))}</th>`;
-    for (let f = 0; f < floors; f++) {
-      if (!floorOk(f, wall)) { html += `<td><span aria-label="No windows on this floor of this wall">\u2013</span></td>`; continue; }
-      const cnt = counts[wall][f], n = cnt.windows + cnt.doors, nm = `${wallLabel(p, wall)}, ${floorName(f).toLowerCase()}`, parts = `${cnt.windows} window${cnt.windows === 1 ? "" : "s"} and ${cnt.doors} door${cnt.doors === 1 ? "" : "s"}`;
-      const lastDoor = !cnt.windows && cnt.doors && p.windows.filter(w => w.type === "door").length < 2;
-      html += `<td><div class="step"><button type="button" data-w="${wall}" data-f="${f}" data-d="-1" aria-label="Fewer: ${nm}" ${n && !lastDoor ? "" : "disabled"}>\u2212</button><span title="${parts}">${n}</span><button type="button" data-w="${wall}" data-f="${f}" data-d="1" aria-label="More: ${nm}" ${n >= 8 ? "disabled" : ""}>+</button></div></td>`;
-    }
-    html += `</tr>`;
-  }
-  html += `</tbody></table>`;
+  let html = "";
   const list = sortedWindows();
   if (!list.some(w => w.id === selId)) selId = null;
-  html += `<div class="field"><div class="fl"><label for="winSel">Edit a window or door</label></div><div class="selrow"><button type="button" id="winPrev" aria-label="Previous window">\u2039</button><select id="winSel"><option value="">Choose one</option>${list.map(w => `<option value="${w.id}" ${w.id === selId ? "selected" : ""}>${winLabel(w)}</option>`).join("")}</select><button type="button" id="winNext" aria-label="Next window">\u203A</button></div></div>`;
-  const s = list.find(w => w.id === selId);
+  const s = treeKind === "win" ? list.find(w => w.id === selId) : null;
   if (s) {
     const door = s.type === "door", styles = door ? DOOR_STYLES : WINDOW_STYLES;
     // a building keeps at least one door
@@ -845,23 +831,6 @@ function renderWinUI() {
     html += `</div>`;
   }
   ed.innerHTML = html;
-  bindWallView(ed);
-  ed.querySelectorAll(".step button[data-w]").forEach(b => b.onclick = () => {
-    const wall = b.dataset.w, f = +b.dataset.f;
-    const next = stepOpenings(p, p.windows, wall, f, +b.dataset.d);
-    if (!next) { toast("A building keeps at least one door"); return; }
-    p.windows = next; winChanged(); renderWinUI();
-  });
-  const sel = $("winSel");
-  sel.onchange = () => { selId = +sel.value || null; renderWinUI(); updateHighlight(); };
-  const step = d => {
-    if (!list.length) return;
-    const i = list.findIndex(w => w.id === selId);
-    selId = list[(i < 0 ? (d > 0 ? 0 : list.length - 1) : (i + d + list.length) % list.length)].id;
-    renderWinUI(); updateHighlight();
-  };
-  $("winPrev").onclick = () => step(-1);
-  $("winNext").onclick = () => step(1);
   if (s) {
     ed.querySelectorAll(".wincard input[type=range]").forEach(inp => inp.oninput = () => {
       s[inp.dataset.k] = +inp.value;
@@ -882,7 +851,7 @@ function renderWinUI() {
     if ($("wf-opens")) $("wf-opens").onchange = e => { s.opens = e.target.checked; winChanged(); renderWinUI(); };
     if ($("wf-swing")) $("wf-swing").onchange = e => { s.swing = e.target.value; winChanged(); };
     if ($("wf-hinge")) $("wf-hinge").onchange = e => { s.hinge = e.target.value; winChanged(); };
-    if ($("winRemove")) $("winRemove").onclick = () => { p.windows = p.windows.filter(w => w.id !== selId); selId = null; winChanged(); renderWinUI(); };
+    if ($("winRemove")) $("winRemove").onclick = () => { p.windows = p.windows.filter(w => w.id !== selId); selId = null; treeKind = "wall"; wvWall = s.wall; winChanged(); renderTreeUI(); updateHighlight(); };
   }
 }
 /* ---------- Game places ---------- */
@@ -1001,45 +970,6 @@ function renderPipesUI() {
 }
 /* ---------- Wings ---------- */
 // The house's wings (an L, T or U): a list in the Wings section, each with its wall, place, size and floors.
-/* ---------- Things on a wall ---------- */
-// One wall at a time: what stands on it in order from its left end (windows, doors and the parts that stand against it), with buttons to add one where there is room.
-function wallViewHtml() {
-  const walls = wallsOf(p), keys = Object.keys(walls);
-  if (!walls[wvWall]) wvWall = keys[0];
-  const opt = (v, label, cur) => `<option value="${v}" ${String(v) === String(cur) ? "selected" : ""}>${esc(label)}</option>`;
-  const groups = [["Main building", ["front", "back", "left", "right"]], ...liveWings(p).map(w => [partName(p, w.id), ["End", "Left", "Right"].map(s => wingWallKey(w.id, s))])];
-  const wf = wingIdOf(wvWall) ? liveWings(p).find(x => x.id === wingIdOf(wvWall)) : null, floorsHere = wf ? wf.floors : p.floors;
-  if (wvFloor >= floorsHere) wvFloor = 0;
-  const items = wallItems(p, wvWall), L = walls[wvWall].L, fmt = v => v.toFixed(2).replace(/\.?0+$/, "");
-  const row = it => {
-    const what = it.kind === "part" ? `Part: ${esc(partName(p, it.id))}` : it.kind === "door" ? "Door" : `Window, ${floorName(it.floor).toLowerCase()}`;
-    return `<li><button type="button" data-wvitem="${it.kind}" data-id="${it.id}" aria-pressed="${it.kind !== "part" && it.id === selId || it.kind === "part" && it.id === wSel}">${what} <span class="muted">${fmt(it.s0)}\u2013${fmt(it.s1)} m</span></button>`
-      + `${it.off ? ` <span class="warn">${esc(it.off)}</span>` : it.hidden ? ` <span class="warn">hidden: it overlaps something</span>` : ""}</li>`;
-  };
-  return `<div class="wallview"><div class="field"><div class="fl"><label for="wvWall">Things on a wall</label></div><select id="wvWall">${groups.map(([name, ks]) => `<optgroup label="${esc(name)}">${ks.filter(k => walls[k]).map(k => opt(k, wallLabel(p, k), wvWall)).join("")}</optgroup>`).join("")}</select></div>`
-    + (items.length ? `<ul class="objlist wvlist">${items.map(row).join("")}</ul>` : `<p class="hint">Nothing on this wall (${fmt(L)} m long) yet.</p>`)
-    + `<div class="addrow"><button type="button" data-wvadd="window">+ Window</button><button type="button" data-wvadd="door">+ Door</button><button type="button" data-wvadd="part" ${(p.wings || []).length >= MAX_WINGS || kindOf(p).hides.includes("Wings") ? "disabled" : ""}>+ Part</button>`
-    + (floorsHere > 1 ? `<label class="inline">on <select id="wvFloor">${Array.from({length: floorsHere}, (_, f) => opt(f, floorName(f), wvFloor)).join("")}</select></label>` : "") + `</div></div>`;
-}
-function bindWallView(ed) {
-  const sel = $("wvWall");
-  if (!sel) return;
-  sel.onchange = () => { wvWall = sel.value; renderWinUI(); };
-  if ($("wvFloor")) $("wvFloor").onchange = e => { wvFloor = +e.target.value; };
-  ed.querySelectorAll("[data-wvitem]").forEach(b => b.onclick = () => {
-    const id = +b.dataset.id;
-    if (b.dataset.wvitem === "part") { wSel = id; setTab("shape"); const det = $("wingsEditor").closest("details"); if (det) det.open = true; renderWingsUI(); $("wingsEditor").scrollIntoView({block: "nearest"}); return; }
-    selId = id; renderWinUI(); updateHighlight();
-    if (!window.matchMedia("(max-width: 820px)").matches) $("winSel").scrollIntoView({block: "nearest"});
-  });
-  ed.querySelectorAll("[data-wvadd]").forEach(b => b.onclick = () => {
-    const kind = b.dataset.wvadd;
-    if (kind === "part") { addPart(wvWall); return; }
-    const next = addOpening(p, wvWall, kind, wvFloor);
-    if (!next) { toast(`No room for a ${kind} on this ${kind === "door" ? "wall's ground floor" : "floor of this wall"}: move or remove something first`); return; }
-    p.windows = next; selId = next[next.length - 1].id; winChanged(); renderWinUI(); updateHighlight();
-  });
-}
 /** A part more on a wall (the house's or a part's), with windows on its walls like a new wing has. */
 function addPart(wall) {
   const next = addPartOn(p, wall);
@@ -1047,7 +977,7 @@ function addPart(wall) {
   const id = next[next.length - 1].id;
   p.wings = next;
   for (const part of WING_PARTS) for (let fl = 0; fl < p.floors; fl++) p.windows = genRow(p, p.windows, wingWallKey(id, part), fl, part === "End" ? 2 : 1);
-  wSel = id; partsChanged(); return true;
+  wSel = id; treeKind = "part"; partsChanged(); return true;
 }
 function partsChanged(renderToo = true) {
   // (a removed part takes its downpipes with it)
@@ -1141,24 +1071,15 @@ function bindMyParts(ed) {
 }
 /** A part in lists: its name and the wall it stands on. */
 const wingLabel = w => `${partName(p, w.id)}: ${wallLabel(p, w.wall)}`;
-function renderWingsUI() {
+/** The card of the selected part (Building tab, below the tree). */
+function renderPartCard() {
   const ed = $("wingsEditor");
   if (!ed) return;
   const wings = p.wings || [], live = wingsOf(p);
   if (!wings.some(w => w.id === wSel)) wSel = null;
   const opt = (v, label, cur) => `<option value="${v}" ${String(v) === String(cur) ? "selected" : ""}>${esc(label)}</option>`;
-  // the parts as a tree: the main building, the parts on its walls, the parts on those ...
-  const depthOf = w => { let d = 1, g = w; while (g && wingIdOf(g.wall)) { g = wings.find(x => x.id === wingIdOf(g.wall)); d++; } return d; };
-  const order = []; const walk = (pid) => { for (const w of wings.filter(x => wingIdOf(x.wall) === pid)) { order.push(w); walk(w.id); } }; walk(0);
-  for (const w of wings) if (!order.includes(w)) order.push(w);   // (any with no parent in the list)
-  let html = `<ul class="objlist ptree"><li class="ptop"><span>Main building <span class="muted">${p.width} \u00D7 ${p.depth} m</span></span></li>`
-    + order.map(w => { const l = live.find(x => x.id === w.id); return `<li style="--d:${depthOf(w)}"><button type="button" data-wing="${w.id}" aria-pressed="${w.id === wSel}">${esc(partName(p, w.id))} <span class="muted">on ${esc(wallLabel(p, w.wall))}</span></button>${l && l.off ? ` <span class="warn">${esc(l.off)}</span>` : ""}</li>`; }).join("") + `</ul>`;
-  if (!wings.length) html += `<p class="hint">No parts: the building is a rectangle.</p>`;
-  if (wings.length < MAX_WINGS) html += `<div class="addrow"><button type="button" id="wingAdd">+ Add a part</button></div>`;
-  // a part from a file (made with "Export this part") on a wall of this building
-  const wallsLive = wallsOf(p), importWalls = [["Main building", ["front", "back", "left", "right"]], ...liveWings(p).map(g => [partName(p, g.id), ["End", "Left", "Right"].map(s2 => wingWallKey(g.id, s2))])];
-  html += `<div class="addrow"><button type="button" id="partImport">Import a part…</button><label class="inline">onto <select id="partImportWall">${importWalls.map(([n, ks]) => `<optgroup label="${esc(n)}">${ks.filter(k => wallsLive[k]).map(k => opt(k, wallLabel(p, k), partImportWall)).join("")}</optgroup>`).join("")}</select></label><input type="file" id="partFile" accept=".json,application/json" hidden></div>` + myPartsHtml();
-  const w = wings.find(x => x.id === wSel);
+  let html = "";
+  const w = treeKind === "part" ? wings.find(x => x.id === wSel) : null;
   if (w) {
     const wallL = (wallsOf(p)[w.wall] || {L: w.wall === "front" || w.wall === "back" ? p.width : p.depth}).L;   // (the place along the wall is shown in metres)
     // the walls it can stand on: the house's and those of the parts before it in the list (its parent is one of them)
@@ -1176,19 +1097,6 @@ function renderWingsUI() {
   }
   ed.innerHTML = html;
   const changed = partsChanged;
-  ed.querySelectorAll("[data-wing]").forEach(b => b.onclick = () => { wSel = +b.dataset.wing; renderWingsUI(); });
-  if ($("wingAdd")) $("wingAdd").onclick = () => {
-    // on the first wall of the main building where there is room (the back first); the selected part's own walls are in its card
-    if (!["back", "front", "right", "left"].some(k => addPart(k))) toast("No room for another part on the main building");
-  };
-  $("partImportWall").onchange = e => { partImportWall = e.target.value; };
-  $("partImport").onclick = () => $("partFile").click();
-  $("partFile").onchange = async e => {
-    const file = e.target.files && e.target.files[0]; e.target.value = "";
-    if (!file) return;
-    let data; try { data = JSON.parse(await file.text()); } catch { toast("That file isn't a part file (it isn't JSON)"); return; }
-    applyPart(data);
-  };
   bindMyParts(ed);
   if (!w) return;
   if ($("partExport")) $("partExport").onclick = () => {
@@ -1218,9 +1126,116 @@ function renderWingsUI() {
     const gone = new Set([w.id]); for (let again = true; again;) { again = false; for (const x of wings) if (!gone.has(x.id) && gone.has(wingIdOf(x.wall))) { gone.add(x.id); again = true; } }
     p.wings = wings.filter(x => !gone.has(x.id));
     p.windows = p.windows.filter(x => !gone.has(wingIdOf(x.wall)));
-    wSel = null; selId = null; changed(); toast(gone.size > 1 ? `${partName(p, w.id)} and ${gone.size - 1} more removed` : `${wingLabel(w)} removed`);
+    const up = w.wall, parentPart = wingIdOf(up);
+    wSel = null; selId = null; treeKind = "wall"; wvWall = up; changed(); toast(gone.size > 1 ? `${partName(p, w.id)} and ${gone.size - 1} more removed` : `${wingLabel(w)} removed`);
   };
 }
+/* ---------- The building as a tree ---------- */
+// The main building, its walls, and on each wall its windows, doors and parts (a part has its walls): one tree to choose from; what is chosen has its settings below.
+let treeKind = "main";
+const treeClosed = new Set();
+function selectNode(kind, v) {
+  treeKind = kind;
+  selId = kind === "win" ? v : null;
+  if (kind === "part") wSel = v;
+  if (kind === "wall") wvWall = v;
+  if (searching) clearSearch();
+  setTab("building");
+  const det = $("treeEditor") && $("treeEditor").closest("details"); if (det) det.open = true;
+  renderTreeUI(); updateHighlight();
+  const card = {main: "mainCard", wall: "wallCard", win: "winEditor", part: "wingsEditor"}[kind];
+  if (card && $(card) && !window.matchMedia("(max-width: 820px)").matches) $(card).scrollIntoView({block: "nearest"});
+}
+const nodeKey = n => n.type === "main" ? "main" : n.type === "wall" ? "wall:" + n.key : n.type === "part" ? "part:" + n.id : "win:" + n.id;
+function treeNavHtml() {
+  const t = buildingTree(p), live = liveWings(p), fmt = v => (+v).toFixed(2).replace(/\.?0+$/, "");
+  const multi = id => (id ? (live.find(x => x.id === id) || {floors: 1}).floors : p.floors) > 1;
+  const isSel = n => n.type === "main" ? treeKind === "main" : n.type === "wall" ? treeKind === "wall" && wvWall === n.key : n.type === "part" ? treeKind === "part" && wSel === n.id : treeKind === "win" && selId === n.id;
+  const label = (n, parentKey) => {
+    if (n.type === "main") return `Main building <span class="muted">${p.width} \u00D7 ${p.depth} m</span>`;
+    if (n.type === "wall") return `${esc(wallLabel(p, n.key))}`;
+    if (n.type === "part") { const l = live.find(x => x.id === n.id); return `${esc(partName(p, n.id))} <span class="muted">${l ? `${fmt(l.ww)} \u00D7 ${fmt(l.wd)} m` : "part"}</span>`; }
+    return `${n.type === "door" ? "Door" : "Window"} <span class="muted">${multi(wingIdOf(parentKey)) && n.type === "window" ? floorName(n.floor).toLowerCase() + ", " : ""}${fmt(n.s0)}\u2013${fmt(n.s1)} m</span>`;
+  };
+  const rows = [];
+  const walk = (n, depth, parentKey) => {
+    const k = nodeKey(n), kids = n.children || [], closed = treeClosed.has(k);
+    rows.push(`<li class="tnode t-${n.type}" style="--d:${depth}">${kids.length ? `<button type="button" class="caret" data-toggle="${k}" aria-expanded="${!closed}" aria-label="${closed ? "Show" : "Hide"} what is under it">${closed ? "\u25B8" : "\u25BE"}</button>` : `<span class="caret"></span>`}`
+      + `<button type="button" class="tbtn" data-node="${k}" aria-pressed="${isSel(n)}">${label(n, parentKey)}</button>${n.off ? ` <span class="warn" title="${esc(n.off)}">left out</span>` : n.hidden ? ` <span class="warn">hidden</span>` : ""}</li>`);
+    if (!closed) for (const c of kids) walk(c, depth + 1, n.type === "wall" ? n.key : parentKey);
+  };
+  walk(t, 0, "");
+  for (const l of t.lost) walk(l, 1, "");
+  return `<ul class="objlist ptree tree">${rows.join("")}</ul>`;
+}
+/** The main building's card: what is where, adding a part, and parts from a file or from My parts. */
+function mainCardHtml() {
+  const opt = (v, label, cur) => `<option value="${v}" ${String(v) === String(cur) ? "selected" : ""}>${esc(label)}</option>`;
+  const wallsLive = wallsOf(p), importWalls = [["Main building", ["front", "back", "left", "right"]], ...liveWings(p).map(g => [partName(p, g.id), ["End", "Left", "Right"].map(s2 => wingWallKey(g.id, s2))])];
+  return `<div class="wincard"><p class="hint">${p.width} \u00D7 ${p.depth} m, ${p.floors} floor${p.floors > 1 ? "s" : ""} of ${p.floorHeight} m${(p.wings || []).length ? `, ${p.wings.length} part${p.wings.length > 1 ? "s" : ""}` : ""}. Size, floors and the roof are in the Shape tab, panels and colours in Look. Choose a wall in the tree to add windows, doors and parts on it.</p>`
+    + `<div class="row"><button type="button" id="mainShape">Shape\u2026</button>${(p.wings || []).length < MAX_WINGS ? `<button type="button" id="wingAdd">+ Add a part</button>` : ""}</div>`
+    + `<div class="addrow"><button type="button" id="partImport">Import a part\u2026</button><label class="inline">onto <select id="partImportWall">${importWalls.map(([n, ks]) => `<optgroup label="${esc(n)}">${ks.filter(k => wallsLive[k]).map(k => opt(k, wallLabel(p, k), partImportWall)).join("")}</optgroup>`).join("")}</select></label><input type="file" id="partFile" accept=".json,application/json" hidden></div>`
+    + myPartsHtml() + `</div>`;
+}
+/** A wall's card: how long it is, and buttons to put a window, a door or a part on it where there is room. */
+function wallCardHtml() {
+  const walls = wallsOf(p), L = walls[wvWall].L, wid = wingIdOf(wvWall), wf = wid ? liveWings(p).find(x => x.id === wid) : null, floorsHere = wf ? wf.floors : p.floors;
+  if (wvFloor >= floorsHere) wvFloor = 0;
+  const opt = (v, label, cur) => `<option value="${v}" ${String(v) === String(cur) ? "selected" : ""}>${esc(label)}</option>`;
+  return `<div class="wincard"><p class="hint">${esc(wallLabel(p, wvWall))}, ${L.toFixed(1)} m long. Add something on it:</p><div class="addrow"><button type="button" data-wvadd="window">+ Window</button><button type="button" data-wvadd="door">+ Door</button>`
+    + `<button type="button" data-wvadd="part" ${(p.wings || []).length >= MAX_WINGS ? "disabled" : ""}>+ Part</button>`
+    + (floorsHere > 1 ? `<label class="inline">window on <select id="wvFloor">${Array.from({length: floorsHere}, (_, f) => opt(f, floorName(f), wvFloor)).join("")}</select></label>` : "") + `</div></div>`;
+}
+/** Just the tree (not the card under it). */
+function renderTreeNav() {
+  const nav = $("treeNav");
+  if (!nav) return;
+  // (what was chosen may be gone)
+  if (treeKind === "win" && !p.windows.some(w => w.id === selId)) treeKind = "main";
+  if (treeKind === "part" && !(p.wings || []).some(w => w.id === wSel)) treeKind = "main";
+  if (treeKind === "wall" && !wallsOf(p)[wvWall]) treeKind = "main";
+  nav.innerHTML = treeNavHtml();
+  nav.querySelectorAll("[data-node]").forEach(b => b.onclick = () => {
+    const [kind, v] = b.dataset.node.split(":");
+    selectNode(kind, kind === "wall" ? v : kind === "main" ? null : +v);
+  });
+  nav.querySelectorAll("[data-toggle]").forEach(b => b.onclick = () => { const k = b.dataset.toggle; if (treeClosed.has(k)) treeClosed.delete(k); else treeClosed.add(k); renderTreeNav(); });
+}
+function renderTreeUI() {
+  const nav = $("treeNav");
+  if (!nav) return;
+  renderTreeNav();
+  const main = $("mainCard"), wall = $("wallCard");
+  main.innerHTML = treeKind === "main" ? mainCardHtml() : "";
+  wall.innerHTML = treeKind === "wall" ? wallCardHtml() : "";
+  if (treeKind === "main") {
+    $("mainShape").onclick = () => setTab("shape");
+    if ($("wingAdd")) $("wingAdd").onclick = () => { if (!["back", "front", "right", "left"].some(k => addPart(k))) toast("No room for another part on the main building"); };
+    $("partImportWall").onchange = e => { partImportWall = e.target.value; };
+    $("partImport").onclick = () => $("partFile").click();
+    $("partFile").onchange = async e => {
+      const file = e.target.files && e.target.files[0]; e.target.value = "";
+      if (!file) return;
+      let data; try { data = JSON.parse(await file.text()); } catch { toast("That file isn't a part file (it isn't JSON)"); return; }
+      applyPart(data);
+    };
+    bindMyParts(main);
+  }
+  if (treeKind === "wall") {
+    if ($("wvFloor")) $("wvFloor").onchange = e => { wvFloor = +e.target.value; };
+    wall.querySelectorAll("[data-wvadd]").forEach(b => b.onclick = () => {
+      const kind = b.dataset.wvadd;
+      if (kind === "part") { addPart(wvWall); return; }
+      const next = addOpening(p, wvWall, kind, wvFloor);
+      if (!next) { toast(`No room for a ${kind} on this ${kind === "door" ? "wall's ground floor" : "floor of this wall"}: move or remove something first`); return; }
+      p.windows = next; selId = next[next.length - 1].id; treeKind = "win"; winChanged(); renderTreeUI(); updateHighlight();
+    });
+  }
+  renderWinCard(); renderPartCard();
+}
+// (the old names: the parts and the windows used to be two editors; both are the tree now)
+function renderWinUI() { renderTreeUI(); }
+function renderWingsUI() { renderTreeUI(); }
 /* ---------- Game objects ---------- */
 // The game's boxes and icons and the pasture's fence (objects.mjs): a list in the Game objects section, and
 // a plan view of the yard to drag them in (ob.on).
@@ -1849,11 +1864,9 @@ function refreshDorm() {
   if (warn && d) warn.hidden = !d._hidden;
 }
 function refreshWin() {
-  const sel = $("winSel");
-  if (!sel) return;
-  for (const opt of sel.options) { if (!opt.value) continue; const w = p.windows.find(x => x.id === +opt.value); if (w) opt.textContent = winLabel(w); }
   const warn = $("winWarn"), s = p.windows.find(x => x.id === selId);
   if (warn && s) warn.hidden = !s._hidden;
+  renderTreeNav();   // (positions and "hidden" in the tree follow a window as it is moved)
 }
 function updateHighlight() {
   if (!selMesh) return;
@@ -1881,12 +1894,7 @@ function pick(e) {
     if (d < -0.3 || d > 0.2) continue;
     const op = ops.find(o => o.id && (o.kind === "window" || o.kind === "door") && s > o.s0 - 0.12 && s < o.s1 + 0.12 && t > o.t0 - 0.12 && t < o.t1 + 0.12);
     if (op) {
-      selId = op.id;
-      if (searching) clearSearch();
-      setTab("openings");
-      const det = $("winEditor").closest("details"); det.open = true;
-      renderWinUI(); updateHighlight();
-      if (!window.matchMedia("(max-width: 820px)").matches) $("winSel").scrollIntoView({block:"nearest"});
+      selectNode("win", op.id);
       return;
     }
   }
@@ -1897,14 +1905,7 @@ function pick(e) {
     if (d < -0.3 || d > 0.2 || s < -0.1 || s > w.L + 0.1 || t < -0.5 || Math.abs(d) >= best) continue;
     wall = key; best = Math.abs(d);
   }
-  if (wall) {
-    wvWall = wall;
-    if (searching) clearSearch();
-    setTab("openings");
-    const det = $("winEditor").closest("details"); det.open = true;
-    renderWinUI();
-    if (!window.matchMedia("(max-width: 820px)").matches) $("wvWall").scrollIntoView({block: "nearest"});
-  }
+  if (wall) selectNode("wall", wall);
 }
 
 /**

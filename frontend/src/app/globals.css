@@ -337,3 +337,14 @@ html:has(.editor-page) { overscroll-behavior: none; }
 .hx-panel .myparts { margin-top: 12px; }
 .hx-panel .myparts h4 { margin: 0 0 4px; font-size: 14px; color: var(--muted); font-weight: 600; }
 .hx-panel button.small { padding: 2px 8px; font-size: 12.5px; }
+
+/* the building tree */
+.hx-panel .tree { list-style: none; margin: 0 0 10px; padding: 0; }
+.hx-panel .tree .tnode { display: flex; align-items: center; gap: 2px; margin-left: calc(var(--d, 0) * 16px); padding: 1px 0; }
+.hx-panel .tree .caret { width: 22px; flex: none; text-align: center; background: none; border: 0; padding: 2px 0; color: var(--muted); cursor: pointer; font-size: 12px; }
+.hx-panel .tree .tbtn { flex: 1; min-width: 0; text-align: left; background: none; border: 1px solid transparent; border-radius: 6px; padding: 3px 8px; font: inherit; font-size: 14px; color: var(--ink); cursor: pointer; }
+.hx-panel .tree .tbtn:hover { background: color-mix(in srgb, var(--accent, #9B2A1F) 8%, transparent); }
+.hx-panel .tree .tbtn[aria-pressed="true"] { border-color: var(--accent, #9B2A1F); background: color-mix(in srgb, var(--accent, #9B2A1F) 12%, transparent); font-weight: 600; }
+.hx-panel .tree .t-main > .tbtn, .hx-panel .tree .t-part > .tbtn { font-weight: 600; }
+.hx-panel .tree .t-wall > .tbtn { color: var(--muted); }
+.hx-panel .tree .t-wall > .tbtn[aria-pressed="true"] { color: var(--ink); }

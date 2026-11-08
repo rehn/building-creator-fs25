@@ -236,6 +236,9 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   from Editor.tsx (api.ts parts functions); Parts section: "Save to My parts", the My parts list (editor.mjs myPartsHtml/bindMyParts/applyPart).
 - Photo guide and parts (step 6 done): photoRequest's wings items have wall (the building's or an earlier part's: w1Left ...), name and optional own look (wallCladding, wallColor, roofMaterial,
   roofColor, trimColor; "" = as its parent); applyAnswer passes them on; the guide says a part meets only its parent's roof. docs/PLAN_PARTS.md is done (steps 1-6).
+- Building tab (the tree, replaces the Parts section and the window editor): model.mjs buildingTree(p) (main > walls > windows, doors, parts > their walls ...; lost = parts whose parent is left out);
+  editor.mjs "The building as a tree": renderTreeNav/renderTreeUI, selectNode(kind, v) (main | wall | win | part; tapping the preview calls it), cards below the tree: mainCardHtml (add, import, My parts),
+  wallCardHtml (+ Window, + Door, + Part), renderWinCard (window/door), renderPartCard (part + materials). renderWinUI/renderWingsUI are aliases of renderTreeUI. Openings tab keeps the style and size of new windows.
 
 ## Dev environment (WSL)
 - ./dev.sh starts API (:8080) + Next dev server (:3000); data in .dev/ (gitignored),
