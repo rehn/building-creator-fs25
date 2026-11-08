@@ -1,7 +1,7 @@
 // A farmhouse's furniture: the pieces its ground floor can have (see layout.mjs for what a catalog entry is),
 // drawn with the kit in props.mjs in each piece's own frame (y up from the floor, -z the wall side of a wall
 // piece), and a first arrangement for a new house. Pure; imports only the pure helpers.
-import { roomOf, furnisher } from "../layout.mjs";
+import { roomOf, furnisher, wallsOf } from "../layout.mjs";
 import { tone, shade } from "./props.mjs";
 import { INNER_WALL } from "./innerwall.mjs";
 
@@ -447,8 +447,9 @@ export function autoFurnish(p) {
   if ((s = wallFor("sofa", 2.1))) f.onWall(s, "sofa", {});
   if (area > 30 && (s = wallFor("bed", 1.55))) f.onWall(s, "bed", {});
   // the tall pieces only where there's no window: the ground floor's windows kept clear too
-  const windows = (p.windows || []).filter(w => w.type !== "door" && w.floor === 0 && ["front", "back", "left", "right"].includes(w.wall))
-    .map(w => { const L = w.wall === "front" || w.wall === "back" ? p.width : p.depth, c = w.pos * L; return {wall: w.wall, s0: c - w.w / 2, s1: c + w.w / 2, clear: 0.7, what: "a window"}; });
+  const frames = wallsOf(p);
+  const windows = (p.windows || []).filter(w => w.type !== "door" && w.floor === 0 && frames[w.wall])
+    .map(w => { const L = frames[w.wall].L, c = w.pos * L; return {wall: w.wall, s0: c - w.w / 2, s1: c + w.w / 2, clear: 0.7, what: "a window"}; });
   const g = furnisher(roomOf(p, windows), CATALOG);
   for (const it of f.items) g.add(it.type, it.x, it.z, it.rot, Object.fromEntries(CATALOG[it.type].params.map(q => [q.k, it[q.k]])));
   const tall = (type, need) => { const w = g.longest(roomOf(p, windows).walls, CATALOG[type].size({})[1]); if (w && w.len >= need) g.onWall(w, type, {}); };

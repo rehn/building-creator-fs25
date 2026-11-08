@@ -221,7 +221,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   the facade; kit.panel draws in it) with studs in front (2.5 cm deep, kit.studs = the building's studSpacing/studWidth/studIrregular).
 - Parts as a tree (docs/PLAN_PARTS.md, step 1 done): p.wings[i].wall may be a wall of an earlier wing ("w1Left"); wingIdOf(wall) = the parent (0: the house); MAX_WINGS = 12.
   layout.mjs wingsOf is recursive (parent, inherited floors/fh/pitch/half, roof type from the parent's roof, off when it would touch more than its parent); model.mjs
-  builds a nested part with walls, floor and a flat roof for now (roofs: step 3); the editor can't create nested parts yet (step 4).
+  builds a nested part with walls, floor, inside (own ceiling at its fh, passages up to the lower ceiling of parent and part, windows hidden under a child) and a flat roof for now (roofs: step 3); the editor can't create nested parts yet (step 4).
   The most parts is a setting: the web container's MAX_PARTS variable (12 if not set, at most HARD_MAX_PARTS = 40; Helm web.maxParts, docker-compose MAX_PARTS), served by
   the web app's /config route and applied at start by AppConfig.tsx (layout.mjs setMaxParts; MAX_WINGS is a live binding).
 
