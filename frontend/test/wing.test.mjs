@@ -85,6 +85,9 @@ test("wings: their walls are where they are, facing out", () => {
 test("wings: built with windows; windows behind a wing are hidden; the footprint reaches the wing", () => {
   let p = house({width: 10, depth: 7, winBack: 3});
   for (const k of ["w1End", "w1Left", "w1Right"]) p.windows = genRow(p, p.windows, k, 0, k === "w1End" ? 2 : 1);
+  // (new windows keep out of a wing, so put one there by hand)
+  const w0 = wingsOf(p)[0];
+  p.windows = [...p.windows, {id: 99, wall: "back", floor: 0, pos: (w0.s0 + w0.s1) / 2 / 10, w: 1, h: 1.2, sill: 0.85, type: "window", style: "default", room: "auto", curtain: "default", curtainColor: "default"}];
   const geo = buildGeometry(p);
   assert.equal(geo.opsByWall.w1End.ops.filter(o => o.kind === "window").length, 2);
   const w = wingsOf(p)[0], under = p.windows.filter(x => x.wall === "back" && x.floor === 0 && (() => { const s = x.pos * 10; return s > w.s0 && s < w.s1; })());
