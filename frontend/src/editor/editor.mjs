@@ -8,7 +8,7 @@ import {
   genRow, sanitize, serialize, slugify, buildGeometry, buildI3d, placeableSnippet, gamePlaces, surfaceSpec, scaledUV, colorFor, WP
 } from "./model.mjs";
 import { WINDOW_STYLES, DOOR_STYLES, PORCH_OPTIONS, PORCH_W, PORCH_D, WING_FIELDS, MAX_WINGS } from "./model.mjs";
-import { pieceSheet, pieceMeshes, buildingTree, matList, matTable, slotOf, partStyle, wallLabel, partName, wallItems, addOpening, addPartOn } from "./model.mjs";
+import { pieceSheet, pieceMeshes, buildingTree, matList, matTable, slotOf, partStyle, splitAtOf, wallLabel, partName, wallItems, addOpening, addPartOn } from "./model.mjs";
 import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, henYard, henCap, seeThroughGlass, kindOf } from "./model.mjs";
 import { cowYard } from "./kinds/cow.mjs";
 import { WALLPAPERS } from "./kinds/innerwall.mjs";
@@ -876,7 +876,7 @@ function renderZonesUI(host = "zonesEditor", fixed = null) {
   const z = (p.wallZones || {})[zoneWall], mode = z ? z.split : "same";
   const opt = (v, label, cur) => `<option value="${v}" ${v === cur ? "selected" : ""}>${esc(label)}</option>`;
   const own = Object.keys(p.wallZones || {});
-  let html = `<p class="hint">The split in Look is for every wall. A wall can have its own: one material, or split at the top of the ground floor or at a height. The two materials (cladding and colour) are the same on every wall.${own.length ? ` Walls with their own: ${own.map(k => esc(wallLabel(p, k))).join(", ")}.` : ""}</p>`;
+  let html = `<p class="hint">The split in Look is for every wall. A wall can have its own: one material, or split at the top of the ground floor or at a height.${own.length ? ` Walls with their own: ${own.map(k => esc(wallLabel(p, k))).join(", ")}.` : ""}</p>`;
   if (!fixed) html += `<div class="field"><div class="fl"><label for="znWall${sx}">Wall</label></div><select id="znWall${sx}">${keys.map(k => opt(k, wallLabel(p, k), zoneWall)).join("")}</select></div>`;
   html += `<div class="field"><div class="fl"><label for="znMode${sx}">Materials on this wall</label></div><select id="znMode${sx}">${opt("same", "Same as the building", mode)}${opt("one", "One material", mode)}${opt("floor", "Split at the top of the ground floor", mode)}${opt("height", "Split at a height", mode)}</select></div>`;
   if (mode === "height") html += `<div class="field"><div class="fl"><label for="znHeight${sx}">Split height, above the ground floor’s floor</label><output id="znHeight-o${sx}">${(+z.height).toFixed(2)} m</output></div><input type="range" id="znHeight${sx}" min="0.5" max="10" step="0.05" value="${z.height}"></div>`;
@@ -998,20 +998,20 @@ const PART_LOOK = [
   {k: "wallSplit", label: "Two materials on the walls", kind: "select"}, {k: "splitHeight", label: "Split height", kind: "range"},
   {k: "lowerCladding", label: "Lower panel", kind: "select", needsSplit: true}, {k: "lowerColor", label: "Lower colour", kind: "color", needsSplit: true},
   {k: "roofMaterial", label: "Roof covering", kind: "select"}, {k: "roofColor", label: "Roof colour", kind: "color"}, {k: "trimColor", label: "Trim colour (corners, frames, eaves)", kind: "color"}];
-function partLookHtml(w) {
-  const pid = wingIdOf(w.wall), parentName = pid ? partName(p, pid) : "the building", up = partStyle(p, pid), mine = partStyle(p, w.id);
+function partLookHtml(w, o = {}) {
+  const pid = o.pid !== undefined ? o.pid : wingIdOf(w.wall), parentName = pid ? partName(p, pid) : "the building", up = partStyle(p, pid), mine = o.mine || partStyle(p, w.id);
   const optsOf = k => k === "wallSplit" ? [["one", "No, one material"], ["floor", "Split at the top of the ground floor"], ["height", "Split at a height"]] : (FLD[k] || FLD[k === "lowerCladding" ? "wallCladding" : k]).options;
   const nameOf = (k, v) => { const o = k === "splitHeight" || FLD[k] && FLD[k].type === "color" ? null : optsOf(k).find(x => x[0] === v); return o ? o[1] : v; };
-  const rows = PART_LOOK.filter(f => !f.needsSplit || mine.wallSplit !== "one").map(f => {
+  const rows = PART_LOOK.filter(f => (!o.keys || o.keys.includes(f.k)) && (!f.needsSplit || mine.wallSplit !== "one")).map(f => {
     const own = w[f.k] !== undefined && w[f.k] !== "", id = `pl-${f.k}`;
     if (f.k === "splitHeight" && mine.wallSplit !== "height") return "";
     if (f.kind === "select") return `<div class="field"><div class="fl"><label for="${id}">${f.label}</label></div><select id="${id}" data-pl="${f.k}"><option value="">${esc(`Same as ${parentName} (${nameOf(f.k, up[f.k])})`)}</option>${optsOf(f.k).map(([v, n]) => `<option value="${v}" ${own && w[f.k] === v ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></div>`;
     if (f.kind === "color") return `<div class="field"><div class="fl"><label for="${id}">${f.label}</label></div><label class="check"><input type="checkbox" data-plown="${f.k}" ${own ? "checked" : ""}> Its own colour${own ? "" : ` (same as ${esc(parentName)})`}</label>${own ? `<input type="color" id="${id}" data-pl="${f.k}" value="${w[f.k]}">` : ""}</div>`;
     return `<div class="field"><div class="fl"><label for="${id}">${f.label}</label><output id="${id}-o">${(+(own ? w[f.k] : up[f.k])).toFixed(2)} m</output></div><input type="range" id="${id}" data-pl="${f.k}" min="0.5" max="10" step="0.05" value="${own ? w[f.k] : up[f.k]}"></div>`;
   }).join("");
-  return `<details class="partlook" ${partLookOpen ? "open" : ""}><summary>Materials: the same as ${esc(parentName)} unless set here</summary>${rows}</details>`;
+  return `<details class="partlook" ${o.open || partLookOpen ? "open" : ""}><summary>${o.summary ? esc(o.summary(parentName)) : `Materials: the same as ${esc(parentName)} unless set here`}</summary>${rows}</details>`;
 }
-function bindPartLook(ed, w, changed) {
+function bindPartLook(ed, w, changed, pid) {
   const d = ed.querySelector(".partlook");
   if (d) d.addEventListener("toggle", () => { partLookOpen = d.open; });
   ed.querySelectorAll("[data-pl]").forEach(el => {
@@ -1022,7 +1022,7 @@ function bindPartLook(ed, w, changed) {
   });
   ed.querySelectorAll("[data-plown]").forEach(el => el.onchange = () => {
     const k = el.dataset.plown;
-    if (el.checked) w[k] = partStyle(p, wingIdOf(w.wall))[k]; else delete w[k];
+    if (el.checked) w[k] = partStyle(p, pid !== undefined ? pid : wingIdOf(w.wall))[k]; else delete w[k];
     changed();
   });
 }
@@ -1190,6 +1190,20 @@ function floorCardHtml() {
   return `<div class="wincard"><p class="hint">${esc(wallLabel(p, wvWall))}, ${esc(floorName(wvFloor).toLowerCase())}. Add something on it:</p><div class="addrow"><button type="button" data-wvadd="window">+ Window</button>`
     + `<button type="button" data-wvadd="door" ${wvFloor === 0 ? "" : 'disabled title="Doors go on the ground floor"'}>+ Door</button></div></div>`;
 }
+/** A wall's own panel and colour (p.wallStyles): the upper and, where the wall is split, the lower. Empty: as the part the wall belongs to. */
+const WALL_LOOK_KEYS = ["wallCladding", "wallColor", "lowerCladding", "lowerColor"];
+function wallLookHtml(key) {
+  p.wallStyles = p.wallStyles || {};
+  const ws = p.wallStyles[key] = p.wallStyles[key] || {}, pid = wingIdOf(key);
+  const mine = {...partStyle(p, pid), ...ws, wallSplit: splitAtOf(p, key) > 0 ? "floor" : "one"};
+  return partLookHtml(ws, {keys: WALL_LOOK_KEYS, pid, mine, open: true, summary: name => `Panel and colour: the same as ${name} unless set here`});
+}
+function bindWallLook(key) {
+  const ed = $("wallLookW");
+  if (!ed) return;
+  const ws = (p.wallStyles = p.wallStyles || {})[key] = (p.wallStyles || {})[key] || {};
+  bindPartLook(ed, ws, () => { if (!Object.keys(ws).length) delete p.wallStyles[key]; persist(); rebuild(false); syncOutputs(); renderTreeUI(); }, wingIdOf(key));
+}
 /** A wall's card: how long it is, and buttons to put a window, a door or a part on it where there is room. */
 function wallCardHtml() {
   const walls = wallsOf(p), L = walls[wvWall].L, wid = wingIdOf(wvWall), wf = wid ? liveWings(p).find(x => x.id === wid) : null, floorsHere = wf ? wf.floors : p.floors;
@@ -1198,7 +1212,7 @@ function wallCardHtml() {
   return `<div class="wincard"><p class="hint">${esc(wallLabel(p, wvWall))}, ${L.toFixed(1)} m long. Add something on it:</p><div class="addrow"><button type="button" data-wvadd="window">+ Window</button><button type="button" data-wvadd="door">+ Door</button>`
     + `<button type="button" data-wvadd="part" ${(p.wings || []).length >= MAX_WINGS ? "disabled" : ""}>+ Part</button>`
     + (floorsHere > 1 ? `<label class="inline">window on <select id="wvFloor">${Array.from({length: floorsHere}, (_, f) => opt(f, floorName(f), wvFloor)).join("")}</select></label>` : "") + `</div></div>`
-    + `<div class="wincard"><h3 class="sub">Look of this wall</h3><div id="zonesEditorW"></div></div>`
+    + `<div class="wincard"><h3 class="sub">Look of this wall</h3><div id="wallLookW">${wallLookHtml(wvWall)}</div><div id="zonesEditorW"></div></div>`
     + `<div class="wincard"><h3 class="sub">Wallpaper on the inside</h3><div id="papersEditorW"></div></div>`;
 }
 /** Just the tree (not the card under it). */
@@ -1241,7 +1255,7 @@ function renderTreeUI() {
     };
     bindMyParts(main);
   }
-  if (treeKind === "wall") { renderZonesUI("zonesEditorW", wvWall); renderPapersUI("papersEditorW", wvWall); }
+  if (treeKind === "wall") { bindWallLook(wvWall); renderZonesUI("zonesEditorW", wvWall); renderPapersUI("papersEditorW", wvWall); }
   if (treeKind === "wall" || treeKind === "floor") {
     if ($("wvFloor")) $("wvFloor").onchange = e => { wvFloor = +e.target.value; };
     wall.querySelectorAll("[data-wvadd]").forEach(b => b.onclick = () => {

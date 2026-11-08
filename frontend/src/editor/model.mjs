@@ -234,6 +234,18 @@ function cleanWallZones(z, p) {
   }
   return out;
 }
+/** Walls with a panel/colour of their own (wallCladding, wallColor, lowerCladding, lowerColor; the rest as the part the wall belongs to): {wall: {...}}. */
+const WALL_STYLE_KEYS = ["wallCladding", "wallColor", "lowerCladding", "lowerColor"];
+function cleanWallStyles(z, p) {
+  const out = {}, walls = wallsOf(p);
+  if (z && typeof z === "object") for (const [k, v] of Object.entries(z)) {
+    if (!walls[k] || !v || typeof v !== "object") continue;
+    const own = cleanPartStyle(v), keep = {};
+    for (const key of WALL_STYLE_KEYS) if (own[key] !== undefined) keep[key] = own[key];
+    if (Object.keys(keep).length) out[k] = keep;
+  }
+  return out;
+}
 /** Where the lower material ends on wall key (m above the wall's foot; 0: one material): the wall's own split, else the building's. */
 export function splitAtOf(p, key) {
   const z = p.wallZones && p.wallZones[key], st = partStyle(p, wingIdOf(key)), mode = z ? z.split : st.wallSplit;
@@ -287,18 +299,28 @@ export const slotOf = m => m.replace(/P\d+$/, "");
 export function matTable(p) {
   const flat = p.roofType === "flat", roofKind = m => flat ? "felt" : m;
   const base = {walls: [p.wallCladding, p.wallColor], wallsLow: [p.lowerCladding, p.lowerColor], roof: [roofKind(p.roofMaterial), p.roofColor], trim: ["", p.trimColor]};
-  const key = (slot, kind, color) => `${slot}|${kind}|${String(color).toLowerCase()}`, variants = [], names = {}, count = {}, of = {};
+  const key = (slot, kind, color) => `${slot}|${kind}|${String(color).toLowerCase()}`, variants = [], names = {}, count = {}, of = {}, ow = {};
+  const pick = (slot, kind, color) => {
+    const k = key(slot, kind, color);
+    if (k === key(slot, ...base[slot])) return slot;
+    if (!names[k]) { count[slot] = (count[slot] || 0) + 1; names[k] = `${slot}P${count[slot]}`; variants.push({name: names[k], slot, kind, color}); }
+    return names[k];
+  };
   for (const w of liveWings(p)) {
     const st = partStyle(p, w.id), want = {walls: [st.wallCladding, st.wallColor], wallsLow: [st.lowerCladding, st.lowerColor], roof: [roofKind(st.roofMaterial), st.roofColor], trim: ["", st.trimColor]};
     of[w.id] = {};
     for (const slot of ["walls", "wallsLow", "roof", "trim"]) {
-      const [kind, color] = want[slot], k = key(slot, kind, color);
-      if (k === key(slot, ...base[slot])) { of[w.id][slot] = slot; continue; }
-      if (!names[k]) { count[slot] = (count[slot] || 0) + 1; names[k] = `${slot}P${count[slot]}`; variants.push({name: names[k], slot, kind, color}); }
-      of[w.id][slot] = names[k];
+      of[w.id][slot] = pick(slot, ...want[slot]);
     }
   }
-  return {variants, of};   // (not kept: the editor changes p in place)
+  // a wall with a panel or colour of its own: its walls and lower walls (what it doesn't set stays the part's)
+  for (const [wall, own] of Object.entries(p.wallStyles || {})) {
+    const st = {...partStyle(p, wingIdOf(wall)), ...own}, o = {};
+    if (own.wallCladding !== undefined || own.wallColor !== undefined) o.walls = pick("walls", st.wallCladding, st.wallColor);
+    if (own.lowerCladding !== undefined || own.lowerColor !== undefined) o.wallsLow = pick("wallsLow", st.lowerCladding, st.lowerColor);
+    if (Object.keys(o).length) ow[wall] = o;
+  }
+  return {variants, of, ow};   // (not kept: the editor changes p in place)
 }
 const variantOf = (p, m) => /P\d+$/.test(m) ? matTable(p).variants.find(v => v.name === m) : undefined;
 /** Every material the building uses: the shared ones, then the parts' own. */
@@ -493,6 +515,8 @@ export function sanitize(obj) {
   out.papers = cleanPapers(obj.papers, out, WALLPAPERS.length);
   // walls with a split of their own (instead of the building's): {wall: {split: "one" | "floor" | "height", height}}
   out.wallZones = cleanWallZones(obj.wallZones, out);
+  // walls with a panel and colour of their own: {wall: {wallCladding, wallColor, lowerCladding, lowerColor}}
+  out.wallStyles = cleanWallStyles(obj.wallStyles, out);
   // where the player moved the game places (sleep point, feed pad ...), one entry per place of the kind
   // the game objects (sleep point, feed pad, pasture ...): the save's, or where the kind puts them to start with
   // (from the settings of before they were objects: the pasture's wall and depth, the sleep point on or off)
@@ -1719,6 +1743,12 @@ function build() {
   rooms = []; downpipes = []; doors = []; itemParts = {};
   MATLIST = matList(p); partMats = null;
   const MT = matTable(p), usePart = id => { partMats = id && MT.of[id] ? MT.of[id] : null; };
+  // (a wall with a look of its own: its part's materials with that wall's walls / lower walls)
+  const useWall = key => {
+    const id = wingIdOf(key), o = MT.ow[key];
+    if (!o) { usePart(id); return; }
+    partMats = {...(id && MT.of[id] ? MT.of[id] : {walls: "walls", wallsLow: "wallsLow", roof: "roof", trim: "trim"}), ...o};
+  };
   G = {}; [...MATLIST, "collision"].forEach(m => G[m] = {p:[], n:[], uv:[], i:[]});
   G.curtain.c = []; G.fittings.c = []; G.fittings.s = []; fitSurf = undefined;
   const W = p.width, D = p.depth, F = p.foundation, fh = p.floorHeight, H = p.floors * fh + (p.halfStorey ? p.kneeWall : 0), top = F + H;
@@ -1889,7 +1919,9 @@ function build() {
     const ops = layoutWall(key, Lw, fh, sv => H + R * Math.max(0, 1 - Math.abs(sv - Lw/2) / (Lw/2)), wingCover(key));
     // Eave walls' inside faces reach into the roof slab (which sits lower further in), staying below its top.
     const inner = hollow ? {lift: R > 0 || p.roofType === "flat" ? 0 : Math.min(WALL_T * tanP, th - 0.02)} : null;
+    useWall(key);
     buildWall(WS[key], ops, H, R, F, {topAt: sv => H + R * Math.max(0, 1 - Math.abs(sv - Lw/2) / (Lw/2)), inner, key, split: splitFor(H, key)});
+    usePart(0);
     opsByWall[key] = {w: WS[key], ops};
     for (const dOp of ops) if (dOp.kind === "door" && dOp.porch.type !== "none") entrances.push({w: WS[key], o: dOp, key, gable});
   }
@@ -1897,6 +1929,7 @@ function build() {
   for (const {wing} of WINGS) for (const part of WING_PARTS) {
     usePart(wing.id);
     const key = wingWallKey(wing.id, part), w = wing.frames[key], Lw = w.L, Hw = wing.H;
+    useWall(key);
     const R = part === "End" && wing.type !== "flat" ? Math.max(0, wing.ww / 2 * wing.tanW - th) : 0;
     const topAt = sv => Hw + R * Math.max(0, 1 - Math.abs(sv - Lw/2) / (Lw/2));
     const ops = layoutWall(key, Lw, wing.fh, topAt, wingCover(key));
