@@ -243,7 +243,6 @@
   "Homes": "Bostäder",
   "Horizontal boards": "Liggande bräder",
   "House": "Hus",
-  "Houses": "Hus",
   "House name": "Husets namn",
   "House to i3d": "House to i3d",
   "Housing": "Boende",
@@ -725,5 +724,6 @@
   "Wallpaper on the inside": "Tapet på insidan",
   "Panel and colour: the same as {name} unless set here": "Panel och färg: som {name} om inget annat anges här",
   "Materials: the same as {name} unless set here": "Material: som {name} om inget annat anges här",
-  "Its own colour": "Egen färg"
+  "Its own colour": "Egen färg",
+  "Go back": "Tillbaka"
 }

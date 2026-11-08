@@ -4,6 +4,7 @@
 // the prompt, attach the photos, paste the answer back); then on to the editor to adjust it (the
 // project page shows the photos and "Publish").
 import { useEffect, useMemo, useState } from "react";
+import { t } from "@/i18n/index.mjs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, templatePhotoUrl, type Template } from "@/lib/api";
@@ -160,7 +161,7 @@ export default function NewTemplatePage() {
                 </label>
                 <p className="hint">The photos are kept with the template, so you can look at them while adjusting. On the next step Claude reads them, here or in a chat.</p>
                 <div className="wizard-nav">
-                  <button type="button" onClick={() => setStep(0)} disabled={!!busy}>Back</button>
+                  <button type="button" onClick={() => setStep(0)} disabled={!!busy}>{t("Go back")}</button>
                   <button className="primary" type="button" onClick={upload} disabled={!files.length || !!busy}>Next: Claude’s suggestion</button>
                 </div>
               </div>
