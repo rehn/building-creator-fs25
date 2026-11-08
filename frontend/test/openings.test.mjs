@@ -11,7 +11,7 @@ function recorder() {
   };
   return {kit, parts};
 }
-const MATS = ["door", "trim", "glass", "iron"];
+const MATS = ["door", "trim", "glass", "iron", "gutter"];
 
 test("styles: every style has an id and a name, ids are unique", () => {
   for (const list of [WINDOW_STYLES, DOOR_STYLES]) {
@@ -60,6 +60,11 @@ for (const st of DOOR_STYLES) for (const right of [false, true]) test(`door styl
     assert.ok(body.length >= 4, "the leaf round the glass");
     const glass = parts.find(q => q.mat === "glass");
     assert.ok(glass && glass.d[0] > leaf.dIn && glass.d[1] < leaf.dOut, "glass in the thickness of the leaf (seen through from both sides)");
+  } else if (st.id === "lowgate") {
+    // (a low steel gate: tubes at the ends and thin rails, in the gutter's metal, no solid leaf)
+    assert.ok(parts.every(q => q.mat !== "door"), "steel, not the door's wood");
+    assert.ok(parts.filter(q => q.mat === "gutter" && q.t[1] - q.t[0] >= leaf.t1 - leaf.t0 - 1e-9).length === 2, "two end tubes");
+    assert.ok(parts.filter(q => q.mat === "gutter" && q.t[1] - q.t[0] < 0.1).length >= 4, "rails");
   } else if (st.id === "gate") {
     // (a fence gate is open: two stiles the leaf's whole height and rails between them, with gaps, not a solid leaf)
     const full = q => q.mat === "door" && q.d[0] <= leaf.dIn + 1e-9 && q.d[1] >= leaf.dOut - 1e-9;

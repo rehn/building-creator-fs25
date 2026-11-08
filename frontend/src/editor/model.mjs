@@ -1130,6 +1130,7 @@ function openingKit(w) {
 function buildDoor(w, o, kit, inner, r, out, key) {
   const slide = o.style === "sliding", pair = isPair(o.s1 - o.s0), g = 0.01, mid = (o.s0 + o.s1) / 2;
   let spans, dIn, dOut, t0 = o.t0 + g, t1 = o.t1 - g, travel = 0;
+  if (o.style === "lowgate") t1 = Math.min(t1, t0 + 1.2);   // (a steel gate as high as a fence: the opening stays open above it)
   if (slide) {
     // over the opening and its frame, 10 cm past each side; the rail above, long enough to slide clear
     const lap = 0.1, a = o.s0 - lap, b = o.s1 + lap;

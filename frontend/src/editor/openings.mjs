@@ -3,7 +3,7 @@
 // (model.mjs) hands in a kit:
 //   kit.box(mat, s0, s1, t0, t1, d0, d1)   a box
 //   kit.slab(mat, [[s, t] ...], d0, d1)    a convex shape in the wall's plane, d0..d1 thick
-// mat: "door" (door colour), "trim" (trim colour), "glass", "iron" (dark ironwork: hinges, handles, rails).
+// mat: "door" (door colour), "trim" (trim colour), "glass", "iron" (dark ironwork: hinges, handles, rails), "gutter" (the gutters' zinc: the low steel gate).
 // Faces that would lie in one plane and overlap are kept a few mm apart: they flicker in the game.
 
 export const WINDOW_STYLES = [
@@ -21,6 +21,7 @@ export const DOOR_STYLES = [
   {id: "panel", name: "Panelled, glass at the top"},
   {id: "sliding", name: "Sliding barn door"},
   {id: "gate", name: "Fence gate (stängselgrind)"},
+  {id: "lowgate", name: "Low steel gate (grind, as high as a fence)"},
   {id: "hole", name: "Open doorway, framed (no door)"},
 ];
 /** Doors for the rooms of a house (inner walls): lighter and finer than the outer doors; not offered as the building's door style. */
@@ -132,7 +133,7 @@ export function drawLeaf(kit, style, L) {
     box("door", 0, hu0, L.t0, L.t1, L.dIn, L.dOut); box("door", hu1, W, L.t0, L.t1, L.dIn, L.dOut);
     box("door", hu0, hu1, L.t0, ha, L.dIn, L.dOut); box("door", hu0, hu1, hb, L.t1, L.dIn, L.dOut);
     box("glass", hu0 + 0.001, hu1 - 0.001, ha + 0.001, hb - 0.001, mid - 0.002, mid + 0.002);   // (1 mm clear of the leaf all round: flush faces flicker)
-  } else if (style !== "gate") kit.box("door", L.s0, L.s1, L.t0, L.t1, L.dIn, L.dOut);
+  } else if (style !== "gate" && style !== "lowgate") kit.box("door", L.s0, L.s1, L.t0, L.t1, L.dIn, L.dOut);
   const boards = () => { for (let u = 0.13; u < W - 0.08; u += 0.13) on("door", u - 0.012, u + 0.012, L.t0 + 0.02, L.t1 - 0.02, f, f + 0.008); };
   // rail: the braced doors' top and bottom boards; iron: strap hinges' heights, resting at f + ironAt
   const rail = 0.13, iron = [];
@@ -164,6 +165,14 @@ export function drawLeaf(kit, style, L) {
     for (const [a, b] of [[L.t0 + bot, lock - 0.05], [lock + 0.05, tm - mid]]) if (b - a > 0.1) on("door", st + 0.03, W - st - 0.03, a + 0.03, b - 0.03, f, f + 0.012);
     if (W - 2 * st > 0.6) { const c = W / 2; box("door", c - 0.015, c + 0.015, tm - 0.01, tg + 0.01, L.dIn - 0.008, L.dOut + 0.018); }   // a bar through the glass
     handleU = W - st / 2; handleAt = 0.02;
+  }
+  else if (style === "lowgate") {
+    // a galvanised steel field gate, only as high as a fence (the opening stays open above it): a tube at each end, four rails between them and a diagonal brace
+    const st = 0.05, rh = 0.04, k = 4, at = j => L.t0 + 0.1 + j * (H - 0.2) / (k - 1);
+    box("gutter", 0, st, L.t0, L.t1, L.dIn, L.dOut); box("gutter", W - st, W, L.t0, L.t1, L.dIn, L.dOut);
+    for (let j = 0; j < k; j++) box("gutter", st, W - st, at(j) - rh / 2, at(j) + rh / 2, L.dIn + 0.01, L.dOut - 0.01);
+    brace(st, at(0), W - st, at(k - 1), 0.04, f, f + 0.012);
+    handleU = W - st / 2; handleAt = 0;
   }
   else if (style === "gate") {
     // a fence gate: a stile each side, horizontal rails between them (every 40 cm or so) and a diagonal brace, open between the rails
