@@ -219,6 +219,9 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   face), plaster = whitewash surface in the wall colour at the inside face (same thickness, WALL_T, as a stud wall); wallpaper goes over. A barn ceiling is boards on beams.
 - Inner walls: a side can be PANEL (kinds/innerwall.mjs panelSide): the building's own material "wallsIn" (settings innerCladding/innerColor, same CLADDING choices as
   the facade; kit.panel draws in it) with studs in front (2.5 cm deep, kit.studs = the building's studSpacing/studWidth/studIrregular).
+- Parts as a tree (docs/PLAN_PARTS.md, step 1 done): p.wings[i].wall may be a wall of an earlier wing ("w1Left"); wingIdOf(wall) = the parent (0: the house); MAX_WINGS = 12.
+  layout.mjs wingsOf is recursive (parent, inherited floors/fh/pitch/half, roof type from the parent's roof, off when it would touch more than its parent); model.mjs
+  builds a nested part with walls, floor and a flat roof for now (roofs: step 3); the editor can't create nested parts yet (step 4).
 
 ## Dev environment (WSL)
 - ./dev.sh starts API (:8080) + Next dev server (:3000); data in .dev/ (gitignored),

@@ -13,8 +13,8 @@ const verts = (G, m) => { const out = []; for (let i = 0; i < G[m].p.length; i +
 test("wings: none by default, a list kept and clamped", () => {
   assert.deepEqual(sanitize({}).wings, []);
   const p = sanitize({wings: [{wall: "left", pos: 7, width: 99, depth: -1, floors: 9}, {wall: "roof"}, null, {}, {}, {}]});
-  assert.equal(p.wings.length, MAX_WINGS, "at most four");
-  assert.deepEqual(p.wings.map(w => w.id), [1, 2, 3, 4]);
+  assert.equal(p.wings.length, 5, "the unusable entry (null) is dropped");
+  assert.deepEqual(p.wings.map(w => w.id), [1, 2, 3, 4, 5]);
   assert.deepEqual([p.wings[0].wall, p.wings[0].pos, p.wings[0].width, p.wings[0].depth, p.wings[0].floors], ["left", 1, 30, 2, 3]);
   assert.equal(p.wings[1].wall, "back", "an unknown wall becomes the back");
   assert.equal(sanitize({wings: [{id: 3, wall: "front"}, {id: 3, wall: "back"}]}).wings.map(w => w.id).join(), "3,1", "ids are kept, repeats renumbered");
@@ -61,7 +61,7 @@ test("wings: several, each with its walls; two that overlap leave the later one 
   const p = house({width: 14, depth: 8, wings: [{...W1, pos: 0}, {id: 2, wall: "back", pos: 1, width: 5, depth: 6, floors: 1}, {id: 3, wall: "front", pos: 0.5, width: 5, depth: 3, floors: 0}]});
   const ws = liveWings(p);
   assert.equal(ws.length, 3, "a U and a front wing");
-  assert.deepEqual(Object.keys(wallsOf(p)).sort(), ["back", "front", "left", "right", ...WING_WALLS.filter(k => /^w[123]/.test(k))].sort());
+  assert.deepEqual(Object.keys(wallsOf(p)).sort(), ["back", "front", "left", "right", ...WING_WALLS.filter(k => /^w[123](End|Left|Right)$/.test(k))].sort());
   const geo = buildGeometry(p);
   for (const k of ["w1End", "w2Left", "w3Right"]) assert.ok(geo.opsByWall[k], k);
   assert.equal(geo.wings.length, 3);

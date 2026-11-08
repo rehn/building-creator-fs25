@@ -170,10 +170,13 @@ function cleanWings(obj) {
   const list = Array.isArray(obj.wings) ? obj.wings : obj.wing === true ? [{id: 1, wall: obj.wingWall, pos: obj.wingPos, width: obj.wingWidth, depth: obj.wingDepth}] : [];
   const used = new Set(), out = [];
   for (const w of list.filter(x => x && typeof x === "object").slice(0, MAX_WINGS)) {
+    // a part stands on a wall of the house or of a part before it in the list (its parent); one whose parent is missing goes too
+    const nested = WING_WALLS.includes(w.wall);
+    if (nested && !used.has(wingIdOf(w.wall))) continue;
     let id = Number.isInteger(w.id) && w.id >= 1 && w.id <= MAX_WINGS && !used.has(w.id) ? w.id : 0;
     if (!id) for (let i = 1; i <= MAX_WINGS; i++) if (!used.has(i)) { id = i; break; }
     used.add(id);
-    out.push({id, wall: WALLS.includes(w.wall) ? w.wall : "back", pos: clampN(w.pos, 0, 1, 0.15), width: clampN(w.width, 2.5, 30, 6), depth: clampN(w.depth, 2, 30, 5), floors: Math.round(clampN(w.floors, 0, 3, 0)), half: w.half === true, floorHeight: +w.floorHeight > 0 ? Math.round(clampN(w.floorHeight, 2.3, 9, 2.7) * 100) / 100 : 0, pitch: +w.pitch > 0 ? Math.round(clampN(w.pitch, 5, 60, 5)) : 0});
+    out.push({id, wall: WALLS.includes(w.wall) || nested ? w.wall : "back", pos: clampN(w.pos, 0, 1, 0.15), width: clampN(w.width, 2.5, 30, 6), depth: clampN(w.depth, 2, 30, 5), floors: Math.round(clampN(w.floors, 0, 3, 0)), half: w.half === true, floorHeight: +w.floorHeight > 0 ? Math.round(clampN(w.floorHeight, 2.3, 9, 2.7) * 100) / 100 : 0, pitch: +w.pitch > 0 ? Math.round(clampN(w.pitch, 5, 60, 5)) : 0});
   }
   return out;
 }
@@ -340,6 +343,8 @@ export function sanitize(obj) {
   const src = Array.isArray(obj.windows) ? obj.windows.map(w => w && oldWing[w.wall] ? {...w, wall: wingWallKey(1, oldWing[w.wall])} : w) : obj.windows;
   // (a door on a wing only counts while there is one)
   let ws = Array.isArray(src) ? cleanWindows(src, obj) : [];
+  // (the windows and doors of a part that is gone go with it; a part that is only left out for now keeps them)
+  { const ids = new Set(out.wings.map(w => w.id)); ws = ws.filter(w => !wingIdOf(w.wall) || ids.has(wingIdOf(w.wall))); }
   if (!ws.some(w => w.type === "door" && walls[w.wall])) ws = cleanWindows([...ws, legacyDoor(obj, out, kind)]);
   out.windows = Array.isArray(src) ? ws : genAll(out, obj, ws);
   out.dormers = Array.isArray(obj.dormers) ? cleanDormers(obj.dormers) : [];
@@ -754,8 +759,8 @@ function prism(mat, sec, at) {
  */
 function layoutWall(key, L, fh, topAt, cover = null) {
   // (a wing may have fewer floors than the house)
-  const wid = wingIdOf(key), wing = wid ? (p.wings || []).find(w => w.id === wid) : null, wf = wing ? wingFloors(p, wing) : p.floors;
-  const nf = wf + ((wing ? wingHalf(p, wing) : p.halfStorey) ? 1 : 0);
+  const wid = wingIdOf(key), wing = wid ? liveWings(p).find(w => w.id === wid) : null, wf = wing ? wing.floors : p.floors;
+  const nf = wf + ((wing ? wing.half : p.halfStorey) ? 1 : 0);
   const ops = [];
   // The kind's own openings (a hen hatch ...) first, then the doors, then the windows: a window over a
   // door is hidden, not the door.
@@ -1588,7 +1593,8 @@ function build() {
   // ridge from the house's middle, z across it from its ridge; Mw maps those to the world, Ml directions.
   const WINGS = liveWings(p).map(wing => {
     const topW = F + wing.H, tanW = wing.tanW, yR = topW + wing.ww / 2 * tanW, eW = wing.ww / 2 + o;
-    if (wing.type === "flat") return {wing, WG: null, topW};
+    // (a part on a part has no roof of its own yet: flat, until the roofs meet their parents'; docs/PLAN_PARTS.md step 3)
+    if (wing.type === "flat" || wing.parent) return {wing, WG: null, topW};
     const m = wallFrames(W, D, F)[wing.wall], cpt = wing.at(wing.sc, 0);
     let WG;
     if ((Math.abs(m.u[0]) > 0.5) === ridgeX) {
@@ -1764,7 +1770,7 @@ function build() {
     return WG.valley ? Math.max(y, roofUnder(x, z)) : y;
   };
   function buildWingBody(item) {
-    const {wing} = item, under = wingUnder(item), {at, s0, s1, wd} = wing, Lm = WS[wing.wall].L, c = 0.09;
+    const {wing} = item, under = wingUnder(item), {at, s0, s1, wd} = wing, Lm = (WS[wing.wall] || wallsOf(p)[wing.wall]).L, c = 0.09;
     const post = (P, du, dn) => {
       // a corner board from P, du along the house's wall and dn out from it (both ±0.09 or 0..0.09)
       const Q = (a, b) => { const q = at(a, b); return [q[0], q[2]]; };
@@ -1786,7 +1792,7 @@ function build() {
   }
   function buildWingRoof(item) {
     const {wing, WG, topW} = item;
-    if (wing.type === "flat") {
+    if (wing.type === "flat" || wing.parent) {   // (a part on a part: flat for now)
       const oo = Math.min(o, 0.4), a = wing.at(wing.s0 - oo, oo), b = wing.at(wing.s1 + oo, wing.wd + oo);
       abox("roof", [a[0], topW, a[2]], [b[0], topW + 0.3, b[2]]);
       abox("collision", [a[0], topW, a[2]], [b[0], topW + 0.3, b[2]]);

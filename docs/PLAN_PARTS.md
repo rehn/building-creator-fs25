@@ -51,7 +51,7 @@ det viktiga är ett bra flöde. Varje steg ska vara färdigt, testat (TDD) och k
 
 ## Ordning
 
-1. Datamodellen: `parent`, generella väggnycklar, `wingsOf` rekursiv för väggar, golv och rektanglar (med test); gamla sparningar översätts där det går.
+1. Datamodellen: generella väggnycklar, `wingsOf` rekursiv för väggar, golv och rektanglar (med test). **Klart (november 2026):** `wall` på en del är en vägg på huset eller på en tidigare del (föräldern är `wingIdOf(wall)`); `cleanWings` släpper del utan förälder; en del ärver våningar, våningshöjd, halvvåning och taklutning av föräldern (0 = som föräldern) men får inte fler våningar än den; roffäll (`valley`/`eave`/`gable`/`flat`) följer förälderns tak; en del som skulle röra annat än föräldern slås av. Delar på delar syns ännu bara med platt tak och går inte att skapa i gränssnittet (steg 3 och 4). Gamla sparningar behöver ingen översättning: nycklarna är oförändrade.
 2. Insidan för nästlade delar: golv, innertak, passager, rum, fönster/dörrar på deras väggar.
 3. Taken för nästlade delar (möter bara föräldern).
 3b. Material per del med arv ("samma som föräldern" som standard): flera material per byggnad i förhandsvisningen och exporten.

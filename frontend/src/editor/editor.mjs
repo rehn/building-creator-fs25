@@ -719,9 +719,9 @@ function applySurfaces() {
 let selId = null;
 function floorName(f) { return p.halfStorey && f === p.floors ? "Attic" : `Floor ${f + 1}`; }
 /** How many floors a wall has: the house's, or its wing's. */
-function floorsOf(wall) { const id = wingIdOf(wall), w = id && (p.wings || []).find(x => x.id === id); return w ? wingFloors(p, w) : p.floors; }
+function floorsOf(wall) { const id = wingIdOf(wall), w = id && liveWings(p).find(x => x.id === id); return w ? w.floors : p.floors; }
 /** Whether a wall has a half floor in the roof (1½-plan): the house's, or its wing's. */
-function halfOf(wall) { const id = wingIdOf(wall), w = id && (p.wings || []).find(x => x.id === id); return w ? wingHalf(p, w) : p.halfStorey; }
+function halfOf(wall) { const id = wingIdOf(wall), w = id && liveWings(p).find(x => x.id === id); return w ? w.half : p.halfStorey; }
 function gableWall(wall) {
   if (wingIdOf(wall)) return wall.endsWith("End") && p.roofType !== "flat";
   return p.roofType === "gable" && (p.ridge === "width" ? (wall === "left" || wall === "right") : (wall === "front" || wall === "back"));
