@@ -28,12 +28,17 @@ det viktiga är ett bra flöde. Varje steg ska vara färdigt, testat (TDD) och k
 - Taket skärs rekursivt: varje del skär förälderns taksida (`notch`), som för huvudbyggnaden idag.
 - Insidan: rummet är föreningen av alla delars golv; varje del har eget innertak (egen våningshöjd) och en passage i förälderns vägg.
 - Del får `name` (visas i listor).
+- **Material per del, med arv.** Varje del kan ha egna material (väggpanel och färg uppe och nere, delning, taktäckning och takfärg, knutlådor/lister),
+  men som standard är de **"samma som föräldern"**. Ett ofyllt fält ärver från förälderns värde (och så uppåt till byggnaden); ett ifyllt fält gäller delen
+  (och dess barn, som ärver från den). Bara det som är ifyllt sparas i delen.
+  Tekniskt: i dag finns en uppsättning material för hela byggnaden (`walls`, `wallsLow`, `roof` ...). Med egna material per del bygger varje del sina ytor i ett material
+  per unikt (plats, panel, färg); likadana material slås ihop så att antalet material i i3d-filen inte växer i onödan.
 
 ## Delar att dela
 
 - Ett **delträd** (en del med allt under den) kan sparas som en fil: storlek, våningar, våningshöjd, tak, saker på väggarna (fönster, dörrar, hål, grindar),
   möbler och barndelar. Väggnycklar skrivs om till lokala (delen själv är rot).
-- **Importera** lägger delen på en vald vägg i en annan byggnad (ladugård, skjul, hus). Material, färger och ytor följer målbyggnaden.
+- **Importera** lägger delen på en vald vägg i en annan byggnad (ladugård, skjul, hus). Det som delen har satt till "samma som föräldern" följer den nya föräldern (rött på den röda ladugården, vitt på det vita huset); det som delen har satt själv behåller den.
   Möbler av typer som målets katalog saknar tas bort med en notis. Passar den inte på väggen minskas bredden/flyttas längs väggen, annars slås den av med förklaring.
 - Först en fil (nedladdning/uppladdning av JSON). Sedan ett "Mina delar"-bibliotek per användare, som "My items" (admin kan dela med alla).
 
@@ -49,6 +54,7 @@ det viktiga är ett bra flöde. Varje steg ska vara färdigt, testat (TDD) och k
 1. Datamodellen: `parent`, generella väggnycklar, `wingsOf` rekursiv för väggar, golv och rektanglar (med test); gamla sparningar översätts där det går.
 2. Insidan för nästlade delar: golv, innertak, passager, rum, fönster/dörrar på deras väggar.
 3. Taken för nästlade delar (möter bara föräldern).
+3b. Material per del med arv ("samma som föräldern" som standard): flera material per byggnad i förhandsvisningen och exporten.
 4. Sakerna per vägg: gemensam vy med fönster, dörr, hål, grind och del.
 5. Export och import av delar (fil), sedan biblioteket.
 6. Fotoguiden och mallarna med den nya modellen; ta bort den gamla vingkoden.
