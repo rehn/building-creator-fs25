@@ -17,7 +17,7 @@ test("wallpaper: a setting for every inside wall and a list of sections, cleaned
   const p = sanitize({});
   assert.equal(p.insidePaper, "none");
   assert.deepEqual(p.papers, []);
-  assert.ok(SCHEMA.some(g => g.title === "Inside walls" && g.custom === "papers" && g.fields.some(f => f.k === "insidePaper")));
+  assert.ok(SCHEMA.some(g => g.title === "Inside walls" && g.fields.some(f => f.k === "insidePaper")));
   assert.equal(sanitize({insidePaper: "3"}).insidePaper, "3");
   assert.equal(sanitize({insidePaper: "99"}).insidePaper, "none");
   const q = sanitize({papers: [{wall: "front", s0: 5, s1: 1, paper: 2}, {wall: "front", s0: 2, s1: 2.1, paper: 1}, {wall: "nowhere", s0: 0, s1: 3, paper: 1}, {wall: "back", s0: -4, s1: 99, paper: 99}, null]});

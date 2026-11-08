@@ -260,8 +260,6 @@ SCHEMA.forEach(g => {
       if (ob.sel || ob.on) renderObjectsUI();
     });
   });
-  if (g.custom === "zones") { const ed = document.createElement("div"); ed.id = "zonesEditor"; d.appendChild(ed); }
-  if (g.custom === "papers") { const ed = document.createElement("div"); ed.id = "papersEditor"; d.appendChild(ed); }
   if (g.custom === "pipes") { const ed = document.createElement("div"); ed.id = "pipesEditor"; d.appendChild(ed); }
   if (g.custom === "dormers") { const ed = document.createElement("div"); ed.id = "dormEditor"; d.appendChild(ed); }
   if (g.custom === "inside") { const ed = document.createElement("div"); ed.id = "insideEditor"; d.appendChild(ed); }
