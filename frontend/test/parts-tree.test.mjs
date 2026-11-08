@@ -103,3 +103,26 @@ test("parts tree: a nested part has walls to put windows and doors on, and the b
   const q = sanitize({...p, wings: p.wings.filter(w => w.id !== 3)});
   assert.ok(!q.windows.some(w => w.wall === "w3Left"));
 });
+
+test("parts tree: the most parts is a setting (setMaxParts, from the MAX_PARTS variable): 12 to start with, never beyond the hard limit", async () => {
+  const layout = await import("../src/editor/layout.mjs"), model = await import("../src/editor/model.mjs");
+  const many = n => Array.from({length: n}, (_, i) => ({id: i + 1, wall: "back", pos: 0.5}));
+  try {
+    assert.equal(layout.MAX_WINGS, 12);
+    assert.equal(sanitize({wings: many(30)}).wings.length, 12);
+    layout.setMaxParts(3);
+    assert.equal(layout.MAX_WINGS, 3, "read live");
+    assert.equal(model.MAX_WINGS, 3, "also through the model's re-export");
+    assert.equal(sanitize({wings: many(30)}).wings.length, 3);
+    layout.setMaxParts(25);
+    assert.equal(sanitize({wings: many(30)}).wings.length, 25);
+    layout.setMaxParts(500);
+    assert.equal(layout.MAX_WINGS, layout.HARD_MAX_PARTS, "kept to the hard limit");
+    layout.setMaxParts("junk");
+    assert.equal(layout.MAX_WINGS, 12, "nonsense gives the default");
+    layout.setMaxParts(0);
+    assert.equal(layout.MAX_WINGS, 1, "at least one");
+    // every wall a part can have has a name, up to the hard limit
+    for (let i = 1; i <= layout.HARD_MAX_PARTS; i++) for (const s of ["End", "Left", "Right"]) assert.ok(model.WALL_NAMES[`w${i}${s}`], `w${i}${s}`);
+  } finally { layout.setMaxParts(12); }
+});

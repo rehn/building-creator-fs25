@@ -36,6 +36,11 @@ has "$pvc" "storage: 1Gi" "PVC size"
 has "$pvc" 'helm.sh/resource-policy: keep' "PVC survives helm uninstall"
 web=$(doc Deployment hus-house-to-i3d-web)
 has "$web" 'value: "http://hus-house-to-i3d-api:8080"' "web finds the API service"
+has "$web" 'name: MAX_PARTS' "web gets MAX_PARTS"
+has "$web" 'value: "12"' "MAX_PARTS is 12 to start with"
+keep=$out; out=$(render --set publicUrl=https://hus.example.se --set adminEmail=me@example.se --set web.maxParts=20)
+has "$(doc Deployment hus-house-to-i3d-web)" 'value: "20"' "web.maxParts sets MAX_PARTS"
+out=$keep
 has "$(doc Service hus-house-to-i3d-api)" "port: 8080" "API service"
 has "$(doc Service hus-house-to-i3d-web)" "port: 3000" "web service"
 hasnt "$out" "kind: StatefulSet" "no Postgres"

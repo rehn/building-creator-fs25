@@ -36,6 +36,8 @@ spec:
           env:
             - name: API_URL
               value: {{ printf "http://%s-api:8080" (include "hx.fullname" .) | quote }}
+            - name: MAX_PARTS
+              value: {{ .Values.web.maxParts | default 12 | quote }}
           ports:
             - name: http
               containerPort: 3000

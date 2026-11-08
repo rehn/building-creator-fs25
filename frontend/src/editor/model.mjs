@@ -3,7 +3,7 @@
 // Pure functions with no DOM or three.js, so they run (and are tested) in Node.
 import { I3dDoc, tg, shape, refNode, boxMesh, splitByColor, mappingsFor, num, v3 } from "./i3d.mjs";
 import { KINDS, kindOf } from "./kinds/index.mjs";
-import { WALL_T, wallFrames, wallsOf, liveWings, wingsOf, wingHeight, wingFloorHeight, wingFloors, wingHalf, wingIdOf, eaveWalls, autoPipes, cleanPipes, cleanPapers, WING_PARTS, MAX_WINGS, WING_WALLS, wingWallKey, openingSpan, roomOf, footprint, toWorld, cleanItems, problems } from "./layout.mjs";
+import { WALL_T, wallFrames, wallsOf, liveWings, wingsOf, wingHeight, wingFloorHeight, wingFloors, wingHalf, wingIdOf, eaveWalls, autoPipes, cleanPipes, cleanPapers, WING_PARTS, MAX_WINGS, HARD_MAX_PARTS, setMaxParts, WING_WALLS, wingWallKey, openingSpan, roomOf, footprint, toWorld, cleanItems, problems } from "./layout.mjs";
 import { withAssets, placement, assetFolder } from "./assets.mjs";
 import { SURFACES } from "./surfaces.mjs";
 import { agedColor } from "./age.mjs";
@@ -155,8 +155,8 @@ export const FIELD = {};
 SCHEMA.forEach(g => g.fields.forEach(f => FIELD[f.k] = FIELD[f.k] || f));
 export const WALLS = ["front", "back", "left", "right"];
 export const WALL_NAMES = {front:"Front", back:"Back", left:"Left side", right:"Right side",
-  ...Object.fromEntries(Array.from({length: MAX_WINGS}, (_, i) => [[wingWallKey(i + 1, "End"), `Wing ${i + 1} end`], [wingWallKey(i + 1, "Left"), `Wing ${i + 1} left side`], [wingWallKey(i + 1, "Right"), `Wing ${i + 1} right side`]]).flat())};
-export { WING_WALLS, MAX_WINGS };
+  ...Object.fromEntries(Array.from({length: HARD_MAX_PARTS}, (_, i) => [[wingWallKey(i + 1, "End"), `Wing ${i + 1} end`], [wingWallKey(i + 1, "Left"), `Wing ${i + 1} left side`], [wingWallKey(i + 1, "Right"), `Wing ${i + 1} right side`]]).flat())};
+export { WING_WALLS, MAX_WINGS, HARD_MAX_PARTS, setMaxParts };
 /** A wing's sliders (the wall and floors are selects): the settings of a wing in p.wings. */
 export const WING_FIELDS = [
   {k:"pos", label:"Middle of the wing along the wall (m from the left end, seen from outside)", min:0, max:1, step:0.005},

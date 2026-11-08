@@ -28,12 +28,21 @@ export function wallFrames(W, D, F) {
   };
 }
 
-/** Most parts (wings, at any depth) a building can have besides its main part. */
-export const MAX_WINGS = 12;
+/**
+ * Most parts (wings, at any depth) a building can have besides its main part: 12 to start with, set by the server's MAX_PARTS variable
+ * (setMaxParts, called when the app starts), never above HARD_MAX_PARTS. A live binding: importers see the new value.
+ */
+export let MAX_WINGS = 12;
+export const HARD_MAX_PARTS = 40;
+export const DEFAULT_MAX_PARTS = 12;
+export function setMaxParts(n) {
+  const v = Math.round(+n);
+  MAX_WINGS = Number.isFinite(v) ? Math.min(HARD_MAX_PARTS, Math.max(1, v)) : DEFAULT_MAX_PARTS;
+}
 /** A wing's walls in the window list: "w1End" (its far end), "w1Left", "w1Right" (its sides, as you face its end). */
 export const wingWallKey = (id, part) => `w${id}${part}`;
 export const WING_PARTS = ["End", "Left", "Right"];
-export const WING_WALLS = Array.from({length: MAX_WINGS}, (_, i) => WING_PARTS.map(s => wingWallKey(i + 1, s))).flat();
+export const WING_WALLS = Array.from({length: HARD_MAX_PARTS}, (_, i) => WING_PARTS.map(s => wingWallKey(i + 1, s))).flat();
 /** The wing a wall key belongs to (its id), or 0 for the house's own four walls. */
 export const wingIdOf = key => { const m = /^w(\d+)(End|Left|Right)$/.exec(key || ""); return m ? +m[1] : 0; };
 /** The roof's thickness (the model's too): a gable-end wing's roof stays under the house's gable overhang. */

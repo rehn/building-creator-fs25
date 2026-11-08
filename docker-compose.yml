@@ -22,6 +22,8 @@ services:
     build: ./frontend
     environment:
       API_URL: http://api:8080
+      # The most parts (wings, at any depth) a building can have besides its main part (12, at most 40).
+      MAX_PARTS: ${MAX_PARTS:-12}
     ports:
       - "3000:3000"
     depends_on:

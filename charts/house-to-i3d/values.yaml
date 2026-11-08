@@ -85,6 +85,8 @@ api:
 
 web:
   replicas: 1
+  # The most parts (wings, at any depth) a building can have besides its main part (12 if not set, at most 40).
+  maxParts: 12
   resources: {}
   podAnnotations: {}
   nodeSelector: {}
