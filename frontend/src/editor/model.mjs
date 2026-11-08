@@ -70,7 +70,7 @@ const SHARED_SECTIONS = [
     {k:"ceiling", label:"Ceiling over the ground floor (closes the roof space, so you don’t see up to the ridge)", type:"check"},
     {k:"floorHeight", label:"Floor height", min:2.3, max:9, step:0.05, unit:" m"},
     {k:"foundation", label:"Foundation height", min:0, max:1.2, step:0.05, unit:" m"}]},
-  {title:"Wings", tab:"shape", custom:"wings", hint:"Wings make an L-, T- or U-shaped house: up to four, each on a wall with its own width, length and number of floors. On a long side a wing's roof meets the house's in a valley; a wing with fewer floors runs up to the wall under the eaves; on a gable end it is a lower annex. It has the house's roof pitch and overhang. Its windows and doors are under Windows.", fields:[]},
+  {title:"Wings", label:"Parts", tab:"shape", custom:"wings", hint:"Parts make an L-, T- or U-shaped house, and a part can have parts of its own (a pump house on a wing): each stands on a wall of the building or of another part, with its own width, length and number of floors. On a long side a wing's roof meets the house's in a valley; a wing with fewer floors runs up to the wall under the eaves; on a gable end it is a lower annex. It has the house's roof pitch and overhang. Its windows and doors are under Windows.", fields:[]},
   {title:"Roof", tab:"shape", fields:[
     {k:"roofType", label:"Roof type", type:"select", options:[["gable","Gable"],["hip","Hip"],["flat","Flat"]]},
     {k:"ridge", label:"Ridge direction", type:"select", options:[["width","Parallel to the front"],["depth","Front to back"]]},
@@ -82,7 +82,7 @@ const SHARED_SECTIONS = [
     {k:"ventilators", label:"Roof ventilators (lanterns on the ridge)", min:0, max:4, step:1}]},
   {title:"Downpipes", tab:"shape", custom:"pipes", hint:"Where the downpipes go: how many on each wall with a gutter, and where along it. Change \"Downpipes per long side\" under Roof to place them again.", fields:[]},
   {title:"Kupor (dormers)", tab:"shape", custom:"dormers", fields:[]},
-  {title:"Windows", label:"Windows and doors", tab:"openings", custom:"windows", hint:"Set how many windows and doors each floor of a wall has, together (a door is a window you have turned into a door: add one here and change it below). To change one window or door, move it to another wall, turn a window into a door or give a door a porch, choose it below or tap it in the preview.", fields:[
+  {title:"Windows", label:"Windows and doors", tab:"openings", custom:"windows", hint:"Choose a wall (or tap it in the preview) to see what stands on it, from its left end, and to add a window, a door or a part. The table gives how many windows and doors each floor of a wall has, together (a door is a window you have turned into a door). To change one window or door, move it to another wall, turn a window into a door or give a door a porch, choose it below or tap it in the preview.", fields:[
     {k:"winStyle", label:"Style", type:"select", options:WINDOW_STYLES.map(s => [s.id, s.name])},
     {k:"winW", label:"Width", min:0.4, max:2.5, step:0.05, unit:" m"},
     {k:"winH", label:"Height", min:0.4, max:2.2, step:0.05, unit:" m"},
@@ -176,7 +176,7 @@ function cleanWings(obj) {
     let id = Number.isInteger(w.id) && w.id >= 1 && w.id <= MAX_WINGS && !used.has(w.id) ? w.id : 0;
     if (!id) for (let i = 1; i <= MAX_WINGS; i++) if (!used.has(i)) { id = i; break; }
     used.add(id);
-    out.push({id, wall: WALLS.includes(w.wall) || nested ? w.wall : "back", pos: clampN(w.pos, 0, 1, 0.15), width: clampN(w.width, 2.5, 30, 6), depth: clampN(w.depth, 2, 30, 5), floors: Math.round(clampN(w.floors, 0, 3, 0)), half: w.half === true, floorHeight: +w.floorHeight > 0 ? Math.round(clampN(w.floorHeight, 2.3, 9, 2.7) * 100) / 100 : 0, pitch: +w.pitch > 0 ? Math.round(clampN(w.pitch, 5, 60, 5)) : 0});
+    out.push({id, wall: WALLS.includes(w.wall) || nested ? w.wall : "back", pos: clampN(w.pos, 0, 1, 0.15), width: clampN(w.width, 2.5, 30, 6), depth: clampN(w.depth, 2, 30, 5), floors: Math.round(clampN(w.floors, 0, 3, 0)), half: w.half === true, name: typeof w.name === "string" ? w.name.trim().slice(0, 40) : "", floorHeight: +w.floorHeight > 0 ? Math.round(clampN(w.floorHeight, 2.3, 9, 2.7) * 100) / 100 : 0, pitch: +w.pitch > 0 ? Math.round(clampN(w.pitch, 5, 60, 5)) : 0});
   }
   return out;
 }
@@ -252,6 +252,68 @@ export function removeDoor(list, wall) {
   if (!mine.length || doors.length < 2) return null;
   const last = mine[mine.length - 1];
   return list.filter(w => w !== last);
+}
+/** A part's name: its own, else "Wing n". */
+export const partName = (p, id) => { const w = (p.wings || []).find(x => x.id === id); return w && w.name ? w.name : `Wing ${id}`; };
+/** A wall's name for the editor: the house's own, or "<part's name> end | left side | right side". */
+export function wallLabel(p, key) {
+  const id = wingIdOf(key), side = /(End|Left|Right)$/.exec(key || "");
+  if (!id || !side) return WALL_NAMES[key] || key;
+  return `${partName(p, id)} ${{End: "end", Left: "left side", Right: "right side"}[side[1]]}`;
+}
+/**
+ * What is on a wall, in order from its left end seen from outside: [{kind: "window" | "door" | "part", id, s0, s1, floor (windows and doors), floors (a part's), hidden, off}].
+ * A part is a part standing on the wall (also one that is left out: off is why).
+ */
+export function wallItems(p, key) {
+  const frame = wallsOf(p)[key];
+  if (!frame) return [];
+  const L = frame.L, live = wingsOf(p), out = [];
+  for (const w of p.windows || []) if (w.wall === key) { const [s0, s1] = openingSpan(w, L); out.push({kind: w.type === "door" ? "door" : "window", id: w.id, floor: w.floor, s0, s1, hidden: !!w._hidden}); }
+  for (const g of p.wings || []) if (g.wall === key) {
+    const l = live.find(x => x.id === g.id);
+    if (l && l.frames) out.push({kind: "part", id: g.id, s0: l.s0, s1: l.s1, floors: l.floors});
+    else { const c = g.pos * L, hw = g.width / 2; out.push({kind: "part", id: g.id, s0: Math.max(0, c - hw), s1: Math.min(L, c + hw), off: (l && l.off) || "It is left out."}); }
+  }
+  return out.sort((a, b) => a.s0 - b.s0 || a.s1 - b.s1);
+}
+/** The free stretches of a wall [s0, s1] on a floor: 30 cm from its ends and 20 cm from what stands there (a part blocks the floors it covers). */
+function freeStretches(p, key, floor, forPart = false) {
+  const L = wallsOf(p)[key].L, blocked = [], eaves = 2 * p.overhang + 0.05;   // (two parts must be this far apart: their eaves would touch)
+  for (const it of wallItems(p, key)) {
+    const m = forPart && it.kind === "part" ? eaves : 0.2;
+    if (it.kind === "part") { if (it.off || floor < it.floors || forPart) blocked.push([it.s0 - m, it.s1 + m]); }
+    else if (it.floor === floor) blocked.push([it.s0 - m, it.s1 + m]);
+  }
+  const gaps = []; let at = 0.3;
+  for (const [a, b] of blocked.sort((x, y) => x[0] - y[0])) { if (a > at) gaps.push([at, a]); at = Math.max(at, b); }
+  if (L - 0.3 > at) gaps.push([at, L - 0.3]);
+  return {L, gaps};
+}
+/**
+ * A window or a door more on a wall: in the middle of the widest free stretch of that floor (a door on the ground floor), as big as the building's windows, or as
+ * the building's other doors (1 x 2.1 m if none). The new window list, or null where there is no room, no such wall or no such floor.
+ */
+export function addOpening(P, key, kind, floor = 0) {
+  if (!wallsOf(P)[key]) return null;
+  const door = kind === "door", wid = wingIdOf(key), wg = wid && liveWings(P).find(x => x.id === wid), fl = door ? 0 : floor;
+  if (fl >= (wg ? wg.floors : P.floors)) return null;
+  const list = P.windows || [], ref = door ? list.find(w => w.type === "door" && w.wall === key) || list.find(w => w.type === "door") : null;
+  const w = door ? (ref ? ref.w : 1) : P.winW, h = door ? (ref ? ref.h : 2.1) : P.winH;
+  const {L, gaps} = freeStretches(P, key, fl), fit = gaps.filter(([a, b]) => b - a >= w + 0.01).sort((x, y) => (y[1] - y[0]) - (x[1] - x[0]))[0];
+  if (!fit) return null;
+  const item = {id: list.reduce((m, x) => Math.max(m, x.id), 0) + 1, wall: key, floor: fl, pos: (fit[0] + fit[1]) / 2 / L, w, h, sill: door ? 0 : P.sill, type: door ? "door" : "window", style: "default", room: "auto", curtain: "default", curtainColor: "default"};
+  if (door) Object.assign(item, {porch: "none", opens: true, swing: "out", hinge: "left"});
+  return [...list, item];
+}
+/** A part more on a wall (the house's or a part's): in the middle of the widest free stretch of its ground floor, up to 6 m wide, 4 m out. The new list of parts, or null (no room, no such wall, too many). */
+export function addPartOn(P, key) {
+  if (!wallsOf(P)[key]) return null;
+  const id = Array.from({length: MAX_WINGS}, (_, i) => i + 1).find(i => !(P.wings || []).some(x => x.id === i));
+  if (!id) return null;
+  const {L, gaps} = freeStretches(P, key, 0, true), fit = gaps.filter(([a, b]) => b - a >= 2.5).sort((x, y) => (y[1] - y[0]) - (x[1] - x[0]))[0];
+  if (!fit) return null;
+  return [...(P.wings || []), {id, wall: key, pos: (fit[0] + fit[1]) / 2 / L, width: Math.min(6, fit[1] - fit[0]), depth: 4, floors: 0}];
 }
 /** An entry of the window list's type ("window" or, on the ground floor, "door") and style ("default" or one of its type's). */
 function openingKind(w) {
