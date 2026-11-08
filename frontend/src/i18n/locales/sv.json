@@ -722,5 +722,6 @@
   "Panel, split and roof covering for the whole building. A single wall can have its own panel, colour and split: choose it in the Building tab.": "Panel, delning och taktäckning för hela byggnaden. En enskild vägg kan ha egen panel, färg och delning: välj den i fliken Byggnad.",
   "Downpipes on this wall": "Stuprör på den här väggen",
   "Downpipe {n}": "Stuprör {n}",
-  "Spread them evenly": "Fördela dem jämnt"
+  "Spread them evenly": "Fördela dem jämnt",
+  "Boards behind the upper windows (so you can't see out through the building)": "Bräder bakom fönstren på övervåningen (så att man inte ser rakt ut genom byggnaden)"
 }

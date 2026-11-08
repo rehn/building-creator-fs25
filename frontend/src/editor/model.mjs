@@ -28,7 +28,7 @@ export const DEFAULTS = {
   wallCladding:"lockpanel", panelSpacing:0.2, battenWidth:0.06, roofMaterial:"tiles", chimneyStyle:"brick", chimneyColor:"#8A3B2C",
   gutters:true, downpipes:2, gutterColor:"#3B3F42",
   wallColor:"#8E2A1E", trimColor:"#F2EFE8", roofColor:"#2B2D2F", doorColor:"#3E5A4A", innerDoorColor:"#E9E3D3", foundationColor:"#6E6E6A",
-  interior:true, insidePaper:"none", curtainStyle:"sides", curtainColor:"#EFE9DC", ventilators:0, age:0,
+  interior:true, loftBacking:true, insidePaper:"none", curtainStyle:"sides", curtainColor:"#EFE9DC", ventilators:0, age:0,
   modPrice:75000, modUpkeep:75, modAuthor:"", modDescription:""
 };
 /** Curtain layouts: [id, name]. Windows can pick one or follow the house's choice ("default"). */
@@ -116,6 +116,7 @@ const SHARED_SECTIONS = [
     {k:"curtainStyle", label:"Curtains", type:"select", options:CURTAIN_OPTIONS}]},
   {title:"Inside walls", label:"Inside walls", tab:"inside", hint:"What the outer walls look like from inside: like the outside (studs behind boards, plaster as plaster, the same split in two materials), or the kind's own finish. Wallpaper goes over either: one for every wall here, or sections along a single wall (one for each room behind it): choose the wall in the Building tab.", fields:[
     {k:"insideSame", label:"Like the outside (boards show their studs inside)", type:"check"},
+    {k:"loftBacking", label:"Boards behind the upper windows (so you can't see out through the building)", type:"check"},
     {k:"studSpacing", label:"Studs: distance between them", min:0.4, max:1.5, step:0.05, unit:" m"},
     {k:"studWidth", label:"Studs: width of each (older barns: heavier)", min:0.045, max:0.12, step:0.005, cm:true},
     {k:"studIrregular", label:"Studs: how uneven (older barns: more)", min:0, max:1, step:0.05},
@@ -1384,6 +1385,13 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
     if (hollow && !dormer && o.t0 < fhOf(key)) { curtainBoth = true; buildCurtains(R); curtainBoth = false; }
     else { rooms.push(R); buildRoom(R); }
   }
+  // no room behind an upper window of a walk-in building (a barn): boards a little behind the glass, else what is seen through it is the window on the other side
+  if (!p.interior && p.loftBacking && hollow && !dormer) for (const o of ops) if (o.kind === "window" && o.glass && o.t0 >= fhOf(key) - 1e-6) {
+    const s0 = Math.max(0.05, o.s0 - 0.5), s1 = Math.min(w.L - 0.05, o.s1 + 0.5), t0 = Math.max(fhOf(key) + 0.05, o.t0 - 0.4), t1 = Math.min(o.t1 + 0.4, topAt((s0 + s1) / 2) - 0.1), d = -r - 0.35;
+    if (t1 - t0 < 0.3 || s1 - s0 < 0.3) continue;
+    paint(LOFT, "boards");
+    poly("fittings", [WP(w, s0, t0, d), WP(w, s1, t0, d), WP(w, s1, t1, d), WP(w, s0, t1, d)], w.n);
+  }
 }
 
 /** Appends a ready-made mesh (with its own normals) to material mat. */
@@ -1400,7 +1408,7 @@ function addMesh(mat, m) {
 /** Inside walls of a walk-in building are whitewashed. */
 /** The floor finish: a skin, so anything lying on the floor (bedding, droppings, plates) shows above it. */
 const FLOOR_T = 0.004;
-const WHITEWASH = "#E9E4D8", GRIME = "#C2B8A3", GRIME_T = 0.9, KICKBOARD = "#3F352C", KICK_T = 0.28, ROOF_BOARDS = "#8C7457";
+const LOFT = "#6B5A48", WHITEWASH = "#E9E4D8", GRIME = "#C2B8A3", GRIME_T = 0.9, KICKBOARD = "#3F352C", KICK_T = 0.28, ROOF_BOARDS = "#8C7457";
 /** A barn's inside walls: whitewash, a grimy band at the bottom and a tarred kickboard ([colour, surface, height]). */
 const BARN_WALLS = {wall: [WHITEWASH, "whitewash"], low: [GRIME, "grime", GRIME_T], kick: [KICKBOARD, "timber", KICK_T]};
 /** The color the next "fittings" faces get, and their surface (a key of SURFACES, or none: plain color). */
