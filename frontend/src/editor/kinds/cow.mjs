@@ -7,7 +7,7 @@ import { tg, shape } from "../i3d.mjs";
 import { roomOf, furnisher, wallsOf, footprint, WALL_T } from "../layout.mjs";
 import { animalNav, navMesh } from "../walkarea.mjs";
 import { wallLength, yardFrame, shellOf, teleportFor, withPasture, pastureWallFor, cornerStripes, palletLines } from "./pasture.mjs";
-import { objectOf, boxOf, iconOf, boxFrom, pastureOf, insidePoly, footprints, blockersOf } from "../objects.mjs";
+import { objectOf, boxOf, iconOf, boxFrom, pastureOf, insidePoly, footprints, blockersOf, animalEntrances } from "../objects.mjs";
 import { placeOnWall, placeOnBuilding } from "../places.mjs";
 import { tone, shade, arc, strawBale, strawLitter } from "./props.mjs";
 import { INNER_WALL } from "./innerwall.mjs";
@@ -34,15 +34,15 @@ export const COW = {count: cowsOf, minWidth: MIN_PASTURE_WIDTH, pallets: false, 
  * the building's floor (less the pieces standing on it), and the ramp through the doorway between them, as {rects, ramp} (walkarea.mjs animalNav). Null otherwise.
  */
 function animalsInside(p, geo, fence, blockers) {
-  const door = p.animalsInside === false ? null : openings(p)[0];
-  if (!door || !fence || fence.length < 3) return null;
-  const w = wallsOf(p)[door.wall];
+  const entrances = p.animalsInside === false ? [] : animalEntrances(p);
+  if (!entrances.length || !fence || fence.length < 3) return null;
+  const w = wallsOf(p)[entrances[0].wall];
   if (!w) return null;
   const F = p.foundation || 0, run = F > 0.02 ? Math.max(0.8, F * 5) : 0.6;
   const at = (s, d) => [w.o[0] + w.u[0] * s + w.n[0] * d, w.o[2] + w.u[2] * s + w.n[2] * d];
   const rooms = roomOf(p, openings(p)).rects;
   const items = (p.items || []).filter(it => CATALOG[it.type] && !CATALOG[it.type].ghost).map(it => footprint(it, CATALOG[it.type]));
-  return animalNav({fence, blockers, rooms, items, door: {a: at(door.s0, run), b: at(door.s1, run), c: at(door.s1, -WALL_T), d: at(door.s0, -WALL_T)}, floorY: F});
+  return animalNav({fence, blockers, rooms, items, doors: entrances.map(e => ({a: at(e.s0, run), b: at(e.s1, run), c: at(e.s1, -WALL_T), d: at(e.s0, -WALL_T)})), floorY: F});
 }
 /** The cows' doorway: an open hole in the pasture wall (1.6 x 2.2 m in the middle of the stretch it encloses, unless the pasture says where and how big), kept clear inside. */
 export function openings(p) {

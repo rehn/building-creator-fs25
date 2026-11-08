@@ -728,5 +728,6 @@
   "Hide where the animals can walk": "Dölj var djuren kan gå",
   "Where the animals can walk: in the yard, and inside the building where they can go in": "Var djuren kan gå: på gården, och inne i byggnaden där de kan gå in",
   "Animals can walk on about {n} m²: in the yard, and inside the building where they can go in": "Djuren kan gå på cirka {n} m²: på gården, och inne i byggnaden där de kan gå in",
-  "The animals can walk inside through the doorway": "Djuren kan gå in genom dörröppningen"
+  "The animals can walk inside through the doorway": "Djuren kan gå in genom dörröppningen",
+  "The animals stay outside: there is no open doorway on the pasture side. Turn the pasture's doorway on, or make a door there an empty framed doorway (style \"Open doorway, framed\").": "Djuren stannar utomhus: det finns ingen öppen dörröppning mot hagen. Slå på hagens dörröppning, eller gör en dörr där till en tom inramad öppning (stil ”Open doorway, framed”)."
 }

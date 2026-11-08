@@ -7,7 +7,7 @@
 // from the middle)}. The pasture: {id, type: "pasture", wall, a (m from the wall's start), b (m from its
 // end: 0 is the far corner, so a pasture snapped to the corners stays there when the building changes
 // size; less than 0 runs past the corner), depth (m out from the wall)}.
-import { wallsOf, liveWings } from "./layout.mjs";
+import { wallsOf, liveWings, openingSpan } from "./layout.mjs";
 /** The building's own four walls (a pasture goes on one of them). */
 const WALLS = ["front", "back", "left", "right"];
 
@@ -227,9 +227,28 @@ export function insidePoly(poly, x, z) {
   return c;
 }
 /** What the building lacks, for the player to read (no ids to hang it on): a kind with troughs that has none of one. */
+/**
+ * Where the animals can go into the building from the pasture: the pasture's doorway (unless it is off), and a door on the pasture's wall that is an empty
+ * framed doorway (style "hole"): [{wall, s0, s1}]. Hens and the like have none.
+ */
+export function animalEntrances(p) {
+  const pa = pastureOf(p), w = pa && wallsOf(p)[pa.wall];
+  if (!pa || !w || !TROUGH_KINDS.includes(p.kind)) return [];
+  const out = [];
+  if (!pa.noGap) out.push({wall: pa.wall, s0: pa.mid - pa.gapW / 2, s1: pa.mid + pa.gapW / 2});
+  for (const d of p.windows || []) {
+    if (d.type !== "door" || d.floor !== 0 || d.wall !== pa.wall) continue;
+    if ((d.style && d.style !== "default" ? d.style : p.doorStyle) !== "hole") continue;
+    const [s0, s1] = openingSpan(d, w.L);
+    out.push({wall: pa.wall, s0, s1});
+  }
+  return out;
+}
 export function objectWarnings(p) {
   const out = [];
   if (!TROUGH_KINDS.includes(p.kind)) return out;
+  if (p.animalsInside !== false && objectOf(p, "pasture") && !animalEntrances(p).length)
+    out.push("The animals stay outside: there is no open doorway on the pasture side. Turn the pasture's doorway on, or make a door there an empty framed doorway (style \"Open doorway, framed\").");
   for (const t of ["feedTrough", "waterTrough"]) if (!objectOf(p, t))
     out.push(t === "feedTrough" ? "No feed trough: the animals have nothing to eat from. Add one under Game objects." : "No water trough: the animals have nothing to drink from. Add one under Game objects.");
   return out;

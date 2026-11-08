@@ -2181,7 +2181,7 @@ function paintWalkArea(yard) {
   const rects = yard.nav ? yard.nav.rects : cellRects(walkArea(yard.fence, yard.blockers || [], cell));
   if (!rects.length) return;
   // one picture of the ground for the yard and one at the building's floor (where the animals can go inside)
-  const paint = (mesh, list, y, ramp) => {
+  const paint = (mesh, list, y, ramps) => {
     if (!list.length) return;
     const x0 = Math.min(...list.map(r => r.x0)), x1 = Math.max(...list.map(r => r.x1)), z0 = Math.min(...list.map(r => r.z0)), z1 = Math.max(...list.map(r => r.z1));
     const nx = Math.max(1, Math.ceil((x1 - x0) / cell)), nz = Math.max(1, Math.ceil((z1 - z0) / cell));
@@ -2190,14 +2190,14 @@ function paintWalkArea(yard) {
     ctx.fillStyle = "rgba(70,190,90,0.47)";
     // (the top row of the picture is the smallest z)
     for (const r of list) ctx.fillRect(Math.round((r.x0 - x0) / cell), Math.round((r.z0 - z0) / cell), Math.max(1, Math.round((r.x1 - r.x0) / cell)), Math.max(1, Math.round((r.z1 - r.z0) / cell)));
-    if (ramp) { ctx.beginPath(); ramp.points.forEach(([x, z], k) => ctx[k ? "lineTo" : "moveTo"]((x - x0) / cell, (z - z0) / cell)); ctx.closePath(); ctx.fill(); }
+    for (const ramp of ramps || []) { ctx.beginPath(); ramp.points.forEach(([x, z], k) => ctx[k ? "lineTo" : "moveTo"]((x - x0) / cell, (z - z0) / cell)); ctx.closePath(); ctx.fill(); }
     if (mesh.material.map) mesh.material.map.dispose();
     mesh.material.map = new THREE.CanvasTexture(cv); mesh.material.map.magFilter = THREE.NearestFilter; mesh.material.needsUpdate = true;
     mesh.scale.set(nx * cell, nz * cell, 1);
     mesh.position.set(x0 + nx * cell / 2, y + 0.03, z0 + nz * cell / 2);
     mesh.visible = true;
   };
-  paint(yardObj.ground, rects.filter(r => !r.inside), 0, yard.nav && yard.nav.ramp);
+  paint(yardObj.ground, rects.filter(r => !r.inside), 0, yard.nav && yard.nav.ramps);
   paint(yardObj.groundIn, rects.filter(r => r.inside), (rects.find(r => r.inside) || {y: 0}).y, null);
   const m2 = rects.reduce((sum, r) => sum + (r.x1 - r.x0) * (r.z1 - r.z0), 0);
   btn.title = t("Animals can walk on about {n} m²: in the yard, and inside the building where they can go in", {n: Math.round(m2)});

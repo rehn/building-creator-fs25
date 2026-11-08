@@ -31,3 +31,27 @@ test("no doorway, no way in: the old area", () => {
 test("hens keep to the yard", () => {
   assert.ok(!buildI3d(sanitize({kind: "chicken"})).includes("navigationMeshShape"));
 });
+
+import { animalEntrances, objectWarnings } from "../src/editor/objects.mjs";
+
+test("an empty framed doorway on the pasture's wall is a way in too, when the pasture's own doorway is off", () => {
+  const base = sanitize({kind: "cow", foundation: 0});
+  const off = base.objects.map(o => o.type === "pasture" ? {...o, noGap: true} : o);
+  const none = sanitize({...base, objects: off});
+  assert.equal(animalEntrances(none).length, 0);
+  assert.ok(objectWarnings(none).some(w => w.startsWith("The animals stay outside")), "says why nobody goes in");
+  assert.ok(!buildI3d(none).includes("navigationMeshShape"));
+  // a door of the style hole on that wall
+  const wall = none.pastureWall, door = {id: 99, wall, floor: 0, type: "door", pos: 0.5, w: 2.4, h: 2.4, sill: 0, style: "hole", opens: false};
+  const open = sanitize({...none, windows: [...none.windows, door]});
+  assert.equal(animalEntrances(open).length, 1, "the hole door");
+  assert.ok(!objectWarnings(open).some(w => w.startsWith("The animals stay outside")));
+  assert.ok(buildI3d(open).includes("navigationMeshShape"), "the walking mesh");
+});
+
+test("with the pasture's doorway on there is one entrance and no warning; and none for hens", () => {
+  const p = sanitize({kind: "cow"});
+  assert.equal(animalEntrances(p).length, 1);
+  assert.ok(!objectWarnings(p).some(w => w.startsWith("The animals stay outside")));
+  assert.equal(animalEntrances(sanitize({kind: "chicken"})).length, 0);
+});

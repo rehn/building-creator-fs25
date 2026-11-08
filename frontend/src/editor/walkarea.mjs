@@ -43,14 +43,14 @@ export function cellRects(w, y = 0, inside = false) {
  *   inside that animals walk round; door: {a: [x, z], b: [x, z], c: [x, z], d: [x, z]} the doorway's strip from outside (a-b, at the foot of the ramp,
  *   ground level) to inside (c-d, at floorY): the ground there is a ramp, so it is taken out of the yard's cells.
  */
-export function animalNav({fence, blockers = [], rooms = [], items = [], door = null, floorY = 0, cell = 0.25}) {
+export function animalNav({fence, blockers = [], rooms = [], items = [], door = null, doors = door ? [door] : [], floorY = 0, cell = 0.25}) {
   const out = walkArea(fence, blockers, cell);
   if (!out) return null;
   const rects = [];
-  const strip = door ? {x0: Math.min(...[door.a, door.b, door.c, door.d].map(q => q[0])), x1: Math.max(...[door.a, door.b, door.c, door.d].map(q => q[0])), z0: Math.min(...[door.a, door.b, door.c, door.d].map(q => q[1])), z1: Math.max(...[door.a, door.b, door.c, door.d].map(q => q[1]))} : null;
-  if (strip) for (let i = 0; i < out.nx; i++) for (let k = 0; k < out.nz; k++) {
+  const strips = doors.map(d => ({x0: Math.min(...[d.a, d.b, d.c, d.d].map(q => q[0])), x1: Math.max(...[d.a, d.b, d.c, d.d].map(q => q[0])), z0: Math.min(...[d.a, d.b, d.c, d.d].map(q => q[1])), z1: Math.max(...[d.a, d.b, d.c, d.d].map(q => q[1]))}));
+  if (strips.length) for (let i = 0; i < out.nx; i++) for (let k = 0; k < out.nz; k++) {
     const x = out.x0 + (i + 0.5) * cell, z = out.z0 + (k + 0.5) * cell;
-    if (x > strip.x0 && x < strip.x1 && z > strip.z0 && z < strip.z1) out.cells[i * out.nz + k] = 0;
+    if (strips.some(st => x > st.x0 && x < st.x1 && z > st.z0 && z < st.z1)) out.cells[i * out.nz + k] = 0;
   }
   rects.push(...cellRects(out, 0));
   if (rooms.length) {
@@ -62,7 +62,8 @@ export function animalNav({fence, blockers = [], rooms = [], items = [], door = 
     }
     rects.push(...cellRects({x0, z0, nx, nz, cell, cells}, floorY, true));
   }
-  return {rects, ramp: door ? {points: [door.a, door.b, door.c, door.d], y0: 0, y1: floorY} : null};
+  const ramps = doors.map(d => ({points: [d.a, d.b, d.c, d.d], y0: 0, y1: floorY}));
+  return {rects, ramps, ramp: ramps[0] || null};
 }
 
 /** A flat mesh {p, n, uv, i} (the i3d shape) of the rectangles, each at its height, and the ramp. */
@@ -71,8 +72,8 @@ export function navMesh(nav) {
   const quad = (pts) => { const b = p.length / 3; for (const q of pts) { p.push(q[0], q[1], q[2]); n.push(0, 1, 0); uv.push(0, 0); } i.push(b, b + 1, b + 2, b, b + 2, b + 3); };
   // counter-clockwise seen from above (the normal up): x then z runs the wrong way round, so z first
   for (const r of nav.rects) quad([[r.x0, r.y, r.z0], [r.x0, r.y, r.z1], [r.x1, r.y, r.z1], [r.x1, r.y, r.z0]]);
-  if (nav.ramp) {
-    const [a, b, c, d] = nav.ramp.points, y0 = nav.ramp.y0, y1 = nav.ramp.y1;
+  for (const ramp of nav.ramps || []) {
+    const [a, b, c, d] = ramp.points, y0 = ramp.y0, y1 = ramp.y1;
     const q = [[a[0], y0, a[1]], [b[0], y0, b[1]], [c[0], y1, c[1]], [d[0], y1, d[1]]];
     // face up: flip when the first triangle faces down
     const e1 = [q[1][0] - q[0][0], q[1][1] - q[0][1], q[1][2] - q[0][2]], e2 = [q[2][0] - q[0][0], q[2][1] - q[0][1], q[2][2] - q[0][2]];
