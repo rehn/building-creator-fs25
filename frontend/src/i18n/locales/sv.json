@@ -726,6 +726,7 @@
   "Rooms and curtains behind the windows are only in houses. In a barn the windows on the upper floors have boards behind them (Inside → Inside walls).": "Rum och gardiner bakom fönstren finns bara i hus. I en lada har fönstren på övervåningarna bräder bakom sig (Inside → Inside walls).",
   "Show where the animals can walk": "Visa var djuren kan gå",
   "Hide where the animals can walk": "Dölj var djuren kan gå",
-  "Where the animals can walk: inside the fence, less the building and the troughs": "Var djuren kan gå: innanför stängslet, utom byggnaden och grytorna",
-  "Animals can walk on about {n} m²: inside the fence, less the building and the troughs": "Djuren kan gå på cirka {n} m²: innanför stängslet, utom byggnaden och grytorna"
+  "Where the animals can walk: in the yard, and inside the building where they can go in": "Var djuren kan gå: på gården, och inne i byggnaden där de kan gå in",
+  "Animals can walk on about {n} m²: in the yard, and inside the building where they can go in": "Djuren kan gå på cirka {n} m²: på gården, och inne i byggnaden där de kan gå in",
+  "The animals can walk inside through the doorway": "Djuren kan gå in genom dörröppningen"
 }

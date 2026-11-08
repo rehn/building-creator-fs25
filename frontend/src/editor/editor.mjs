@@ -3,7 +3,7 @@
 import * as THREE from "three";
 import JSZip from "jszip";
 import { t } from "../i18n/index.mjs";
-import { walkArea, areaOf } from "./walkarea.mjs";
+import { walkArea, areaOf, cellRects } from "./walkarea.mjs";
 import {
   SCHEMA, TABS, fieldsFor, WALLS, WALL_NAMES, DTYPES, DORM_DEF, MATS, fittingTextures,
   genRow, sanitize, serialize, slugify, buildGeometry, buildI3d, placeableSnippet, gamePlaces, surfaceSpec, scaledUV, colorFor, WP
@@ -46,7 +46,7 @@ const MARKUP = `<div class="hx-editor" data-tab="shape">
     <div class="readout" id="readout"></div>
     <div class="orbit-hint" id="orbitHint">Drag to orbit, scroll to zoom</div>
     <button type="button" class="hx-walk" id="walkBtn" title="See the building as a person walking round and in it">Walk around</button>
-    <button type="button" class="hx-walk hx-walk2" id="walkAreaBtn" aria-pressed="false" hidden title="Where the animals can walk: inside the fence, less the building and the troughs">Show where the animals can walk</button>
+    <button type="button" class="hx-walk hx-walk2" id="walkAreaBtn" aria-pressed="false" hidden title="Where the animals can walk: in the yard, and inside the building where they can go in">Show where the animals can walk</button>
     <div class="hx-inside-bar" id="insideBar" hidden>
       <div class="seg" role="group" aria-label="View">
         <button type="button" id="viewPlan" aria-pressed="true">Plan</button><button type="button" id="view3d" aria-pressed="false">3D</button>
@@ -2079,8 +2079,11 @@ function makeYardMarker() {
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({transparent: true, depthWrite: false, side: THREE.DoubleSide}));
   ground.rotation.x = -Math.PI / 2; ground.position.y = 0.03; ground.visible = false; ground.renderOrder = 2;
   group.add(ground);
-  const dispose = () => { for (const m of [net, posts, wires, ground]) { m.geometry.dispose(); if (m.material.map) m.material.map.dispose(); m.material.dispose(); } };
-  return {group, net, posts, wires, ground, dispose};
+  const groundIn = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({transparent: true, depthWrite: false, side: THREE.DoubleSide}));
+  groundIn.rotation.x = -Math.PI / 2; groundIn.visible = false; groundIn.renderOrder = 3;
+  group.add(groundIn);
+  const dispose = () => { for (const m of [net, posts, wires, ground, groundIn]) { m.geometry.dispose(); if (m.material.map) m.material.map.dispose(); m.material.dispose(); } };
+  return {group, net, posts, wires, ground, groundIn, dispose};
 }
 /* Icon glyphs, drawn in white on a 128 px circle. */
 function drawFeed(x) {
@@ -2171,23 +2174,33 @@ function updateYardMarker(geo) {
 }
 /** Paints where the animals can walk (inside the fence, less the building and the troughs) on the ground, if that is switched on. */
 function paintWalkArea(yard) {
-  const g = yardObj.ground, btn = $("walkAreaBtn");
-  g.visible = false;
+  const btn = $("walkAreaBtn");
+  yardObj.ground.visible = yardObj.groundIn.visible = false;
   if (!showWalkArea) return;
-  const span = Math.max(...yard.fence.map(q => q[0])) - Math.min(...yard.fence.map(q => q[0])), cell = Math.max(0.2, span / 700);
-  const w = walkArea(yard.fence, yard.blockers || [], cell);
-  if (!w) return;
-  const cv = document.createElement("canvas"); cv.width = w.nx; cv.height = w.nz;
-  const ctx = cv.getContext("2d"), img = ctx.createImageData(w.nx, w.nz);
-  // (the top row of the picture is the smallest z)
-  for (let i = 0; i < w.nx; i++) for (let k = 0; k < w.nz; k++) if (w.cells[i * w.nz + k]) { const o = (k * w.nx + i) * 4; img.data[o] = 70; img.data[o + 1] = 190; img.data[o + 2] = 90; img.data[o + 3] = 120; }
-  ctx.putImageData(img, 0, 0);
-  if (g.material.map) g.material.map.dispose();
-  g.material.map = new THREE.CanvasTexture(cv); g.material.map.magFilter = THREE.NearestFilter; g.material.needsUpdate = true;
-  g.scale.set(w.nx * w.cell, w.nz * w.cell, 1);
-  g.position.set(w.x0 + w.nx * w.cell / 2, 0.03, w.z0 + w.nz * w.cell / 2);
-  g.visible = true;
-  btn.title = t("Animals can walk on about {n} m²: inside the fence, less the building and the troughs", {n: Math.round(areaOf(w))});
+  const xs = yard.fence.map(q => q[0]), span = Math.max(...xs) - Math.min(...xs), cell = Math.max(0.2, span / 700);
+  const rects = yard.nav ? yard.nav.rects : cellRects(walkArea(yard.fence, yard.blockers || [], cell));
+  if (!rects.length) return;
+  // one picture of the ground for the yard and one at the building's floor (where the animals can go inside)
+  const paint = (mesh, list, y, ramp) => {
+    if (!list.length) return;
+    const x0 = Math.min(...list.map(r => r.x0)), x1 = Math.max(...list.map(r => r.x1)), z0 = Math.min(...list.map(r => r.z0)), z1 = Math.max(...list.map(r => r.z1));
+    const nx = Math.max(1, Math.ceil((x1 - x0) / cell)), nz = Math.max(1, Math.ceil((z1 - z0) / cell));
+    const cv = document.createElement("canvas"); cv.width = nx; cv.height = nz;
+    const ctx = cv.getContext("2d");
+    ctx.fillStyle = "rgba(70,190,90,0.47)";
+    // (the top row of the picture is the smallest z)
+    for (const r of list) ctx.fillRect(Math.round((r.x0 - x0) / cell), Math.round((r.z0 - z0) / cell), Math.max(1, Math.round((r.x1 - r.x0) / cell)), Math.max(1, Math.round((r.z1 - r.z0) / cell)));
+    if (ramp) { ctx.beginPath(); ramp.points.forEach(([x, z], k) => ctx[k ? "lineTo" : "moveTo"]((x - x0) / cell, (z - z0) / cell)); ctx.closePath(); ctx.fill(); }
+    if (mesh.material.map) mesh.material.map.dispose();
+    mesh.material.map = new THREE.CanvasTexture(cv); mesh.material.map.magFilter = THREE.NearestFilter; mesh.material.needsUpdate = true;
+    mesh.scale.set(nx * cell, nz * cell, 1);
+    mesh.position.set(x0 + nx * cell / 2, y + 0.03, z0 + nz * cell / 2);
+    mesh.visible = true;
+  };
+  paint(yardObj.ground, rects.filter(r => !r.y), 0, yard.nav && yard.nav.ramp);
+  paint(yardObj.groundIn, rects.filter(r => r.y > 0), (rects.find(r => r.y > 0) || {y: 0}).y, null);
+  const m2 = rects.reduce((sum, r) => sum + (r.x1 - r.x0) * (r.z1 - r.z0), 0);
+  btn.title = t("Animals can walk on about {n} m²: in the yard, and inside the building where they can go in", {n: Math.round(m2)});
   needs = true;
 }
 function rebuild(fit) {

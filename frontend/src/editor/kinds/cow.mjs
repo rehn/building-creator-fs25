@@ -4,7 +4,8 @@
 // the fence, water is automatic. Swedish barn presets: a red ladugård, a small fähus, a lösdriftsstall.
 // Imports only the i3d writer and the pure helpers; the core hands in the rest (see kinds/index.mjs).
 import { tg, shape } from "../i3d.mjs";
-import { roomOf, furnisher } from "../layout.mjs";
+import { roomOf, furnisher, wallsOf, footprint, WALL_T } from "../layout.mjs";
+import { animalNav, navMesh } from "../walkarea.mjs";
 import { wallLength, yardFrame, shellOf, teleportFor, withPasture, pastureWallFor, cornerStripes, palletLines } from "./pasture.mjs";
 import { objectOf, boxOf, iconOf, boxFrom, pastureOf, insidePoly, footprints, blockersOf } from "../objects.mjs";
 import { placeOnWall, placeOnBuilding } from "../places.mjs";
@@ -28,6 +29,21 @@ export const COW = {count: cowsOf, minWidth: MIN_PASTURE_WIDTH, pallets: false, 
   fence: "cowFence/cowFence", glyph: "cow", fnAnimal: "$l10n_function_animalPenCow"};
 
 /* ---------- The doorway and the troughs ---------- */
+/**
+ * Where the animals walk when they can go inside (p.animalsInside, and the pasture has its doorway): the yard (the fence, less the building and the troughs),
+ * the building's floor (less the pieces standing on it), and the ramp through the doorway between them, as {rects, ramp} (walkarea.mjs animalNav). Null otherwise.
+ */
+function animalsInside(p, geo, fence, blockers) {
+  const door = p.animalsInside === false ? null : openings(p)[0];
+  if (!door || !fence || fence.length < 3) return null;
+  const w = wallsOf(p)[door.wall];
+  if (!w) return null;
+  const F = p.foundation || 0, run = F > 0.02 ? Math.max(0.8, F * 5) : 0.6;
+  const at = (s, d) => [w.o[0] + w.u[0] * s + w.n[0] * d, w.o[2] + w.u[2] * s + w.n[2] * d];
+  const rooms = roomOf(p, openings(p)).rects;
+  const items = (p.items || []).filter(it => CATALOG[it.type] && !CATALOG[it.type].ghost).map(it => footprint(it, CATALOG[it.type]));
+  return animalNav({fence, blockers, rooms, items, door: {a: at(door.s0, run), b: at(door.s1, run), c: at(door.s1, -WALL_T), d: at(door.s0, -WALL_T)}, floorY: F});
+}
 /** The cows' doorway: an open hole in the pasture wall (1.6 x 2.2 m in the middle of the stretch it encloses, unless the pasture says where and how big), kept clear inside. */
 export function openings(p) {
   if (p.pastureNoGap) return [];
@@ -99,7 +115,9 @@ export function cowYard(geo, p, cfg = COW) {
   // The game objects: where the building has them (objects.mjs); to start with, the feed pad and bales
   // outside the fence on the feed side, the trailer spot further out, the info area round the barn.
   const {food, bales, loading, info, pallets} = cowObjects(geo, p, yf, cfg);
+  const nav = animalsInside(p, geo, fence, [...blockersOf(p), ...[feedTrough, waterTrough].filter(Boolean).map(t => t.box)]);
   return {
+    nav,
     ...(pallets && {pallet: {lines: palletLines(pallets.box), trigger: pallets.box, stripes: cornerStripes(rectOf(pallets.box))}}),
     fence, feedTrough, waterTrough, foodPlaces, waterPlaces, food: food.box, bales: bales && bales.box, loading: loading.box, info: info.box,
     blockers: [...blockersOf(p), ...[feedTrough, waterTrough].filter(Boolean).map(t => t.box)],
@@ -377,7 +395,10 @@ export const sceneOf = cfg => c => {
     ...(y.feedTrough ? [plane("foodPlane", y.feedTrough, forage), places("foodPlaces", "foodPlace", y.foodPlaces)] : []),
     ...(y.waterTrough ? [plane("waterPlane", y.waterTrough, water), places("waterPlaces", "waterPlace", y.waterPlaces)] : []),
     // Like the base game's cow barn: the barn and troughs are cut out of the walking area made from the fence.
-    tg("navigationRootNode", [0, 0, 0], y.blockers.map(blocker)),
+    // (animals that can go inside: a walking mesh of the whole area, like the base game's big barns; else the area made from the fence minus the blockers)
+    tg("navigationRootNode", [0, 0, 0], y.nav
+      ? [shape("navigationMeshShape", {shapeId: doc.shape("navigationMeshShape", navMesh(y.nav)), nonRenderable: true, buildNavMeshMask: "0xfe", castsShadows: false, receiveShadows: false, materialIds: forage})]
+      : y.blockers.map(blocker)),
     tg("fence1", [0, 0, 0], y.fence.map((q, i) => tg(`fence1Node${i + 1}`, q))),
     ...(y.pallet ? [
       c.box("palletTrigger", y.pallet.trigger, c.trigger("0x20000000", "0x10000")),
@@ -404,7 +425,7 @@ ${y.bales ? `        <triggerMarker node="markerBales" filename="$data/shared/as
     <husbandry saveId="Animals_${cfg.animal}" hasStatistics="false">
         <!-- The walking area is made from the fence when the barn is placed; the barn and troughs are blocked out. -->
         <animals type="${cfg.animal}" baseMaxNumAnimals="${n}" maxNumAnimals="${n}">
-            <navigation rootNode="navigationRootNode"/>
+            ${y.nav ? '<navigation shape="navigationMeshShape"/>' : '<navigation rootNode="navigationRootNode"/>'}
             <loadingTrigger node="loadingTrigger"/>
         </animals>
         <food capacity="${n * cfg.foodPer}">
@@ -462,10 +483,11 @@ export default {
   walkIn: true,
   glyph: "cow",
   yard: (geo, p) => cowYard(geo, p),
-  defaults: {ceiling: false, insideSame: true, cows: 12, pastureWall: "back", fenceDepth: 15, winStyle: "stall", doorStyle: "xbrace"},
+  defaults: {ceiling: false, insideSame: true, animalsInside: true, cows: 12, pastureWall: "back", fenceDepth: 15, winStyle: "stall", doorStyle: "xbrace"},
   sections: [
     {title: "Cows", tab: "game", hint: "Cows graze in the pasture and come in through a wide doorway in the pasture side; they eat and drink at troughs along that wall. Fill feed (or drop bales) at the feed place outside the fence; water is automatic. The pasture, the feed pad and the rest are under Game objects. This is a barn without milking (like the game’s small cow barn).", fields: [
-      {k: "cows", label: "Cows", min: 1, max: MAX_COWS, step: 1}]},
+      {k: "cows", label: "Cows", min: 1, max: MAX_COWS, step: 1},
+      {k: "animalsInside", label: "The animals can walk inside through the doorway", type: "check"}]},
   ],
   hides: ["Interior", "Kupor (dormers)"],
   /**
