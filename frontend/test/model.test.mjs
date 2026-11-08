@@ -893,3 +893,16 @@ test("serialize: internal fields are not saved and the result loads back the sam
   assert.deepEqual(sanitize(json), sanitize(JSON.parse(JSON.stringify(json))));
   assert.deepEqual(serialize(sanitize(json)), json);
 });
+
+test("opening counts: windows and doors are counted apart, per wall and floor", async () => {
+  const { openingCounts } = await import("../src/editor/model.mjs");
+  const p = sanitize({ floors: 2, windows: [
+    { wall: "right", floor: 0, pos: 0.2, type: "door", w: 1, h: 2.1 }, { wall: "right", floor: 0, pos: 0.5, type: "door", w: 1, h: 2.1 },
+    { wall: "right", floor: 0, pos: 0.8, type: "window", w: 1, h: 1.2, sill: 0.9 }, { wall: "right", floor: 1, pos: 0.5, type: "window", w: 1, h: 1.2, sill: 0.9 },
+    { wall: "front", floor: 1, pos: 0.5, type: "window", w: 1, h: 1.2, sill: 0.9 }] });
+  const c = openingCounts(p);
+  assert.deepEqual(c.right[0], { windows: 1, doors: 2 });
+  assert.deepEqual(c.right[1], { windows: 1, doors: 0 });
+  assert.deepEqual(c.front[1], { windows: 1, doors: 0 });
+  assert.deepEqual(c.back[0], { windows: 0, doors: 0 });
+});

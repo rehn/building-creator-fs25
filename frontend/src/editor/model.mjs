@@ -82,7 +82,7 @@ const SHARED_SECTIONS = [
     {k:"ventilators", label:"Roof ventilators (lanterns on the ridge)", min:0, max:4, step:1}]},
   {title:"Downpipes", tab:"shape", custom:"pipes", hint:"Where the downpipes go: how many on each wall with a gutter, and where along it. Change \"Downpipes per long side\" under Roof to place them again.", fields:[]},
   {title:"Kupor (dormers)", tab:"shape", custom:"dormers", fields:[]},
-  {title:"Windows", tab:"openings", custom:"windows", hint:"Set how many windows each floor has. To change one window or door, move it to another wall, turn a window into a door or give a door a porch, choose it below or tap it in the preview.", fields:[
+  {title:"Windows", tab:"openings", custom:"windows", hint:"Set how many windows each floor has (the doors on a wall are counted under its ground floor). To change one window or door, move it to another wall, turn a window into a door or give a door a porch, choose it below or tap it in the preview.", fields:[
     {k:"winStyle", label:"Style", type:"select", options:WINDOW_STYLES.map(s => [s.id, s.name])},
     {k:"winW", label:"Width", min:0.4, max:2.5, step:0.05, unit:" m"},
     {k:"winH", label:"Height", min:0.4, max:2.2, step:0.05, unit:" m"},
@@ -233,6 +233,12 @@ function cleanWallZones(z, p) {
 export function splitAtOf(p, key) {
   const z = p.wallZones && p.wallZones[key], mode = z ? z.split : p.wallSplit;
   return mode === "floor" ? p.floorHeight : mode === "height" ? (z && z.height !== undefined ? z.height : p.splitHeight) : 0;
+}
+/** How many windows and doors each wall has on each floor: {wall: {floor: {windows, doors}}} for the house's walls and its wings' (floors 0 to 2). */
+export function openingCounts(p) {
+  const out = {};
+  for (const wall of Object.keys(wallsOf(p))) out[wall] = [0, 1, 2].map(f => ({windows: p.windows.filter(w => w.wall === wall && w.floor === f && w.type !== "door").length, doors: p.windows.filter(w => w.wall === wall && w.floor === f && w.type === "door").length}));
+  return out;
 }
 /** An entry of the window list's type ("window" or, on the ground floor, "door") and style ("default" or one of its type's). */
 function openingKind(w) {
