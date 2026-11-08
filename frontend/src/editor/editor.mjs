@@ -168,6 +168,7 @@ function clearSearch() { $("settingsSearch").value = ""; applySearch(); }
 function setTab(t) {
   if (!TABS.some(x => x[0] === t)) t = TABS[0][0];
   editorEl.dataset.tab = t;
+  placeShape();
   for (const [s] of TABS) {
     const b = $("tab-" + s);
     b.setAttribute("aria-selected", String(s === t));
@@ -202,6 +203,8 @@ function fmt(f, v) {
 const FLD = fieldsFor(kindOf(p));
 const kindSections = [];
 function syncKind() { for (const {g, d} of kindSections) d.hidden = !g.kinds.includes(p.kind); }
+// (the Shape tab's sections: they are shown under the main building in the tree when it is chosen, see placeShape)
+const shapeSections = [];
 SCHEMA.forEach(g => {
   if (g.kinds && !g.kinds.includes(p.kind)) return;
   const d = document.createElement("details");
@@ -212,6 +215,7 @@ SCHEMA.forEach(g => {
   d.addEventListener("toggle", () => { openState[g.title] = d.open; remember.set("hx-open-sections", openState); });
   d.innerHTML = `<summary data-tabname="${TABS.find(x => x[0] === g.tab)[1]}">${g.label || g.title}</summary>` + (g.hint ? `<p class="hint">${g.hint}</p>` : "");
   d.dataset.section = g.title;
+  if (g.tab === "shape") shapeSections.push(d);
   const wrap = document.createElement("div");
   if (g.colors) wrap.className = "colors";
   g.fields.forEach(f => {
@@ -262,7 +266,7 @@ SCHEMA.forEach(g => {
   if (g.custom === "dormers") { const ed = document.createElement("div"); ed.id = "dormEditor"; d.appendChild(ed); }
   if (g.custom === "inside") { const ed = document.createElement("div"); ed.id = "insideEditor"; d.appendChild(ed); }
   if (g.custom === "objects") { const ed = document.createElement("div"); ed.id = "objectsEditor"; d.appendChild(ed); }
-  if (g.custom === "tree") { const ed = document.createElement("div"); ed.id = "treeEditor"; ed.innerHTML = `<div id="treeNav"></div><div id="mainCard"></div><div id="wallCard"></div><div id="winEditor"></div><div id="wingsEditor"></div>`; d.appendChild(ed); }
+  if (g.custom === "tree") { const ed = document.createElement("div"); ed.id = "treeEditor"; ed.innerHTML = `<div id="treeNav"></div><div id="mainCard"></div><div id="mainShapeHost"></div><div id="wallCard"></div><div id="winEditor"></div><div id="wingsEditor"></div>`; d.appendChild(ed); }
   if (g.custom === "windows") {
     const sub = document.createElement("p"); sub.className = "sub"; sub.textContent = "Size for new windows"; d.appendChild(sub);
   }
@@ -446,6 +450,14 @@ const stage = $("stage");
 const readout = $("readout");
 // first-person walking (see "Walking around" below)
 let lastGeo = null;
+let mainChosen = false;   // (the main building is chosen in the tree)
+/** The Shape tab's sections live under the main building in the tree while it is chosen (and the Shape tab isn't shown), else in the Shape tab. */
+function placeShape() {
+  const host = $("mainShapeHost"), home = $("controls-shape");
+  if (!host || !home) return;
+  const want = mainChosen && editorEl.dataset.tab === "building" ? host : home;
+  for (const d of shapeSections) if (d.parentElement !== want) want.appendChild(d);
+}
 // the wall the "Things on a wall" view shows, and the floor a new window goes on
 let wvWall = "front", wvFloor = 0, wSel = null, partImportWall = "back";
 const walk = {on: false, pos: {x: 0, y: 0, z: 0}, yaw: 0, pitch: 0, keys: new Set(), last: 0, walker: null, eye: 1.65, ey: 0};
@@ -1180,8 +1192,8 @@ function treeNavHtml() {
 function mainCardHtml() {
   const opt = (v, label, cur) => `<option value="${v}" ${String(v) === String(cur) ? "selected" : ""}>${esc(label)}</option>`;
   const wallsLive = wallsOf(p), importWalls = [["Main building", ["front", "back", "left", "right"]], ...liveWings(p).map(g => [partName(p, g.id), ["End", "Left", "Right"].map(s2 => wingWallKey(g.id, s2))])];
-  return `<div class="wincard"><p class="hint">${p.width} \u00D7 ${p.depth} m, ${p.floors} floor${p.floors > 1 ? "s" : ""} of ${p.floorHeight} m${(p.wings || []).length ? `, ${p.wings.length} part${p.wings.length > 1 ? "s" : ""}` : ""}. Size, floors and the roof are in the Shape tab, panels and colours in Look. Choose a wall in the tree to add windows, doors and parts on it.</p>`
-    + `<div class="row"><button type="button" id="mainShape">Shape\u2026</button>${(p.wings || []).length < MAX_WINGS ? `<button type="button" id="wingAdd">+ Add a part</button>` : ""}</div>`
+  return `<div class="wincard"><p class="hint">${p.width} \u00D7 ${p.depth} m, ${p.floors} floor${p.floors > 1 ? "s" : ""} of ${p.floorHeight} m${(p.wings || []).length ? `, ${p.wings.length} part${p.wings.length > 1 ? "s" : ""}` : ""}. Its size, floors and roof are below; panels and colours are in Look. Choose a wall in the tree to add windows, doors and parts on it.</p>`
+    + `<div class="row">${(p.wings || []).length < MAX_WINGS ? `<button type="button" id="wingAdd">+ Add a part</button>` : ""}</div>`
     + `<div class="addrow"><button type="button" id="partImport">Import a part\u2026</button><label class="inline">onto <select id="partImportWall">${importWalls.map(([n, ks]) => `<optgroup label="${esc(n)}">${ks.filter(k => wallsLive[k]).map(k => opt(k, wallLabel(p, k), partImportWall)).join("")}</optgroup>`).join("")}</select></label><input type="file" id="partFile" accept=".json,application/json" hidden></div>`
     + myPartsHtml() + `</div>`;
 }
@@ -1241,9 +1253,9 @@ function renderTreeUI() {
   renderTreeNav();
   const main = $("mainCard"), wall = $("wallCard");
   main.innerHTML = treeKind === "main" ? mainCardHtml() : "";
+  mainChosen = treeKind === "main"; placeShape();
   wall.innerHTML = treeKind === "wall" ? wallCardHtml() : treeKind === "floor" ? floorCardHtml() : "";
   if (treeKind === "main") {
-    $("mainShape").onclick = () => setTab("shape");
     if ($("wingAdd")) $("wingAdd").onclick = () => { if (!["back", "front", "right", "left"].some(k => addPart(k))) toast("No room for another part on the main building"); };
     $("partImportWall").onchange = e => { partImportWall = e.target.value; };
     $("partImport").onclick = () => $("partFile").click();
