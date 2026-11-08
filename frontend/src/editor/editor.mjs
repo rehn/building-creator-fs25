@@ -70,7 +70,7 @@ const MARKUP = `<div class="hx-editor" data-tab="shape">
  * options.assets: the user's imported items, {list(), file(id, name)} (see editor.d.mts)
  * Returns {getSettings, setSettings, exportModel, exportSettings, importSettings, snapshot, toast, destroy}.
  */
-export function createEditor(root, {initial, onChange, author = "", assets = null} = {}) {
+export function createEditor(root, {initial, onChange, author = "", assets = null, parts: partSource = null} = {}) {
 root.innerHTML = MARKUP;
 const $ = id => root.querySelector("#" + id);
 const cleanups = [];
@@ -1091,6 +1091,54 @@ function bindPartLook(ed, w, changed) {
     changed();
   });
 }
+/** Puts a part file on the wall chosen for imports; says how it went. */
+function applyPart(data) {
+  const before = (p.wings || []).length, r = importPart(p, partImportWall, data);
+  if (r.error) { toast(r.error); return false; }
+  const q = sanitize({...p, ...r.settings});
+  p.wings = q.wings; p.windows = q.windows; if (r.settings.items) p.items = q.items;
+  wSel = r.settings.wings[before].id;
+  partsChanged(); toast(["Part imported.", ...r.notes].join(" "));
+  return true;
+}
+/* ---------- My parts: saved on the server, for every building ---------- */
+let myParts = null, myPartsAdmin = false, myPartsLoading = false;
+async function loadMyParts() {
+  if (!partSource || myPartsLoading) return;
+  myPartsLoading = true;
+  try { const [list, admin] = await Promise.all([partSource.list(), partSource.isAdmin().catch(() => false)]); if (destroyed) return; myParts = list; myPartsAdmin = !!admin; }
+  catch { myParts = myParts || []; }
+  finally { myPartsLoading = false; }
+  renderWingsUI();
+}
+function myPartsHtml() {
+  if (!partSource) return "";
+  if (myParts === null) { loadMyParts(); return `<p class="hint">Loading your parts\u2026</p>`; }
+  const info = it => [it.info && it.info.parts ? `${it.info.parts} part${it.info.parts > 1 ? "s" : ""}` : "", it.info && it.info.items ? `${it.info.items} piece${it.info.items > 1 ? "s" : ""}` : "", it.shared ? "shared" : ""].filter(Boolean).join(", ");
+  const rows = myParts.map(it => `<li><button type="button" data-usepart="${it.id}" title="Put it on the wall chosen above">${esc(it.name)} <span class="muted">${esc(info(it))}</span></button>`
+    + (myPartsAdmin && it.mine ? ` <button type="button" class="small" data-sharepart="${it.id}" data-shared="${it.shared}">${it.shared ? "Stop sharing" : "Share with everyone"}</button>` : "")
+    + (it.mine ? ` <button type="button" class="small danger" data-delpart="${it.id}" aria-label="Delete ${esc(it.name)}">Delete</button>` : "") + `</li>`).join("");
+  return `<div class="myparts"><h4>My parts</h4>` + (rows ? `<ul class="objlist">${rows}</ul>` : `<p class="hint">Nothing saved yet. Choose a part and press “Save to My parts” to use it in other buildings.</p>`) + `</div>`;
+}
+function bindMyParts(ed) {
+  if (!partSource) return;
+  ed.querySelectorAll("[data-usepart]").forEach(b => b.onclick = async () => {
+    try { const full = await partSource.get(b.dataset.usepart); applyPart(full.data); } catch { toast("Couldn't load that part. Try again."); }
+  });
+  ed.querySelectorAll("[data-sharepart]").forEach(b => b.onclick = async () => {
+    try { await partSource.update(b.dataset.sharepart, {shared: b.dataset.shared !== "true"}); myParts = null; renderWingsUI(); } catch { toast("Couldn't change that. Try again."); }
+  });
+  ed.querySelectorAll("[data-delpart]").forEach(b => b.onclick = async () => {
+    if (!window.confirm("Delete this saved part? Buildings that already have it are not changed.")) return;
+    try { await partSource.remove(b.dataset.delpart); myParts = null; renderWingsUI(); toast("Deleted"); } catch { toast("Couldn't delete it. Try again."); }
+  });
+  if ($("partSave")) $("partSave").onclick = async () => {
+    const w = (p.wings || []).find(x => x.id === wSel), f = w && exportPart(p, w.id);
+    if (!f) return;
+    try { await partSource.save({name: f.name, info: {parts: f.parts.length, windows: f.windows.length, items: f.items.length}, data: f}); myParts = null; renderWingsUI(); toast(`${f.name} saved to My parts`); }
+    catch (e) { toast((e && e.message) || "Couldn't save it. Try again."); }
+  };
+}
 /** A part in lists: its name and the wall it stands on. */
 const wingLabel = w => `${partName(p, w.id)}: ${wallLabel(p, w.wall)}`;
 function renderWingsUI() {
@@ -1109,7 +1157,7 @@ function renderWingsUI() {
   if (wings.length < MAX_WINGS) html += `<div class="addrow"><button type="button" id="wingAdd">+ Add a part</button></div>`;
   // a part from a file (made with "Export this part") on a wall of this building
   const wallsLive = wallsOf(p), importWalls = [["Main building", ["front", "back", "left", "right"]], ...liveWings(p).map(g => [partName(p, g.id), ["End", "Left", "Right"].map(s2 => wingWallKey(g.id, s2))])];
-  html += `<div class="addrow"><button type="button" id="partImport">Import a part…</button><label class="inline">onto <select id="partImportWall">${importWalls.map(([n, ks]) => `<optgroup label="${esc(n)}">${ks.filter(k => wallsLive[k]).map(k => opt(k, wallLabel(p, k), partImportWall)).join("")}</optgroup>`).join("")}</select></label><input type="file" id="partFile" accept=".json,application/json" hidden></div>`;
+  html += `<div class="addrow"><button type="button" id="partImport">Import a part…</button><label class="inline">onto <select id="partImportWall">${importWalls.map(([n, ks]) => `<optgroup label="${esc(n)}">${ks.filter(k => wallsLive[k]).map(k => opt(k, wallLabel(p, k), partImportWall)).join("")}</optgroup>`).join("")}</select></label><input type="file" id="partFile" accept=".json,application/json" hidden></div>` + myPartsHtml();
   const w = wings.find(x => x.id === wSel);
   if (w) {
     const wallL = (wallsOf(p)[w.wall] || {L: w.wall === "front" || w.wall === "back" ? p.width : p.depth}).L;   // (the place along the wall is shown in metres)
@@ -1124,7 +1172,7 @@ function renderWingsUI() {
       + `<div class="field"><div class="fl"><label for="wg-pitch">Roof angle</label><output id="wg-pitch-o">${w.pitch ? w.pitch + "°" : "as the house (" + p.roofPitch + "°)"}</output></div><input type="range" id="wg-pitch" min="0" max="60" step="1" value="${w.pitch}"></div>`
       + `<div class="field"><div class="fl"><label for="wg-fh">Floor height</label><output id="wg-fh-o">${w.floorHeight ? w.floorHeight.toFixed(2) + " m" : "as the house (" + p.floorHeight.toFixed(2) + " m)"}</output></div><input type="range" id="wg-fh" min="2.2" max="9" step="0.05" value="${w.floorHeight || 2.2}"></div>`
       + partLookHtml(w)
-      + `<p class="hint">A wing with fewer floors, or a flatter roof, has a lower roof. Roof angle 0 follows the house.</p><div class="row">${wings.length < MAX_WINGS ? `<button type="button" id="wingAddChild">+ Add a part on ${esc(partName(p, w.id))}</button>` : ""}<button type="button" id="partExport">Export this part</button><button type="button" id="wingRemove" class="danger">Remove ${esc(partName(p, w.id))} and what stands on it</button></div></div>`;
+      + `<p class="hint">A wing with fewer floors, or a flatter roof, has a lower roof. Roof angle 0 follows the house.</p><div class="row">${wings.length < MAX_WINGS ? `<button type="button" id="wingAddChild">+ Add a part on ${esc(partName(p, w.id))}</button>` : ""}${partSource ? `<button type="button" id="partSave">Save to My parts</button>` : ""}<button type="button" id="partExport">Export this part</button><button type="button" id="wingRemove" class="danger">Remove ${esc(partName(p, w.id))} and what stands on it</button></div></div>`;
   }
   ed.innerHTML = html;
   const changed = partsChanged;
@@ -1139,13 +1187,9 @@ function renderWingsUI() {
     const file = e.target.files && e.target.files[0]; e.target.value = "";
     if (!file) return;
     let data; try { data = JSON.parse(await file.text()); } catch { toast("That file isn't a part file (it isn't JSON)"); return; }
-    const r = importPart(p, partImportWall, data);
-    if (r.error) { toast(r.error); return; }
-    const q = sanitize({...p, ...r.settings});
-    p.wings = q.wings; p.windows = q.windows; if (r.settings.items) p.items = q.items;
-    wSel = r.settings.wings[wings.length].id;
-    partsChanged(); toast(["Part imported.", ...r.notes].join(" "));
+    applyPart(data);
   };
+  bindMyParts(ed);
   if (!w) return;
   if ($("partExport")) $("partExport").onclick = () => {
     const f = exportPart(p, w.id);

@@ -25,6 +25,7 @@ export default function Editor({ initial, onChange, onReady, author = "" }: Prop
     const ed = createEditor(host.current, {
       initial: start.current, onChange: s => change.current(s), author: by.current,
       assets: { list: api.assets, file: api.assetFile },
+      parts: { list: api.parts, get: api.part, save: api.savePart, update: api.updatePart, remove: api.deletePart, isAdmin: async () => (await api.me()).isAdmin },
     });
     ready.current(ed);
     return () => { ready.current(null); ed.destroy(); };

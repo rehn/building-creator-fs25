@@ -232,6 +232,8 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   wallsLow, roof, trim through partMats while a part is built (usePart); the editor makes meshes/textures for variants on demand (makeMesh, texturedNow). Not cached: the editor changes p in place.
 - Parts to share (step 5): partfile.mjs exportPart(p, id) -> {format "house-to-i3d-part", version, name, parts (renumbered, local walls), windows, items (a, b, rot in the part's frame)}; importPart(p, wall, file) ->
   {settings: {wings, windows, items}, notes} or {error}; the editor: Parts > "Export this part" / "Import a part...". Parts may stand over windows (not doors): model.mjs freeStretches(forPart).
+- My parts (the library of saved part files): backend store/parts.go + api/parts.go (table `parts`, /api/parts, only the admin shares, 256 KB per file); the editor gets `parts` (list/get/save/update/remove/isAdmin)
+  from Editor.tsx (api.ts parts functions); Parts section: "Save to My parts", the My parts list (editor.mjs myPartsHtml/bindMyParts/applyPart).
 
 ## Dev environment (WSL)
 - ./dev.sh starts API (:8080) + Next dev server (:3000); data in .dev/ (gitignored),

@@ -107,6 +107,11 @@ func (s *Server) routes() {
 	m.HandleFunc("PATCH /api/assets/{id}", s.requireUser(s.updateAsset))
 	m.HandleFunc("DELETE /api/assets/{id}", s.requireUser(s.deleteAsset))
 	m.HandleFunc("GET /api/assets/{id}/files/{name}", s.requireUser(s.assetFile))
+	m.HandleFunc("GET /api/parts", s.requireUser(s.listParts))
+	m.HandleFunc("POST /api/parts", s.requireUser(s.createPart))
+	m.HandleFunc("GET /api/parts/{id}", s.requireUser(s.getPart))
+	m.HandleFunc("PATCH /api/parts/{id}", s.requireUser(s.updatePart))
+	m.HandleFunc("DELETE /api/parts/{id}", s.requireUser(s.deletePart))
 
 	m.HandleFunc("GET /api/templates", s.requireUser(s.listTemplates))
 	m.HandleFunc("GET /api/templates/{id}/photos/{n}", s.requireUser(s.templatePhoto))

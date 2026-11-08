@@ -37,6 +37,20 @@ export interface Asset {
   updatedAt: string;
 }
 
+/** A part of a building saved to be put on other buildings (the editor's part file is data; info: a few numbers for the list). */
+export interface SavedPart {
+  id: string;
+  name: string;
+  info: { parts?: number; windows?: number; items?: number };
+  /** Only when one part is fetched. */
+  data?: Record<string, unknown>;
+  /** Shared with everyone (only the admin shares); only the owner (mine) changes it. */
+  shared: boolean;
+  mine: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** A starting design the admin made for everyone, usually from photos (Claude suggests, the admin adjusts). */
 export interface Template {
   id: string;
@@ -120,6 +134,12 @@ export const api = {
     if (!res.ok) throw new ApiError(res.status, "file", `Couldn't load ${name} (${res.status}).`);
     return res.arrayBuffer();
   },
+
+  parts: () => request<SavedPart[]>("GET", "/parts"),
+  part: (id: string) => request<SavedPart>("GET", "/parts/" + encodeURIComponent(id)),
+  savePart: (input: { name: string; data: Record<string, unknown>; info?: Record<string, unknown>; shared?: boolean }) => request<SavedPart>("POST", "/parts", input),
+  updatePart: (id: string, patch: { name?: string; shared?: boolean }) => request<SavedPart>("PATCH", "/parts/" + encodeURIComponent(id), patch),
+  deletePart: (id: string) => request<void>("DELETE", "/parts/" + encodeURIComponent(id)),
 
   templates: () => request<Template[]>("GET", "/templates"),
   allTemplates: () => request<Template[]>("GET", "/admin/templates"),

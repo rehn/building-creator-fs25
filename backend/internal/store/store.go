@@ -92,6 +92,17 @@ CREATE TABLE IF NOT EXISTS asset_files (
 	data     BLOB    NOT NULL,
 	PRIMARY KEY (asset_id, name)
 );
+CREATE TABLE IF NOT EXISTS parts (
+	id         TEXT    PRIMARY KEY,
+	user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	name       TEXT    NOT NULL,
+	info       TEXT    NOT NULL DEFAULT '{}',
+	data       TEXT    NOT NULL,
+	shared     INTEGER NOT NULL DEFAULT 0,
+	created_at INTEGER NOT NULL,
+	updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS parts_user ON parts(user_id, updated_at DESC);
 CREATE TABLE IF NOT EXISTS templates (
 	id         TEXT    PRIMARY KEY,
 	kind       TEXT    NOT NULL,
@@ -173,6 +184,17 @@ CREATE TABLE IF NOT EXISTS asset_files (
 	data     BYTEA  NOT NULL,
 	PRIMARY KEY (asset_id, name)
 );
+CREATE TABLE IF NOT EXISTS parts (
+	id         TEXT    PRIMARY KEY,
+	user_id    BIGINT  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	name       TEXT    NOT NULL,
+	info       TEXT    NOT NULL DEFAULT '{}',
+	data       TEXT    NOT NULL,
+	shared     BOOLEAN NOT NULL DEFAULT FALSE,
+	created_at BIGINT  NOT NULL,
+	updated_at BIGINT  NOT NULL
+);
+CREATE INDEX IF NOT EXISTS parts_user ON parts(user_id, updated_at DESC);
 CREATE TABLE IF NOT EXISTS templates (
 	id         TEXT    PRIMARY KEY,
 	kind       TEXT    NOT NULL,
