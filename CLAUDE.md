@@ -159,7 +159,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Frontend tests: cd frontend && npm test (node --test, no browser needed)
 
 ## Status
-- Go tests (66) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (613) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
+- Go tests (66) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (642) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
 - Cow barn (kinds/cow.mjs): cowHusbandryPasture (no milk, like cowBarnSmall), automatic water, feed
   and water troughs outside on the pasture wall (kind.outside), a plain walk-through doorway for the
   cows (openings with plain: true; tall openings get a collision gap), feed pad + bale trigger
@@ -239,6 +239,13 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Building tab (the tree, replaces the Parts section and the window editor): model.mjs buildingTree(p) (main > walls > windows, doors, parts > their walls ...; lost = parts whose parent is left out);
   editor.mjs "The building as a tree": renderTreeNav/renderTreeUI, selectNode(kind, v) (main | wall | win | part; tapping the preview calls it), cards below the tree: mainCardHtml (add, import, My parts),
   wallCardHtml (+ Window, + Door, + Part), renderWinCard (window/door), renderPartCard (part + materials). renderWinUI/renderWingsUI are aliases of renderTreeUI. Openings tab keeps the style and size of new windows.
+- Tree cards (what a chosen node shows, editor.mjs renderTreeUI): main building = its size/roof sections (the Shape tab's sections are moved under the card while it is chosen, placeShape; Shape tab otherwise);
+  a wall = add window/door/part, "Look of this wall" (p.wallStyles = {wall: {wallCladding, wallColor, lowerCladding, lowerColor}}, matTable().ow: material variants per wall, useWall in buildGeometry; the split per wall is p.wallZones),
+  wallpaper sections (p.papers) and the downpipes on it (eave walls only, pipesCardHtml). renderZonesUI/renderPapersUI take (host, fixedWall); the Look and Inside tabs no longer have per-wall editors. addPartOn (model.mjs) gives a new part the look of its wall (wallStyles, wallZones).
+- Door style "lowgate" (openings.mjs): galvanised steel gate (material "gutter") only 1.2 m high in a tall opening (buildDoor caps the leaf).
+- Valley roofs: the wing's slope ends on the exact 45-degree valley line (k + eR * slopeR); test/valley-gap.test.mjs looks for holes seen from above.
+- Animals' walking area: navmeshBlocker boxes for every footprint (objects.mjs blockersOf: main building and each part), cow/sheep/chicken.
+- Upper-floor windows of a walk-in building without rooms (barns; p.interior false) get boards a little behind the glass (setting loftBacking, default true; Inside > Inside walls). Rooms behind windows are houses only. Later: furnishing the upper floors.
 
 ## Dev environment (WSL)
 - ./dev.sh starts API (:8080) + Next dev server (:3000); data in .dev/ (gitignored),
