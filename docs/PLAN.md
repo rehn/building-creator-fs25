@@ -117,3 +117,4 @@ Varje steg ska vara färdigt, testat (TDD) och kontrollerat i webbläsaren innan
 - Övervåningar man kan gå på, med trappor och bjälklag.
 - Fler byggnadstyper: får, skjul, fordonsverkstad.
 - Mjölkning (kogård med mjölkrobot), halm och gödsel.
+- LOD (nivåer av detalj) för att spara resurser i spelet när man är en bit ifrån: till exempel en enklare modell utan inredning, möbler, räfflor och små detaljer på avstånd, och vid riktigt långt avstånd bara skalet. Det som kostar mest är insidan (möbler, rum, stolpar och reglar), så börja där. Kräver att i3d-exporten delar upp scenen i detaljnivåer med avstånd (och att förhandsvisningen kan visa dem), och bör mätas i spelet (trianglar och ritanrop) innan och efter.
