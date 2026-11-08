@@ -318,8 +318,10 @@ export function wallLabel(p, key) {
 export function wallItems(p, key) {
   const frame = wallsOf(p)[key];
   if (!frame) return [];
-  const L = frame.L, live = wingsOf(p), out = [];
-  for (const w of p.windows || []) if (w.wall === key) { const [s0, s1] = openingSpan(w, L); out.push({kind: w.type === "door" ? "door" : "window", id: w.id, floor: w.floor, s0, s1, hidden: !!w._hidden}); }
+  const L = frame.L, live = wingsOf(p), out = [], wid = wingIdOf(key), wg = wid && live.find(x => x.id === wid);
+  // (a window on a floor the wall doesn't have, from when the building had more, stays in the save but is not shown: nothing is built there)
+  const floors = (wg ? wg.floors : p.floors) + ((wg ? wg.half : p.halfStorey) ? 1 : 0);
+  for (const w of p.windows || []) if (w.wall === key && w.floor < floors) { const [s0, s1] = openingSpan(w, L); out.push({kind: w.type === "door" ? "door" : "window", id: w.id, floor: w.floor, s0, s1, hidden: !!w._hidden}); }
   for (const g of p.wings || []) if (g.wall === key) {
     const l = live.find(x => x.id === g.id);
     if (l && l.frames) out.push({kind: "part", id: g.id, s0: l.s0, s1: l.s1, floors: l.floors});

@@ -91,3 +91,16 @@ test("add a part beside a part: far enough away that their eaves don't touch", (
   const r = addPartOn(q, "back");
   if (r) assert.equal(liveWings(sanitize({...q, wings: r})).length, 3);
 });
+
+test("things on a wall: a window on a floor the wall doesn't have (the house has fewer floors now) is not listed", () => {
+  const p = sanitize({width: 16, depth: 9, floors: 1, windows: [
+    {wall: "front", floor: 0, pos: 0.2, type: "door", w: 1.4, h: 2.3}, {wall: "back", floor: 0, pos: 0.5, type: "window", w: 1, h: 1.2, sill: 0.9},
+    {wall: "back", floor: 1, pos: 0.5, type: "window", w: 1, h: 1.2, sill: 0.9}, {wall: "back", floor: 2, pos: 0.5, type: "window", w: 1, h: 1.2, sill: 0.9}]});
+  assert.equal(p.windows.filter(w => w.wall === "back").length, 3, "kept in the save, in case floors are added again");
+  assert.deepEqual(wallItems(p, "back").map(i => [i.kind, i.floor]), [["window", 0]]);
+  const two = sanitize({...p, floors: 2});
+  assert.deepEqual(wallItems(two, "back").map(i => i.floor), [0, 1], "back when the house has the floor");
+  // a part with fewer floors than the house lists only its own floors
+  const w = sanitize({...two, wings: [{id: 1, wall: "left", pos: 0.5, width: 4, depth: 4, floors: 1}], windows: [...two.windows, {wall: "w1End", floor: 0, pos: 0.5, type: "window", w: 1, h: 1.2, sill: 0.9}, {wall: "w1End", floor: 1, pos: 0.5, type: "window", w: 1, h: 1.2, sill: 0.9}]});
+  assert.deepEqual(wallItems(w, "w1End").map(i => i.floor), [0]);
+});
