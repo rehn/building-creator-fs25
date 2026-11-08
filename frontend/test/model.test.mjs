@@ -33,7 +33,7 @@ test("schema: every section is in a tab, in the order of what you do", () => {
   assert.deepEqual(ids, ["building", "shape", "openings", "inside", "look", "game"]);
   assert.ok(SCHEMA.every(g => ids.includes(g.tab)), "every section has a tab");
   assert.deepEqual(inTab("building"), ["Building"]);
-  assert.deepEqual(inTab("shape"), ["Size", "Roof", "Downpipes", "Kupor (dormers)"]);
+  assert.deepEqual(inTab("shape"), ["Size", "Roof", "Kupor (dormers)"]);
   assert.deepEqual(inTab("openings"), ["Windows", "Doors"]);
   assert.deepEqual(inTab("inside"), ["Inside", "Interior", "Inside walls"]);
   assert.deepEqual(inTab("look"), ["Surfaces", "Colors"]);

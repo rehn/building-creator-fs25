@@ -80,7 +80,6 @@ const SHARED_SECTIONS = [
     {k:"gutters", label:"Rain gutters", type:"check"},
     {k:"downpipes", label:"Downpipes per long side (a new house starts with this; place them one by one under Downpipes)", min:0, max:2, step:1},
     {k:"ventilators", label:"Roof ventilators (lanterns on the ridge)", min:0, max:4, step:1}]},
-  {title:"Downpipes", tab:"shape", custom:"pipes", hint:"Where the downpipes go: how many on each wall with a gutter, and where along it. Change \"Downpipes per long side\" under Roof to place them again.", fields:[]},
   {title:"Kupor (dormers)", tab:"shape", custom:"dormers", fields:[]},
   {title:"Windows", tab:"openings", custom:"windows", hint:"The style and size new windows get. The windows and doors themselves are in the Building tab: choose one there (or tap it in the preview) to move it, resize it or give a door a porch.", fields:[
     {k:"winStyle", label:"Style", type:"select", options:WINDOW_STYLES.map(s => [s.id, s.name])},

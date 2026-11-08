@@ -20,5 +20,6 @@
   "Panel and colour: the same as {name} unless set here",
   "Materials: the same as {name} unless set here",
   "Its own colour",
-  "Houses"
+  "Houses",
+  "Downpipe {n}"
 ]

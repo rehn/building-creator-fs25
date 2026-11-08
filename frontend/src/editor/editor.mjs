@@ -260,7 +260,6 @@ SCHEMA.forEach(g => {
       if (ob.sel || ob.on) renderObjectsUI();
     });
   });
-  if (g.custom === "pipes") { const ed = document.createElement("div"); ed.id = "pipesEditor"; d.appendChild(ed); }
   if (g.custom === "dormers") { const ed = document.createElement("div"); ed.id = "dormEditor"; d.appendChild(ed); }
   if (g.custom === "inside") { const ed = document.createElement("div"); ed.id = "insideEditor"; d.appendChild(ed); }
   if (g.custom === "objects") { const ed = document.createElement("div"); ed.id = "objectsEditor"; d.appendChild(ed); }
@@ -945,43 +944,31 @@ function renderPapersUI(host = "papersEditor", fixed = null) {
     inp.onchange = () => { const s = sec(); if (s && f !== "paper" && s.s1 < s.s0) [s.s0, s.s1] = [s.s1, s.s0]; save(); };
   });
 }
+/** Downpipes on the wall chosen in the tree (walls with a gutter): how many, and where along it. */
+function pipesCardHtml(key) {
+  if (!eaveWalls(p).includes(key)) return "";
+  return `<div class="wincard"><h3 class="sub">Downpipes</h3><div id="pipesEditorW"></div></div>`;
+}
 function renderPipesUI() {
-  const ed = $("pipesEditor");
+  const ed = $("pipesEditorW");
   if (!ed) return;
+  const key = wvWall, walls = wallsOf(p);
   if (!p.gutters || p.roofType === "flat") { ed.innerHTML = `<p class="hint">${p.roofType === "flat" ? "A flat roof has no gutters or downpipes." : "Turn on Rain gutters under Roof to place downpipes."}</p>`; return; }
-  const keys = eaveWalls(p), walls = wallsOf(p), pipes = (p.pipes || []).filter(x => keys.includes(x.wall));
-  let out = null;
-  if (!pipes.some(x => x.id === pipeSel)) pipeSel = null;
-  let html = `<table class="wgrid"><thead><tr><th scope="col"><span class="sr">Wall</span></th><th scope="col">Downpipes</th></tr></thead><tbody>`;
-  for (const k of keys) {
-    const n = pipes.filter(x => x.wall === k).length, nm = wallLabel(p, k);
-    html += `<tr><th scope="row">${nm}</th><td><div class="step"><button type="button" data-pw="${k}" data-d="-1" aria-label="Fewer downpipes: ${nm}" ${n ? "" : "disabled"}>\u2212</button><span>${n}</span><button type="button" data-pw="${k}" data-d="1" aria-label="More downpipes: ${nm}" ${n >= 6 ? "disabled" : ""}>+</button></div></td></tr>`;
-  }
-  html += `</tbody></table>`;
-  const list = [...pipes].sort((a, b) => keys.indexOf(a.wall) - keys.indexOf(b.wall) || a.pos - b.pos);
-  html += `<div class="field"><div class="fl"><label for="pipeSel">Move a downpipe</label></div><select id="pipeSel"><option value="">Choose one</option>${list.map(x => `<option value="${x.id}" ${x.id === pipeSel ? "selected" : ""}>${esc(pipeLabel(x, pipes))}</option>`).join("")}</select></div>`;
-  const s = pipes.find(x => x.id === pipeSel);
-  if (s) {
-    const L = walls[s.wall].L;
-    out = v => `${(v * L).toFixed(2)} m from the left`;
-    html += `<div class="wincard"><div class="field"><div class="fl"><label for="pipePos">Place along the wall</label><output id="pipePos-o">${out(s.pos)}</output></div><input type="range" id="pipePos" min="0" max="1" step="0.005" value="${s.pos}" data-scale="${L}"></div>`
-      + `<p class="hint">Seen from outside, from the wall’s left end. A pipe can’t stand where a wing meets the wall.</p><div class="row"><button type="button" id="pipeRemove" class="danger">Remove this downpipe</button></div></div>`;
-  }
-  html += `<button type="button" id="pipeAuto">Place them again from “Downpipes per long side”</button>`;
+  const L = walls[key].L, mine = (p.pipes || []).filter(x => x.wall === key).sort((u, v) => u.pos - v.pos), n = mine.length;
+  const nm = wallLabel(p, key), out = v => `${(v * L).toFixed(2)} m from the left`;
+  let html = `<div class="field"><div class="fl"><label>Downpipes on this wall</label></div><div class="step"><button type="button" data-pd="-1" aria-label="Fewer downpipes: ${nm}" ${n ? "" : "disabled"}>\u2212</button><span>${n}</span><button type="button" data-pd="1" aria-label="More downpipes: ${nm}" ${n >= 6 ? "disabled" : ""}>+</button></div></div>`;
+  html += mine.map((x, i) => `<div class="field"><div class="fl"><label for="pipePos${x.id}">Downpipe ${i + 1}</label><output id="pipePos${x.id}-o">${out(x.pos)}</output></div><input type="range" id="pipePos${x.id}" data-pid="${x.id}" min="0" max="1" step="0.005" value="${x.pos}" data-scale="${L}"></div>`).join("");
+  html += `<p class="hint">Seen from outside, from the wall’s left end. A pipe can’t stand where a wing meets the wall.</p>${n > 1 ? `<button type="button" id="pipeEven">Spread them evenly</button>` : ""}`;
   ed.innerHTML = html;
-  const save = () => { persist(); rebuild(false); renderPipesUI(); renderPapersAll(); renderZonesAll(); };
-  ed.querySelectorAll("[data-pw]").forEach(b => b.onclick = () => {
-    const k = b.dataset.pw, n = pipes.filter(x => x.wall === k).length + (+b.dataset.d);
-    p.pipes = renumber([...(p.pipes || []).filter(x => x.wall !== k), ...pipePositions(walls[k].L, n).map(pos => ({wall: k, pos: +pos.toFixed(3)}))]);
-    pipeSel = null; save();
+  const save = () => { persist(); rebuild(false); renderPipesUI(); };
+  const set = count => { p.pipes = renumber([...(p.pipes || []).filter(x => x.wall !== key), ...pipePositions(L, count).map(pos => ({wall: key, pos: +pos.toFixed(3)}))]); save(); };
+  ed.querySelectorAll("[data-pd]").forEach(btn => btn.onclick = () => set(n + (+btn.dataset.pd)));
+  if ($("pipeEven")) $("pipeEven").onclick = () => set(n);
+  ed.querySelectorAll("[data-pid]").forEach(inp => {
+    const pipe = () => (p.pipes || []).find(x => x.id === +inp.dataset.pid);
+    inp.oninput = () => { const x = pipe(); if (!x) return; x.pos = +inp.value; $(`pipePos${x.id}-o`).textContent = out(x.pos); persist(); rebuild(false); };
+    inp.onchange = () => save();
   });
-  $("pipeSel").onchange = e => { pipeSel = +e.target.value || null; renderPipesUI(); renderPapersAll(); renderZonesAll(); };
-  $("pipeAuto").onclick = () => { p.pipes = autoPipes(p); pipeSel = null; save(); toast("Downpipes placed again"); };
-  if (!s) return;
-  const mine = () => (p.pipes || []).find(x => x.id === pipeSel);
-  $("pipePos").oninput = e => { const x = mine(); x.pos = +e.target.value; $("pipePos-o").textContent = out(x.pos); persist(); rebuild(false); };
-  $("pipePos").onchange = () => save();
-  $("pipeRemove").onclick = () => { p.pipes = renumber((p.pipes || []).filter(x => x.id !== pipeSel)); pipeSel = null; save(); };
 }
 /* ---------- Wings ---------- */
 // The house's wings (an L, T or U): a list in the Wings section, each with its wall, place, size and floors.
@@ -1223,7 +1210,8 @@ function wallCardHtml() {
     + `<button type="button" data-wvadd="part" ${(p.wings || []).length >= MAX_WINGS ? "disabled" : ""}>+ Part</button>`
     + (floorsHere > 1 ? `<label class="inline">window on <select id="wvFloor">${Array.from({length: floorsHere}, (_, f) => opt(f, floorName(f), wvFloor)).join("")}</select></label>` : "") + `</div></div>`
     + `<div class="wincard"><h3 class="sub">Look of this wall</h3><div id="wallLookW">${wallLookHtml(wvWall)}</div><div id="zonesEditorW"></div></div>`
-    + `<div class="wincard"><h3 class="sub">Wallpaper on the inside</h3><div id="papersEditorW"></div></div>`;
+    + `<div class="wincard"><h3 class="sub">Wallpaper on the inside</h3><div id="papersEditorW"></div></div>`
+    + pipesCardHtml(wvWall);
 }
 /** Just the tree (not the card under it). */
 function renderTreeNav() {
@@ -1265,7 +1253,7 @@ function renderTreeUI() {
     };
     bindMyParts(main);
   }
-  if (treeKind === "wall") { bindWallLook(wvWall); renderZonesUI("zonesEditorW", wvWall); renderPapersUI("papersEditorW", wvWall); }
+  if (treeKind === "wall") { renderPipesUI(); bindWallLook(wvWall); renderZonesUI("zonesEditorW", wvWall); renderPapersUI("papersEditorW", wvWall); }
   if (treeKind === "wall" || treeKind === "floor") {
     if ($("wvFloor")) $("wvFloor").onchange = e => { wvFloor = +e.target.value; };
     wall.querySelectorAll("[data-wvadd]").forEach(b => b.onclick = () => {
