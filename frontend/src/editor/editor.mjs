@@ -1134,6 +1134,7 @@ function renderPartCard() {
 // The main building, its walls, and on each wall its windows, doors and parts (a part has its walls): one tree to choose from; what is chosen has its settings below.
 let treeKind = "main";
 const treeClosed = new Set();
+let treeScroll = 0;
 function selectNode(kind, v) {
   treeKind = kind;
   selId = kind === "win" ? v : null;
@@ -1200,6 +1201,11 @@ function renderTreeNav() {
     selectNode(kind, kind === "wall" ? v : kind === "main" ? null : +v);
   });
   nav.querySelectorAll("[data-toggle]").forEach(b => b.onclick = () => { const k = b.dataset.toggle; if (treeClosed.has(k)) treeClosed.delete(k); else treeClosed.add(k); renderTreeNav(); });
+  // the tree has a fixed height and scrolls inside: keep what is chosen in view (and where it was scrolled to, across redraws)
+  const box = nav.querySelector(".tree"), cur = nav.querySelector('[aria-pressed="true"]');
+  nav.scrollTop = treeScroll;
+  if (cur && box) { const t = cur.offsetTop - nav.offsetTop; if (t < nav.scrollTop) nav.scrollTop = Math.max(0, t - 4); else if (t + cur.offsetHeight > nav.scrollTop + nav.clientHeight) nav.scrollTop = t + cur.offsetHeight - nav.clientHeight + 4; }
+  nav.onscroll = () => { treeScroll = nav.scrollTop; };
 }
 function renderTreeUI() {
   const nav = $("treeNav");

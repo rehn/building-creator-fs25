@@ -348,3 +348,6 @@ html:has(.editor-page) { overscroll-behavior: none; }
 .hx-panel .tree .t-main > .tbtn, .hx-panel .tree .t-part > .tbtn { font-weight: 600; }
 .hx-panel .tree .t-wall > .tbtn { color: var(--muted); }
 .hx-panel .tree .t-wall > .tbtn[aria-pressed="true"] { color: var(--ink); }
+/* the tree has a fixed height (the user can drag its lower edge) and scrolls inside */
+.hx-panel #treeNav { height: 20rem; min-height: 8rem; max-height: 70vh; overflow-y: auto; resize: vertical; margin-bottom: 10px; padding: 6px 4px; border: 1px solid var(--line, #d8d3c6); border-radius: 8px; background: var(--panel, #fff); }
+.hx-panel #treeNav .tree { margin: 0; }
