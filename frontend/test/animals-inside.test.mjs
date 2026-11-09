@@ -55,3 +55,23 @@ test("with the pasture's doorway on there is one entrance and no warning; and no
   assert.ok(!objectWarnings(p).some(w => w.startsWith("The animals stay outside")));
   assert.equal(animalEntrances(sanitize({kind: "chicken"})).length, 0);
 });
+
+import { buildGeometry } from "../src/editor/model.mjs";
+import { kindOf } from "../src/editor/kinds/index.mjs";
+
+test("inner walls keep the animals out, except through an open doorway", () => {
+  const nav = door => {
+    const base = sanitize({kind: "cow", foundation: 0, items: []});
+    const p = sanitize({...base, items: [{id: 1, type: "innerwall", x: 0, z: 0, rot: 0, length: 6, door, doorAt: 0.5}]});
+    const geo = buildGeometry(p);
+    return kindOf(p).yard(geo, p).nav;
+  };
+  const at = (n, x, z) => n.rects.some(r => r.inside && x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1);
+  const open = nav(1), shut = nav(3), withDoor = nav(2);
+  // the wall runs along x at z = 0 from -3 to 3; its doorway is in the middle (about 1 m wide), the stretches either side are solid
+  assert.ok(!at(open, -2, 0) && !at(open, 2, 0), "the solid stretches");
+  assert.ok(at(open, 0, 0), "an open doorway is a way through");
+  assert.ok(!at(shut, 0, 0), "a wall that stays shut");
+  assert.ok(!at(withDoor, 0, 0), "a door the animals can't open is solid");
+  assert.ok(at(open, -4, 0) && at(open, 0, 1), "the rest of the floor is walkable");
+});

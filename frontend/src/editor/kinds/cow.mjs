@@ -4,7 +4,7 @@
 // the fence, water is automatic. Swedish barn presets: a red ladugård, a small fähus, a lösdriftsstall.
 // Imports only the i3d writer and the pure helpers; the core hands in the rest (see kinds/index.mjs).
 import { tg, shape } from "../i3d.mjs";
-import { roomOf, furnisher, wallsOf, footprint, WALL_T } from "../layout.mjs";
+import { roomOf, furnisher, wallsOf, footprint, toWorld, WALL_T } from "../layout.mjs";
 import { animalNav, navMesh } from "../walkarea.mjs";
 import { wallLength, yardFrame, shellOf, teleportFor, withPasture, pastureWallFor, cornerStripes, palletLines } from "./pasture.mjs";
 import { objectOf, boxOf, iconOf, boxFrom, pastureOf, insidePoly, footprints, blockersOf, animalEntrances } from "../objects.mjs";
@@ -30,6 +30,19 @@ export const COW = {count: cowsOf, minWidth: MIN_PASTURE_WIDTH, pallets: false, 
 
 /* ---------- The doorway and the troughs ---------- */
 /**
+ * What a piece on the floor keeps the animals out of, as boxes {x0, x1, z0, z1}: its footprint, or, for a piece with solids of its own (an inner wall), those: the
+ * stretches that reach the floor, the doorway open (animals can't open a door, so a wall with one is solid all along).
+ */
+function animalBlockers(it) {
+  const def = CATALOG[it.type];
+  if (!def || def.ghost) return [];
+  if (!def.solids) return [footprint(it, def)];
+  return def.solids(Math.round(it.door) >= 2 ? {...it, door: 3} : it, {ceil: 3}).filter(([, , , , y0]) => y0 < 0.3).map(([x0, x1, z0, z1]) => {
+    const a = toWorld(it, x0, z0), b = toWorld(it, x1, z1);
+    return {x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]), z0: Math.min(a[1], b[1]), z1: Math.max(a[1], b[1])};
+  });
+}
+/**
  * Where the animals walk when they can go inside (p.animalsInside, and the pasture has its doorway): the yard (the fence, less the building and the troughs),
  * the building's floor (less the pieces standing on it), and the ramp through the doorway between them, as {rects, ramp} (walkarea.mjs animalNav). Null otherwise.
  */
@@ -41,7 +54,7 @@ function animalsInside(p, geo, fence, blockers) {
   const F = p.foundation || 0, run = F > 0.02 ? Math.max(0.8, F * 5) : 0.6;
   const at = (s, d) => [w.o[0] + w.u[0] * s + w.n[0] * d, w.o[2] + w.u[2] * s + w.n[2] * d];
   const rooms = roomOf(p, openings(p)).rects;
-  const items = (p.items || []).filter(it => CATALOG[it.type] && !CATALOG[it.type].ghost).map(it => footprint(it, CATALOG[it.type]));
+  const items = (p.items || []).flatMap(animalBlockers);
   return animalNav({fence, blockers, rooms, items, doors: entrances.map(e => ({a: at(e.s0, run), b: at(e.s1, run), c: at(e.s1, -WALL_T), d: at(e.s0, -WALL_T)})), floorY: F});
 }
 /** The cows' doorway: an open hole in the pasture wall (1.6 x 2.2 m in the middle of the stretch it encloses, unless the pasture says where and how big), kept clear inside. */
