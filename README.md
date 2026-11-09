@@ -42,7 +42,7 @@ To run the images from Docker Hub instead of building, set `DOCKERHUB_USERNAME` 
 
 ### Inviting friends
 
-As the admin, open **Invites**, enter a friend's email and send them the link. It works once, for that address, for 14 days. They can sign up with a password, or with Google if it's set up and the Google account has the same email.
+As the admin, open **Admin**, enter a friend's email and send them the link. It works once, for that address, for 14 days. They can sign up with a password, or with Google if it's set up and the Google account has the same email.
 
 ### Sign in with Google (optional)
 
@@ -51,6 +51,17 @@ As the admin, open **Invites**, enter a friend's email and send them the link. I
 3. Put the client ID and secret in `.env` as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, then `docker compose up -d`.
 
 The Google button only shows up when both are set.
+
+### Templates from photos (optional)
+
+As the admin, open **Admin** and choose **New from photos**. Pick the kind of building, add photos of a real one and anything you know about it (its length, which photo is the front). Claude reads the photos and suggests the settings, with notes on what it wasn't sure of. You then adjust the building in the editor with the photos above it, and **Publish template**: it shows up under **New** for everyone. Unpublish, rename or delete it on the Admin page; buildings made from it stay.
+
+Claude can read the photos two ways, and the wizard offers both:
+
+- **Ask Claude here:** the server sends the photos to the Claude API and fills in the answer. It needs an Anthropic API key in `.env` as `ANTHROPIC_API_KEY` (from the [Anthropic Console](https://console.anthropic.com/)); API use is paid per request, separately from a Claude subscription.
+- **Use Claude in a chat:** copy the prompt the wizard gives you into a chat at [claude.ai](https://claude.ai), attach the same photos, and paste Claude's answer back. No key needed; it's part of your Claude plan.
+
+Or skip Claude and start from one of the built-in designs.
 
 ## Run it on Kubernetes (Helm)
 
@@ -114,6 +125,8 @@ helm install house-to-i3d oci://registry-1.docker.io/rehn/house-to-i3d --version
 The API creates its tables on start. The volumes are kept when you `helm uninstall`: the SQLite PVC and the Postgres PVC with the Secret holding its password (`helm.sh/resource-policy: keep`). A reinstall with the same release name picks them up again. Delete them with `kubectl delete pvc ...` when you really want everything gone.
 
 Google sign-in: `--set google.clientId=... --set google.clientSecret=...`, or `google.existingSecret` naming a Secret with `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+
+Templates from photos: `--set claude.apiKey=...`, or `claude.existingSecret` naming a Secret with `ANTHROPIC_API_KEY`.
 
 ### Going online
 
@@ -211,6 +224,7 @@ To release, publish a GitHub release with a tag like `v1.0.0`, for example with 
 | `PUBLIC_URL` | api | required | The address people open, without a trailing slash |
 | `ADMIN_EMAIL` | api | | Can sign up without an invite and becomes admin |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | api | | Turn on Sign in with Google |
+| `ANTHROPIC_API_KEY` | api | | Lets the admin's template wizard ask Claude to read photos of a building |
 | `DATABASE_PATH` | api | `/data/house-to-i3d.db` | SQLite file |
 | `DATABASE_URL` | api | | `postgres://user:password@host:5432/db`: use Postgres instead of SQLite |
 | `LISTEN_ADDR` | api | `:8080` | |

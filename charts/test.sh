@@ -36,6 +36,11 @@ has "$pvc" "storage: 1Gi" "PVC size"
 has "$pvc" 'helm.sh/resource-policy: keep' "PVC survives helm uninstall"
 web=$(doc Deployment hus-house-to-i3d-web)
 has "$web" 'value: "http://hus-house-to-i3d-api:8080"' "web finds the API service"
+has "$web" 'name: MAX_PARTS' "web gets MAX_PARTS"
+has "$web" 'value: "12"' "MAX_PARTS is 12 to start with"
+keep=$out; out=$(render --set publicUrl=https://hus.example.se --set adminEmail=me@example.se --set web.maxParts=20)
+has "$(doc Deployment hus-house-to-i3d-web)" 'value: "20"' "web.maxParts sets MAX_PARTS"
+out=$keep
 has "$(doc Service hus-house-to-i3d-api)" "port: 8080" "API service"
 has "$(doc Service hus-house-to-i3d-web)" "port: 3000" "web service"
 hasnt "$out" "kind: StatefulSet" "no Postgres"
@@ -61,6 +66,15 @@ has "$(doc Secret hus-house-to-i3d)" "GOOGLE_CLIENT_SECRET: $(printf csecret | b
 has "$(doc Deployment hus-house-to-i3d-api)" "key: GOOGLE_CLIENT_SECRET" "API reads it from the secret"
 out=$(render --set publicUrl=https://hus.example.se --set google.existingSecret=gsec); renders "google existing secret"
 has "$(doc Deployment hus-house-to-i3d-api)" "name: gsec" "API reads Google from the existing secret"
+
+echo "Claude reads photos for the admin's templates"
+out=$(render --set publicUrl=https://hus.example.se); hasnt "$out" "ANTHROPIC_API_KEY" "no key, no Claude"
+out=$(render --set publicUrl=https://hus.example.se --set claude.apiKey=sk-test); renders "claude"
+has "$(doc Secret hus-house-to-i3d)" "ANTHROPIC_API_KEY: $(printf sk-test | base64)" "secret holds the API key"
+has "$(doc Deployment hus-house-to-i3d-api)" "key: ANTHROPIC_API_KEY" "API reads it from the secret"
+out=$(render --set publicUrl=https://hus.example.se --set claude.existingSecret=csec); renders "claude existing secret"
+has "$(doc Deployment hus-house-to-i3d-api)" "name: csec" "API reads the key from the existing secret"
+hasnt "$(doc Secret hus-house-to-i3d)" "ANTHROPIC_API_KEY" "no key copied into the chart's secret"
 
 echo "Postgres in the release"
 out=$(render --set publicUrl=https://hus.example.se --set database.type=postgres --set api.replicas=2); renders "bundled postgres"

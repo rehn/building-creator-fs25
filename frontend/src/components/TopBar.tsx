@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, type User } from "@/lib/api";
 import { Brand } from "./Brand";
+import { LanguageSelect } from "./LanguageSelect";
 
 export function TopBar({ user }: { user: User | null }) {
   const router = useRouter();
@@ -12,8 +13,10 @@ export function TopBar({ user }: { user: User | null }) {
   return (
     <header className="topbar">
       <Brand />
-      {user && <span className="who">{user.name}</span>}
-      {user?.isAdmin && <Link className="btn" href="/admin">Invites</Link>}
+      {user && <span className="who" translate="no">{user.name}</span>}
+      {user && <Link className="btn" href="/items">My items</Link>}
+      {user?.isAdmin && <Link className="btn" href="/admin">Admin</Link>}
+      <LanguageSelect />
       {user && <button type="button" onClick={logout}>Log out</button>}
     </header>
   );

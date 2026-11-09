@@ -16,6 +16,7 @@ import (
 
 	"house-to-i3d/backend/internal/auth"
 	"house-to-i3d/backend/internal/store"
+	"house-to-i3d/backend/internal/vision"
 )
 
 type Config struct {
@@ -26,6 +27,7 @@ type Config struct {
 	SecureCookies      bool // true when PublicURL is https
 	TrustProxy         bool // use X-Forwarded-For for rate limiting
 	SessionTTL         time.Duration
+	Vision             vision.Suggester // suggests template settings from photos; nil without ANTHROPIC_API_KEY
 
 	googleEndpoints *googleEndpoints // tests point this at a fake Google
 }
@@ -36,9 +38,9 @@ func (c Config) GoogleRedirectURL() string { return c.PublicURL + "/api/auth/goo
 
 const (
 	sessionCookie = "hx_session"
-	loginAttempts = 10              // per IP and email, per 15 minutes
-	maxDataBytes  = 1 << 20         // house settings
-	maxThumbBytes = 300 << 10       // preview image as a data URL
+	loginAttempts = 10               // per IP and email, per 15 minutes
+	maxDataBytes  = 1 << 20          // house settings
+	maxThumbBytes = 300 << 10        // preview image as a data URL
 	maxBodyBytes  = 2 * maxDataBytes // whole request body
 	inviteTTL     = 14 * 24 * time.Hour
 )
@@ -99,6 +101,27 @@ func (s *Server) routes() {
 	m.HandleFunc("PATCH /api/projects/{id}", s.requireUser(s.updateProject))
 	m.HandleFunc("DELETE /api/projects/{id}", s.requireUser(s.deleteProject))
 	m.HandleFunc("POST /api/projects/{id}/duplicate", s.requireUser(s.duplicateProject))
+
+	m.HandleFunc("GET /api/assets", s.requireUser(s.listAssets))
+	m.HandleFunc("POST /api/assets", s.requireUser(s.createAsset))
+	m.HandleFunc("PATCH /api/assets/{id}", s.requireUser(s.updateAsset))
+	m.HandleFunc("DELETE /api/assets/{id}", s.requireUser(s.deleteAsset))
+	m.HandleFunc("GET /api/assets/{id}/files/{name}", s.requireUser(s.assetFile))
+	m.HandleFunc("GET /api/parts", s.requireUser(s.listParts))
+	m.HandleFunc("POST /api/parts", s.requireUser(s.createPart))
+	m.HandleFunc("GET /api/parts/{id}", s.requireUser(s.getPart))
+	m.HandleFunc("PATCH /api/parts/{id}", s.requireUser(s.updatePart))
+	m.HandleFunc("DELETE /api/parts/{id}", s.requireUser(s.deletePart))
+
+	m.HandleFunc("GET /api/templates", s.requireUser(s.listTemplates))
+	m.HandleFunc("GET /api/templates/{id}/photos/{n}", s.requireUser(s.templatePhoto))
+	m.HandleFunc("GET /api/admin/vision", s.requireAdmin(s.visionStatus))
+	m.HandleFunc("GET /api/admin/templates", s.requireAdmin(s.listAllTemplates))
+	m.HandleFunc("POST /api/admin/templates", s.requireAdmin(s.createTemplate))
+	m.HandleFunc("GET /api/admin/templates/{id}", s.requireAdmin(s.getTemplate))
+	m.HandleFunc("PATCH /api/admin/templates/{id}", s.requireAdmin(s.updateTemplate))
+	m.HandleFunc("DELETE /api/admin/templates/{id}", s.requireAdmin(s.deleteTemplate))
+	m.HandleFunc("POST /api/admin/templates/{id}/suggest", s.requireAdmin(s.suggestTemplate))
 
 	m.HandleFunc("GET /api/admin/invites", s.requireAdmin(s.listInvites))
 	m.HandleFunc("POST /api/admin/invites", s.requireAdmin(s.createInvite))

@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULTS, SCHEMA, sanitize, buildGeometry, buildI3d, serialize, MATS, placementAreas, placeableSnippet, sleepPoint, boxMesh, WP, ROOM_TYPES, CURTAIN_STYLES, rgb, pipeMesh, gutterMesh, surfaceSpec, scaledUV, ridgeCapMesh } from "../src/editor/model.mjs";
+import { genRow, DEFAULTS, SCHEMA, sanitize, buildGeometry, buildI3d, serialize, MATS, placementAreas, placeableSnippet, sleepPoint, boxMesh, WP, ROOM_TYPES, CURTAIN_STYLES, rgb, pipeMesh, gutterMesh, surfaceSpec, scaledUV, ridgeCapMesh , TABS } from "../src/editor/model.mjs";
 
 const cross3 = (a, b) => [a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0]];
-const countOn = (p, wall, floor) => p.windows.filter(w => w.wall === wall && w.floor === floor).length;
+const countOn = (p, wall, floor) => p.windows.filter(w => w.wall === wall && w.floor === floor && w.type !== "door").length;
 
 test("sanitize: empty input gives the defaults plus generated windows", () => {
   const p = sanitize({});
@@ -14,8 +14,9 @@ test("sanitize: empty input gives the defaults plus generated windows", () => {
 
 test("sanitize: numbers are clamped to their range and snapped to the step", () => {
   const p = sanitize({ width: 999, depth: -5, roofPitch: 37.4 });
-  assert.equal(p.width, 30);
-  assert.equal(p.depth, 4);
+  assert.equal(p.width, 60, "a long barn can be 60 m");
+  assert.equal(p.depth, 2.5);
+  assert.equal(sanitize({ depth: 999 }).depth, 30);
   assert.equal(p.roofPitch, 37);
 });
 
@@ -26,12 +27,20 @@ test("sanitize: invalid selects, colors and booleans fall back to defaults", () 
   assert.equal(p.chimney, DEFAULTS.chimney);
 });
 
-// The editor shows "build" on the left (or the first tab) and "finish" on the right (or the second tab).
-test("schema: sections are split into building the house and finishing it", () => {
-  const side = s => SCHEMA.filter(g => g.side === s).map(g => g.title);
-  assert.ok(SCHEMA.every(g => g.side === "build" || g.side === "finish"), "every section has a side");
-  assert.deepEqual(side("build"), ["Size", "Roof", "Kupor (dormers)", "Windows", "Door", "Entrance"]);
-  assert.deepEqual(side("finish"), ["Surfaces", "Colors", "Interior", "Farmhouse", "Game mod"]);
+// The editor has a tab for each thing you do; every section is in one of them.
+test("schema: every section is in a tab, in the order of what you do", () => {
+  const ids = TABS.map(t => t[0]), inTab = t => SCHEMA.filter(g => g.tab === t).map(g => g.title);
+  assert.deepEqual(ids, ["building", "shape", "openings", "inside", "look", "game"]);
+  assert.ok(SCHEMA.every(g => ids.includes(g.tab)), "every section has a tab");
+  assert.deepEqual(inTab("building"), ["Building"]);
+  assert.deepEqual(inTab("shape"), ["Size", "Roof", "Kupor (dormers)"]);
+  assert.deepEqual(inTab("openings"), ["Windows", "Doors"]);
+  assert.deepEqual(inTab("inside"), ["Inside", "Interior", "Inside walls"]);
+  assert.deepEqual(inTab("look"), ["Surfaces", "Colors"]);
+  assert.deepEqual(inTab("game"), ["Chickens", "Cows", "Sheep", "Game objects", "Game mod"]);
+  // the names shown say what the section is for
+  const label = t => { const g = SCHEMA.find(x => x.title === t); return g.label || g.title; };
+  assert.deepEqual(["Inside", "Interior", "Inside walls", "Game mod"].map(label), ["Furniture and pieces", "Rooms and curtains", "Inside walls", "Shop and mod"]);
 });
 
 test("sanitize: unknown keys are dropped", () => {
@@ -45,8 +54,8 @@ test("sanitize: window list is cleaned and ids renumbered", () => {
     { wall: "roof", floor: 0, pos: 0.5 },
     { wall: "back", floor: 9, pos: 2, w: 99, h: 0, sill: -1 },
   ] });
-  assert.equal(p.windows.length, 2);
-  assert.deepEqual(p.windows.map(w => w.id), [1, 2]);
+  assert.equal(p.windows.filter(w => w.type !== "door").length, 2, "and a door");
+  assert.deepEqual(p.windows.map(w => w.id), [1, 2, 3]);
   const b = p.windows[1];
   assert.equal(b.floor, 2); assert.equal(b.pos, 1); assert.equal(b.w, 3); assert.equal(b.h, 0.3); assert.equal(b.sill, 0);
 });
@@ -63,7 +72,7 @@ test("window generation: the door's slot on the ground floor is skipped", () => 
   assert.equal(countOn(p, "front", 0), 3);
   assert.equal(countOn(p, "back", 0), 2);
   const doorCenter = p.width / 2;
-  assert.ok(p.windows.filter(w => w.wall === "front" && w.floor === 0).every(w => Math.abs(w.pos * p.width - doorCenter) > 0.5));
+  assert.ok(p.windows.filter(w => w.wall === "front" && w.floor === 0 && w.type !== "door").every(w => Math.abs(w.pos * p.width - doorCenter) > 0.5));
 });
 
 function assertMeshValid(g, name) {
@@ -184,25 +193,101 @@ for (const roofType of ["gable", "hip"]) {
   });
 }
 
+/* ---------- Window trim ---------- */
+// One window on the front wall; returns its opening and helpers in the wall's (s, t, d) frame.
+function oneWindow(w, h) {
+  const p = sanitize({ windows: [{ wall: "front", floor: 0, pos: 0.3, w, h, sill: 1 }], doorWall: "back", entrance: "none", interior: false });
+  const geo = buildGeometry(p), { w: wall, ops } = geo.opsByWall.front, o = ops.find(x => x.kind === "window");
+  const local = (g, k) => { const x = g.p[k*3] - wall.o[0], z = g.p[k*3+2] - wall.o[2];
+    return { s: x * wall.u[0] + z * wall.u[2], t: g.p[k*3+1] - wall.o[1], d: x * wall.n[0] + z * wall.n[2] }; };
+  const pts = m => Array.from({ length: geo.G[m].p.length / 3 }, (_, k) => local(geo.G[m], k));
+  return { geo, o, pts };
+}
+const near = (q, o, m = 0.2) => q.s > o.s0 - m && q.s < o.s1 + m && q.t > o.t0 - m && q.t < o.t1 + m;
+
+test("window: the opening is lined with painted trim, not the wall's boards", () => {
+  const { o, pts } = oneWindow(1, 1.2), r = 0.15;
+  // the lining's inner corners (at the back of the wall) are trim; there is no wall cladding there
+  const back = (q, m) => Math.abs(q.d + r) < 1e-6 && q.s > o.s0 - 1e-6 && q.s < o.s1 + 1e-6 && (Math.abs(q.t - o.t0) < 1e-6 || Math.abs(q.t - o.t1) < 1e-6);
+  assert.ok(pts("trim").some(q => back(q)), "no trim lining");
+  assert.ok(!pts("walls").some(q => back(q)), "wall cladding in the opening");
+});
+
+test("window: sill and frame sit on the wall, not overlapping the lining (no flicker)", () => {
+  for (const [w, h] of [[0.6, 0.5], [1.2, 1.25]]) {
+    const { o, pts } = oneWindow(w, h), r = 0.15;
+    // every trim vertex near the window is on the wall face or in front of it, or at the back of the
+    // lining; none inside the wall where it would share a plane with the lining
+    for (const q of pts("trim").filter(q => near(q, o))) {
+      const inWall = q.d < -1e-6 && q.d > -r + 1e-6;
+      // glazing bars across the opening (their ends meet the lining back to back, which can't flicker)
+      const bar = q.s > o.s0 - 1e-6 && q.s < o.s1 + 1e-6 && q.t > o.t0 - 1e-6 && q.t < o.t1 + 1e-6;
+      assert.ok(!inWall || bar, `${w} x ${h}: trim inside the wall at s ${q.s.toFixed(3)}, t ${q.t.toFixed(3)}, d ${q.d.toFixed(3)}`);
+    }
+  }
+});
+
+test("window: a small window has a slimmer frame and no centre bar", () => {
+  const frame = (w, h) => { const { o, pts } = oneWindow(w, h);
+    // the left side piece's top corners (above the opening, left of it, in front of the wall)
+    const side = pts("trim").filter(q => q.d > 1e-6 && q.t > o.t1 - 1e-6 && q.t < o.t1 + 0.2 && q.s < o.s0 - 1e-6 && q.s > o.s0 - 0.2);
+    // glazing bars: trim inside the wall's thickness across the middle of the opening
+    const bar = pts("trim").filter(q => q.s > o.s0 + 0.1 && q.s < o.s1 - 0.1 && q.d < -1e-6 && q.d > -0.15 + 1e-6);
+    return { width: o.s0 - Math.min(...side.map(q => q.s)), bars: bar.length }; };
+  const small = frame(0.6, 0.5), big = frame(1.2, 1.25);
+  assert.ok(small.width <= 0.05 + 1e-6, `small frame ${small.width.toFixed(3)} m wide`);
+  assert.ok(big.width >= 0.07, `big frame ${big.width.toFixed(3)} m wide`);
+  assert.equal(small.bars, 0, "a small window gets one pane");
+  assert.ok(big.bars > 0, "a big window keeps its centre bar");
+});
+
 /* ---------- Ridge cap ---------- */
 // Local coordinates: x along the ridge, y up, z across; the roof's top surface is y = ridgeY - tanP * |z|.
+// Like ridge tiles: a cap that hugs the two slopes, thin at its edges, with a soft rounded crown a
+// few cm above the ridge. Not a roll standing on top of the ridge.
 for (const pitch of [10, 38, 60]) {
-  test(`ridgeCapMesh: a half-round cap resting on the slopes (${pitch} degrees)`, () => {
-    const ridgeY = 7, tanP = Math.tan(pitch * Math.PI / 180), r = 0.12;
-    const m = ridgeCapMesh(-4, 4, ridgeY, tanP, r);
+  test(`ridgeCapMesh: a low cap hugging the slopes, rounded on top (${pitch} degrees)`, () => {
+    const ridgeY = 7, tanP = Math.tan(pitch * Math.PI / 180), w = 0.13;
+    const m = ridgeCapMesh(-4, 4, ridgeY, tanP, w);
     assertMeshValid(m, "ridge cap");
     const arc = m.arc, roofAt = z => ridgeY - tanP * Math.abs(z);
-    assert.ok(arc.length >= 2 * 12, "arc too coarse");
+    assert.ok(arc.length >= 2 * 12, "profile too coarse");
+    const zs = arc.map(i => m.p[i*3+2]);
+    assert.ok(Math.max(...zs) - Math.min(...zs) >= 2 * w - 1e-6, "narrower than asked");
+    let prev = null;
     for (const i of arc) {
-      const y = m.p[i*3+1] - m.axisY, z = m.p[i*3+2], n = [m.n[i*3], m.n[i*3+1], m.n[i*3+2]];
-      assert.ok(Math.abs(Math.hypot(y, z) - r) < 1e-6, "arc vertex off the half round");
-      assert.ok(Math.abs(n[0]) < 1e-9 && Math.abs(n[1] * z - n[2] * y) < 1e-6 && n[1] * y + n[2] * z > 0, "arc normal not radial (flat shading)");
+      const z = m.p[i*3+2], y = m.p[i*3+1], n = [m.n[i*3], m.n[i*3+1], m.n[i*3+2]];
+      assert.ok(y > roofAt(z), "below the roof");
+      assert.ok(y - roofAt(z) <= 0.07 + 1e-9, `${(y - roofAt(z)).toFixed(3)} m above the roof: stands up like a roll`);
+      assert.ok(Math.abs(Math.hypot(...n) - 1) < 1e-6 && Math.abs(n[0]) < 1e-9, "normal not unit, across the ridge");
+      assert.ok(n[1] > 0.3, "faces down or sideways (an undercut)");
+      // smooth: the normal turns only a little from one point to the next
+      if (prev) assert.ok(n[1] * prev[1] + n[2] * prev[2] > Math.cos(12 * Math.PI / 180), "kink in the profile");
+      prev = n;
     }
-    // round on top, and its edges tucked into the roof (no gap you can see through)
-    assert.ok(Math.max(...arc.map(i => m.p[i*3+1])) >= ridgeY + 0.5 * r, "cap does not stand above the ridge");
+    // thin at the edges, rounded crown on top
+    const top = Math.max(...arc.map(i => m.p[i*3+1]));
+    assert.ok(top - ridgeY >= 0.04 && top - ridgeY <= 0.08, `crown ${(top - ridgeY).toFixed(3)} m above the ridge`);
+    for (const i of [arc[0], arc[arc.length - 1]]) assert.ok(m.p[i*3+1] - roofAt(m.p[i*3+2]) <= 0.04, "thick at the edge");
+    // edges tucked into the roof (no gap you can see through)
     assert.ok(m.rim.length >= 4, "no rim");
     for (const i of m.rim) assert.ok(m.p[i*3+1] <= roofAt(m.p[i*3+2]) - 0.005, "cap edge floats above the roof");
     for (const side of [-1, 1]) assert.ok(m.rim.some(i => Math.sign(m.p[i*3+2]) === side), "rim missing on one side");
+  });
+}
+
+for (const roofType of ["gable", "hip"]) for (const pitch of [15, 35, 50]) {
+  test(`geometry: the ridge cap is low (${roofType}, ${pitch} degrees)`, () => {
+    const p = sanitize({ roofType, roofPitch: pitch, width: 8, depth: 6, chimney: false });
+    const { G, dims } = buildGeometry(p), g = G.roof, ridge = dims.ridgeY;
+    let top = -Infinity;
+    for (let i = 0; i < g.p.length / 3; i++) top = Math.max(top, g.p[i*3+1]);
+    assert.ok(top - ridge <= 0.08 + 1e-9, `cap stands ${(top - ridge).toFixed(3)} m above the ridge`);
+    assert.ok(top - ridge >= 0.04, "cap too flat to see");
+    const m = ridgeCapMesh(-2, 2, 5, Math.tan(pitch * Math.PI / 180), 0.13);
+    // its ends are one plain color: every end vertex has the same uv (no tile stripes in rings)
+    const ends = []; for (let i = 0; i < m.n.length / 3; i++) if (Math.abs(m.n[i*3]) > 0.99) ends.push(m.uv[i*2] + "," + m.uv[i*2+1]);
+    assert.ok(ends.length > 0 && new Set(ends).size === 1, "end caps are textured");
   });
 }
 
@@ -409,7 +494,7 @@ test("areas: the level area covers the house, porch and steps on the ground", ()
   const ground = MATS.flatMap(m => verts(geo.G[m])).filter(([, y]) => y < 0.01);
   assert.ok(ground.length > 0);
   for (const [x, , z] of ground) assert.ok(x >= level.x0 && x <= level.x1 && z >= level.z0 && z <= level.z1, `ground point ${x},${z} outside the level area`);
-  assert.ok(level.z1 > geo.dims.D / 2 + p.entranceDepth, "porch not inside the level area");
+  assert.ok(level.z1 > geo.dims.D / 2 + 1.6, "porch not inside the level area");
 });
 
 test("areas: the test area is a box around the whole house", () => {
@@ -460,8 +545,9 @@ test("i3d: one shape per used material plus a collision shape", () => {
   const xml = buildI3d(p, { withTex: false });
   const { G } = buildGeometry(p);
   const used = MATS.filter(m => G[m].i.length).length;
-  assert.equal((xml.match(/<IndexedTriangleSet /g) || []).length, used + 2, "materials + collision + sleep trigger");
-  assert.equal((xml.match(/<Material /g) || []).length, used + 1);
+  // (and the door's leaf, its collision and trigger, the furniture's colours ...; the door and its ironwork are all on the leaf)
+  assert.ok((xml.match(/<IndexedTriangleSet /g) || []).length >= used + 2, "materials + collision + sleep trigger");
+  for (const m of MATS.filter(m => G[m].i.length && !["curtain", "fittings", "door", "iron"].includes(m))) assert.match(xml, new RegExp(`<Shape name="${m}"`), m);
   assert.match(xml, /^<\?xml version="1.0"/);
   assert.doesNotMatch(xml, /NaN|undefined/);
   assert.match(xml, /<Files\/>/);
@@ -475,15 +561,15 @@ const camForward = ([rx, ry]) => {
   return [-Math.cos(a) * Math.sin(b), Math.sin(a), -Math.cos(a) * Math.cos(b)];
 };
 
-test("sanitize: the sleep point is on by default and can be turned off", () => {
-  assert.equal(sanitize({}).sleepPoint, true);
-  assert.equal(sanitize({ sleepPoint: false }).sleepPoint, false);
+test("sanitize: a house has a sleep point to start with; a save that had it off has none", () => {
+  assert.deepEqual(sanitize({}).objects.map(o => o.type), ["sleep"]);
+  assert.deepEqual(sanitize({ sleepPoint: false }).objects, []);
 });
 
 for (const doorWall of ["front", "back", "left", "right"]) {
   test(`sleep point: trigger, icon, spawn and camera for a door on the ${doorWall} wall`, () => {
     const p = sanitize({ doorWall, doorPos: 0.4, foundation: 0.6, entrance: "porch" });
-    const geo = buildGeometry(p), sp = sleepPoint(geo);
+    const geo = buildGeometry(p), sp = sleepPoint(geo, p);
     const { w, ops } = geo.opsByWall[doorWall], door = ops.find(o => o.kind === "door");
     const sc = (door.s0 + door.s1) / 2;
     const out = q => (q[0] - w.o[0]) * w.n[0] + (q[2] - w.o[2]) * w.n[2];
@@ -513,7 +599,7 @@ for (const doorWall of ["front", "back", "left", "right"]) {
 
 test("i3d: sleep point nodes match the snippet and use the base game's trigger filter", () => {
   const p = sanitize({ doorWall: "right" });
-  const sp = sleepPoint(buildGeometry(p));
+  const sp = sleepPoint(buildGeometry(p), p);
   const tree = sceneTree(buildI3d(p)), snippet = placeableSnippet(p);
   const map = Object.fromEntries([...snippet.matchAll(/<i3dMapping id="([^"]+)" node="([^"]+)"\/>/g)].map(m => [m[1], m[2]]));
   for (const id of ["sleepingTrigger", "sleepTriggerMarker", "spawnPoint", "sleepCamera"]) assert.ok(map[id], `${id} has no i3dMapping`);
@@ -566,7 +652,7 @@ test("i3d: a farmhouse has an indoor area over the house, matching the snippet",
   assert.ok(near(Math.min(...xs), -W / 2) && near(Math.max(...xs), W / 2) && near(Math.min(...zs), -D / 2) && near(Math.max(...zs), D / 2), "indoor area is the walls' footprint");
   // same convention as the other areas: width along z, height along x
   assert.ok(near(w[0], s[0]) && w[2] > s[2] && near(h[2], s[2]) && h[0] > s[0]);
-  assert.doesNotMatch(placeableSnippet(sanitize({ sleepPoint: false })), /indoorArea/);
+  assert.match(placeableSnippet(sanitize({ sleepPoint: false })), /indoorArea/, "a house is walked into, sleep point or not");
 });
 
 test("i3d: no sleep point when it is turned off", () => {
@@ -575,7 +661,6 @@ test("i3d: no sleep point when it is turned off", () => {
   assert.doesNotMatch(xml, /sleep|spawnPoint|<Camera/);
   assert.doesNotMatch(snippet, /sleep|farmhouse|spawnPoint/);
   const { G } = buildGeometry(p);
-  assert.equal((xml.match(/<IndexedTriangleSet /g) || []).length, MATS.filter(m => G[m].i.length).length + 1);
 });
 
 /* ---------- Interior: rooms behind the windows, curtains ---------- */
@@ -601,8 +686,9 @@ const interiorCases = {
 for (const [name, settings] of Object.entries(interiorCases)) {
   test(`interior: a room behind every window, inside the house (${name})`, () => {
     const p = sanitize(settings), geo = buildGeometry(p), { rooms, dims } = geo;
-    const winOps = Object.values(geo.opsByWall).flatMap(e => e.ops.filter(o => o.kind === "window"));
-    assert.equal(rooms.filter(r => !r.dormer).length, winOps.length, "one room per wall window");
+    // (the ground floor is walked into: the rooms are behind the windows of the floors above)
+    const winOps = Object.values(geo.opsByWall).flatMap(e => e.ops.filter(o => o.kind === "window" && o.t0 >= p.floorHeight));
+    assert.equal(rooms.filter(r => !r.dormer).length, winOps.length, "one room per upper-floor window");
     if (p.dormers.length) assert.ok(rooms.some(r => r.dormer), "dormer windows have rooms");
     for (const r of rooms) {
       const o = r.op;
@@ -623,7 +709,8 @@ for (const [name, settings] of Object.entries(interiorCases)) {
     for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++)
       assert.ok(overlap(boxes[i], boxes[j]) < 1e-6, `rooms ${i} and ${j} overlap`);
     // curtains hang inside the rooms, behind the glass
-    const cur = verts(geo.G.curtain);
+    // (the ground floor's curtains hang in the real room: only the floors above have a pretend one)
+    const cur = verts(geo.G.curtain).filter(q => q[1] > dims.F + p.floorHeight - 0.02);
     assert.ok(cur.length > 0, "no curtains");
     for (const q of cur) assert.ok(boxes.some(b => inAabb(q, b)), `curtain point ${q} outside every room`);
     assertMeshValid(geo.G.interior, "interior");
@@ -638,7 +725,8 @@ test("interior: rooms behind the windows look different", () => {
 });
 
 test("interior: turning rooms or curtains off removes them", () => {
-  const off = buildGeometry(sanitize({ interior: false }));
+  // (a farmhouse always has them behind its upper windows; a barn has none)
+  const off = buildGeometry(sanitize({ kind: "chicken" }));
   assert.equal(off.rooms.length, 0);
   assert.equal(off.G.interior.i.length, 0);
   assert.equal(off.G.curtain.i.length, 0, "curtains need the rooms behind the glass");
@@ -666,7 +754,7 @@ test("sanitize: each window and kupa keeps its own room and curtains, or falls b
     ],
     dormers: [{ type: "gable", side: 1, pos: 0.5, room: "bedroom", curtain: "valance" }, { type: "shed", side: -1, pos: 0.5 }],
   });
-  assert.deepEqual(p.windows.map(w => [w.room, w.curtain]), [["kitchen", "cafe"], ["auto", "default"], ["auto", "default"]]);
+  assert.deepEqual(p.windows.filter(w => w.type !== "door").map(w => [w.room, w.curtain]), [["kitchen", "cafe"], ["auto", "default"], ["auto", "default"]]);
   assert.deepEqual(p.dormers.map(d => [d.room, d.curtain]), [["bedroom", "valance"], ["auto", "default"]]);
   assert.ok(sanitize({}).windows.every(w => w.room === "auto" && w.curtain === "default"), "generated windows");
 });
@@ -684,7 +772,7 @@ function curtainsByRoom(geo) {
 }
 const fourWindows = curtain => ({
   winFront: 0, winBack: 0, winLeft: 0, winRight: 0,
-  windows: ["sides", "panels", "valance", "cafe", "none"].map((c, i) => ({ wall: "back", floor: 0, pos: 0.1 + i * 0.2, w: 1, h: 1.3, curtain: c })),
+  windows: ["sides", "panels", "valance", "cafe", "none"].map((c, i) => ({ wall: "back", floor: 1, pos: 0.1 + i * 0.2, w: 1, h: 1.3, curtain: c })),
   curtainStyle: curtain,
 });
 
@@ -718,10 +806,10 @@ test("interior: windows on the house default follow the house's curtain style", 
   const p = sanitize({ curtainStyle: "valance" });
   const { rooms } = buildGeometry(p);
   assert.ok(rooms.length > 0 && rooms.every(r => r.curtain === "valance"));
-  const q = sanitize({ ...p, windows: p.windows.map((w, i) => i ? w : { ...w, curtain: "cafe" }) });
+  const first = p.windows.findIndex(w => w.type !== "door" && w.floor === 1), q = sanitize({ ...p, windows: p.windows.map((w, i) => i !== first ? w : { ...w, curtain: "cafe" }) });
   const r2 = buildGeometry(q).rooms;
-  assert.equal(r2.find(r => r.op.id === q.windows[0].id).curtain, "cafe");
-  assert.ok(r2.filter(r => r.op.id !== q.windows[0].id).every(r => r.curtain === "valance"));
+  assert.equal(r2.find(r => r.op.id === q.windows[first].id).curtain, "cafe");
+  assert.ok(r2.filter(r => r.op.id !== q.windows[first].id).every(r => r.curtain === "valance"));
 });
 
 test("sanitize: windows and kupor keep their own curtain color, or follow the house", () => {
@@ -729,7 +817,7 @@ test("sanitize: windows and kupor keep their own curtain color, or follow the ho
     windows: [{ wall: "front", pos: 0.3, curtainColor: "#AA2233" }, { wall: "front", pos: 0.7, curtainColor: "red" }, { wall: "back" }],
     dormers: [{ type: "gable", side: 1, curtainColor: "#112233" }, { type: "shed", side: -1, curtainColor: 5 }],
   });
-  assert.deepEqual(p.windows.map(w => w.curtainColor), ["#AA2233", "default", "default"]);
+  assert.deepEqual(p.windows.filter(w => w.type !== "door").map(w => w.curtainColor), ["#AA2233", "default", "default"]);
   assert.deepEqual(p.dormers.map(d => d.curtainColor), ["#112233", "default"]);
   assert.ok(sanitize({}).windows.every(w => w.curtainColor === "default"), "generated windows");
 });
@@ -742,7 +830,9 @@ test("interior: each window's curtains get its own color, the rest the house col
   assert.equal(g.c.length, g.p.length, "one color per curtain vertex");
   const boxes = geo.rooms.map(r => aabb(roomCorners(r)));
   for (let i = 0; i < g.p.length / 3; i++) {
-    const r = geo.rooms[boxes.findIndex(b => inAabb([g.p[i*3], g.p[i*3+1], g.p[i*3+2]], b))];
+    const at = boxes.findIndex(b => inAabb([g.p[i*3], g.p[i*3+1], g.p[i*3+2]], b));
+    if (at < 0) { assert.ok(g.p[i*3+1] < p.foundation + p.floorHeight, "outside every room only on the ground floor"); continue; }
+    const r = geo.rooms[at];
     const want = r.dormer ? "#2244AA" : r.op.id === p.windows[0].id ? "#AA2233" : "#EEEEEE";
     assert.equal(hexOf(g.c, i), want);
     assert.equal(r.curtainColor, want);
@@ -751,7 +841,8 @@ test("interior: each window's curtains get its own color, the rest the house col
 
 test("i3d: one curtain shape and material per curtain color", () => {
   const p = sanitize({ curtainColor: "#EEEEEE" });
-  p.windows[0].curtainColor = "#AA2233"; p.windows[1].curtainColor = "#2244AA"; p.windows[2].curtainColor = "#AA2233";
+  const up = p.windows.filter(w => w.floor === 1);
+  up[0].curtainColor = "#AA2233"; up[1].curtainColor = "#2244AA"; up[2].curtainColor = "#AA2233";
   const xml = buildI3d(p);
   const shapes = [...xml.matchAll(/<Shape name="(curtain\d*)"[^>]*materialIds="(\d+)"/g)].map(m => [m[1], m[2]]);
   assert.equal(shapes.length, 3);
@@ -784,7 +875,6 @@ test("i3d: see-through glass and textured rooms when the interior is on", () => 
   assert.match(xml, /<Shape name="glass"[^>]*castsShadows="false"/);
   const plain = buildI3d(sanitize({}), { withTex: false });
   assert.match(plain, /<Material name="glass_mat"[^>]*diffuseColor="[\d.]+ [\d.]+ [\d.]+ 0\.\d+"[^>]*alphaBlending="true"/);
-  assert.doesNotMatch(buildI3d(sanitize({ interior: false })), /alphaBlending/);
 });
 
 test("i3d: textures are referenced when exporting with textures", () => {
@@ -803,4 +893,45 @@ test("serialize: internal fields are not saved and the result loads back the sam
   assert.doesNotMatch(JSON.stringify(json), /_hidden/);
   assert.deepEqual(sanitize(json), sanitize(JSON.parse(JSON.stringify(json))));
   assert.deepEqual(serialize(sanitize(json)), json);
+});
+
+test("opening counts: windows and doors are counted apart, per wall and floor", async () => {
+  const { openingCounts } = await import("../src/editor/model.mjs");
+  const p = sanitize({ floors: 2, windows: [
+    { wall: "right", floor: 0, pos: 0.2, type: "door", w: 1, h: 2.1 }, { wall: "right", floor: 0, pos: 0.5, type: "door", w: 1, h: 2.1 },
+    { wall: "right", floor: 0, pos: 0.8, type: "window", w: 1, h: 1.2, sill: 0.9 }, { wall: "right", floor: 1, pos: 0.5, type: "window", w: 1, h: 1.2, sill: 0.9 },
+    { wall: "front", floor: 1, pos: 0.5, type: "window", w: 1, h: 1.2, sill: 0.9 }] });
+  const c = openingCounts(p);
+  assert.deepEqual(c.right[0], { windows: 1, doors: 2 });
+  assert.deepEqual(c.right[1], { windows: 1, doors: 0 });
+  assert.deepEqual(c.front[1], { windows: 1, doors: 0 });
+  assert.deepEqual(c.back[0], { windows: 0, doors: 0 });
+});
+
+test("the table steps windows and doors together: + adds an opening, - takes one away, a building keeps a door", async () => {
+  const { stepOpenings, openingCounts } = await import("../src/editor/model.mjs");
+  const p = sanitize({ width: 12, depth: 8, windows: [{ wall: "front", floor: 0, pos: 0.5, type: "door", w: 1.4, h: 2.3 }, { wall: "front", floor: 0, pos: 0.2, type: "window", w: 1, h: 1.2, sill: 0.9 }] });
+  const total = (q, wall, f) => { const c = openingCounts(q)[wall][f]; return c.windows + c.doors; };
+  assert.equal(total(p, "front", 0), 2);
+  const more = sanitize({ ...p, windows: stepOpenings(p, p.windows, "front", 0, 1) });
+  assert.equal(total(more, "front", 0), 3);
+  assert.equal(openingCounts(more).front[0].doors, 1, "the door stays");
+  const less = sanitize({ ...p, windows: stepOpenings(more, more.windows, "front", 0, -1) });
+  assert.equal(total(less, "front", 0), 2);
+  const onlyDoor = sanitize({ ...p, windows: p.windows.filter(w => w.type === "door") });
+  assert.equal(stepOpenings(onlyDoor, onlyDoor.windows, "front", 0, -1), null, "the only door stays");
+  const two = sanitize({ ...p, windows: [...p.windows.filter(w => w.type === "door"), { wall: "back", floor: 0, pos: 0.5, type: "door", w: 1, h: 2.1 }] });
+  assert.equal(openingCounts(sanitize({ ...two, windows: stepOpenings(two, two.windows, "back", 0, -1) })).back[0].doors, 0, "with doors left on another wall a door can go");
+  let q = p; for (let i = 0; i < 12; i++) { const n = stepOpenings(q, q.windows, "back", 0, 1); if (n) q = sanitize({ ...q, windows: n }); }
+  assert.ok(total(q, "back", 0) <= 8, "at most 8 in a cell");
+});
+
+test("new windows keep out of a wing: not on the stretch of the wall it stands against (only where it covers that floor)", () => {
+  const p = sanitize({ width: 14, depth: 8, floors: 2, wings: [{ wall: "back", pos: 0.5, width: 5, depth: 5, floors: 1 }], windows: [{ wall: "front", floor: 0, pos: 0.5, type: "door", w: 1, h: 2.1 }] });
+  const wg = buildGeometry(p).wings[0];
+  const spots = (floor, n) => genRow(p, p.windows, "back", floor, n).filter(w => w.wall === "back" && w.floor === floor).map(w => w.pos * 14);
+  for (const n of [1, 2, 3, 4, 5]) for (const s of spots(0, n)) assert.ok(s < wg.s0 - 0.2 || s > wg.s1 + 0.2, `floor 0, ${n}: window at ${s.toFixed(2)} in the wing's ${wg.s0.toFixed(1)}-${wg.s1.toFixed(1)}`);
+  assert.equal(spots(0, 4).length, 4);
+  // the floor above the wing's roof is free along the whole wall
+  assert.ok(spots(1, 3).some(s => s > wg.s0 && s < wg.s1), "upper floor: the middle is free");
 });

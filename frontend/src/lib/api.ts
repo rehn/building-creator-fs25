@@ -13,6 +13,8 @@ export interface ProjectSummary {
   id: string;
   name: string;
   thumbnail: string;
+  /** Kind of building, only in the list ("" or missing: a farmhouse). */
+  kind?: string;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -20,6 +22,52 @@ export interface ProjectSummary {
 
 export interface Project extends ProjectSummary {
   data: Record<string, unknown>;
+}
+
+/** An imported item (see src/editor/assets.mjs for meta). */
+export interface Asset {
+  id: string;
+  name: string;
+  meta: Record<string, unknown>;
+  files: { name: string; size: number }[];
+  /** Shared with everyone (only the admin shares); only the owner (mine) can change it. */
+  shared: boolean;
+  mine: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A part of a building saved to be put on other buildings (the editor's part file is data; info: a few numbers for the list). */
+export interface SavedPart {
+  id: string;
+  name: string;
+  info: { parts?: number; windows?: number; items?: number };
+  /** Only when one part is fetched. */
+  data?: Record<string, unknown>;
+  /** Shared with everyone (only the admin shares); only the owner (mine) changes it. */
+  shared: boolean;
+  mine: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A starting design the admin made for everyone, usually from photos (Claude suggests, the admin adjusts). */
+export interface Template {
+  id: string;
+  kind: string;
+  name: string;
+  blurb: string;
+  settings: Record<string, unknown>;
+  thumbnail: string;
+  /** Claude's last answer for the photos ({seen, settings, openings, notes}), or null. */
+  suggestion: { seen?: string; notes?: string; [k: string]: unknown } | null;
+  /** The admin's project it is adjusted in. */
+  projectId: string;
+  published: boolean;
+  /** How many photos it has. */
+  photos: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Invite {
@@ -36,16 +84,15 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  return send<T>(method, path, body === undefined ? undefined : JSON.stringify(body), body === undefined ? undefined : { "Content-Type": "application/json" });
+}
+
+/** A request with a body as is (JSON text, or a FormData the browser encodes itself). */
+async function send<T>(method: string, path: string, body?: BodyInit, headers?: HeadersInit): Promise<T> {
   let res: Response;
   try {
-    res = await fetch("/api" + path, {
-      method,
-      headers: body === undefined ? undefined : { "Content-Type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-      credentials: "same-origin",
-      cache: "no-store",
-    });
+    res = await fetch("/api" + path, { method, headers, body, credentials: "same-origin", cache: "no-store" });
   } catch {
     throw new ApiError(0, "offline", "Can't reach the server. Check your connection.");
   }
@@ -56,6 +103,9 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   }
   return json as T;
 }
+
+/** Where photo n of a template is (an <img> src). */
+export const templatePhotoUrl = (id: string, n: number) => `/api/templates/${encodeURIComponent(id)}/photos/${n}`;
 
 export const api = {
   authConfig: () => request<{ google: boolean }>("GET", "/auth/config"),
@@ -72,6 +122,39 @@ export const api = {
     request<Project>("PATCH", "/projects/" + encodeURIComponent(id), patch),
   deleteProject: (id: string) => request<void>("DELETE", "/projects/" + encodeURIComponent(id)),
   duplicateProject: (id: string) => request<Project>("POST", "/projects/" + encodeURIComponent(id) + "/duplicate"),
+
+  assets: () => request<Asset[]>("GET", "/assets"),
+  /** Imports an item: form fields name, meta (JSON) and files. */
+  importAsset: (form: FormData) => send<Asset>("POST", "/assets", form),
+  updateAsset: (id: string, patch: { name?: string; meta?: Record<string, unknown>; shared?: boolean }) =>
+    request<Asset>("PATCH", "/assets/" + encodeURIComponent(id), patch),
+  deleteAsset: (id: string) => request<void>("DELETE", "/assets/" + encodeURIComponent(id)),
+  assetFile: async (id: string, name: string) => {
+    const res = await fetch(`/api/assets/${encodeURIComponent(id)}/files/${encodeURIComponent(name)}`, { credentials: "same-origin", cache: "no-store" });
+    if (!res.ok) throw new ApiError(res.status, "file", `Couldn't load ${name} (${res.status}).`);
+    return res.arrayBuffer();
+  },
+
+  parts: () => request<SavedPart[]>("GET", "/parts"),
+  part: (id: string) => request<SavedPart>("GET", "/parts/" + encodeURIComponent(id)),
+  savePart: (input: { name: string; data: Record<string, unknown>; info?: Record<string, unknown>; shared?: boolean }) => request<SavedPart>("POST", "/parts", input),
+  updatePart: (id: string, patch: { name?: string; shared?: boolean }) => request<SavedPart>("PATCH", "/parts/" + encodeURIComponent(id), patch),
+  deletePart: (id: string) => request<void>("DELETE", "/parts/" + encodeURIComponent(id)),
+
+  templates: () => request<Template[]>("GET", "/templates"),
+  allTemplates: () => request<Template[]>("GET", "/admin/templates"),
+  template: (id: string) => request<Template>("GET", "/admin/templates/" + encodeURIComponent(id)),
+  /** Starts a template: form fields kind, name, blurb and photos. */
+  createTemplate: (form: FormData) => send<Template>("POST", "/admin/templates", form),
+  updateTemplate: (id: string, patch: { name?: string; blurb?: string; settings?: Record<string, unknown>; thumbnail?: string; projectId?: string; published?: boolean; suggestion?: object }) =>
+    request<Template>("PATCH", "/admin/templates/" + encodeURIComponent(id), patch),
+  deleteTemplate: (id: string) => request<void>("DELETE", "/admin/templates/" + encodeURIComponent(id)),
+  /** Asks Claude to suggest settings from the photos (takes up to a few minutes). */
+  suggestTemplate: (id: string, input: { guide: string; notes: string; schema: object }) =>
+    request<Template>("POST", "/admin/templates/" + encodeURIComponent(id) + "/suggest", input),
+
+  /** Whether the server can ask Claude itself (it has an ANTHROPIC_API_KEY). */
+  visionStatus: () => request<{ enabled: boolean }>("GET", "/admin/vision"),
 
   invites: () => request<Invite[]>("GET", "/admin/invites"),
   createInvite: (email: string) => request<{ invite: Invite; link: string }>("POST", "/admin/invites", { email }),

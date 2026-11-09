@@ -1,8 +1,10 @@
 "use client";
+import { t } from "@/i18n/index.mjs";
 import { useEffect, useState } from "react";
 import { api, type Invite } from "@/lib/api";
 import { useUser } from "@/lib/useUser";
 import { TopBar } from "@/components/TopBar";
+import { Templates } from "./Templates";
 
 const date = (iso: string) => new Date(iso).toLocaleDateString("sv-SE");
 
@@ -45,7 +47,7 @@ export default function AdminPage() {
   }
 
   async function remove(inv: Invite) {
-    if (!window.confirm(`Remove the invite for ${inv.email}?`)) return;
+    if (!window.confirm(t("Remove the invite for {email}?", { email: inv.email }))) return;
     try {
       await api.deleteInvite(inv.id);
       setInvites(list => (list ?? []).filter(x => x.id !== inv.id));
@@ -95,6 +97,7 @@ export default function AdminPage() {
                 </tbody>
               </table>
             </div>
+            <Templates />
           </>
         )}
       </main>

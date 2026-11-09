@@ -80,6 +80,19 @@ label.stack input { margin-top: 5px; }
 .house .actions button { padding: 4px 10px; font-size: 14px; }
 .empty { text-align: center; padding: 56px 16px; background: var(--panel); border: 1px dashed var(--line); border-radius: 10px; }
 .empty h3 { font-size: 22px; margin-bottom: 6px; }
+.presets { margin-bottom: 24px; }
+.presets-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.presets-head h3 { font-size: 20px; margin-right: auto; }
+.preset { display: flex; flex-direction: column; gap: 6px; text-align: left; padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; color: var(--ink); }
+.preset:hover:not(:disabled), .preset:focus-visible { border-color: var(--accent, currentColor); }
+.preset b { font-size: 16px; }
+.preset span { color: var(--muted); font-size: 14px; line-height: 1.4; }
+.kind-group { margin-bottom: 28px; }
+.kind-group > h3, .kind-group > h4 { margin-bottom: 10px; }
+.kind-group > h3 { font-size: 20px; }
+.kind-group > h4 { font-size: 15px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.kind-group > h3 small { color: var(--muted); font-size: 14px; font-weight: normal; margin-left: 6px; }
+.presets .kind-group { margin-bottom: 18px; }
 table.list { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
 table.list th, table.list td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); }
 table.list th { color: var(--muted); font-weight: 500; font-size: 14px; }
@@ -92,7 +105,10 @@ table.list th { color: var(--muted); font-weight: 500; font-size: 14px; }
 .badge.ok { color: var(--ok); border-color: currentColor; }
 
 /* ---------- Editor page ---------- */
-.editor-page { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+/* The editor fills the window: clip (not hidden) so focus and scrollIntoView cannot scroll the page, and no rubber-banding. */
+.editor-page { height: 100dvh; display: flex; flex-direction: column; overflow: clip; }
+html:has(.editor-page) { overscroll-behavior: none; }
+@media (min-width: 821px) { html:has(.editor-page), html:has(.editor-page) body { overflow: hidden; height: 100%; } }
 .editor-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
 .editor-bar .back { padding: 6px 10px; }
 .editor-bar input.name {
@@ -106,24 +122,25 @@ table.list th { color: var(--muted); font-weight: 500; font-size: 14px; }
 .loading { padding: 40px; color: var(--muted); text-align: center; }
 
 /* ---------- Editor (markup from editor.mjs) ---------- */
-/* Settings in two sides: "build" and "finish". One column with tabs, or on wide screens one panel
-   each side of the 3D view. The editor's data-tab says which side the tabs show. */
-.hx-editor { flex: 1; min-height: 0; display: grid; grid-template-columns: 350px 1fr; grid-template-rows: auto 1fr; }
-.hx-panel { overflow-y: auto; min-height: 0; border-right: 1px solid var(--line); background: var(--panel); padding: 4px 16px 32px; }
-.hx-tabs { grid-column: 1; grid-row: 1; display: flex; gap: 4px; padding: 6px 16px 0; background: var(--panel); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-.hx-tabs button { flex: 1; justify-content: center; border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: none; padding: 8px 0 7px; font-weight: 600; font-size: 15px; color: var(--muted); }
+/* The settings are in one panel with a tab for each thing you do (shape, openings, inside, look, game) and a search box. */
+.hx-editor { flex: 1; min-height: 0; display: grid; grid-template-columns: 360px 1fr; grid-template-rows: auto 1fr; }
+.hx-panel { position: relative; overflow-y: auto; min-height: 0; border-right: 1px solid var(--line); background: var(--panel); padding: 0 16px 32px; grid-column: 1; grid-row: 2; }
+.hx-tabs { grid-column: 1; grid-row: 1; display: flex; gap: 2px; padding: 6px 10px 0; background: var(--panel); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.hx-tabs button { flex: 1; justify-content: center; border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: none; padding: 8px 0 7px; font-weight: 600; font-size: 14.5px; color: var(--muted); min-width: 0; }
 .hx-tabs button:hover { color: var(--ink); background: none; }
 .hx-tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
-.hx-build, .hx-finish { grid-column: 1; grid-row: 2; }
-.hx-editor[data-tab="build"] .hx-finish, .hx-editor[data-tab="finish"] .hx-build { display: none; }
-.hx-panel .hx-side { display: none; margin: 14px 0 2px; font-size: 12.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
-@media (min-width: 1400px) {
-  .hx-editor { grid-template-columns: 340px 1fr 340px; }
-  .hx-tabs { display: none; }
-  .hx-editor[data-tab] .hx-build, .hx-editor[data-tab] .hx-finish { display: block; grid-row: 1 / span 2; }   /* both sides, whatever the tab */
-  .hx-finish { grid-column: 3; border-right: 0; border-left: 1px solid var(--line); }
-  .hx-panel .hx-side { display: block; }
-}
+.hx-editor.searching .hx-tabs button { opacity: .5; }
+.hx-panel .hx-side { display: none; }
+.hx-search { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 6px; margin: 0 -16px; padding: 10px 16px 8px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.hx-search input { flex: 1; font: inherit; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--field); color: var(--ink); min-width: 0; }
+.hx-search button { border: 0; background: none; font-size: 22px; line-height: 1; padding: 2px 8px; color: var(--muted); }
+.hx-panel .nomatch, .hx-panel .na { display: none !important; }
+.hx-editor.searching .hx-panel summary::before { content: attr(data-tabname) " \203A "; color: var(--muted); font: 500 12px var(--font-body), sans-serif; text-transform: uppercase; letter-spacing: .05em; margin-right: 6px; }
+.hx-editor.searching .hx-panel summary { justify-content: flex-start; }
+.hx-editor.searching .hx-panel summary::after { margin-left: auto; }
+.hx-search input::-webkit-search-cancel-button { display: none; }
+.hx-search button[hidden] { display: none; }
+.hx-nomatch { margin: 18px 0; }
 .hx-panel details { border-bottom: 1px solid var(--line); padding: 4px 0 12px; }
 .hx-panel summary { font-family: var(--font-display), "Arial Narrow", sans-serif; font-weight: 600; font-size: 19px; padding: 8px 0; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
 .hx-panel summary::-webkit-details-marker { display: none; }
@@ -152,6 +169,8 @@ table.list th { color: var(--muted); font-weight: 500; font-size: 14px; }
 .hx-panel .selrow button { padding: 5px 10px; }
 .hx-panel .wincard { border-left: 3px solid var(--accent); padding: 2px 0 4px 10px; margin: 8px 0; }
 .hx-panel .warn { color: var(--accent); font-size: 14px; margin: 6px 0; }
+.hx-panel ul.pieces { margin: 4px 0 10px; padding-left: 20px; font-size: 14px; }
+#insideEditor .row { margin-top: 6px; }
 .hx-panel .sub { font-weight: 600; margin: 16px 0 0; }
 .hx-panel button.wide { width: 100%; margin-top: 8px; justify-content: center; }
 .hx-panel .addrow { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 4px; }
@@ -161,6 +180,19 @@ table.list th { color: var(--muted); font-weight: 500; font-size: 14px; }
 .hx-stage .readout { position: absolute; left: 14px; bottom: 12px; display: flex; gap: 14px; flex-wrap: wrap; font-size: 13.5px; color: var(--muted); pointer-events: none; }
 .hx-stage .readout b { color: var(--ink); font-weight: 600; }
 .hx-stage .orbit-hint { position: absolute; right: 14px; bottom: 12px; font-size: 13px; color: var(--muted); pointer-events: none; }
+/* Arranging the inside: a bar over the preview, a palette and the selected piece in the panel. */
+.hx-inside-bar { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center;
+  padding: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,.12); max-width: calc(100% - 24px); }
+.hx-inside-bar[hidden] { display: none; }
+.hx-inside-bar .seg { display: flex; }
+.hx-inside-bar .seg button { border-radius: 0; }
+.hx-inside-bar .seg button:first-child { border-radius: 6px 0 0 6px; }
+.hx-inside-bar .seg button:last-child { border-radius: 0 6px 6px 0; margin-left: -1px; }
+.hx-inside-bar .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+#insideEditor .palette { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 6px 0 10px; }
+#insideEditor .palette button { font-size: 13.5px; padding: 6px 8px; text-align: left; }
+#insideEditor .piece { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin: 8px 0; }
+#insideEditor .piece h4 { margin: 0 0 6px; font-size: 15px; }
 .hx-toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 9px 14px; border-radius: 6px; font-size: 14px; max-width: 90vw; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 10; }
 .hx-toast.show { opacity: 1; }
 .hx-dialog { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink); width: min(680px, 92vw); padding: 16px; }
@@ -172,8 +204,151 @@ table.list th { color: var(--muted); font-weight: 500; font-size: 14px; }
   .editor-page { height: auto; min-height: 100dvh; overflow: visible; }
   .hx-editor { display: flex; flex-direction: column; }
   .hx-stage { height: 52vh; flex: none; order: -1; }   /* the house first, then the settings */
-  .hx-tabs { border-right: 0; }
-  .hx-panel { border-right: 0; overflow: visible; }
+  .hx-tabs { border-right: 0; grid-column: auto; }
+  .hx-panel { border-right: 0; overflow: visible; grid-column: auto; }
+  .hx-search { position: static; }
   .hx-stage .orbit-hint { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .hx-toast { transition: none; } }
+
+/* ---------- My items ---------- */
+.item-form { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 24px; }
+@media (max-width: 760px) { .item-form { grid-template-columns: 1fr; } }
+.item-view { width: 100%; aspect-ratio: 4 / 3; border-radius: 8px; display: block; background: var(--stage); }
+.item-fields { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.item-fields label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.item-fields label.choice { flex-direction: row; align-items: center; gap: 8px; }
+.item-fields fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.item-fields legend { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
+.item-fields .warn { color: var(--accent); font-size: 14px; margin: 0; }
+.item-files { list-style: none; padding: 0; margin: 0; font-size: 14px; display: flex; flex-direction: column; gap: 2px; }
+.item-files li::before { content: "✓ "; color: var(--pine); }
+.item-files li.missing::before { content: "✗ "; color: var(--accent); }
+.item-files li.missing { color: var(--accent); }
+.item-files small { color: var(--muted); }
+.seg { display: flex; }
+.seg button { border-radius: 0; }
+.seg button + button { margin-left: -1px; }
+.seg button:first-child { border-radius: 6px 0 0 6px; }
+.seg button:last-child { border-radius: 0 6px 6px 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.item-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.item-list li { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+.item-list li > div:first-child { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 200px; }
+.item-list small { color: var(--muted); }
+.item-list .actions { display: flex; gap: 6px; }
+#insideEditor .palette-head { margin: 10px 0 0; font-size: 14px; }
+.item-group { margin: 26px 0 0; font-size: 20px; }
+
+/* ---------- Templates: "New" cards, the admin's list and the photo wizard ---------- */
+.preset img { width: calc(100% + 32px); margin: -14px -16px 4px; aspect-ratio: 16 / 10; object-fit: cover; border-radius: 10px 10px 0 0; background: var(--stage); }
+.badge.ok { color: var(--ok); border-color: var(--ok); }
+.admin-templates { margin-top: 40px; }
+.wizard select, .wizard textarea { font: inherit; width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--field); color: var(--ink); margin-top: 5px; }
+.wizard textarea { resize: vertical; }
+.steps { display: flex; gap: 8px; list-style: none; padding: 0; margin: 0 0 16px; counter-reset: step; flex-wrap: wrap; }
+.steps li { counter-increment: step; color: var(--muted); font-size: 14px; display: flex; align-items: center; gap: 6px; }
+.steps li::before { content: counter(step); width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; font-size: 13px; background: var(--field); }
+.steps li + li::after { order: -1; content: ""; width: 20px; border-top: 1px solid var(--line); }
+.steps li[aria-current="step"] { color: var(--ink); font-weight: 600; }
+.steps li[aria-current="step"]::before { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.steps li.done::before { content: "\2713"; color: var(--ok); border-color: var(--ok); }
+.wizard-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px 20px; max-width: 760px; }
+.wizard-card h3 { font-size: 19px; margin: 18px 0 4px; }
+.wizard-card .says { margin: 0; white-space: pre-line; }
+.wizard-nav { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; flex-wrap: wrap; }
+.wizard-nav.left { justify-content: flex-start; margin-top: 8px; }
+.drop { display: grid; place-items: center; min-height: 120px; border: 2px dashed var(--line); border-radius: 10px; background: var(--field); color: var(--muted); cursor: pointer; margin-top: 10px; text-align: center; padding: 16px; }
+.drop:hover { border-color: var(--muted); }
+.photo-grid { list-style: none; padding: 0; margin: 14px 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.photo-grid.small { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); margin: 0 0 8px; }
+.photo-grid li { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.photo-grid img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 6px; background: var(--stage); }
+.photo-grid button { padding: 2px 8px; font-size: 13px; align-self: flex-start; }
+.summary { display: grid; gap: 4px; margin: 16px 0 0; padding: 12px 14px; background: var(--field); border: 1px solid var(--line); border-radius: 8px; }
+.summary div { display: flex; gap: 12px; }
+.summary dt { width: 90px; flex: none; color: var(--muted); }
+.summary dd { margin: 0; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.swatch { width: 22px; height: 22px; border-radius: 4px; border: 1px solid var(--line); display: inline-block; }
+
+/* While adjusting a template in the editor: its photos, Claude's notes and Publish. */
+.ref-strip { position: relative; display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+.ref-label { font-size: 12.5px; color: var(--muted); line-height: 1.25; }
+.ref-label b { color: var(--ink); font-weight: 600; }
+.ref-strip ul { list-style: none; display: flex; gap: 6px; padding: 0; margin: 0 auto 0 0; overflow-x: auto; max-width: 100%; }
+.ref-strip ul button { padding: 0; border-radius: 4px; overflow: hidden; }
+.ref-strip ul img { height: 52px; width: auto; display: block; }
+.ref-strip .status { color: var(--muted); font-size: 13.5px; }
+.ref-notes { position: absolute; z-index: 5; top: 100%; left: 12px; right: 12px; max-width: 720px; max-height: 50vh; overflow-y: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px 14px; box-shadow: 0 6px 18px rgb(0 0 0 / .18); white-space: pre-line; }
+.ref-big { position: fixed; inset: 0; z-index: 50; background: rgb(0 0 0 / .82); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 16px; padding-top: max(16px, env(safe-area-inset-top, 0px)); padding-bottom: max(16px, env(safe-area-inset-bottom, 0px)); }
+.ref-big img { max-width: 100%; max-height: calc(100% - 60px); object-fit: contain; }
+.ref-big-nav { display: flex; gap: 8px; align-items: center; color: #fff; flex-wrap: wrap; justify-content: center; }
+.ways { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 8px; }
+.way { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px 14px; background: var(--field); display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.way h3 { margin: 0; }
+.chat-steps { margin: 4px 0 6px; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.chat-steps textarea { margin-top: 6px; font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
+.hx-panel .objlist { list-style: none; padding: 0; margin: 8px 0; display: flex; flex-direction: column; gap: 4px; }
+.hx-panel .objlist li { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.hx-panel .objlist button { padding: 4px 10px; font-size: 14px; }
+.hx-panel .objlist button[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.hx-panel .objlist .warn { margin: 0; font-size: 13px; }
+.checks { margin: 14px 0 0; padding: 10px 14px 12px; border: 1px solid var(--accent); border-radius: 8px; background: var(--field); }
+.checks h3 { font-size: 17px; margin: 0 0 4px; color: var(--accent); }
+.checks ul { margin: 4px 0 10px; padding-left: 20px; }
+.checks li { margin: 2px 0; }
+
+/* The palette of inside pieces: groups that fold away, each piece a small picture with its name. */
+#insideEditor .pgroup { border: 0; padding: 0; margin: 4px 0 2px; }
+#insideEditor .pgroup > summary { font-family: var(--font-body), sans-serif; font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); padding: 6px 0 2px; cursor: pointer; }
+#insideEditor .pgroup > summary span { font-weight: 400; opacity: .7; margin-left: 4px; }
+#insideEditor .pgroup > summary::after { content: none; }
+#insideEditor .palette button.pal { display: flex; flex-direction: column; align-items: stretch; gap: 3px; padding: 4px 4px 5px; text-align: center; font-size: 12.5px; line-height: 1.2; }
+#insideEditor .palette button.pal img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: contain; border-radius: 5px; background: color-mix(in srgb, var(--field) 70%, transparent); }
+#insideEditor .palette button.pal span { padding: 0 2px; overflow-wrap: anywhere; }
+
+/* A slider's number can be clicked and typed over (10+100 works): a hint on the number, and the little box that replaces it. */
+.hx-panel .fl output { cursor: text; border-bottom: 1px dotted color-mix(in srgb, var(--muted) 60%, transparent); }
+.hx-panel .fl output:hover { color: var(--ink); border-bottom-color: var(--accent); }
+.hx-panel input.numin { width: 8.5em; max-width: 60%; margin: 0; padding: 2px 6px; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Picking buildings on the start page to pack into one game mod. */
+.house { position: relative; }
+.house .pick { position: absolute; top: 8px; left: 8px; z-index: 2; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--line); cursor: pointer; }
+.house .pick input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.packbar { position: sticky; bottom: 12px; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin: 20px 0 0; padding: 12px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 6px 24px rgba(0, 0, 0, .18); }
+.packbar label { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.packbar input[type=text] { font: inherit; padding: 6px 8px; min-width: 12em; border: 1px solid var(--line); border-radius: 6px; background: var(--field); color: var(--ink); }
+
+.page-head .head-actions { display: flex; gap: 8px; align-items: center; }
+.kind-group h3 .linklike { margin-left: 12px; padding: 2px 8px; font-size: 13px; font-weight: 500; vertical-align: middle; }
+
+/* "Walk around": the first-person view button, top right of the preview */
+.hx-stage .hx-walk { position: absolute; right: 14px; top: 12px; z-index: 2; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line, #c9c4b8); background: var(--panel, #fff); color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; }
+.hx-stage .hx-walk2 { top: 56px; }
+.hx-stage .hx-walk[aria-pressed="true"] { background: var(--accent, #9B2A1F); color: #fff; border-color: transparent; }
+.hx-panel .wgrid .wdoors { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+/* the parts tree and the things on a wall */
+.hx-panel .ptree li { margin-left: calc(var(--d, 0) * 14px); }
+.hx-panel .ptree li.ptop { margin-left: 0; color: var(--muted); padding: 2px 0 4px; }
+.hx-panel .muted { color: var(--muted); font-size: 0.92em; }
+.hx-panel .wallview { margin-bottom: 14px; }
+.hx-panel label.inline { display: inline-flex; gap: 6px; align-items: center; margin-left: 6px; font-size: 14px; }
+.hx-panel .myparts { margin-top: 12px; }
+.hx-panel .myparts h4 { margin: 0 0 4px; font-size: 14px; color: var(--muted); font-weight: 600; }
+.hx-panel button.small { padding: 2px 8px; font-size: 12.5px; }
+
+/* the building tree */
+.hx-panel .tree { list-style: none; margin: 0 0 10px; padding: 0; }
+.hx-panel .tree .tnode { display: flex; align-items: center; gap: 2px; margin-left: calc(var(--d, 0) * 16px); padding: 1px 0; }
+.hx-panel .tree .caret { width: 22px; flex: none; text-align: center; background: none; border: 0; padding: 2px 0; color: var(--muted); cursor: pointer; font-size: 12px; }
+.hx-panel .tree .tbtn { flex: 1; min-width: 0; text-align: left; background: none; border: 1px solid transparent; border-radius: 6px; padding: 3px 8px; font: inherit; font-size: 14px; color: var(--ink); cursor: pointer; }
+.hx-panel .tree .tbtn:hover { background: color-mix(in srgb, var(--accent, #9B2A1F) 8%, transparent); }
+.hx-panel .tree .tbtn[aria-pressed="true"] { border-color: var(--accent, #9B2A1F); background: color-mix(in srgb, var(--accent, #9B2A1F) 12%, transparent); font-weight: 600; }
+.hx-panel .tree .t-main > .tbtn, .hx-panel .tree .t-part > .tbtn { font-weight: 600; }
+.hx-panel .tree .t-wall > .tbtn { color: var(--muted); }
+.hx-panel .tree .t-wall > .tbtn[aria-pressed="true"] { color: var(--ink); }
+/* the tree has a fixed height (the user can drag its lower edge) and scrolls inside */
+.hx-panel #treeNav { height: 20rem; min-height: 8rem; max-height: 70vh; overflow-y: auto; resize: vertical; margin-bottom: 10px; padding: 6px 4px; border: 1px solid var(--line, #d8d3c6); border-radius: 8px; background: var(--panel, #fff); }
+.hx-panel #treeNav .tree { margin: 0; }

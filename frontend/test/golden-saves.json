@@ -1,0 +1,1160 @@
+{
+ "preset farmhouse": {
+  "parts": [],
+  "windows": 22,
+  "doors": 1,
+  "hidden": 0,
+  "ops": {
+   "front": 5,
+   "back": 6,
+   "right": 2,
+   "left": 2
+  },
+  "triangles": {
+   "walls": 238,
+   "trim": 1586,
+   "roof": 112,
+   "glass": 68,
+   "door": 220,
+   "foundation": 36,
+   "chimney": 24,
+   "gutter": 3608,
+   "iron": 40,
+   "interior": 70,
+   "curtain": 1134,
+   "fittings": 2566
+  },
+  "box": [
+   [
+    -5.51,
+    5.52
+   ],
+   [
+    0,
+    9.33
+   ],
+   [
+    -4.12,
+    5.38
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ },
+ "preset gardenCoop": {
+  "parts": [],
+  "windows": 7,
+  "doors": 1,
+  "hidden": 0,
+  "ops": {
+   "front": 2,
+   "back": 1,
+   "right": 0,
+   "left": 1
+  },
+  "triangles": {
+   "walls": 200,
+   "trim": 400,
+   "roof": 108,
+   "glass": 8,
+   "door": 112,
+   "foundation": 24,
+   "iron": 80,
+   "fittings": 3664
+  },
+  "box": [
+   [
+    -2.31,
+    2.32
+   ],
+   [
+    -0.03,
+    3.6
+   ],
+   [
+    -1.9,
+    2.2
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ },
+ "preset longHenHouse": {
+  "parts": [],
+  "windows": 19,
+  "doors": 1,
+  "hidden": 0,
+  "ops": {
+   "front": 6,
+   "back": 0,
+   "right": 1,
+   "left": 1
+  },
+  "triangles": {
+   "walls": 284,
+   "trim": 1260,
+   "roof": 108,
+   "glass": 24,
+   "door": 224,
+   "foundation": 24,
+   "gutter": 1888,
+   "iron": 160,
+   "fittings": 9424
+  },
+  "box": [
+   [
+    -5.2,
+    4.92
+   ],
+   [
+    -0.03,
+    3.46
+   ],
+   [
+    -3.02,
+    3.02
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ },
+ "preset poultryBarn": {
+  "parts": [],
+  "windows": 49,
+  "doors": 1,
+  "hidden": 0,
+  "ops": {
+   "front": 9,
+   "back": 8,
+   "right": 1,
+   "left": 0
+  },
+  "triangles": {
+   "walls": 592,
+   "trim": 1256,
+   "roof": 108,
+   "glass": 64,
+   "door": 204,
+   "foundation": 36,
+   "gutter": 3512,
+   "iron": 172,
+   "fittings": 24816
+  },
+  "box": [
+   [
+    -10.51,
+    11
+   ],
+   [
+    -0.03,
+    4.42
+   ],
+   [
+    -4.62,
+    4.62
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ },
+ "preset ladugard": {
+  "parts": [],
+  "windows": 40,
+  "doors": 1,
+  "hidden": 2,
+  "ops": {
+   "front": 6,
+   "back": 5,
+   "right": 0,
+   "left": 2
+  },
+  "triangles": {
+   "walls": 512,
+   "trim": 2352,
+   "roof": 116,
+   "glass": 44,
+   "door": 344,
+   "foundation": 48,
+   "gutter": 3512,
+   "iron": 160,
+   "fittings": 21396
+  },
+  "box": [
+   [
+    -9.3,
+    8.52
+   ],
+   [
+    0,
+    8.63
+   ],
+   [
+    -5.45,
+    5.12
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ },
+ "preset fahus": {
+  "parts": [],
+  "windows": 13,
+  "doors": 1,
+  "hidden": 0,
+  "ops": {
+   "front": 3,
+   "back": 1,
+   "right": 1,
+   "left": 1
+  },
+  "triangles": {
+   "walls": 268,
+   "trim": 764,
+   "roof": 108,
+   "glass": 16,
+   "door": 172,
+   "foundation": 36,
+   "iron": 80,
+   "fittings": 8148
+  },
+  "box": [
+   [
+    -4.41,
+    4.42
+   ],
+   [
+    0,
+    4.78
+   ],
+   [
+    -3.95,
+    4
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ },
+ "preset losdriftsstall": {
+  "parts": [],
+  "windows": 49,
+  "doors": 1,
+  "hidden": 0,
+  "ops": {
+   "front": 9,
+   "back": 8,
+   "right": 1,
+   "left": 0
+  },
+  "triangles": {
+   "walls": 704,
+   "trim": 1756,
+   "roof": 128,
+   "glass": 64,
+   "door": 204,
+   "foundation": 44,
+   "gutter": 3560,
+   "iron": 172,
+   "fittings": 53876
+  },
+  "box": [
+   [
+    -15.51,
+    16
+   ],
+   [
+    0,
+    7.09
+   ],
+   [
+    -8.62,
+    8.95
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ },
+ "preset farhus": {
+  "parts": [],
+  "windows": 13,
+  "doors": 1,
+  "hidden": 0,
+  "ops": {
+   "front": 3,
+   "back": 1,
+   "right": 1,
+   "left": 1
+  },
+  "triangles": {
+   "walls": 260,
+   "trim": 764,
+   "roof": 108,
+   "glass": 16,
+   "door": 172,
+   "foundation": 36,
+   "iron": 80,
+   "fittings": 4536
+  },
+  "box": [
+   [
+    -4.41,
+    4.42
+   ],
+   [
+    0,
+    4.82
+   ],
+   [
+    -3.95,
+    4
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ },
+ "preset farstall": {
+  "parts": [],
+  "windows": 28,
+  "doors": 1,
+  "hidden": 0,
+  "ops": {
+   "front": 4,
+   "back": 5,
+   "right": 0,
+   "left": 2
+  },
+  "triangles": {
+   "walls": 434,
+   "trim": 1900,
+   "roof": 112,
+   "glass": 36,
+   "door": 304,
+   "foundation": 48,
+   "gutter": 3512,
+   "iron": 160,
+   "fittings": 12078
+  },
+  "box": [
+   [
+    -8.3,
+    7.52
+   ],
+   [
+    0,
+    7.35
+   ],
+   [
+    -4.95,
+    4.62
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ },
+ "preset storfarstall": {
+  "parts": [],
+  "windows": 37,
+  "doors": 1,
+  "hidden": 0,
+  "ops": {
+   "front": 7,
+   "back": 6,
+   "right": 1,
+   "left": 0
+  },
+  "triangles": {
+   "walls": 554,
+   "trim": 1380,
+   "roof": 120,
+   "glass": 48,
+   "door": 204,
+   "foundation": 36,
+   "gutter": 3512,
+   "iron": 172,
+   "fittings": 18474
+  },
+  "box": [
+   [
+    -12.51,
+    13
+   ],
+   [
+    0,
+    6.36
+   ],
+   [
+    -6.62,
+    6.95
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ },
+ "house, default": {
+  "parts": [],
+  "windows": 22,
+  "doors": 1,
+  "hidden": 0,
+  "ops": {
+   "front": 5,
+   "back": 6,
+   "right": 2,
+   "left": 2
+  },
+  "triangles": {
+   "walls": 238,
+   "trim": 1586,
+   "roof": 112,
+   "glass": 68,
+   "door": 220,
+   "foundation": 36,
+   "chimney": 24,
+   "gutter": 3608,
+   "iron": 40,
+   "interior": 70,
+   "curtain": 1134,
+   "fittings": 2566
+  },
+  "box": [
+   [
+    -5.51,
+    5.52
+   ],
+   [
+    0,
+    9.33
+   ],
+   [
+    -4.12,
+    5.38
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ },
+ "house, L wing at an end": {
+  "parts": [
+   {
+    "id": 1,
+    "type": "valley",
+    "wall": "back",
+    "floors": 2,
+    "H": 5.4,
+    "rect": [
+     0,
+     6,
+     -10,
+     -4
+    ]
+   }
+  ],
+  "windows": 22,
+  "doors": 1,
+  "hidden": 0,
+  "ops": {
+   "front": 5,
+   "back": 7,
+   "right": 2,
+   "left": 2,
+   "w1End": 0,
+   "w1Left": 0,
+   "w1Right": 0
+  },
+  "triangles": {
+   "walls": 282,
+   "trim": 1641,
+   "roof": 223,
+   "glass": 68,
+   "door": 220,
+   "foundation": 48,
+   "chimney": 24,
+   "gutter": 4708,
+   "iron": 40,
+   "interior": 70,
+   "curtain": 1122,
+   "fittings": 2636
+  },
+  "box": [
+   [
+    -6.51,
+    6.62
+   ],
+   [
+    0,
+    9.73
+   ],
+   [
+    -10.51,
+    5.88
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ },
+ "house, T wing in the middle, valley": {
+  "parts": [
+   {
+    "id": 1,
+    "type": "valley",
+    "wall": "back",
+    "floors": 2,
+    "H": 5.4,
+    "rect": [
+     -4,
+     4,
+     -11,
+     -4
+    ]
+   }
+  ],
+  "windows": 22,
+  "doors": 1,
+  "hidden": 0,
+  "ops": {
+   "front": 5,
+   "back": 7,
+   "right": 2,
+   "left": 2,
+   "w1End": 0,
+   "w1Left": 0,
+   "w1Right": 0
+  },
+  "triangles": {
+   "walls": 298,
+   "trim": 1654,
+   "roof": 222,
+   "glass": 68,
+   "door": 220,
+   "foundation": 48,
+   "chimney": 24,
+   "gutter": 5676,
+   "iron": 40,
+   "interior": 70,
+   "curtain": 1110,
+   "fittings": 2672
+  },
+  "box": [
+   [
+    -7.51,
+    7.52
+   ],
+   [
+    0,
+    9.73
+   ],
+   [
+    -11.51,
+    5.88
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ },
+ "house, low wing under the eaves": {
+  "parts": [
+   {
+    "id": 1,
+    "type": "eave",
+    "wall": "back",
+    "floors": 1,
+    "H": 2.7,
+    "rect": [
+     -1.5,
+     1.5,
+     -8,
+     -4
+    ]
+   }
+  ],
+  "windows": 22,
+  "doors": 1,
+  "hidden": 1,
+  "ops": {
+   "front": 5,
+   "back": 6,
+   "right": 2,
+   "left": 2,
+   "w1End": 0,
+   "w1Left": 0,
+   "w1Right": 0
+  },
+  "triangles": {
+   "walls": 322,
+   "trim": 1570,
+   "roof": 220,
+   "glass": 64,
+   "door": 220,
+   "foundation": 48,
+   "chimney": 24,
+   "gutter": 5496,
+   "iron": 40,
+   "interior": 60,
+   "curtain": 1072,
+   "fittings": 2706
+  },
+  "box": [
+   [
+    -6.51,
+    6.52
+   ],
+   [
+    0,
+    9.73
+   ],
+   [
+    -8.51,
+    5.88
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ },
+ "house, gable annex": {
+  "parts": [
+   {
+    "id": 1,
+    "type": "gable",
+    "wall": "left",
+    "floors": 1,
+    "H": 2.7,
+    "rect": [
+     -9,
+     -6,
+     -1.5,
+     1.5
+    ]
+   }
+  ],
+  "windows": 22,
+  "doors": 1,
+  "hidden": 1,
+  "ops": {
+   "front": 5,
+   "back": 6,
+   "right": 2,
+   "left": 2,
+   "w1End": 0,
+   "w1Left": 0,
+   "w1Right": 0
+  },
+  "triangles": {
+   "walls": 250,
+   "trim": 1570,
+   "roof": 220,
+   "glass": 64,
+   "door": 220,
+   "foundation": 48,
+   "chimney": 24,
+   "gutter": 5496,
+   "iron": 40,
+   "interior": 60,
+   "curtain": 1072,
+   "fittings": 2636
+  },
+  "box": [
+   [
+    -9.51,
+    6.52
+   ],
+   [
+    0,
+    9.73
+   ],
+   [
+    -4.62,
+    5.88
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ },
+ "house, U": {
+  "parts": [
+   {
+    "id": 1,
+    "type": "valley",
+    "wall": "back",
+    "floors": 2,
+    "H": 5.4,
+    "rect": [
+     2,
+     8,
+     -10.5,
+     -4.5
+    ]
+   },
+   {
+    "id": 2,
+    "type": "valley",
+    "wall": "back",
+    "floors": 2,
+    "H": 5.4,
+    "rect": [
+     -8,
+     -2,
+     -10.5,
+     -4.5
+    ]
+   }
+  ],
+  "windows": 22,
+  "doors": 1,
+  "hidden": 0,
+  "ops": {
+   "front": 5,
+   "back": 8,
+   "right": 2,
+   "left": 2,
+   "w1End": 0,
+   "w1Left": 0,
+   "w1Right": 0,
+   "w2End": 0,
+   "w2Left": 0,
+   "w2Right": 0
+  },
+  "triangles": {
+   "walls": 326,
+   "trim": 1696,
+   "roof": 334,
+   "glass": 68,
+   "door": 220,
+   "foundation": 60,
+   "chimney": 24,
+   "gutter": 5808,
+   "iron": 40,
+   "interior": 70,
+   "curtain": 1134,
+   "fittings": 2770
+  },
+  "box": [
+   [
+    -8.62,
+    8.62
+   ],
+   [
+    0,
+    10.12
+   ],
+   [
+    -11.01,
+    6.38
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ },
+ "house, wings, flat roof": {
+  "parts": [
+   {
+    "id": 1,
+    "type": "flat",
+    "wall": "back",
+    "floors": 2,
+    "H": 5.4,
+    "rect": [
+     -0.6,
+     5.4,
+     -10,
+     -4
+    ]
+   }
+  ],
+  "windows": 22,
+  "doors": 1,
+  "hidden": 0,
+  "ops": {
+   "front": 5,
+   "back": 7,
+   "right": 2,
+   "left": 2,
+   "w1End": 0,
+   "w1Left": 0,
+   "w1Right": 0
+  },
+  "triangles": {
+   "walls": 258,
+   "trim": 1626,
+   "roof": 24,
+   "glass": 68,
+   "door": 220,
+   "foundation": 48,
+   "chimney": 24,
+   "iron": 40,
+   "interior": 70,
+   "curtain": 1122,
+   "fittings": 2636
+  },
+  "box": [
+   [
+    -6.4,
+    6.4
+   ],
+   [
+    0,
+    7.2
+   ],
+   [
+    -10.4,
+    5.88
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ },
+ "house, wing with its own floor height and pitch": {
+  "parts": [
+   {
+    "id": 1,
+    "type": "eave",
+    "wall": "back",
+    "floors": 1,
+    "H": 3.4,
+    "rect": [
+     -2.89,
+     2.89,
+     -10,
+     -4
+    ]
+   }
+  ],
+  "windows": 22,
+  "doors": 1,
+  "hidden": 1,
+  "ops": {
+   "front": 5,
+   "back": 6,
+   "right": 2,
+   "left": 2,
+   "w1End": 0,
+   "w1Left": 0,
+   "w1Right": 0
+  },
+  "triangles": {
+   "walls": 343,
+   "trim": 1570,
+   "roof": 220,
+   "glass": 64,
+   "door": 220,
+   "foundation": 48,
+   "chimney": 24,
+   "gutter": 5496,
+   "iron": 40,
+   "interior": 60,
+   "curtain": 1072,
+   "fittings": 2742
+  },
+  "box": [
+   [
+    -7.51,
+    7.52
+   ],
+   [
+    0,
+    9.73
+   ],
+   [
+    -10.51,
+    5.88
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ },
+ "house, hip roof": {
+  "parts": [],
+  "windows": 22,
+  "doors": 1,
+  "hidden": 0,
+  "ops": {
+   "front": 5,
+   "back": 6,
+   "right": 2,
+   "left": 2
+  },
+  "triangles": {
+   "walls": 214,
+   "trim": 1584,
+   "roof": 114,
+   "glass": 68,
+   "door": 220,
+   "foundation": 36,
+   "chimney": 24,
+   "gutter": 7216,
+   "iron": 40,
+   "interior": 70,
+   "curtain": 1134,
+   "fittings": 2534
+  },
+  "box": [
+   [
+    -6.62,
+    6.62
+   ],
+   [
+    0,
+    10.12
+   ],
+   [
+    -5.12,
+    6.38
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ },
+ "old save: one wing in the old settings": {
+  "parts": [
+   {
+    "id": 1,
+    "type": "gable",
+    "wall": "left",
+    "floors": 2,
+    "H": 5.4,
+    "rect": [
+     -9,
+     -5,
+     -3.2,
+     1.8
+    ]
+   }
+  ],
+  "windows": 22,
+  "doors": 1,
+  "hidden": 0,
+  "ops": {
+   "front": 5,
+   "back": 6,
+   "right": 2,
+   "left": 3,
+   "w1End": 0,
+   "w1Left": 0,
+   "w1Right": 0
+  },
+  "triangles": {
+   "walls": 282,
+   "trim": 1650,
+   "roof": 220,
+   "glass": 68,
+   "door": 220,
+   "foundation": 48,
+   "chimney": 24,
+   "gutter": 5544,
+   "iron": 40,
+   "interior": 70,
+   "curtain": 1122,
+   "fittings": 2668
+  },
+  "box": [
+   [
+    -9.51,
+    5.52
+   ],
+   [
+    0,
+    9.33
+   ],
+   [
+    -4.12,
+    5.38
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ },
+ "old save: the main door in the old settings": {
+  "parts": [],
+  "windows": 22,
+  "doors": 1,
+  "hidden": 0,
+  "ops": {
+   "front": 4,
+   "back": 6,
+   "right": 2,
+   "left": 3
+  },
+  "triangles": {
+   "walls": 246,
+   "trim": 1298,
+   "roof": 112,
+   "glass": 80,
+   "door": 416,
+   "foundation": 36,
+   "chimney": 24,
+   "gutter": 3608,
+   "iron": 80,
+   "interior": 70,
+   "curtain": 1134,
+   "fittings": 2548
+  },
+  "box": [
+   [
+    -6.75,
+    5.52
+   ],
+   [
+    0,
+    9.33
+   ],
+   [
+    -4.12,
+    4.12
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ },
+ "barn, with a ceiling and the inside like the outside": {
+  "parts": [],
+  "windows": 22,
+  "doors": 1,
+  "hidden": 1,
+  "ops": {
+   "front": 5,
+   "back": 6,
+   "right": 2,
+   "left": 2
+  },
+  "triangles": {
+   "walls": 404,
+   "trim": 2556,
+   "roof": 108,
+   "glass": 52,
+   "door": 132,
+   "foundation": 36,
+   "chimney": 24,
+   "gutter": 3608,
+   "iron": 80,
+   "fittings": 11676
+  },
+  "box": [
+   [
+    -5.51,
+    5.52
+   ],
+   [
+    0,
+    9.33
+   ],
+   [
+    -4.45,
+    4.5
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ },
+ "hen house with wings": {
+  "parts": [
+   {
+    "id": 1,
+    "type": "valley",
+    "wall": "back",
+    "floors": 2,
+    "H": 5.4,
+    "rect": [
+     1.5,
+     4.5,
+     -6.5,
+     -3.5
+    ]
+   }
+  ],
+  "windows": 22,
+  "doors": 1,
+  "hidden": 0,
+  "ops": {
+   "front": 5,
+   "back": 8,
+   "right": 2,
+   "left": 2,
+   "w1End": 0,
+   "w1Left": 0,
+   "w1Right": 0
+  },
+  "triangles": {
+   "walls": 714,
+   "trim": 1160,
+   "roof": 220,
+   "glass": 56,
+   "door": 132,
+   "foundation": 48,
+   "chimney": 24,
+   "gutter": 5676,
+   "iron": 80,
+   "fittings": 5326
+  },
+  "box": [
+   [
+    -5.51,
+    5.52
+   ],
+   [
+    -0.03,
+    9.33
+   ],
+   [
+    -7.01,
+    4.5
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ },
+ "house with windows and doors on a wing": {
+  "parts": [
+   {
+    "id": 1,
+    "type": "valley",
+    "wall": "back",
+    "floors": 2,
+    "H": 5.4,
+    "rect": [
+     -3,
+     3,
+     -10,
+     -4
+    ]
+   }
+  ],
+  "windows": 3,
+  "doors": 2,
+  "hidden": 0,
+  "ops": {
+   "front": 1,
+   "back": 1,
+   "right": 0,
+   "left": 0,
+   "w1End": 1,
+   "w1Left": 1,
+   "w1Right": 0
+  },
+  "triangles": {
+   "walls": 82,
+   "trim": 298,
+   "roof": 220,
+   "glass": 40,
+   "door": 636,
+   "foundation": 72,
+   "chimney": 24,
+   "gutter": 5676,
+   "iron": 120,
+   "curtain": 108,
+   "fittings": 2386
+  },
+  "box": [
+   [
+    -7.51,
+    7.52
+   ],
+   [
+    0,
+    9.73
+   ],
+   [
+    -10.51,
+    5
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ }
+}

@@ -1,4 +1,4 @@
-// Package store keeps users, sessions, invites and projects in SQLite (default) or Postgres.
+// Package store keeps users, sessions, invites, projects and imported items (assets) in SQLite (default) or Postgres.
 package store
 
 import (
@@ -75,6 +75,55 @@ CREATE TABLE IF NOT EXISTS projects (
 	updated_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS projects_user ON projects(user_id, updated_at DESC);
+CREATE TABLE IF NOT EXISTS assets (
+	id         TEXT    PRIMARY KEY,
+	user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	name       TEXT    NOT NULL,
+	meta       TEXT    NOT NULL,
+	created_at INTEGER NOT NULL,
+	updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS assets_user ON assets(user_id, updated_at DESC);
+CREATE TABLE IF NOT EXISTS asset_files (
+	asset_id TEXT    NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+	pos      INTEGER NOT NULL,
+	name     TEXT    NOT NULL,
+	size     INTEGER NOT NULL,
+	data     BLOB    NOT NULL,
+	PRIMARY KEY (asset_id, name)
+);
+CREATE TABLE IF NOT EXISTS parts (
+	id         TEXT    PRIMARY KEY,
+	user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	name       TEXT    NOT NULL,
+	info       TEXT    NOT NULL DEFAULT '{}',
+	data       TEXT    NOT NULL,
+	shared     INTEGER NOT NULL DEFAULT 0,
+	created_at INTEGER NOT NULL,
+	updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS parts_user ON parts(user_id, updated_at DESC);
+CREATE TABLE IF NOT EXISTS templates (
+	id         TEXT    PRIMARY KEY,
+	kind       TEXT    NOT NULL,
+	name       TEXT    NOT NULL,
+	blurb      TEXT    NOT NULL DEFAULT '',
+	settings   TEXT    NOT NULL DEFAULT '{}',
+	thumbnail  TEXT    NOT NULL DEFAULT '',
+	suggestion TEXT,
+	project_id TEXT    NOT NULL DEFAULT '',
+	published  INTEGER NOT NULL DEFAULT 0,
+	created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+	created_at INTEGER NOT NULL,
+	updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS template_photos (
+	template_id TEXT    NOT NULL REFERENCES templates(id) ON DELETE CASCADE,
+	pos         INTEGER NOT NULL,
+	type        TEXT    NOT NULL,
+	data        BLOB    NOT NULL,
+	PRIMARY KEY (template_id, pos)
+);
 `
 
 // Same tables for Postgres. Emails are unique and looked up case-insensitively through lower(email),
@@ -118,6 +167,55 @@ CREATE TABLE IF NOT EXISTS projects (
 	updated_at BIGINT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS projects_user ON projects(user_id, updated_at DESC);
+CREATE TABLE IF NOT EXISTS assets (
+	id         TEXT   PRIMARY KEY,
+	user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	name       TEXT   NOT NULL,
+	meta       TEXT   NOT NULL,
+	created_at BIGINT NOT NULL,
+	updated_at BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS assets_user ON assets(user_id, updated_at DESC);
+CREATE TABLE IF NOT EXISTS asset_files (
+	asset_id TEXT   NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+	pos      INTEGER NOT NULL,
+	name     TEXT   NOT NULL,
+	size     BIGINT NOT NULL,
+	data     BYTEA  NOT NULL,
+	PRIMARY KEY (asset_id, name)
+);
+CREATE TABLE IF NOT EXISTS parts (
+	id         TEXT    PRIMARY KEY,
+	user_id    BIGINT  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	name       TEXT    NOT NULL,
+	info       TEXT    NOT NULL DEFAULT '{}',
+	data       TEXT    NOT NULL,
+	shared     BOOLEAN NOT NULL DEFAULT FALSE,
+	created_at BIGINT  NOT NULL,
+	updated_at BIGINT  NOT NULL
+);
+CREATE INDEX IF NOT EXISTS parts_user ON parts(user_id, updated_at DESC);
+CREATE TABLE IF NOT EXISTS templates (
+	id         TEXT    PRIMARY KEY,
+	kind       TEXT    NOT NULL,
+	name       TEXT    NOT NULL,
+	blurb      TEXT    NOT NULL DEFAULT '',
+	settings   TEXT    NOT NULL DEFAULT '{}',
+	thumbnail  TEXT    NOT NULL DEFAULT '',
+	suggestion TEXT,
+	project_id TEXT    NOT NULL DEFAULT '',
+	published  BOOLEAN NOT NULL DEFAULT FALSE,
+	created_by BIGINT  REFERENCES users(id) ON DELETE SET NULL,
+	created_at BIGINT  NOT NULL,
+	updated_at BIGINT  NOT NULL
+);
+CREATE TABLE IF NOT EXISTS template_photos (
+	template_id TEXT    NOT NULL REFERENCES templates(id) ON DELETE CASCADE,
+	pos         INTEGER NOT NULL,
+	type        TEXT    NOT NULL,
+	data        BYTEA   NOT NULL,
+	PRIMARY KEY (template_id, pos)
+);
 `
 
 // IsPostgresURL reports whether dsn is a Postgres connection URL (postgres:// or postgresql://).
@@ -148,7 +246,11 @@ func openPostgres(url string) (*Store, error) {
 		if _, err := tx.exec(context.Background(), `SELECT pg_advisory_xact_lock(7340211)`); err != nil {
 			return err
 		}
-		return execAll(context.Background(), tx.Tx, schemaPostgres)
+		if err := execAll(context.Background(), tx.Tx, schemaPostgres); err != nil {
+			return err
+		}
+		_, err := tx.exec(context.Background(), `ALTER TABLE assets ADD COLUMN IF NOT EXISTS shared BOOLEAN NOT NULL DEFAULT FALSE`)
+		return err
 	})
 	if err != nil {
 		db.Close()
@@ -189,7 +291,21 @@ func openSQLite(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("creating schema: %w", err)
 	}
+	if err := addColumnSQLite(db, "assets", "shared", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("updating schema: %w", err)
+	}
 	return &Store{db: db, dialect: sqlite, Now: time.Now}, nil
+}
+
+// addColumnSQLite adds a column to a table that doesn't have it yet (SQLite has no ADD COLUMN IF NOT EXISTS).
+func addColumnSQLite(db *sql.DB, table, column, def string) error {
+	var n int
+	if err := db.QueryRow(`SELECT count(*) FROM pragma_table_info(?) WHERE name = ?`, table, column).Scan(&n); err != nil || n > 0 {
+		return err
+	}
+	_, err := db.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + column + ` ` + def)
+	return err
 }
 
 // rebind turns ? placeholders (outside quoted strings) into $1, $2, ... for Postgres.
@@ -521,6 +637,9 @@ type ProjectSummary struct {
 	Version   int64     `json:"version"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
+	// Kind is the kind of building (data.kind, "" when it's missing or not text);
+	// only set by ListProjects, so the list can group buildings without loading their data.
+	Kind string `json:"kind,omitempty"`
 }
 
 type Project struct {
@@ -577,7 +696,12 @@ func (s *Store) insertProject(ctx context.Context, userID int64, name string, da
 
 // ListProjects returns a user's projects, the last edited first.
 func (s *Store) ListProjects(ctx context.Context, userID int64) ([]ProjectSummary, error) {
-	rows, err := s.query(ctx, `SELECT id, name, thumbnail, version, created_at, updated_at FROM projects WHERE user_id = ? ORDER BY updated_at DESC, id`, userID)
+	// data is always a JSON object (the API checks it), stored as text in both databases.
+	kind := `CASE WHEN json_type(data, '$.kind') = 'text' THEN json_extract(data, '$.kind') ELSE '' END`
+	if s.dialect == postgres {
+		kind = `CASE WHEN jsonb_typeof(data::jsonb -> 'kind') = 'string' THEN data::jsonb ->> 'kind' ELSE '' END`
+	}
+	rows, err := s.query(ctx, `SELECT id, name, thumbnail, version, created_at, updated_at, `+kind+` FROM projects WHERE user_id = ? ORDER BY updated_at DESC, id`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -586,7 +710,7 @@ func (s *Store) ListProjects(ctx context.Context, userID int64) ([]ProjectSummar
 	for rows.Next() {
 		var p ProjectSummary
 		var created, updated int64
-		if err := rows.Scan(&p.ID, &p.Name, &p.Thumbnail, &p.Version, &created, &updated); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Thumbnail, &p.Version, &created, &updated, &p.Kind); err != nil {
 			return nil, err
 		}
 		p.CreatedAt, p.UpdatedAt = time.UnixMilli(created), time.UnixMilli(updated)

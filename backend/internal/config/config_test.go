@@ -81,3 +81,14 @@ func TestDatabaseURLMustBePostgres(t *testing.T) {
 		}
 	}
 }
+
+func TestClaudeNeedsAKey(t *testing.T) {
+	c, _ := Load(env(map[string]string{"PUBLIC_URL": "http://localhost:3000"}))
+	if c.API.Vision != nil {
+		t.Fatal("no key, no Claude")
+	}
+	c, _ = Load(env(map[string]string{"PUBLIC_URL": "http://localhost:3000", "ANTHROPIC_API_KEY": " sk-ant-test "}))
+	if c.API.Vision == nil {
+		t.Fatal("with a key, the wizard can ask Claude")
+	}
+}
