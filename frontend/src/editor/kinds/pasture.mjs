@@ -182,14 +182,30 @@ export function contourClosure(fence, rects, e = 0.15) {
   const len = p => p.reduce((s, q, i) => i ? s + Math.hypot(q[0] - p[i - 1][0], q[1] - p[i - 1][1]) : 0, 0);
   const options = [path(1), path(-1)].map(p => ({p, ok: !probes.some(([x, z]) => inside([...fence.map(pt), ...p], x, z)), l: len(p)}));
   const pick = options.filter(o => o.ok).sort((a, b) => a.l - b.l)[0] || options.sort((a, b) => a.l - b.l)[0];
+  // A post standing at a corner of the building, its fence running on along the line of a wall (seen in the game: posts (-10, 15) then (-20, 15) on a barn
+  // from x -10, z 15): the way round the corner would cross that first (or last) stretch of fence. It stops where it meets it, 5 cm short.
+  let way = pick.p;
+  const hit = (a, b, c, d) => {
+    const r = [b[0] - a[0], b[1] - a[1]], q = [d[0] - c[0], d[1] - c[1]], den = r[0] * q[1] - r[1] * q[0];
+    if (Math.abs(den) < 1e-12) return null;
+    const t = ((c[0] - a[0]) * q[1] - (c[1] - a[1]) * q[0]) / den, u = ((c[0] - a[0]) * r[1] - (c[1] - a[1]) * r[0]) / den;
+    return t > 1e-9 && t < 1 - 1e-9 && u > 1e-9 && u < 1 - 1e-9 ? t : null;
+  };
+  const short = (a, b, t, back) => { const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, tt = t + (back ? -0.05 : 0.05) / l; return [a[0] + (b[0] - a[0]) * tt, a[1] + (b[1] - a[1]) * tt]; };
+  if (fence.length >= 2) {
+    const f0 = pt(fence[0]), f1 = pt(fence[1]);
+    for (let i = way.length - 2; i >= 0; i--) { const t = hit(way[i], way[i + 1], f0, f1); if (t !== null) { way = [...way.slice(0, i + 1), short(way[i], way[i + 1], t, true)]; break; } }
+    const g0 = pt(fence[fence.length - 2]), g1 = pt(fence[fence.length - 1]);
+    for (let i = 0; i + 1 < way.length; i++) { const t = hit(way[i], way[i + 1], g0, g1); if (t !== null) { way = [short(way[i], way[i + 1], t, false), ...way.slice(i + 1)]; break; } }
+  }
   // (points on top of the posts themselves add nothing)
-  return pick.p.filter(q => Math.hypot(q[0] - last[0], q[1] - last[1]) > 0.05 && Math.hypot(q[0] - first[0], q[1] - first[1]) > 0.05);
+  return way.filter(q => Math.hypot(q[0] - last[0], q[1] - last[1]) > 0.05 && Math.hypot(q[0] - first[0], q[1] - first[1]) > 0.05);
 }
 
 /**
- * The husbandry's additionalNavMeshNodes for a fence: the way along the building between its posts (contourClosure), in the order the game wants them.
- * From the last post back to the first, after the posts of a fence that goes counter-clockwise (ccwFence): the game's own fences go that way, and a
- * fence the other way round got the game's warning "Could not shrink polygon ... check order of fence segments and direction" (and a crossed area).
+ * The husbandry's additionalNavMeshNodes for a fence: the way along the building from its last post back to its first (contourClosure), after the posts.
+ * (The crossed area first seen in the game came from a post at the building's corner, the way back crossing the fence's first stretch: contourClosure
+ * now stops short of it.)
  */
 export const navContourNodes = (fence, rects, e = 0.15) => contourClosure(fence, rects, e);
 

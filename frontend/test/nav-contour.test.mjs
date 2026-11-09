@@ -56,7 +56,7 @@ test("the export adds the points to the husbandry's fence, as nodes in the scene
 });
 
 import { navContourNodes } from "../src/editor/kinds/pasture.mjs";
-test("the nodes for the game run from the last post back to the first, after a counter-clockwise fence", () => {
+test("the nodes for the game run from the last post back to the first (after the posts)", () => {
   const fence = [[0, 0, -3.15], [0, 0, -12], [14, 0, -12], [14, 0, 0], [5.15, 0, 0]], rects = [rect(-5, 5, -3, 3)];
   const nodes = navContourNodes(fence, rects, 0.15), path = contourClosure(fence, rects, 0.15);
   assert.deepEqual(nodes, path);
@@ -75,4 +75,16 @@ test("the navigation shape gets its i3dMapping (the game said: Index not found: 
   const xml = placeableXml(sanitize({kind: "cow"}), "x");
   assert.ok(/<navigation shape="navigationMeshShape"\/>/.test(xml));
   assert.ok(/<i3dMapping id="navigationMeshShape" node="[^"]+"\/>/.test(xml), "the mapping");
+});
+
+test("the pasture seen crossed in the game (a post at the barn.s corner, the fence on along the wall.s line) is one simple polygon now", () => {
+  // the pasture from the game (posts from the export) and its barn
+  const fence = [[-10, 0, 15], [-20, 0, 15], [-20, 0, -21.25], [-5, 0, -21.25], [-5, 0, -36], [7.75, 0, -36], [7.75, 0, -15]].map(q => q);
+  const nodes = navContourNodes(fence, [rect(-10, 10, -15, 15)], 0.15);
+  const poly = [...fence.map(q => [q[0], q[2]]), ...nodes];
+  const seg = (a, b, c, d) => { const o = (p, q, r) => Math.sign((q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])); return o(a, b, c) * o(a, b, d) < 0 && o(c, d, a) * o(c, d, b) < 0; };
+  for (let i = 0; i < poly.length; i++) for (let j = i + 2; j < poly.length; j++) {
+    if (i === 0 && j === poly.length - 1) continue;
+    assert.ok(!seg(poly[i], poly[(i + 1) % poly.length], poly[j], poly[(j + 1) % poly.length]), `edges ${i} and ${j} cross`);
+  }
 });
