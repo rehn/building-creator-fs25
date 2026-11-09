@@ -1408,6 +1408,8 @@ function addMesh(mat, m) {
 /** Inside walls of a walk-in building are whitewashed. */
 /** The floor finish: a skin, so anything lying on the floor (bedding, droppings, plates) shows above it. */
 const FLOOR_T = 0.004;
+/** With no foundation (the floor on the ground) the floor skin stands this far above it: a few mm would be hidden by the terrain, and the grass shows through. */
+const FLOOR_LIFT = 0.03;
 const LOFT = "#6B5A48", WHITEWASH = "#E9E4D8", GRIME = "#C2B8A3", GRIME_T = 0.9, KICKBOARD = "#3F352C", KICK_T = 0.28, ROOF_BOARDS = "#8C7457";
 /** A barn's inside walls: whitewash, a grimy band at the bottom and a tarred kickboard ([colour, surface, height]). */
 const BARN_WALLS = {wall: [WHITEWASH, "whitewash"], low: [GRIME, "grime", GRIME_T], kick: [KICKBOARD, "timber", KICK_T]};
@@ -1593,7 +1595,14 @@ function buildRoofFrame(ext, span, top, ridgeY, tanP, M, th, vents, skip = () =>
  */
 function buildInside(kind, F, H) {
   const room = roomOf(p, openings), catalog = catalogFor(p), items = p.items || [];
-  if (kind.furnish) kind.furnish({floor: (color, surf) => { paint(color, surf); for (const r of room.rects) abox("fittings", [r.x0, F, r.z0], [r.x1, F + FLOOR_T, r.z1]); }});
+  if (kind.furnish) kind.furnish({floor: (color, surf) => {
+    paint(color, surf);
+    const low = F < FLOOR_LIFT, top = low ? F + FLOOR_LIFT : F + FLOOR_T;
+    for (const r of room.rects) {
+      abox("fittings", [r.x0, low ? F - 0.05 : F, r.z0], [r.x1, top, r.z1]);
+      if (low) abox("collision", [r.x0, F - 0.05, r.z0], [r.x1, top, r.z1]);   // (so the player and the animals stand on it)
+    }
+  }});
   const outside = new Set([...problems(items, catalog, room)].filter(([, m]) => /outside/i.test(m)).map(([id]) => id));
   for (const it of items) {
     const def = catalog[it.type];
