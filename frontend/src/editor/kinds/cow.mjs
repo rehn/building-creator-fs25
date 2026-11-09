@@ -6,7 +6,7 @@
 import { tg, shape } from "../i3d.mjs";
 import { roomOf, furnisher, wallsOf, footprint, toWorld, WALL_T } from "../layout.mjs";
 import { animalNav, navMesh, KEEP } from "../walkarea.mjs";
-import { wallLength, yardFrame, shellOf, teleportFor, withPasture, pastureWallFor, cornerStripes, palletLines, footprintHull } from "./pasture.mjs";
+import { wallLength, yardFrame, shellOf, teleportFor, withPasture, pastureWallFor, cornerStripes, palletLines, footprintHull, contourClosure } from "./pasture.mjs";
 import { objectOf, boxOf, iconOf, boxFrom, pastureOf, insidePoly, footprints, blockersOf, animalEntrances } from "../objects.mjs";
 import { placeOnWall, placeOnBuilding } from "../places.mjs";
 import { tone, shade, arc, strawBale, strawLitter } from "./props.mjs";
@@ -56,11 +56,13 @@ function animalsInside(p, geo, fence, blockers) {
   const at = (s, d) => [w.o[0] + w.u[0] * s + w.n[0] * d, w.o[2] + w.u[2] * s + w.n[2] * d];
   const rooms = roomOf(p, openings(p)).rects;
   const items = (p.items || []).flatMap(animalBlockers);
-  const nav = animalNav({fence, blockers, rooms, items: items.map(b => ({...b})), doors: entrances.map(e => ({a: at(e.s0, run), b: at(e.s1, run), c: at(e.s1, -WALL_T), d: at(e.s0, -WALL_T)})), floorY: F});
+  const nav = animalNav({fence, blockers, rooms, items: items.map(b => ({...b})), doors: entrances.map(e => ({a: at(e.s0, run), b: at(e.s1, run), c: at(e.s1, -WALL_T), d: at(e.s0, -WALL_T)})), floorY: F < 0.03 ? F + 0.03 : F + 0.004});   // (the top of the floor: see FLOOR_LIFT in model.mjs)
   if (!nav) return null;
   nav.blockers = [...wallSlabs(p, entrances), ...items.map(box), ...blockers.filter(b => b.keep === KEEP.trough)];
   return nav;
 }
+/** The walking mesh for the export: the building's floor and the ramps (the yard is the fence's contour, which the game makes itself). */
+const insideOnly = nav => ({...nav, rects: nav.rects.filter(r => r.inside)});
 /** A blocker box from a floor rectangle {x0, x1, z0, z1}: 2 m high. */
 const box = r => ({center: [(r.x0 + r.x1) / 2, 1, (r.z0 + r.z1) / 2], size: [r.x1 - r.x0, 2, r.z1 - r.z0]});
 /**
@@ -157,9 +159,11 @@ export function cowYard(geo, p, cfg = COW) {
   // The game objects: where the building has them (objects.mjs); to start with, the feed pad and bales
   // outside the fence on the feed side, the trailer spot further out, the info area round the barn.
   const {food, bales, loading, info, pallets} = cowObjects(geo, p, yf, cfg);
-  const nav = animalsInside(p, geo, fence, [...blockersOf(p).map(b => ({...b, keep: KEEP.wall})), ...[feedTrough, waterTrough].filter(Boolean).map(t => ({...t.box, keep: KEEP.trough}))]);
+  // (the area as the game makes it: the fence, closed along the building)
+  const contour = [...fence, ...contourClosure(fence, footprints(p), 0.15).map(([x, z]) => [x, 0, z])];
+  const nav = animalsInside(p, geo, contour, [...blockersOf(p).map(b => ({...b, keep: KEEP.wall})), ...[feedTrough, waterTrough].filter(Boolean).map(t => ({...t.box, keep: KEEP.trough}))]);
   return {
-    nav,
+    nav, contour,
     ...(pallets && {pallet: {lines: palletLines(pallets.box), trigger: pallets.box, stripes: cornerStripes(rectOf(pallets.box))}}),
     fence, feedTrough, waterTrough, foodPlaces, waterPlaces, food: food.box, bales: bales && bales.box, loading: loading.box, info: info.box,
     blockers: [...blockersOf(p), ...[feedTrough, waterTrough].filter(Boolean).map(t => t.box)],
@@ -439,12 +443,14 @@ export const sceneOf = cfg => c => {
     // Like the base game's cow barn: the barn and troughs are cut out of the walking area made from the fence.
     // (animals that can go inside: a walking mesh of the whole area, like the base game's big barns; else the area made from the fence minus the blockers)
     tg("navigationRootNode", [0, 0, 0], y.nav
-      ? [shape("navigationMeshShape", {shapeId: doc.shape("navigationMeshShape", navMesh(y.nav), {cpu: true}), nonRenderable: true, buildNavMeshMask: "0xfe", castsShadows: false, receiveShadows: false, materialIds: forage}),
+      ? [shape("navigationMeshShape", {shapeId: doc.shape("navigationMeshShape", navMesh(insideOnly(y.nav)), {cpu: true}), nonRenderable: true, buildNavMeshMask: "0xfe", castsShadows: false, receiveShadows: false, materialIds: forage}),
         // (the base game's big barns also have a "walkingPlane": the same area as a collision surface of its own group, which the animals stand on)
-        shape("walkingPlane", {shapeId: doc.shape("walkingPlane", navMesh(y.nav), {cpu: true}), static: true, collisionFilterGroup: "0x400000", collisionFilterMask: "0x1", nonRenderable: true, castsShadows: false, receiveShadows: false, materialIds: forage}),
+        shape("walkingPlane", {shapeId: doc.shape("walkingPlane", navMesh(insideOnly(y.nav)), {cpu: true}), static: true, collisionFilterGroup: "0x400000", collisionFilterMask: "0x1", nonRenderable: true, castsShadows: false, receiveShadows: false, materialIds: forage}),
         ...y.nav.blockers.map(blocker)]
       : y.blockers.map(blocker)),
     tg("fence1", [0, 0, 0], y.fence.map((q, i) => tg(`fence1Node${i + 1}`, q))),
+    // the way back from the last post to the first along the building (the game would close the area with a straight line, through the building)
+    tg("navContour", [0, 0, 0], contourClosure(y.fence, footprints(p), 0.15).map(([x, z], i) => tg(`navContourNode${i + 1}`, [x, 0, z]))),
     // the ground under the building: the meadow's clear task takes grass away there (and paints dirt)
     tg("meadowClear", [0, 0, 0], footprintHull(p).map(([x, z], i) => tg(`clearAreaPoint${i + 1}`, [x, 0, z]))),
     ...(y.pallet ? [
@@ -504,7 +510,11 @@ ${y.pallet ? `        <pallets>
 ${y.fence.map((_, i) => `                    <node node="fence1Node${i + 1}"/>`).join("\n")}
                 </section>
             </sections>
-        </fence>
+${(pts => pts.length ? `            <!-- the animals' area goes back along the building to the first post, not through it -->
+            <additionalNavMeshNodes>
+${pts.map((_, i) => `                <node node="navContourNode${i + 1}"/>`).join("\n")}
+            </additionalNavMeshNodes>
+` : "")(contourClosure(y.fence, footprints(p), 0.15))}        </fence>
         <meadow>
             <fruitType name="GRASS" eatableStartGrowthState="greenMiddle" eatableEndGrowthState="harvestReady" eatenGrowthState="greenSmall"/>
             <fruitType name="MEADOW" eatableStartGrowthState="greenMiddle" eatableEndGrowthState="harvestReady" eatenGrowthState="greenSmall"/>

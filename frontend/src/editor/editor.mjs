@@ -2178,7 +2178,7 @@ function paintWalkArea(yard) {
   yardObj.ground.visible = yardObj.groundIn.visible = false;
   if (!showWalkArea) return;
   const xs = yard.fence.map(q => q[0]), span = Math.max(...xs) - Math.min(...xs), cell = Math.max(0.2, span / 700);
-  const rects = yard.nav ? yard.nav.rects : cellRects(walkArea(yard.fence, yard.blockers || [], cell));
+  const rects = yard.nav ? yard.nav.rects : cellRects(walkArea(yard.contour || yard.fence, yard.blockers || [], cell));
   if (!rects.length) return;
   // one picture of the ground for the yard and one at the building's floor (where the animals can go inside)
   const paint = (mesh, list, y, ramps) => {

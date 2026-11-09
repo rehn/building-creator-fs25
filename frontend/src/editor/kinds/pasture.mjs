@@ -112,3 +112,76 @@ export function footprintHull(p, margin = 0.5) {
   const half = list => { const h = []; for (const q of list) { while (h.length >= 2 && cross(h[h.length - 2], h[h.length - 1], q) <= 0) h.pop(); h.push(q); } h.pop(); return h; };
   return [...half(pts), ...half(pts.slice().reverse())];
 }
+
+/**
+ * The outline of the building seen from above: the union of its footprints [{x0, x1, z0, z1}] grown by e, as one counter-clockwise loop [[x, z] ...]
+ * (x right, z down the page, the area positive by the shoelace sum x·z' − x'·z): the outer one, if the rectangles leave a hole.
+ */
+export function buildingOutline(rects, e = 0) {
+  const R = rects.map(r => ({x0: r.x0 - e, x1: r.x1 + e, z0: r.z0 - e, z1: r.z1 + e}));
+  if (!R.length) return [];
+  const xs = [...new Set(R.flatMap(r => [r.x0, r.x1]))].sort((a, b) => a - b), zs = [...new Set(R.flatMap(r => [r.z0, r.z1]))].sort((a, b) => a - b);
+  const nx = xs.length - 1, nz = zs.length - 1;
+  const cov = (i, j) => i >= 0 && j >= 0 && i < nx && j < nz && R.some(r => (xs[i] + xs[i + 1]) / 2 > r.x0 && (xs[i] + xs[i + 1]) / 2 < r.x1 && (zs[j] + zs[j + 1]) / 2 > r.z0 && (zs[j] + zs[j + 1]) / 2 < r.z1);
+  // the edges between a covered cell and an empty one, each going round its cell the same way (so they join into loops)
+  const next = new Map(), key = (i, j) => `${i},${j}`;
+  const edge = (a, b) => next.set(key(...a), b);
+  for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) if (cov(i, j)) {
+    if (!cov(i, j - 1)) edge([i, j], [i + 1, j]);
+    if (!cov(i + 1, j)) edge([i + 1, j], [i + 1, j + 1]);
+    if (!cov(i, j + 1)) edge([i + 1, j + 1], [i, j + 1]);
+    if (!cov(i - 1, j)) edge([i, j + 1], [i, j]);
+  }
+  const loops = [], seen = new Set();
+  for (const start of next.keys()) {
+    if (seen.has(start)) continue;
+    const loop = [];
+    for (let k = start, n = 0; !seen.has(k) && n < 10000; n++) { seen.add(k); const [i, j] = k.split(",").map(Number); loop.push([xs[i], zs[j]]); const b = next.get(k); if (!b) break; k = key(...b); }
+    loops.push(loop);
+  }
+  const area = poly => poly.reduce((s, [x, z], i) => { const [x2, z2] = poly[(i + 1) % poly.length]; return s + x * z2 - x2 * z; }, 0) / 2;
+  let out = loops.sort((a, b) => Math.abs(area(b)) - Math.abs(area(a)))[0];
+  if (area(out) < 0) out = out.reverse();
+  // (corners only: points on a straight run are left out)
+  return out.filter((q, i) => { const a = out[(i + out.length - 1) % out.length], b = out[(i + 1) % out.length]; return Math.abs((q[0] - a[0]) * (b[1] - q[1]) - (q[1] - a[1]) * (b[0] - q[0])) > 1e-9; });
+}
+
+/**
+ * The way back from a fence's last post to its first along the building (outline grown by e), as [[x, z] ...] to add to the animals' contour after the posts
+ * (the husbandry's additionalNavMeshNodes): the game would close the contour with a straight line, which cuts through the building when the pasture goes
+ * round a corner of it. The side of the building taken is the one that leaves the building out of the area. [] when the fence doesn't start and end at the building.
+ */
+export function contourClosure(fence, rects, e = 0.15) {
+  const O = buildingOutline(rects, e);
+  if (O.length < 3 || fence.length < 2) return [];
+  const pt = q => [q[0], q.length > 2 ? q[2] : q[1]];
+  const first = pt(fence[0]), last = pt(fence[fence.length - 1]);
+  // the nearest point of the outline to q: [edge index k (from O[k] to O[k+1]), the point, its distance]
+  const near = q => {
+    let best = null;
+    O.forEach((a, k) => {
+      const b = O[(k + 1) % O.length], dx = b[0] - a[0], dz = b[1] - a[1], l2 = dx * dx + dz * dz;
+      const t = l2 ? Math.max(0, Math.min(1, ((q[0] - a[0]) * dx + (q[1] - a[1]) * dz) / l2)) : 0, c = [a[0] + t * dx, a[1] + t * dz], d = Math.hypot(q[0] - c[0], q[1] - c[1]);
+      if (!best || d < best[2]) best = [k, c, d];
+    });
+    return best;
+  };
+  const A = near(last), B = near(first);
+  if (A[2] > 1.5 || B[2] > 1.5) return [];
+  const n = O.length, a0 = O[A[0]], b0 = O[(A[0] + 1) % n];
+  const ahead = A[0] === B[0] && (B[1][0] - A[1][0]) * (b0[0] - a0[0]) + (B[1][1] - A[1][1]) * (b0[1] - a0[1]) >= 0;
+  const path = dir => {
+    const out = [A[1]];
+    if (A[0] === B[0] && (dir > 0) === ahead) return [...out, B[1]];   // (both on one edge, going towards B)
+    if (dir > 0) for (let k = (A[0] + 1) % n, m = 0; m < n; k = (k + 1) % n, m++) { out.push(O[k]); if (k === B[0]) break; }
+    else for (let k = A[0], m = 0; m < n; k = (k + n - 1) % n, m++) { out.push(O[k]); if (k === (B[0] + 1) % n) break; }
+    return [...out, B[1]];
+  };
+  const inside = (poly, x, z) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, zi] = poly[i], [xj, zj] = poly[j]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) c = !c; } return c; };
+  const probes = rects.map(r => [(r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2]);
+  const len = p => p.reduce((s, q, i) => i ? s + Math.hypot(q[0] - p[i - 1][0], q[1] - p[i - 1][1]) : 0, 0);
+  const options = [path(1), path(-1)].map(p => ({p, ok: !probes.some(([x, z]) => inside([...fence.map(pt), ...p], x, z)), l: len(p)}));
+  const pick = options.filter(o => o.ok).sort((a, b) => a.l - b.l)[0] || options.sort((a, b) => a.l - b.l)[0];
+  // (points on top of the posts themselves add nothing)
+  return pick.p.filter(q => Math.hypot(q[0] - last[0], q[1] - last[1]) > 0.05 && Math.hypot(q[0] - first[0], q[1] - first[1]) > 0.05);
+}
