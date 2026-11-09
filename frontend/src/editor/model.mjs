@@ -899,7 +899,31 @@ function poly(mat, pts, hint, uvf) {
   }
   // An inside surface's uvs count copies of its texture.
   if (S) uvs = uvs.map(([u, v]) => [u / S.w, v / S.h]);
-  pts.forEach((q, k) => { g.p.push(q[0], q[1], q[2]); g.n.push(n[0], n[1], n[2]); g.uv.push(uvs[k][0], uvs[k][1]); if (g.c) g.c.push(...(mat === "fittings" ? rgbHere : curtainRGB)); if (g.s) g.s.push(surf); });
+  // (a collision needs no uvs; the game wants every uv within [-32, 32])
+  if (slotOf(mat) === "collision") uvs = uvs.map(() => [0, 0]);
+  emitFace(g, mat, pts, uvs, n, rgbHere, surf);
+}
+/** Writes a convex face to mesh g: split while its uvs span more than 30 copies of the texture, and moved by whole copies to start near 0 (the textures tile). */
+function emitFace(g, mat, pts, uvs, n, rgbHere, surf) {
+  for (const a of [0, 1]) {
+    const lo = Math.min(...uvs.map(u => u[a])), hi = Math.max(...uvs.map(u => u[a]));
+    if (hi - lo > 30) {
+      const c = (lo + hi) / 2;
+      for (const keep of [-1, 1]) {
+        const P = [], U = [];
+        pts.forEach((q, k) => {
+          const j = (k + 1) % pts.length, du = uvs[k][a] - c, dv = uvs[j][a] - c;
+          if (du * keep >= 0) { P.push(q); U.push(uvs[k]); }
+          if (du * dv < 0) { const t = du / (du - dv); P.push(q.map((v, i) => v + (pts[j][i] - v) * t)); U.push(uvs[k].map((v, i) => v + (uvs[j][i] - v) * t)); }
+        });
+        if (P.length >= 3) emitFace(g, mat, P, U, n, rgbHere, surf);
+      }
+      return;
+    }
+  }
+  const du = Math.floor(Math.min(...uvs.map(u => u[0]))), dv = Math.floor(Math.min(...uvs.map(u => u[1])));
+  const base = g.p.length / 3;
+  pts.forEach((q, k) => { g.p.push(q[0], q[1], q[2]); g.n.push(n[0], n[1], n[2]); g.uv.push(uvs[k][0] - du, uvs[k][1] - dv); if (g.c) g.c.push(...(mat === "fittings" ? rgbHere : curtainRGB)); if (g.s) g.s.push(surf); });
   for (let k = 1; k < pts.length - 1; k++) g.i.push(base, base + k, base + k + 1);
 }
 function box(mat, P, ax, ay, az) {
@@ -995,7 +1019,9 @@ function quad(mat, pts, uvs, hint) {
   let n = norm(cross(sub(pts[1], pts[0]), sub(pts[2], pts[0])));
   if (dot(n, hint) < 0) { pts = pts.slice().reverse(); uvs = uvs.slice().reverse(); n = neg(n); }
   const g = G[mat], base = g.p.length / 3;
-  pts.forEach((q, k) => { g.p.push(...q); g.n.push(...n); g.uv.push(...uvs[k]); if (g.c) g.c.push(...(mat === "fittings" ? fitRGB : curtainRGB)); if (g.s) g.s.push(undefined); });
+  // (moved by whole copies of the texture to start near 0: the game wants uvs within [-32, 32]; an atlas's 0..1 stays as it is)
+  const du = Math.floor(Math.min(...uvs.map(u => u[0]))), dv = Math.floor(Math.min(...uvs.map(u => u[1])));
+  pts.forEach((q, k) => { g.p.push(...q); g.n.push(...n); g.uv.push(uvs[k][0] - du, uvs[k][1] - dv); if (g.c) g.c.push(...(mat === "fittings" ? fitRGB : curtainRGB)); if (g.s) g.s.push(undefined); });
   g.i.push(base, base + 1, base + 2, base, base + 2, base + 3);
 }
 /** Color (0..1 rgb) given to the curtain vertices being built; color and surface (SURFACES) of the fittings. */

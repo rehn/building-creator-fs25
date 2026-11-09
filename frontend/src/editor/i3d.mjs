@@ -127,7 +127,7 @@ export function pathOf(root, name) {
 
 /** Attributes in placeable XML whose value is the id of an i3dMapping. */
 const NODE_ATTRS = ["node", "startNode", "endNode", "widthNode", "heightNode", "triggerNode", "teleportNode", "rootNode",
-  "exactFillRootNode", "spawnNode", "cameraNode", "linkNode"];
+  "exactFillRootNode", "spawnNode", "cameraNode", "linkNode", "shape"];
 /**
  * i3dMappings for every node the placeable XML names: [[id, path]], in the order it names them.
  * Values that are already paths ("0>") are left alone. Throws if a named node isn't in the scene.

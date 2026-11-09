@@ -138,7 +138,7 @@
    "foundation": 36,
    "gutter": 3512,
    "iron": 172,
-   "fittings": 24688
+   "fittings": 24816
   },
   "box": [
    [
@@ -247,14 +247,14 @@
   },
   "triangles": {
    "walls": 704,
-   "trim": 1752,
-   "roof": 124,
+   "trim": 1756,
+   "roof": 128,
    "glass": 64,
    "door": 204,
-   "foundation": 36,
+   "foundation": 44,
    "gutter": 3560,
    "iron": 172,
-   "fittings": 53780
+   "fittings": 53876
   },
   "box": [
    [

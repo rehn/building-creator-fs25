@@ -6,7 +6,7 @@
 import { tg, shape } from "../i3d.mjs";
 import { roomOf, furnisher, wallsOf, footprint, toWorld, WALL_T } from "../layout.mjs";
 import { animalNav, navMesh, KEEP } from "../walkarea.mjs";
-import { wallLength, yardFrame, shellOf, teleportFor, withPasture, pastureWallFor, cornerStripes, palletLines, footprintHull, contourClosure, navContourNodes } from "./pasture.mjs";
+import { wallLength, yardFrame, shellOf, teleportFor, withPasture, pastureWallFor, cornerStripes, palletLines, footprintHull, contourClosure, navContourNodes, ccwFence } from "./pasture.mjs";
 import { objectOf, boxOf, iconOf, boxFrom, pastureOf, insidePoly, footprints, blockersOf, animalEntrances } from "../objects.mjs";
 import { placeOnWall, placeOnBuilding } from "../places.mjs";
 import { tone, shade, arc, strawBale, strawLitter } from "./props.mjs";
@@ -150,7 +150,7 @@ function startTroughs(yf, p, cfg) {
 export function cowYard(geo, p, cfg = COW) {
   const yf = yardFrame(geo, p, cfg.minWidth), {at, boxAt, rectOf} = yf;
   // The pasture: the building's pasture object, or (placing things to start with) its wall and depth.
-  const pa = pastureOf(p), past = pa ? pa.w : yf.past, fence = pa ? pa.fence : yf.fence;
+  const pa = pastureOf(p), past = pa ? pa.w : yf.past, fence = ccwFence(pa ? pa.fence : yf.fence);
   const {feedTrough: ft, waterTrough: wt} = cowObjects(geo, p, yf, cfg);
   const fromObj = e => e && (({center: [x, , z], size: [w, h, d]}) => ({x, z, w, d, h}))(e.box);
   const rects = footprints(p);

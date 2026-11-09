@@ -56,10 +56,23 @@ test("the export adds the points to the husbandry's fence, as nodes in the scene
 });
 
 import { navContourNodes } from "../src/editor/kinds/pasture.mjs";
-test("the nodes for the game run from the first post towards the last (the other way round crossed the area in the game)", () => {
+test("the nodes for the game run from the last post back to the first, after a counter-clockwise fence", () => {
   const fence = [[0, 0, -3.15], [0, 0, -12], [14, 0, -12], [14, 0, 0], [5.15, 0, 0]], rects = [rect(-5, 5, -3, 3)];
   const nodes = navContourNodes(fence, rects, 0.15), path = contourClosure(fence, rects, 0.15);
-  assert.deepEqual(nodes, path.slice().reverse());
+  assert.deepEqual(nodes, path);
   const d = (q, p) => Math.hypot(q[0] - p[0], q[1] - p[2]);
-  assert.ok(d(nodes[0], fence[0]) <= d(nodes[nodes.length - 1], fence[0]), "starts at the first post's end");
+  assert.ok(d(nodes[nodes.length - 1], fence[0]) <= d(nodes[0], fence[0]), "ends at the first post");
+});
+
+import { ccwFence } from "../src/editor/kinds/pasture.mjs";
+test("a fence drawn clockwise is turned to go counter-clockwise, as the game's fences do", () => {
+  const ccw = [[0, 0, 0], [10, 0, 0], [10, 0, 10], [0, 0, 10]];
+  assert.deepEqual(ccwFence(ccw), ccw);
+  assert.deepEqual(ccwFence(ccw.slice().reverse()), ccw);
+});
+
+test("the navigation shape gets its i3dMapping (the game said: Index not found: navigationMeshShape)", () => {
+  const xml = placeableXml(sanitize({kind: "cow"}), "x");
+  assert.ok(/<navigation shape="navigationMeshShape"\/>/.test(xml));
+  assert.ok(/<i3dMapping id="navigationMeshShape" node="[^"]+"\/>/.test(xml), "the mapping");
 });

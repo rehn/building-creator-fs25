@@ -188,7 +188,15 @@ export function contourClosure(fence, rects, e = 0.15) {
 
 /**
  * The husbandry's additionalNavMeshNodes for a fence: the way along the building between its posts (contourClosure), in the order the game wants them.
- * Given from the last post back to the first, the game's area came out crossed (two thin triangles, seen with showNavMesh): it joins them the other way
- * round, so they go from the first post to the last.
+ * From the last post back to the first, after the posts of a fence that goes counter-clockwise (ccwFence): the game's own fences go that way, and a
+ * fence the other way round got the game's warning "Could not shrink polygon ... check order of fence segments and direction" (and a crossed area).
  */
-export const navContourNodes = (fence, rects, e = 0.15) => contourClosure(fence, rects, e).reverse();
+export const navContourNodes = (fence, rects, e = 0.15) => contourClosure(fence, rects, e);
+
+/** The fence's posts going counter-clockwise round the pasture seen from above (the shoelace sum x·z' − x'·z positive, closing back to the first), as the base
+ * game's barns have them; a fence drawn the other way round is turned. */
+export function ccwFence(fence) {
+  if (!fence || fence.length < 3) return fence;
+  const s = fence.reduce((sum, q, i) => { const r = fence[(i + 1) % fence.length]; return sum + q[0] * r[2] - r[0] * q[2]; }, 0);
+  return s < 0 ? fence.slice().reverse() : fence;
+}

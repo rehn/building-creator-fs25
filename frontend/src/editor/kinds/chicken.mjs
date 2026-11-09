@@ -3,7 +3,7 @@
 // Imports only the i3d writer; the core hands in what it needs (see kinds/index.mjs).
 import { tg, shape } from "../i3d.mjs";
 import { roomOf, furnisher } from "../layout.mjs";
-import { OPPOSITE, wallLength, yardFrame, shellOf, teleportFor, withPasture, pastureWallFor, cornerStripes, palletLines, contourClosure, navContourNodes } from "./pasture.mjs";
+import { OPPOSITE, wallLength, yardFrame, shellOf, teleportFor, withPasture, pastureWallFor, cornerStripes, palletLines, contourClosure, navContourNodes, ccwFence } from "./pasture.mjs";
 import { objectOf, boxOf, iconOf, boxFrom, pastureOf, blockersOf, footprints } from "../objects.mjs";
 import { tone, shade, strawBale } from "./props.mjs";
 import { INNER_WALL } from "./innerwall.mjs";
@@ -42,7 +42,7 @@ export function henYard(geo, p) {
   // either side of its middle
   const lines = palletLines(pallets.box);
   return {
-    fence: pa ? pa.fence : yf.fence,
+    fence: ccwFence(pa ? pa.fence : yf.fence),
     food: {...food.box, marker: food.icon},
     pallet: {lines, trigger: pallets.box, stripes: cornerStripes(rectOf(pallets.box))},
     loading: {...loading.box, marker: loading.icon, teleport: teleportFor(loading, geo.dims)},
