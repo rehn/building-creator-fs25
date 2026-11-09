@@ -54,3 +54,12 @@ test("the export adds the points to the husbandry's fence, as nodes in the scene
   assert.ok(names.length >= 1);
   for (const n of names) assert.ok(i3d.includes(`name="${n}"`), n);
 });
+
+import { navContourNodes } from "../src/editor/kinds/pasture.mjs";
+test("the nodes for the game run from the first post towards the last (the other way round crossed the area in the game)", () => {
+  const fence = [[0, 0, -3.15], [0, 0, -12], [14, 0, -12], [14, 0, 0], [5.15, 0, 0]], rects = [rect(-5, 5, -3, 3)];
+  const nodes = navContourNodes(fence, rects, 0.15), path = contourClosure(fence, rects, 0.15);
+  assert.deepEqual(nodes, path.slice().reverse());
+  const d = (q, p) => Math.hypot(q[0] - p[0], q[1] - p[2]);
+  assert.ok(d(nodes[0], fence[0]) <= d(nodes[nodes.length - 1], fence[0]), "starts at the first post's end");
+});

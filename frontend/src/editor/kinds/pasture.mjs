@@ -185,3 +185,10 @@ export function contourClosure(fence, rects, e = 0.15) {
   // (points on top of the posts themselves add nothing)
   return pick.p.filter(q => Math.hypot(q[0] - last[0], q[1] - last[1]) > 0.05 && Math.hypot(q[0] - first[0], q[1] - first[1]) > 0.05);
 }
+
+/**
+ * The husbandry's additionalNavMeshNodes for a fence: the way along the building between its posts (contourClosure), in the order the game wants them.
+ * Given from the last post back to the first, the game's area came out crossed (two thin triangles, seen with showNavMesh): it joins them the other way
+ * round, so they go from the first post to the last.
+ */
+export const navContourNodes = (fence, rects, e = 0.15) => contourClosure(fence, rects, e).reverse();

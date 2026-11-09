@@ -6,7 +6,7 @@
 import { tg, shape } from "../i3d.mjs";
 import { roomOf, furnisher, wallsOf, footprint, toWorld, WALL_T } from "../layout.mjs";
 import { animalNav, navMesh, KEEP } from "../walkarea.mjs";
-import { wallLength, yardFrame, shellOf, teleportFor, withPasture, pastureWallFor, cornerStripes, palletLines, footprintHull, contourClosure } from "./pasture.mjs";
+import { wallLength, yardFrame, shellOf, teleportFor, withPasture, pastureWallFor, cornerStripes, palletLines, footprintHull, contourClosure, navContourNodes } from "./pasture.mjs";
 import { objectOf, boxOf, iconOf, boxFrom, pastureOf, insidePoly, footprints, blockersOf, animalEntrances } from "../objects.mjs";
 import { placeOnWall, placeOnBuilding } from "../places.mjs";
 import { tone, shade, arc, strawBale, strawLitter } from "./props.mjs";
@@ -450,7 +450,7 @@ export const sceneOf = cfg => c => {
       : y.blockers.map(blocker)),
     tg("fence1", [0, 0, 0], y.fence.map((q, i) => tg(`fence1Node${i + 1}`, q))),
     // the way back from the last post to the first along the building (the game would close the area with a straight line, through the building)
-    tg("navContour", [0, 0, 0], contourClosure(y.fence, footprints(p), 0.15).map(([x, z], i) => tg(`navContourNode${i + 1}`, [x, 0, z]))),
+    tg("navContour", [0, 0, 0], navContourNodes(y.fence, footprints(p), 0.15).map(([x, z], i) => tg(`navContourNode${i + 1}`, [x, 0, z]))),
     // the ground under the building: the meadow's clear task takes grass away there (and paints dirt)
     tg("meadowClear", [0, 0, 0], footprintHull(p).map(([x, z], i) => tg(`clearAreaPoint${i + 1}`, [x, 0, z]))),
     ...(y.pallet ? [
@@ -514,7 +514,7 @@ ${(pts => pts.length ? `            <!-- the animals' area goes back along the b
             <additionalNavMeshNodes>
 ${pts.map((_, i) => `                <node node="navContourNode${i + 1}"/>`).join("\n")}
             </additionalNavMeshNodes>
-` : "")(contourClosure(y.fence, footprints(p), 0.15))}        </fence>
+` : "")(navContourNodes(y.fence, footprints(p), 0.15))}        </fence>
         <meadow>
             <fruitType name="GRASS" eatableStartGrowthState="greenMiddle" eatableEndGrowthState="harvestReady" eatenGrowthState="greenSmall"/>
             <fruitType name="MEADOW" eatableStartGrowthState="greenMiddle" eatableEndGrowthState="harvestReady" eatenGrowthState="greenSmall"/>
