@@ -79,7 +79,7 @@ spec:
             {{- end }}
             {{- if $sqlite }}
             - name: DATABASE_PATH
-              value: /data/house-to-i3d.db
+              value: /data/building-creator-fs25.db
             {{- else }}
             - name: DATABASE_URL
               valueFrom:

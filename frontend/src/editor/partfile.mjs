@@ -9,7 +9,7 @@
 import { wallsOf, liveWings, wingsOf, wingIdOf, wingWallKey, MAX_WINGS } from "./layout.mjs";
 import { sanitize, catalogFor, freeStretches } from "./model.mjs";
 
-export const PART_FORMAT = "house-to-i3d-part";
+export const PART_FORMAT = "building-creator-fs25-part";
 const num = (v, d = 0) => Number.isFinite(+v) ? +v : d;
 const round = v => Math.round(v * 1000) / 1000;
 const SIDE = /(End|Left|Right)$/;
@@ -56,7 +56,7 @@ export function exportPart(p, id) {
  * It goes where the wall has room (its stretch of the ground floor clear of other parts and their eaves, and of openings), as wide as it can be up to its own width.
  */
 export function importPart(p, wallKey, file) {
-  if (!file || file.format !== PART_FORMAT || !Array.isArray(file.parts) || !file.parts.length || file.parts.some(x => !x || typeof x !== "object")) return {error: "That is not a part file."};
+  if (!file || (file.format !== PART_FORMAT && file.format !== "house-to-i3d-part") || !Array.isArray(file.parts) || !file.parts.length || file.parts.some(x => !x || typeof x !== "object")) return {error: "That is not a part file."};
   if (!wallsOf(p)[wallKey]) return {error: "There is no such wall to put it on."};
   const have = p.wings || [];
   if (have.length + file.parts.length > MAX_WINGS) return {error: `Too many parts: the building has ${have.length}, this adds ${file.parts.length}, and the most is ${MAX_WINGS}.`};

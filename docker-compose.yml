@@ -1,7 +1,7 @@
 # Runs the whole app: docker compose up -d   (settings come from .env)
 services:
   api:
-    image: ${DOCKERHUB_USERNAME:-local}/house-to-i3d-api:${TAG:-latest}
+    image: ${DOCKERHUB_USERNAME:-local}/building-creator-fs25-api:${TAG:-latest}
     build: ./backend
     environment:
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3000}
@@ -18,7 +18,7 @@ services:
     restart: unless-stopped
 
   web:
-    image: ${DOCKERHUB_USERNAME:-local}/house-to-i3d-web:${TAG:-latest}
+    image: ${DOCKERHUB_USERNAME:-local}/building-creator-fs25-web:${TAG:-latest}
     build: ./frontend
     environment:
       API_URL: http://api:8080

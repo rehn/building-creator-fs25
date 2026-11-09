@@ -58,7 +58,7 @@ func openTest(t *testing.T) *Store {
 func TestIsPostgresURL(t *testing.T) {
 	for in, want := range map[string]bool{
 		"postgres://u:p@db/hus": true, "postgresql://db/hus?sslmode=disable": true, "POSTGRES://db/x": true,
-		":memory:": false, "/data/house-to-i3d.db": false, "postgres.db": false, "./postgres://x": false,
+		":memory:": false, "/data/building-creator-fs25.db": false, "postgres.db": false, "./postgres://x": false,
 	} {
 		if got := IsPostgresURL(in); got != want {
 			t.Errorf("IsPostgresURL(%q) = %v", in, got)

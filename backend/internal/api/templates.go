@@ -15,8 +15,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"house-to-i3d/backend/internal/store"
-	"house-to-i3d/backend/internal/vision"
+	"building-creator-fs25/backend/internal/store"
+	"building-creator-fs25/backend/internal/vision"
 )
 
 const (

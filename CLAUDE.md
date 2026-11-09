@@ -145,11 +145,11 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   and turns the answer {seen, settings, openings, notes} into settings (applyAnswer -> sanitize). The admin adjusts
   in an ordinary project opened with ?template=ID (photo strip, Claude's notes, Publish template = settings +
   snapshot). Chart: claude.apiKey / claude.existingSecret. Tried with a real key by the user (a template came out OK).
-- charts/house-to-i3d = Helm chart (SQLite on a PVC, or Postgres in-release/external);
+- charts/building-creator-fs25 = Helm chart (SQLite on a PVC, or Postgres in-release/external);
   charts/test.sh renders and checks every setup.
 - docker-compose.yml runs api + web; CI in .github/workflows/ci.yml pushes
-  house-to-i3d-api and house-to-i3d-web to Docker Hub on releases (vX.Y.Z), then
-  the chart to oci://registry-1.docker.io/rehn/house-to-i3d.
+  building-creator-fs25-api and building-creator-fs25-web to Docker Hub on releases (vX.Y.Z), then
+  the chart to oci://registry-1.docker.io/rehn/building-creator-fs25.
 
 ## How we work
 - TDD: write the failing test first, then the code.
@@ -230,7 +230,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Materials per part (step 3b): a part may set wallCladding, wallColor, wallSplit, splitHeight, lowerCladding, lowerColor, roofMaterial, roofColor, trimColor (empty = as the parent);
   model.mjs partStyle (inherits up to the building), matTable (variants "wallsP1" "roofP1" ... shared by equal values, none for the building's own), matList; poly/addMesh map walls,
   wallsLow, roof, trim through partMats while a part is built (usePart); the editor makes meshes/textures for variants on demand (makeMesh, texturedNow). Not cached: the editor changes p in place.
-- Parts to share (step 5): partfile.mjs exportPart(p, id) -> {format "house-to-i3d-part", version, name, parts (renumbered, local walls), windows, items (a, b, rot in the part's frame)}; importPart(p, wall, file) ->
+- Parts to share (step 5): partfile.mjs exportPart(p, id) -> {format "building-creator-fs25-part", version, name, parts (renumbered, local walls), windows, items (a, b, rot in the part's frame)}; importPart(p, wall, file) ->
   {settings: {wings, windows, items}, notes} or {error}; the editor: Parts > "Export this part" / "Import a part...". Parts may stand over windows (not doors): model.mjs freeStretches(forPart).
 - My parts (the library of saved part files): backend store/parts.go + api/parts.go (table `parts`, /api/parts, only the admin shares, 256 KB per file); the editor gets `parts` (list/get/save/update/remove/isAdmin)
   from Editor.tsx (api.ts parts functions); Parts section: "Save to My parts", the My parts list (editor.mjs myPartsHtml/bindMyParts/applyPart).

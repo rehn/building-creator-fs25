@@ -18,7 +18,7 @@ func TestDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.API.PublicURL != "http://localhost:3000" || c.API.SecureCookies || c.Addr != ":8080" || c.DatabasePath != "/data/house-to-i3d.db" {
+	if c.API.PublicURL != "http://localhost:3000" || c.API.SecureCookies || c.Addr != ":8080" || c.DatabasePath != "/data/building-creator-fs25.db" {
 		t.Fatalf("unexpected defaults %+v", c)
 	}
 	if c.API.GoogleEnabled() {
@@ -64,7 +64,7 @@ func TestDatabaseURLChoosesPostgres(t *testing.T) {
 		t.Fatalf("Database() = %q, want the URL", c.Database())
 	}
 	c, _ = Load(env(map[string]string{"PUBLIC_URL": "http://localhost:3000"}))
-	if c.Database() != "/data/house-to-i3d.db" {
+	if c.Database() != "/data/building-creator-fs25.db" {
 		t.Fatalf("without DATABASE_URL, Database() = %q, want the SQLite path", c.Database())
 	}
 }

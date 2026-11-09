@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-const partFile = `{"format":"house-to-i3d-part","version":1,"name":"Pumphus","parts":[{"id":1}],"windows":[],"items":[]}`
+const partFile = `{"format":"building-creator-fs25-part","version":1,"name":"Pumphus","parts":[{"id":1}],"windows":[],"items":[]}`
 
 func TestPartLifecycle(t *testing.T) {
 	s := openTest(t)
