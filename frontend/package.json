@@ -1,5 +1,5 @@
 {
-  "name": "house-to-i3d-web",
+  "name": "building-creator-fs25-web",
   "private": true,
   "scripts": {
     "dev": "next dev",

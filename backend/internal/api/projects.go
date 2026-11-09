@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"house-to-i3d/backend/internal/store"
+	"building-creator-fs25/backend/internal/store"
 )
 
 type projectInput struct {

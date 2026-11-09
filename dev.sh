@@ -26,7 +26,7 @@ fi
 set -a; source .env; set +a
 
 export PUBLIC_URL=http://localhost:3000
-export DATABASE_PATH=$root/.dev/house-to-i3d.db
+export DATABASE_PATH=$root/.dev/building-creator-fs25.db
 export LISTEN_ADDR=127.0.0.1:8080
 export API_URL=http://127.0.0.1:8080
 
@@ -61,7 +61,7 @@ cat <<EOF
 
   House to i3d is starting at  http://localhost:3000
   First time: click "Create the admin account" and sign up as ${ADMIN_EMAIL:-<set ADMIN_EMAIL in .env>}
-  Database: .dev/house-to-i3d.db   (./dev.sh --reset to start over)
+  Database: .dev/building-creator-fs25.db   (./dev.sh --reset to start over)
   Ctrl+C stops both servers.
 
 EOF

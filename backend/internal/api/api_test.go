@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"house-to-i3d/backend/internal/auth"
-	"house-to-i3d/backend/internal/store"
+	"building-creator-fs25/backend/internal/auth"
+	"building-creator-fs25/backend/internal/store"
 )
 
 const origin = "http://localhost:3000"

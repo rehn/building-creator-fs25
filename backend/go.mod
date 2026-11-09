@@ -1,4 +1,4 @@
-module house-to-i3d/backend
+module building-creator-fs25/backend
 
 go 1.25.0
 

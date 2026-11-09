@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"house-to-i3d/backend/internal/api"
-	"house-to-i3d/backend/internal/auth"
-	"house-to-i3d/backend/internal/store"
-	"house-to-i3d/backend/internal/vision"
+	"building-creator-fs25/backend/internal/api"
+	"building-creator-fs25/backend/internal/auth"
+	"building-creator-fs25/backend/internal/store"
+	"building-creator-fs25/backend/internal/vision"
 )
 
 type Config struct {
@@ -35,14 +35,14 @@ func (c Config) Database() string {
 //	GOOGLE_CLIENT_ID      with GOOGLE_CLIENT_SECRET, turns on "Sign in with Google"
 //	GOOGLE_CLIENT_SECRET
 //	LISTEN_ADDR           default :8080
-//	DATABASE_PATH         SQLite file, default /data/house-to-i3d.db
+//	DATABASE_PATH         SQLite file, default /data/building-creator-fs25.db
 //	DATABASE_URL          postgres://user:pass@host:5432/db, use Postgres instead of SQLite
 //	TRUST_PROXY           "true" when the API is only reachable through the web app
 //	ANTHROPIC_API_KEY     lets the admin's template wizard ask Claude to read photos of a building
 func Load(getenv func(string) string) (Config, error) {
 	c := Config{
 		Addr:         or(getenv("LISTEN_ADDR"), ":8080"),
-		DatabasePath: or(getenv("DATABASE_PATH"), "/data/house-to-i3d.db"),
+		DatabasePath: or(getenv("DATABASE_PATH"), "/data/building-creator-fs25.db"),
 		DatabaseURL:  strings.TrimSpace(getenv("DATABASE_URL")),
 	}
 	if c.DatabaseURL != "" && !store.IsPostgresURL(c.DatabaseURL) {

@@ -14,9 +14,9 @@ import (
 	"syscall"
 	"time"
 
-	"house-to-i3d/backend/internal/api"
-	"house-to-i3d/backend/internal/config"
-	"house-to-i3d/backend/internal/store"
+	"building-creator-fs25/backend/internal/api"
+	"building-creator-fs25/backend/internal/config"
+	"building-creator-fs25/backend/internal/store"
 )
 
 func main() {

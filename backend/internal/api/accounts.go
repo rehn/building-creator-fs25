@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"house-to-i3d/backend/internal/auth"
-	"house-to-i3d/backend/internal/store"
+	"building-creator-fs25/backend/internal/auth"
+	"building-creator-fs25/backend/internal/store"
 )
 
 /* ---------- Email and password ---------- */

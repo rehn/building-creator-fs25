@@ -24,10 +24,10 @@ image:
   registry: docker.io
   pullPolicy: IfNotPresent
   api:
-    repository: rehn/house-to-i3d-api
+    repository: rehn/building-creator-fs25-api
     tag: ""          # default: the chart's appVersion
   web:
-    repository: rehn/house-to-i3d-web
+    repository: rehn/building-creator-fs25-web
     tag: ""          # default: the chart's appVersion
 imagePullSecrets: []
 

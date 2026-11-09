@@ -96,7 +96,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ vars.DOCKERHUB_USERNAME }}/house-to-i3d-${{ matrix.name }}
+          images: ${{ vars.DOCKERHUB_USERNAME }}/building-creator-fs25-${{ matrix.name }}
           tags: |
             # Release v1.2.3 -> 1.2.3, 1.2, 1 and latest
             type=semver,pattern={{version}}
@@ -124,7 +124,7 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,scope=${{ matrix.name }},mode=max
 
-  # Release v1.2.3 -> chart 1.2.3 (app version 1.2.3) at oci://registry-1.docker.io/<DOCKERHUB_USERNAME>/house-to-i3d
+  # Release v1.2.3 -> chart 1.2.3 (app version 1.2.3) at oci://registry-1.docker.io/<DOCKERHUB_USERNAME>/building-creator-fs25
   helm:
     name: Publish Helm chart
     needs: [docker]
@@ -138,11 +138,11 @@ jobs:
       - name: Package
         run: |
           version="${GITHUB_REF_NAME#v}"
-          helm package charts/house-to-i3d --version "$version" --app-version "$version" --destination dist
+          helm package charts/building-creator-fs25 --version "$version" --app-version "$version" --destination dist
       - name: Push to Docker Hub
         env:
           DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           echo "$DOCKERHUB_TOKEN" | helm registry login registry-1.docker.io --username "$DOCKERHUB_USERNAME" --password-stdin
-          helm push dist/house-to-i3d-*.tgz "oci://registry-1.docker.io/$DOCKERHUB_USERNAME"
+          helm push dist/building-creator-fs25-*.tgz "oci://registry-1.docker.io/$DOCKERHUB_USERNAME"
