@@ -11,7 +11,9 @@ for (const kind of ["cow", "sheep"]) {
     const p = sanitize({kind}), xml = buildI3d(p), px = placeableXml(p, "x");
     assert.equal(p.animalsInside, true);
     assert.ok(xml.includes('name="navigationMeshShape"'), "the mesh shape");
-    assert.ok(!xml.includes('name="navmeshBlocker"'), "no blockers: the mesh is the area");
+    // (the mesh is a surface the game adds: the walls are obstacles in it, thin boxes round the building with a gap at the doorway, not one box over the whole building)
+    const blockers = [...xml.matchAll(/<Shape name="navmeshBlocker[0-9]*"/g)];
+    assert.ok(blockers.length >= 4, `wall blockers (${blockers.length})`);
     assert.ok(px.includes('<navigation shape="navigationMeshShape"/>'), "the husbandry names it");
     assert.ok(xml.includes('name="navigationRootNode"'), "under the navigation node");
   });

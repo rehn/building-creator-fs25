@@ -56,7 +56,35 @@ function animalsInside(p, geo, fence, blockers) {
   const at = (s, d) => [w.o[0] + w.u[0] * s + w.n[0] * d, w.o[2] + w.u[2] * s + w.n[2] * d];
   const rooms = roomOf(p, openings(p)).rects;
   const items = (p.items || []).flatMap(animalBlockers);
-  return animalNav({fence, blockers, rooms, items, doors: entrances.map(e => ({a: at(e.s0, run), b: at(e.s1, run), c: at(e.s1, -WALL_T), d: at(e.s0, -WALL_T)})), floorY: F});
+  const nav = animalNav({fence, blockers, rooms, items: items.map(b => ({...b})), doors: entrances.map(e => ({a: at(e.s0, run), b: at(e.s1, run), c: at(e.s1, -WALL_T), d: at(e.s0, -WALL_T)})), floorY: F});
+  if (!nav) return null;
+  nav.blockers = [...wallSlabs(p, entrances), ...items.map(box), ...blockers.filter(b => b.keep === KEEP.trough)];
+  return nav;
+}
+/** A blocker box from a floor rectangle {x0, x1, z0, z1}: 2 m high. */
+const box = r => ({center: [(r.x0 + r.x1) / 2, 1, (r.z0 + r.z1) / 2], size: [r.x1 - r.x0, 2, r.z1 - r.z0]});
+/**
+ * The walls round the building (every part, with the passages between parts open) as thin blocker boxes, with a gap at each entrance: the game cuts these out of
+ * the ground the animals walk on, so they can't go through a wall, in or out. Each box covers the wall (its thickness and a little more inside).
+ */
+function wallSlabs(p, entrances) {
+  const out = [], frames = wallsOf(p), t = WALL_T + 0.1, inward = 0.05;
+  for (const w of roomOf(p, openings(p)).walls) {
+    const horizontal = w.z0 === w.z1, lo = horizontal ? Math.min(w.x0, w.x1) : Math.min(w.z0, w.z1), hi = horizontal ? Math.max(w.x0, w.x1) : Math.max(w.z0, w.z1);
+    let parts = [[lo - WALL_T, hi + WALL_T]];
+    for (const e of entrances.filter(q => q.wall === w.name)) {
+      const f = frames[e.wall], at = s => horizontal ? f.o[0] + f.u[0] * s : f.o[2] + f.u[2] * s, a = Math.min(at(e.s0), at(e.s1)), b = Math.max(at(e.s0), at(e.s1));
+      parts = parts.flatMap(([u, v]) => [[u, Math.min(v, a)], [Math.max(u, b), v]]).filter(([u, v]) => v - u > 0.05);
+    }
+    const [nx, nz] = w.into, centre = (t - inward) / 2 - inward;   // (the box reaches t outside the inside face and `inward` inside it)
+    for (const [u, v] of parts) {
+      const along = (u + v) / 2, len = v - u;
+      out.push(horizontal
+        ? {center: [along, 1, w.z0 - nz * ((t - inward) / 2)], size: [len, 2, t + inward]}
+        : {center: [w.x0 - nx * ((t - inward) / 2), 1, along], size: [t + inward, 2, len]});
+    }
+  }
+  return out;
 }
 /** The cows' doorway: an open hole in the pasture wall (1.6 x 2.2 m in the middle of the stretch it encloses, unless the pasture says where and how big), kept clear inside. */
 export function openings(p) {
@@ -411,7 +439,7 @@ export const sceneOf = cfg => c => {
     // Like the base game's cow barn: the barn and troughs are cut out of the walking area made from the fence.
     // (animals that can go inside: a walking mesh of the whole area, like the base game's big barns; else the area made from the fence minus the blockers)
     tg("navigationRootNode", [0, 0, 0], y.nav
-      ? [shape("navigationMeshShape", {shapeId: doc.shape("navigationMeshShape", navMesh(y.nav)), nonRenderable: true, buildNavMeshMask: "0xfe", castsShadows: false, receiveShadows: false, materialIds: forage})]
+      ? [shape("navigationMeshShape", {shapeId: doc.shape("navigationMeshShape", navMesh(y.nav)), nonRenderable: true, buildNavMeshMask: "0xfe", castsShadows: false, receiveShadows: false, materialIds: forage}), ...y.nav.blockers.map(blocker)]
       : y.blockers.map(blocker)),
     tg("fence1", [0, 0, 0], y.fence.map((q, i) => tg(`fence1Node${i + 1}`, q))),
     ...(y.pallet ? [
