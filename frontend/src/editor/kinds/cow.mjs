@@ -73,7 +73,7 @@ function wallSlabs(p, entrances) {
     const horizontal = w.z0 === w.z1, lo = horizontal ? Math.min(w.x0, w.x1) : Math.min(w.z0, w.z1), hi = horizontal ? Math.max(w.x0, w.x1) : Math.max(w.z0, w.z1);
     let parts = [[lo - WALL_T, hi + WALL_T]];
     for (const e of entrances.filter(q => q.wall === w.name)) {
-      const f = frames[e.wall], at = s => horizontal ? f.o[0] + f.u[0] * s : f.o[2] + f.u[2] * s, a = Math.min(at(e.s0), at(e.s1)) - 0.25, b = Math.max(at(e.s0), at(e.s1)) + 0.25;   // (a little wider than the doorway: the game keeps the animals off the edges)
+      const f = frames[e.wall], at = s => horizontal ? f.o[0] + f.u[0] * s : f.o[2] + f.u[2] * s, a = Math.min(at(e.s0), at(e.s1)), b = Math.max(at(e.s0), at(e.s1));   // (exactly the doorway: wider let the animals through the wall beside it)
       parts = parts.flatMap(([u, v]) => [[u, Math.min(v, a)], [Math.max(u, b), v]]).filter(([u, v]) => v - u > 0.05);
     }
     const [nx, nz] = w.into, centre = (t - inward) / 2 - inward;   // (the box reaches t outside the inside face and `inward` inside it)
