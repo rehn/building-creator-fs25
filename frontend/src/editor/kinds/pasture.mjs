@@ -2,7 +2,7 @@
 // outside go (feed on one wall, something else on another, walls without a door first).
 // Pure; used by the hen house and the cow barn.
 import { wallsOf } from "../layout.mjs";
-import { pastureOf } from "../objects.mjs";
+import { pastureOf, footprints } from "../objects.mjs";
 
 export const OPPOSITE = {front: "back", back: "front", left: "right", right: "left"};
 export const wallLength = (p, wall) => (wall === "front" || wall === "back") ? p.width : p.depth;
@@ -99,4 +99,16 @@ export function cornerStripes(r, arm = 1, w = 0.25) {
     quad(cx, cx + sx * w, cz + sz * w, cz + sz * az); // arm along z
   }
   return g;
+}
+
+/**
+ * The ground under the building, for the meadow's clear task (the game paints the meadow over the area it takes from the fence and the walking area, and the barn's floor
+ * must not get grass): the convex hull of the building's footprints (the main building and every part), grown by margin m, as [[x, z] ...] in order round it.
+ */
+export function footprintHull(p, margin = 0.5) {
+  const pts = footprints(p).flatMap(r => [[r.x0 - margin, r.z0 - margin], [r.x1 + margin, r.z0 - margin], [r.x1 + margin, r.z1 + margin], [r.x0 - margin, r.z1 + margin]]);
+  pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const half = list => { const h = []; for (const q of list) { while (h.length >= 2 && cross(h[h.length - 2], h[h.length - 1], q) <= 0) h.pop(); h.push(q); } h.pop(); return h; };
+  return [...half(pts), ...half(pts.slice().reverse())];
 }

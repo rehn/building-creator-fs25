@@ -6,7 +6,7 @@
 import { tg, shape } from "../i3d.mjs";
 import { roomOf, furnisher, wallsOf, footprint, toWorld, WALL_T } from "../layout.mjs";
 import { animalNav, navMesh, KEEP } from "../walkarea.mjs";
-import { wallLength, yardFrame, shellOf, teleportFor, withPasture, pastureWallFor, cornerStripes, palletLines } from "./pasture.mjs";
+import { wallLength, yardFrame, shellOf, teleportFor, withPasture, pastureWallFor, cornerStripes, palletLines, footprintHull } from "./pasture.mjs";
 import { objectOf, boxOf, iconOf, boxFrom, pastureOf, insidePoly, footprints, blockersOf, animalEntrances } from "../objects.mjs";
 import { placeOnWall, placeOnBuilding } from "../places.mjs";
 import { tone, shade, arc, strawBale, strawLitter } from "./props.mjs";
@@ -442,6 +442,8 @@ export const sceneOf = cfg => c => {
       ? [shape("navigationMeshShape", {shapeId: doc.shape("navigationMeshShape", navMesh(y.nav)), nonRenderable: true, buildNavMeshMask: "0xfe", castsShadows: false, receiveShadows: false, materialIds: forage}), ...y.nav.blockers.map(blocker)]
       : y.blockers.map(blocker)),
     tg("fence1", [0, 0, 0], y.fence.map((q, i) => tg(`fence1Node${i + 1}`, q))),
+    // the ground under the building: the meadow's clear task takes grass away there (and paints dirt)
+    tg("meadowClear", [0, 0, 0], footprintHull(p).map(([x, z], i) => tg(`clearAreaPoint${i + 1}`, [x, 0, z]))),
     ...(y.pallet ? [
       c.box("palletTrigger", y.pallet.trigger, c.trigger("0x20000000", "0x10000")),
       ...y.pallet.lines.map(([a, b], i) => tg(`palletAreaStart0${i + 1}`, a, [tg(`palletAreaEnd0${i + 1}`, b.map((v, k) => v - a[k]))])),
@@ -508,6 +510,14 @@ ${y.fence.map((_, i) => `                    <node node="fence1Node${i + 1}"/>`)
                 <ground type="NONE"/>
                 <terrainGroundType name="grass"/>
             </createTask>
+            <clearTask>
+                <fruit type="UNKNOWN" growthState="0"/>
+                <ground type="NONE"/>
+                <terrainGroundType name="dirt"/>
+                <polygon>
+${footprintHull(p).map((_, i) => `                    <node node="clearAreaPoint${i + 1}"/>`).join("\n")}
+                </polygon>
+            </clearTask>
         </meadow>
     </husbandry>
 `;
