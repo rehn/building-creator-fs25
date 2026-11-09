@@ -112,3 +112,10 @@ test("the ground under an animal building is painted dirt (as the base game's ba
   for (const kind of ["cow", "sheep", "chicken"]) assert.ok(/levelArea [^>]*groundType="dirt"/.test(placeableXml(sanitize({kind}), "x")), kind);
   assert.ok(!/groundType=/.test(placeableXml(sanitize({}), "x")), "a house keeps its grass");
 });
+
+test("a walking mesh comes with a walking plane (as the base game's big barns have), a collision surface of the animals' group", () => {
+  const xml = buildI3d(sanitize({kind: "cow"}));
+  const plane = /<Shape name="walkingPlane"[^>]*>/.exec(xml);
+  assert.ok(plane, "the plane");
+  assert.ok(/collisionFilterGroup="0x400000"/.test(plane[0]) && /collisionFilterMask="0x1"/.test(plane[0]) && /static="true"/.test(plane[0]), plane[0]);
+});
