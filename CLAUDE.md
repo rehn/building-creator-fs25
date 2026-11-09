@@ -159,7 +159,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - Frontend tests: cd frontend && npm test (node --test, no browser needed)
 
 ## Status
-- Go tests (66) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (642) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
+- Go tests (66) pass on SQLite (Postgres run only in CI so far), go vet is clean. Frontend tests (682) pass. test/flicker.test.mjs finds coplanar overlapping faces (z-fighting) on the outside, in openings too, for every window and door style.
 - Cow barn (kinds/cow.mjs): cowHusbandryPasture (no milk, like cowBarnSmall), automatic water, feed
   and water troughs outside on the pasture wall (kind.outside), a plain walk-through doorway for the
   cows (openings with plain: true; tall openings get a collision gap), feed pad + bale trigger
@@ -244,7 +244,16 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   wallpaper sections (p.papers) and the downpipes on it (eave walls only, pipesCardHtml). renderZonesUI/renderPapersUI take (host, fixedWall); the Look and Inside tabs no longer have per-wall editors. addPartOn (model.mjs) gives a new part the look of its wall (wallStyles, wallZones).
 - Door style "lowgate" (openings.mjs): galvanised steel gate (material "gutter") only 1.2 m high in a tall opening (buildDoor caps the leaf).
 - Valley roofs: the wing's slope ends on the exact 45-degree valley line (k + eR * slopeR); test/valley-gap.test.mjs looks for holes seen from above.
-- Animals' walking area: navmeshBlocker boxes for every footprint (objects.mjs blockersOf: main building and each part), cow/sheep/chicken.
+- Animals' walking area (cow/sheep barns, kinds/cow.mjs + walkarea.mjs + pasture.mjs; confirmed in-game): the game makes the outdoor area from the fence's contour (posts + `fence/additionalNavMeshNodes`)
+  merged with `navigation#shape` (the inside). Export: `<navigation shape="navigationMeshShape"/>` (the attribute `shape` must be in i3d.mjs NODE_ATTRS or the i3dMapping is missing: "Index not found"),
+  under navigationRootNode a CPU mesh (meshUsage 256 is required) navigationMeshShape + walkingPlane (static, group 0x400000, mask 0x1) of the building's floor and the ramps through the pasture doorway (animalNav/navMesh,
+  inside only, at the top of the floor), and navmeshBlocker boxes (group 0x800000) for wall slabs with a gap at each entrance, pieces and troughs. Setting animalsInside (default on); off = old rootNode mode with footprint blockers.
+  Entrances (objects.mjs animalEntrances): the pasture's doorway and a hole-style door on the pasture wall. KEEP in walkarea.mjs = distances the animals keep from walls/pieces. Only floor reachable from a doorway counts.
+  The fence goes counter-clockwise (ccwFence). The game closes the contour with a straight line from the last post to the first, which cut through the building when the pasture goes round a corner:
+  navContourNodes (pasture.mjs) adds points along the building (additionalNavMeshNodes), as far out as the end posts stand (closureOffset) and stopping short of the fence's first/last stretch.
+  Meadow: a clearTask polygon round the building (footprintHull); levelArea groundType="dirt" for animal buildings; a floor 3 cm above the ground when the foundation is 0 (FLOOR_LIFT).
+- FS25's own Lua source, engine function docs and collision bit names are in the SDK (`sdk/debugger/gameSource.zip`, `sdk/debugger/scriptBinding.xml`, `shared/collisionMaskFlags.xml`); the game's `log.txt`
+  (Documents/My Games/FarmingSimulator2025) names mapping/mesh/uv errors, and the console command `showNavMesh true` draws the navigation mesh in the game. UVs must stay within [-32, 32] (emitFace in model.mjs).
 - Upper-floor windows of a walk-in building without rooms (barns; p.interior false) get boards a little behind the glass (setting loftBacking, default true; Inside > Inside walls). Rooms behind windows are houses only. Later: furnishing the upper floors.
 
 ## Dev environment (WSL)
