@@ -359,7 +359,7 @@ function scene(c) {
     tg("navigationRootNode", [0, 0, 0], y.blockers.map((b, i) => c.box(i ? `navmeshBlocker${i + 1}` : "navmeshBlocker", b, {static: true, collisionFilterGroup: "0x800000", collisionFilterMask: "0x1", buildNavMeshMask: "0xfe"}))),
     tg("fence1", [0, 0, 0], y.fence.map((q, i) => tg(`fence1Node${i + 1}`, q))),
     // the way back from the last post to the first along the building (the game would close the area with a straight line, through the building)
-    tg("navContour", [0, 0, 0], navContourNodes(y.fence, footprints(p), 0.15).map(([x, z], i) => tg(`navContourNode${i + 1}`, [x, 0, z]))),
+    tg("navContour", [0, 0, 0], navContourNodes(y.fence, footprints(p)).map(([x, z], i) => tg(`navContourNode${i + 1}`, [x, 0, z]))),
     // Hidden until the game's trigger marker setting shows it; projected onto the terrain.
     shape("warningStripes01", {translation: [0, 0.02, 0], shapeId: doc.shape("warningStripes", y.pallet.stripes), castsShadows: false, receiveShadows: true,
       nonRenderable: true, terrainDecal: true, materialIds: stripesMat, clipDistance: 100}),
@@ -406,7 +406,7 @@ ${(pts => pts.length ? `            <!-- the animals' area goes back along the b
             <additionalNavMeshNodes>
 ${pts.map((_, i) => `                <node node="navContourNode${i + 1}"/>`).join("\n")}
             </additionalNavMeshNodes>
-` : "")(navContourNodes(y.fence, footprints(p), 0.15))}        </fence>
+` : "")(navContourNodes(y.fence, footprints(p)))}        </fence>
         <meadow>
             <createTask weedState="0">
                 <decoFoliage name="grassShort"/>

@@ -207,7 +207,7 @@ export function contourClosure(fence, rects, e = 0.15) {
  * (The crossed area first seen in the game came from a post at the building's corner, the way back crossing the fence's first stretch: contourClosure
  * now stops short of it.)
  */
-export const navContourNodes = (fence, rects, e = 0.15) => contourClosure(fence, rects, e);
+export const navContourNodes = (fence, rects, e = closureOffset(fence, rects)) => contourClosure(fence, rects, e);
 
 /** The fence's posts going counter-clockwise round the pasture seen from above (the shoelace sum x·z' − x'·z positive, closing back to the first), as the base
  * game's barns have them; a fence drawn the other way round is turned. */
@@ -215,4 +215,20 @@ export function ccwFence(fence) {
   if (!fence || fence.length < 3) return fence;
   const s = fence.reduce((sum, q, i) => { const r = fence[(i + 1) % fence.length]; return sum + q[0] * r[2] - r[0] * q[2]; }, 0);
   return s < 0 ? fence.slice().reverse() : fence;
+}
+
+/**
+ * How far out from the walls the way back along the building runs: as far as the fence's end posts stand from them (0 for posts on the walls, as a fence
+ * drawn by hand from corner to corner has; 15 cm for the fence the app makes), at most 50 cm. Away from the posts' own line the area got a thin spike at the
+ * first post, and the game could not plan the meadow ("Could not shrink polygon for creation task").
+ */
+export function closureOffset(fence, rects) {
+  const O = buildingOutline(rects, 0);
+  if (O.length < 3 || !fence || fence.length < 2) return 0.15;
+  const dist = q => Math.min(...O.map((a, k) => {
+    const b = O[(k + 1) % O.length], dx = b[0] - a[0], dz = b[1] - a[1], l2 = dx * dx + dz * dz, x = q[0], z = q.length > 2 ? q[2] : q[1];
+    const t = l2 ? Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / l2)) : 0;
+    return Math.hypot(x - a[0] - t * dx, z - a[1] - t * dz);
+  }));
+  return Math.min(0.5, Math.min(dist(fence[0]), dist(fence[fence.length - 1])));
 }

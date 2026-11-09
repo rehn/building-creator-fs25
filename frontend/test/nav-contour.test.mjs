@@ -88,3 +88,11 @@ test("the pasture seen crossed in the game (a post at the barn.s corner, the fen
     assert.ok(!seg(poly[i], poly[(i + 1) % poly.length], poly[j], poly[(j + 1) % poly.length]), `edges ${i} and ${j} cross`);
   }
 });
+
+import { closureOffset } from "../src/editor/kinds/pasture.mjs";
+test("the way along the building runs as far out as the fence's end posts stand (on the wall for posts on the walls)", () => {
+  const rects = [rect(-10, 10, -15, 15)];
+  assert.ok(closureOffset([[-10, 0, 15], [-20, 0, 15], [7.75, 0, -15]], rects) < 1e-6, "posts on the walls");
+  assert.ok(Math.abs(closureOffset([[0, 0, -15.15], [0, 0, -30], [5.15, 0, 0]].map(q => q), [rect(-5, 5, -15, 15)]) - 0.15) < 1e-6, "15 cm out");
+  assert.equal(closureOffset([[0, 0, -40], [5, 0, -45]], rects), 0.5, "at most 50 cm");
+});

@@ -160,7 +160,7 @@ export function cowYard(geo, p, cfg = COW) {
   // outside the fence on the feed side, the trailer spot further out, the info area round the barn.
   const {food, bales, loading, info, pallets} = cowObjects(geo, p, yf, cfg);
   // (the area as the game makes it: the fence, closed along the building)
-  const contour = [...fence, ...contourClosure(fence, footprints(p), 0.15).map(([x, z]) => [x, 0, z])];
+  const contour = [...fence, ...navContourNodes(fence, footprints(p)).map(([x, z]) => [x, 0, z])];
   const nav = animalsInside(p, geo, contour, [...blockersOf(p).map(b => ({...b, keep: KEEP.wall})), ...[feedTrough, waterTrough].filter(Boolean).map(t => ({...t.box, keep: KEEP.trough}))]);
   return {
     nav, contour,
@@ -450,7 +450,7 @@ export const sceneOf = cfg => c => {
       : y.blockers.map(blocker)),
     tg("fence1", [0, 0, 0], y.fence.map((q, i) => tg(`fence1Node${i + 1}`, q))),
     // the way back from the last post to the first along the building (the game would close the area with a straight line, through the building)
-    tg("navContour", [0, 0, 0], navContourNodes(y.fence, footprints(p), 0.15).map(([x, z], i) => tg(`navContourNode${i + 1}`, [x, 0, z]))),
+    tg("navContour", [0, 0, 0], navContourNodes(y.fence, footprints(p)).map(([x, z], i) => tg(`navContourNode${i + 1}`, [x, 0, z]))),
     // the ground under the building: the meadow's clear task takes grass away there (and paints dirt)
     tg("meadowClear", [0, 0, 0], footprintHull(p).map(([x, z], i) => tg(`clearAreaPoint${i + 1}`, [x, 0, z]))),
     ...(y.pallet ? [
@@ -514,7 +514,7 @@ ${(pts => pts.length ? `            <!-- the animals' area goes back along the b
             <additionalNavMeshNodes>
 ${pts.map((_, i) => `                <node node="navContourNode${i + 1}"/>`).join("\n")}
             </additionalNavMeshNodes>
-` : "")(navContourNodes(y.fence, footprints(p), 0.15))}        </fence>
+` : "")(navContourNodes(y.fence, footprints(p)))}        </fence>
         <meadow>
             <fruitType name="GRASS" eatableStartGrowthState="greenMiddle" eatableEndGrowthState="harvestReady" eatenGrowthState="greenSmall"/>
             <fruitType name="MEADOW" eatableStartGrowthState="greenMiddle" eatableEndGrowthState="harvestReady" eatenGrowthState="greenSmall"/>
