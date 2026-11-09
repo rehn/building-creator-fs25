@@ -60,6 +60,23 @@ has "$ing" "secretName: hus-tls" "ingress TLS"
 out=$(render --set ingress.enabled=true --set ingress.host=hus.example.se); renders "ingress without TLS"
 has "$(doc Deployment hus-house-to-i3d-api)" 'value: "http://hus.example.se"' "http PUBLIC_URL without TLS"
 
+echo "HTTPRoute (Gateway API)"
+out=$(render --set httpRoute.enabled=true --set 'httpRoute.hostnames[0]=hus.example.se' --set 'httpRoute.parentRefs[0].name=gw' --set 'httpRoute.parentRefs[0].namespace=gateway-system' --set httpRoute.tls=true); renders "httproute"
+has "$(doc Deployment hus-house-to-i3d-api)" 'value: "https://hus.example.se"' "PUBLIC_URL from the route's hostname"
+route=$(doc HTTPRoute hus-house-to-i3d)
+has "$route" "apiVersion: gateway.networking.k8s.io/v1" "Gateway API v1"
+has "$route" '- "hus.example.se"' "hostname"
+has "$route" "name: gw" "parent Gateway"
+has "$route" "namespace: gateway-system" "its namespace"
+has "$route" "name: hus-house-to-i3d-web" "route points at the web service"
+has "$route" "port: 3000" "on the service port"
+hasnt "$out" "kind: Ingress" "no ingress"
+out=$(render --set httpRoute.enabled=true --set 'httpRoute.hostnames[0]=hus.example.se' --set 'httpRoute.parentRefs[0].name=gw'); renders "httproute without TLS"
+has "$(doc Deployment hus-house-to-i3d-api)" 'value: "http://hus.example.se"' "http PUBLIC_URL without TLS"
+refuses "httpRoute.enabled needs httpRoute.parentRefs" --set httpRoute.enabled=true --set 'httpRoute.hostnames[0]=hus.example.se'
+refuses "httpRoute.enabled needs httpRoute.hostnames" --set httpRoute.enabled=true --set 'httpRoute.parentRefs[0].name=gw'
+refuses "Use either ingress or httpRoute" --set httpRoute.enabled=true --set 'httpRoute.hostnames[0]=a.example.se' --set 'httpRoute.parentRefs[0].name=gw' --set ingress.enabled=true --set ingress.host=a.example.se
+
 echo "Google sign-in"
 out=$(render --set publicUrl=https://hus.example.se --set google.clientId=cid --set google.clientSecret=csecret); renders "google"
 has "$(doc Secret hus-house-to-i3d)" "GOOGLE_CLIENT_SECRET: $(printf csecret | base64)" "secret holds the client secret"

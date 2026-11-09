@@ -1,0 +1,10 @@
+adminEmail: me@example.se
+httpRoute:
+  enabled: true
+  hostnames:
+    - hus.example.se
+  parentRefs:
+    - name: gateway
+      namespace: gateway-system
+      sectionName: https
+  tls: true

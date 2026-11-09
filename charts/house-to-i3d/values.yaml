@@ -1,7 +1,7 @@
 # House to i3d: a Next.js web app (the only part exposed) and a Go API behind it.
 
 # The address people open, without a trailing slash, e.g. https://hus.example.se.
-# Leave empty to use the ingress host (https when ingress TLS is on).
+# Leave empty to use the httpRoute's or the ingress's host (https when its TLS is on).
 publicUrl: ""
 
 # This email can sign up without an invite and becomes the admin.
@@ -96,6 +96,14 @@ web:
 service:
   type: ClusterIP
   port: 3000
+
+# Gateway API: an HTTPRoute that attaches to a Gateway you already have. Use this or the ingress below.
+httpRoute:
+  enabled: false
+  hostnames: []             # e.g. [hus.example.se]
+  parentRefs: []            # the Gateway: e.g. [{name: gateway, namespace: gateway-system, sectionName: https}]
+  annotations: {}
+  tls: false                # set true if the Gateway serves this host over https (for the default publicUrl)
 
 ingress:
   enabled: false

@@ -67,30 +67,53 @@ Or skip Claude and start from one of the built-in designs.
 
 The chart is published as an OCI artifact on Docker Hub with every release, next to the images. You need Helm 3.8 or newer.
 
+Put your settings in a values file, `values.yaml`, and install with it. This one exposes the web app through a Gateway API `HTTPRoute` attached to a Gateway you already have:
+
+```yaml
+# values.yaml
+adminEmail: you@example.se        # can sign up without an invite and becomes the admin
+
+httpRoute:
+  enabled: true
+  hostnames:
+    - hus.example.se
+  parentRefs:                     # the Gateway to attach to
+    - name: gateway
+      namespace: gateway-system
+      sectionName: https
+  tls: true                       # the Gateway serves the host over https (sets the default publicUrl)
+
+# Optional (see the sections below):
+# claude:
+#   existingSecret: house-claude  # a Secret with ANTHROPIC_API_KEY
+# google:
+#   existingSecret: house-google  # a Secret with GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET
+# database:
+#   type: postgres
+```
+
 ```sh
 helm install house-to-i3d oci://registry-1.docker.io/rehn/house-to-i3d \
   --version 1.0.0 \
   --namespace house-to-i3d --create-namespace \
-  --set adminEmail=you@example.se \
-  --set ingress.enabled=true \
-  --set ingress.host=hus.example.se \
-  --set ingress.tls.enabled=true \
-  --set ingress.tls.secretName=hus-tls
+  -f values.yaml
 ```
 
+`-f` and `--set` combine (`--set` wins), so you can still change a single setting on the command line, like `--set adminEmail=you@example.se`.
+```
 Use the release you want for `--version` (the chart version is the app version, without the `v`). To see every setting:
 
 ```sh
 helm show values oci://registry-1.docker.io/rehn/house-to-i3d --version 1.0.0
 ```
 
-Upgrade with the same values to a newer version:
+Upgrade to a newer version with the same values file:
 
 ```sh
-helm upgrade house-to-i3d oci://registry-1.docker.io/rehn/house-to-i3d --version 1.1.0 --namespace house-to-i3d --reuse-values
+helm upgrade house-to-i3d oci://registry-1.docker.io/rehn/house-to-i3d --version 1.1.0 --namespace house-to-i3d -f values.yaml
 ```
 
-Only the web app is exposed (through the ingress, or the `<release>-web` service if you bring your own proxy). `PUBLIC_URL` comes from the ingress host, or set `publicUrl` yourself. Without an ingress, try it with `kubectl port-forward svc/house-to-i3d-web 3000:3000` and `--set publicUrl=http://localhost:3000`.
+Only the web app is exposed (through the `HTTPRoute`, or the `<release>-web` service if you bring your own proxy). `PUBLIC_URL` comes from the route's first hostname, or set `publicUrl` yourself. Without a route, try it with `kubectl port-forward svc/house-to-i3d-web 3000:3000` and `--set publicUrl=http://localhost:3000`.
 
 ### Where the data lives
 
@@ -185,7 +208,7 @@ What the tests cover:
 - **backend/internal/api**: signing up (admin without invite, everyone else with one), invites that only work once and only for their email, login and logout, rate limiting, Google sign-in against a fake Google, project create/read/update/delete, version conflicts between tabs, users not seeing each other's houses, and cross-site requests being refused.
 - **backend/internal/store**: the database layer on SQLite and Postgres, including expiry of sessions and invites and two saves of the same version at once.
 - **frontend/test**: settings validation, window generation, valid geometry for every roof type, closed collision for walls, roof, dormers, chimney and entrance, placement areas (leveling, clear, test, tip occlusion), i3d output, rooms and curtains behind the windows, the game mod files (checked against the game's own schemas when they were written), export file names and the API proxy.
-- **charts/test.sh**: the Helm chart with SQLite, Postgres in the release, your own Postgres, ingress and Google sign-in, and the setups it must refuse.
+- **charts/test.sh**: the Helm chart with SQLite, Postgres in the release, your own Postgres, HTTPRoute (and the older ingress) and Google sign-in, and the setups it must refuse.
 
 ## Lock files
 
