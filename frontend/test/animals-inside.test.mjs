@@ -119,3 +119,8 @@ test("a walking mesh comes with a walking plane (as the base game's big barns ha
   assert.ok(plane, "the plane");
   assert.ok(/collisionFilterGroup="0x400000"/.test(plane[0]) && /collisionFilterMask="0x1"/.test(plane[0]) && /static="true"/.test(plane[0]), plane[0]);
 });
+
+test("the walking mesh and the walking plane are kept in memory (the game bakes the navigation and the collision from them)", () => {
+  const xml = buildI3d(sanitize({kind: "cow"}));
+  for (const name of ["navigationMeshShape", "walkingPlane"]) assert.ok(new RegExp(`<IndexedTriangleSet name="${name}"[^>]*meshUsage="256"`).test(xml), name);
+});

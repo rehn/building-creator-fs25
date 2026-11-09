@@ -439,9 +439,9 @@ export const sceneOf = cfg => c => {
     // Like the base game's cow barn: the barn and troughs are cut out of the walking area made from the fence.
     // (animals that can go inside: a walking mesh of the whole area, like the base game's big barns; else the area made from the fence minus the blockers)
     tg("navigationRootNode", [0, 0, 0], y.nav
-      ? [shape("navigationMeshShape", {shapeId: doc.shape("navigationMeshShape", navMesh(y.nav)), nonRenderable: true, buildNavMeshMask: "0xfe", castsShadows: false, receiveShadows: false, materialIds: forage}),
+      ? [shape("navigationMeshShape", {shapeId: doc.shape("navigationMeshShape", navMesh(y.nav), {cpu: true}), nonRenderable: true, buildNavMeshMask: "0xfe", castsShadows: false, receiveShadows: false, materialIds: forage}),
         // (the base game's big barns also have a "walkingPlane": the same area as a collision surface of its own group, which the animals stand on)
-        shape("walkingPlane", {shapeId: doc.shape("walkingPlane", navMesh(y.nav)), static: true, collisionFilterGroup: "0x400000", collisionFilterMask: "0x1", nonRenderable: true, castsShadows: false, receiveShadows: false, materialIds: forage}),
+        shape("walkingPlane", {shapeId: doc.shape("walkingPlane", navMesh(y.nav), {cpu: true}), static: true, collisionFilterGroup: "0x400000", collisionFilterMask: "0x1", nonRenderable: true, castsShadows: false, receiveShadows: false, materialIds: forage}),
         ...y.nav.blockers.map(blocker)]
       : y.blockers.map(blocker)),
     tg("fence1", [0, 0, 0], y.fence.map((q, i) => tg(`fence1Node${i + 1}`, q))),
