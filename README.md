@@ -100,7 +100,7 @@ helm install house-to-i3d oci://registry-1.docker.io/rehn/house-to-i3d \
 ```
 
 `-f` and `--set` combine (`--set` wins), so you can still change a single setting on the command line, like `--set adminEmail=you@example.se`.
-```
+
 Use the release you want for `--version` (the chart version is the app version, without the `v`). To see every setting:
 
 ```sh
