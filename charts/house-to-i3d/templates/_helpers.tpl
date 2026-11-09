@@ -32,14 +32,16 @@ app.kubernetes.io/component: {{ index . 1 }}
 {{- printf "%s/%s:%s" $.Values.image.registry $img.repository (default $.Chart.AppVersion $img.tag) -}}
 {{- end -}}
 
-{{/* The address people open: publicUrl, else the ingress host. */}}
+{{/* The address people open: publicUrl, else the route's or the ingress's host. */}}
 {{- define "hx.publicUrl" -}}
 {{- if .Values.publicUrl -}}
 {{- .Values.publicUrl | trimSuffix "/" -}}
+{{- else if and .Values.httpRoute.enabled .Values.httpRoute.hostnames -}}
+{{- printf "%s://%s" (ternary "https" "http" .Values.httpRoute.tls) (first .Values.httpRoute.hostnames) -}}
 {{- else if and .Values.ingress.enabled .Values.ingress.host -}}
 {{- printf "%s://%s" (ternary "https" "http" .Values.ingress.tls.enabled) .Values.ingress.host -}}
 {{- else -}}
-{{- fail "Set publicUrl (the address people open, like https://hus.example.se), or enable the ingress with a host." -}}
+{{- fail "Set publicUrl (the address people open, like https://hus.example.se), or enable the httpRoute (or the ingress) with a host." -}}
 {{- end -}}
 {{- end -}}
 

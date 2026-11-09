@@ -1,8 +1,8 @@
 House to i3d is installed.
 
 Open {{ include "hx.publicUrl" . }}
-{{- if not .Values.ingress.enabled }}
-(No ingress: put the {{ include "hx.fullname" . }}-web service behind your ingress or proxy, or try it with
+{{- if not (or .Values.httpRoute.enabled .Values.ingress.enabled) }}
+(No httpRoute or ingress: put the {{ include "hx.fullname" . }}-web service behind your ingress or proxy, or try it with
   kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "hx.fullname" . }}-web 3000:{{ .Values.service.port }}
  and publicUrl=http://localhost:3000.)
 {{- end }}
