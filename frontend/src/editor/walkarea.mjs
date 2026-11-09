@@ -37,53 +37,79 @@ export function cellRects(w, y = 0, inside = false) {
   return out;
 }
 
-/**
- * Where animals can walk, as rectangles with a height {x0, x1, z0, z1, y}, and the ramp (a sloped quad) where they come in through a doorway.
- *   fence, blockers: the yard (as walkArea); rooms: the floors inside the building [{x0, x1, z0, z1}] at height floorY; items: boxes on the floor
- *   inside that animals walk round; door: {a: [x, z], b: [x, z], c: [x, z], d: [x, z]} the doorway's strip from outside (a-b, at the foot of the ramp,
- *   ground level) to inside (c-d, at floorY): the ground there is a ramp, so it is taken out of the yard's cells.
- */
-export function animalNav({fence, blockers = [], rooms = [], items = [], door = null, doors = door ? [door] : [], floorY = 0, cell = 0.25}) {
-  const out = walkArea(fence, blockers, cell);
-  if (!out) return null;
-  const rects = [];
-  const strips = doors.map(d => ({x0: Math.min(...[d.a, d.b, d.c, d.d].map(q => q[0])), x1: Math.max(...[d.a, d.b, d.c, d.d].map(q => q[0])), z0: Math.min(...[d.a, d.b, d.c, d.d].map(q => q[1])), z1: Math.max(...[d.a, d.b, d.c, d.d].map(q => q[1]))}));
-  if (strips.length) for (let i = 0; i < out.nx; i++) for (let k = 0; k < out.nz; k++) {
-    const x = out.x0 + (i + 0.5) * cell, z = out.z0 + (k + 0.5) * cell;
-    if (strips.some(st => x > st.x0 && x < st.x1 && z > st.z0 && z < st.z1)) out.cells[i * out.nz + k] = 0;
+/** How far from a wall, a fence, a trough or a piece the middle of an animal keeps (m): its body reaches this far round the point the game moves it by. */
+export const KEEP = {wall: 0.9, fence: 0.4, trough: 0.6, piece: 0.4, innerWall: 0.35};
+const distToPoly = (poly, x, z) => {
+  let best = Infinity;
+  for (let i = 0; i + 1 < poly.length; i++) {
+    const [ax, , az] = poly[i], [bx, , bz] = poly[i + 1], dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz;
+    const t = l2 ? Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)) : 0;
+    best = Math.min(best, Math.hypot(x - ax - t * dx, z - az - t * dz));
   }
-  rects.push(...cellRects(out, 0));
+  return best;
+};
+/**
+ * Where animals can walk, as rectangles with a height {x0, x1, z0, z1, y, inside}, and the ramps (sloped quads) where they come in through a doorway.
+ * The middle of an animal keeps away from what it must not go through (KEEP): the area is the fence's, less its edge, the building (wall) and the troughs.
+ *   fence, blockers [{center, size, keep?}]: the yard; rooms: the floors inside the building [{x0, x1, z0, z1}] at height floorY (kept off the walls);
+ *   items: boxes on the floor inside [{x0, x1, z0, z1, keep?}]; doors: [{a, b, c, d}] each doorway's strip, from outside (a-b, ground level, where the
+ *   ramp starts) to inside (c-d, at floorY): the ground there is a ramp, so it is taken out of the yard's cells, and a landing inside keeps the way open
+ *   through the strip kept off the walls.
+ */
+export function animalNav({fence, blockers = [], rooms = [], items = [], door = null, doors = door ? [door] : [], floorY = 0, cell = 0.2, keep = KEEP}) {
+  if (!fence || fence.length < 3) return null;
+  const xs = fence.map(q => q[0]), zs = fence.map(q => q[2]);
+  const x0 = Math.min(...xs), z0 = Math.min(...zs), nx = Math.max(1, Math.ceil((Math.max(...xs) - x0) / cell)), nz = Math.max(1, Math.ceil((Math.max(...zs) - z0) / cell));
+  const boxes = blockers.map(b => { const m = b.keep ?? keep.wall; return {x0: b.center[0] - b.size[0] / 2 - m, x1: b.center[0] + b.size[0] / 2 + m, z0: b.center[2] - b.size[2] / 2 - m, z1: b.center[2] + b.size[2] / 2 + m}; });
+  const bbox = d => { const q = [d.a, d.b, d.c, d.d]; return {x0: Math.min(...q.map(v => v[0])), x1: Math.max(...q.map(v => v[0])), z0: Math.min(...q.map(v => v[1])), z1: Math.max(...q.map(v => v[1]))}; };
+  const strips = doors.map(bbox);
+  const inBox = (b, x, z) => x > b.x0 && x < b.x1 && z > b.z0 && z < b.z1;
+  const cells = new Uint8Array(nx * nz);
+  for (let i = 0; i < nx; i++) for (let k = 0; k < nz; k++) {
+    const x = x0 + (i + 0.5) * cell, z = z0 + (k + 0.5) * cell;
+    if (!insidePoly(fence, x, z) || distToPoly(fence, x, z) < keep.fence || strips.some(st => inBox(st, x, z))) continue;
+    if (!boxes.some(b => inBox(b, x, z))) cells[i * nz + k] = 1;
+  }
+  const rects = cellRects({x0, z0, nx, nz, cell, cells}, 0);
   if (rooms.length) {
-    const xs = rooms.flatMap(r => [r.x0, r.x1]), zs = rooms.flatMap(r => [r.z0, r.z1]);
-    const x0 = Math.min(...xs), z0 = Math.min(...zs), nx = Math.ceil((Math.max(...xs) - x0) / cell), nz = Math.ceil((Math.max(...zs) - z0) / cell), cells = new Uint8Array(nx * nz);
-    for (let i = 0; i < nx; i++) for (let k = 0; k < nz; k++) {
-      const x = x0 + (i + 0.5) * cell, z = z0 + (k + 0.5) * cell;
-      if (rooms.some(r => x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1) && !items.some(b => x > b.x0 && x < b.x1 && z > b.z0 && z < b.z1)) cells[i * nz + k] = 1;
+    const rxs = rooms.flatMap(r => [r.x0, r.x1]), rzs = rooms.flatMap(r => [r.z0, r.z1]);
+    const ix0 = Math.min(...rxs), iz0 = Math.min(...rzs), inx = Math.ceil((Math.max(...rxs) - ix0) / cell), inz = Math.ceil((Math.max(...rzs) - iz0) / cell), icells = new Uint8Array(inx * inz);
+    const shrunk = rooms.map(r => ({x0: r.x0 + keep.wall, x1: r.x1 - keep.wall, z0: r.z0 + keep.wall, z1: r.z1 - keep.wall}));
+    const blocks = items.map(b => { const m = b.keep ?? keep.piece; return {x0: b.x0 - m, x1: b.x1 + m, z0: b.z0 - m, z1: b.z1 + m}; });
+    // a landing just inside each doorway (the doorway's width, deep enough to get off the wall's margin): it joins the ramp to the floor
+    const landings = doors.map(d => {
+      const m = [(d.c[0] + d.d[0]) / 2, (d.c[1] + d.d[1]) / 2], o = [(d.a[0] + d.b[0]) / 2, (d.a[1] + d.b[1]) / 2], len = Math.hypot(o[0] - m[0], o[1] - m[1]) || 1, depth = keep.wall + 0.3;
+      const e = [d.c[0] - (o[0] - m[0]) / len * depth, d.c[1] - (o[1] - m[1]) / len * depth, d.d[0] - (o[0] - m[0]) / len * depth, d.d[1] - (o[1] - m[1]) / len * depth];
+      const xsL = [d.c[0], d.d[0], e[0], e[2]], zsL = [d.c[1], d.d[1], e[1], e[3]];
+      return {x0: Math.min(...xsL), x1: Math.max(...xsL), z0: Math.min(...zsL), z1: Math.max(...zsL), m, dir: [(o[0] - m[0]) / len, (o[1] - m[1]) / len]};
+    });
+    for (let i = 0; i < inx; i++) for (let k = 0; k < inz; k++) {
+      const x = ix0 + (i + 0.5) * cell, z = iz0 + (k + 0.5) * cell;
+      if ((shrunk.some(r => inBox(r, x, z)) && !blocks.some(b => inBox(b, x, z))) || landings.some(l => inBox(l, x, z) && rooms.some(r => inBox(r, x, z)))) icells[i * inz + k] = 1;
     }
     // only what can be reached from a doorway: a stretch cut off by an inner wall (or a piece) is not somewhere the animals can be
     if (doors.length) {
-      const reach = new Uint8Array(nx * nz), queue = [];
+      const reach = new Uint8Array(inx * inz), queue = [];
       const nearest = (px, pz) => {   // the walkable cell nearest a point, within 1 m
-        const ci = Math.floor((px - x0) / cell), ck = Math.floor((pz - z0) / cell), R = Math.ceil(1 / cell);
+        const ci = Math.floor((px - ix0) / cell), ck = Math.floor((pz - iz0) / cell), R = Math.ceil(1 / cell);
         let best = null, bd = 1e9;
-        for (let i = Math.max(0, ci - R); i <= Math.min(nx - 1, ci + R); i++) for (let k = Math.max(0, ck - R); k <= Math.min(nz - 1, ck + R); k++) if (cells[i * nz + k]) { const d = Math.hypot(i - ci, k - ck); if (d < bd) { bd = d; best = [i, k]; } }
+        for (let i = Math.max(0, ci - R); i <= Math.min(inx - 1, ci + R); i++) for (let k = Math.max(0, ck - R); k <= Math.min(inz - 1, ck + R); k++) if (icells[i * inz + k]) { const dd = Math.hypot(i - ci, k - ck); if (dd < bd) { bd = dd; best = [i, k]; } }
         return best;
       };
-      for (const d of doors) {
-        const m = [(d.c[0] + d.d[0]) / 2, (d.c[1] + d.d[1]) / 2], o = [(d.a[0] + d.b[0]) / 2, (d.a[1] + d.b[1]) / 2], len = Math.hypot(o[0] - m[0], o[1] - m[1]) || 1;
-        const seed = nearest(m[0] - (o[0] - m[0]) / len * cell * 1.5, m[1] - (o[1] - m[1]) / len * cell * 1.5);
-        if (seed && !reach[seed[0] * nz + seed[1]]) { reach[seed[0] * nz + seed[1]] = 1; queue.push(seed); }
+      for (const l of landings) {
+        const seed = nearest(l.m[0] - l.dir[0] * cell * 1.5, l.m[1] - l.dir[1] * cell * 1.5);
+        if (seed && !reach[seed[0] * inz + seed[1]]) { reach[seed[0] * inz + seed[1]] = 1; queue.push(seed); }
       }
       while (queue.length) {
         const [i, k] = queue.pop();
         for (const [di, dk] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
           const ni = i + di, nk = k + dk;
-          if (ni >= 0 && nk >= 0 && ni < nx && nk < nz && cells[ni * nz + nk] && !reach[ni * nz + nk]) { reach[ni * nz + nk] = 1; queue.push([ni, nk]); }
+          if (ni >= 0 && nk >= 0 && ni < inx && nk < inz && icells[ni * inz + nk] && !reach[ni * inz + nk]) { reach[ni * inz + nk] = 1; queue.push([ni, nk]); }
         }
       }
-      for (let n = 0; n < cells.length; n++) if (!reach[n]) cells[n] = 0;
+      for (let n = 0; n < icells.length; n++) if (!reach[n]) icells[n] = 0;
     }
-    rects.push(...cellRects({x0, z0, nx, nz, cell, cells}, floorY, true));
+    rects.push(...cellRects({x0: ix0, z0: iz0, nx: inx, nz: inz, cell, cells: icells}, floorY, true));
   }
   const ramps = doors.map(d => ({points: [d.a, d.b, d.c, d.d], y0: 0, y1: floorY}));
   return {rects, ramps, ramp: ramps[0] || null};

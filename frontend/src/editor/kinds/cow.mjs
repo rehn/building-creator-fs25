@@ -5,7 +5,7 @@
 // Imports only the i3d writer and the pure helpers; the core hands in the rest (see kinds/index.mjs).
 import { tg, shape } from "../i3d.mjs";
 import { roomOf, furnisher, wallsOf, footprint, toWorld, WALL_T } from "../layout.mjs";
-import { animalNav, navMesh } from "../walkarea.mjs";
+import { animalNav, navMesh, KEEP } from "../walkarea.mjs";
 import { wallLength, yardFrame, shellOf, teleportFor, withPasture, pastureWallFor, cornerStripes, palletLines } from "./pasture.mjs";
 import { objectOf, boxOf, iconOf, boxFrom, pastureOf, insidePoly, footprints, blockersOf, animalEntrances } from "../objects.mjs";
 import { placeOnWall, placeOnBuilding } from "../places.mjs";
@@ -39,7 +39,7 @@ function animalBlockers(it) {
   if (!def.solids) return [footprint(it, def)];
   return def.solids(Math.round(it.door) >= 2 ? {...it, door: 3} : it, {ceil: 3}).filter(([, , , , y0]) => y0 < 0.3).map(([x0, x1, z0, z1]) => {
     const a = toWorld(it, x0, z0), b = toWorld(it, x1, z1);
-    return {x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]), z0: Math.min(a[1], b[1]), z1: Math.max(a[1], b[1])};
+    return {x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]), z0: Math.min(a[1], b[1]), z1: Math.max(a[1], b[1]), keep: KEEP.innerWall};
   });
 }
 /**
@@ -51,7 +51,8 @@ function animalsInside(p, geo, fence, blockers) {
   if (!entrances.length || !fence || fence.length < 3) return null;
   const w = wallsOf(p)[entrances[0].wall];
   if (!w) return null;
-  const F = p.foundation || 0, run = F > 0.02 ? Math.max(0.8, F * 5) : 0.6;
+  // (the ramp, and a way out over the margin kept off the wall)
+  const F = p.foundation || 0, run = Math.max(F > 0.02 ? Math.max(0.8, F * 5) : 0.6, KEEP.wall + 0.4);
   const at = (s, d) => [w.o[0] + w.u[0] * s + w.n[0] * d, w.o[2] + w.u[2] * s + w.n[2] * d];
   const rooms = roomOf(p, openings(p)).rects;
   const items = (p.items || []).flatMap(animalBlockers);
@@ -128,7 +129,7 @@ export function cowYard(geo, p, cfg = COW) {
   // The game objects: where the building has them (objects.mjs); to start with, the feed pad and bales
   // outside the fence on the feed side, the trailer spot further out, the info area round the barn.
   const {food, bales, loading, info, pallets} = cowObjects(geo, p, yf, cfg);
-  const nav = animalsInside(p, geo, fence, [...blockersOf(p), ...[feedTrough, waterTrough].filter(Boolean).map(t => t.box)]);
+  const nav = animalsInside(p, geo, fence, [...blockersOf(p).map(b => ({...b, keep: KEEP.wall})), ...[feedTrough, waterTrough].filter(Boolean).map(t => ({...t.box, keep: KEEP.trough}))]);
   return {
     nav,
     ...(pallets && {pallet: {lines: palletLines(pallets.box), trigger: pallets.box, stripes: cornerStripes(rectOf(pallets.box))}}),

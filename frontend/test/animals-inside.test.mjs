@@ -73,19 +73,35 @@ test("inner walls keep the animals out, except through an open doorway", () => {
   assert.ok(at(open, 0, 0), "an open doorway is a way through");
   assert.ok(!at(shut, 0, 0), "a wall that stays shut");
   assert.ok(!at(withDoor, 0, 0), "a door the animals can't open is solid");
-  assert.ok(at(open, -4, 0) && at(open, 0, 1), "the rest of the floor is walkable");
+  assert.ok(at(open, -3.6, 0) && at(open, 0, 1), "the rest of the floor is walkable");
 });
 
 test("a stretch of the floor cut off by an inner wall (nothing to walk through) is not walkable", () => {
   // an inner wall right across the barn (z = 0), the doorway to the pasture is on the back wall (z < 0)
   const nav = door => {
     const base = sanitize({kind: "cow", foundation: 0, items: []});
-    const p = sanitize({...base, items: [{id: 1, type: "innerwall", x: 0, z: 0, rot: 0, length: 15.6, door, doorAt: 0.5}]});
+    const p = sanitize({...base, items: [{id: 1, type: "innerwall", x: 0, z: 0, rot: 0, length: 9.6, door, doorAt: 0.5}]});
     return kindOf(p).yard(buildGeometry(p), p).nav;
   };
   const at = (n, x, z) => n.rects.some(r => r.inside && x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1);
   const shut = nav(3), open = nav(1);
-  assert.ok(at(shut, -4, -2) && at(shut, 4, -2), "the side with the doorway");
-  assert.ok(!at(shut, -4, 2) && !at(shut, 4, 2), "the other side is cut off");
-  assert.ok(at(open, -4, 2) && at(open, 4, 2), "through the wall's doorway it is reached");
+  assert.ok(at(shut, -3, -1.5) && at(shut, 3, -1.5), "the side with the doorway");
+  assert.ok(!at(shut, -3, 1.5) && !at(shut, 3, 1.5), "the other side is cut off");
+  assert.ok(at(open, -3, 1.5) && at(open, 3, 1.5), "through the wall's doorway it is reached");
+});
+
+test("the animals keep their distance from the walls, the troughs and the fence (their bodies reach round the point the game moves them by)", () => {
+  const p = sanitize({kind: "cow", foundation: 0, items: []});
+  const nav = kindOf(p).yard(buildGeometry(p), p).nav, W = p.width, D = p.depth;
+  const walk = (x, z, inside) => nav.rects.some(r => !!r.inside === inside && x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1);
+  // in the yard behind the barn (its back wall at z = -D/2): nothing within the wall's margin, plenty beyond it
+  assert.ok(!walk(-5.2, -D / 2 - 0.3, false) && !walk(-5.2, -D / 2 - 0.8, false), "not up against the wall");
+  assert.ok(walk(-5.2, -D / 2 - 1.5, false), "free beyond the margin");
+  // inside, not within the margin of a wall either
+  assert.ok(!walk(W / 2 - 0.5, 0, true), "not up against the inside of the wall");
+  assert.ok(walk(W / 2 - 1.3, 0, true), "free beyond the margin");
+  // the way in through the doorway stays open: the ramp's outer end is clear of the margin
+  const door = nav.ramps[0].points, outer = [(door[0][0] + door[1][0]) / 2, (door[0][1] + door[1][1]) / 2];
+  const away = [outer[0], outer[1] + Math.sign(outer[1]) * 0.4];
+  assert.ok(walk(away[0], away[1], false), "the yard goes right up to the ramp's end");
 });
