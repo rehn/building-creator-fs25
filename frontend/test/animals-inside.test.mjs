@@ -107,3 +107,8 @@ test("the animals keep their distance from the walls, the troughs and the fence 
   const away = [outer[0], outer[1] + Math.sign(outer[1]) * 0.4];
   assert.ok(walk(away[0], away[1], false), "the yard goes right up to the ramp's end");
 });
+
+test("the ground under an animal building is painted dirt (as the base game's barn does), not left as grass", () => {
+  for (const kind of ["cow", "sheep", "chicken"]) assert.ok(/levelArea [^>]*groundType="dirt"/.test(placeableXml(sanitize({kind}), "x")), kind);
+  assert.ok(!/groundType=/.test(placeableXml(sanitize({}), "x")), "a house keeps its grass");
+});

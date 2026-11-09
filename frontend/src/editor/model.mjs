@@ -2505,10 +2505,10 @@ ${d.leaves.map((leaf, k) => `                <part node="door${i + 1}Leaf${k + 1
         <clearArea startNode="clearAreaStart01" widthNode="clearAreaWidth01" heightNode="clearAreaHeight01"/>
     </clearAreas>
 
-    <!-- Add groundType="gravel" (or asphalt, concrete, dirt, grass ...) to levelArea to also paint the ground. -->
+    <!-- An animal building paints dirt under itself, like the base game's barns (a house keeps its grass). Other ground types: gravel, asphalt, concrete, grass ... -->
     <leveling requireLeveling="true" maxSmoothDistance="3" maxSlope="75" maxEdgeAngle="30">
         <levelAreas>
-            <levelArea startNode="levelAreaStart01" widthNode="levelAreaWidth01" heightNode="levelAreaHeight01"/>
+            <levelArea startNode="levelAreaStart01" widthNode="levelAreaWidth01" heightNode="levelAreaHeight01"${kind.id === "house" ? "" : ' groundType="dirt"'}/>
         </levelAreas>
     </leveling>
 
