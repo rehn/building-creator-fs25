@@ -75,3 +75,17 @@ test("inner walls keep the animals out, except through an open doorway", () => {
   assert.ok(!at(withDoor, 0, 0), "a door the animals can't open is solid");
   assert.ok(at(open, -4, 0) && at(open, 0, 1), "the rest of the floor is walkable");
 });
+
+test("a stretch of the floor cut off by an inner wall (nothing to walk through) is not walkable", () => {
+  // an inner wall right across the barn (z = 0), the doorway to the pasture is on the back wall (z < 0)
+  const nav = door => {
+    const base = sanitize({kind: "cow", foundation: 0, items: []});
+    const p = sanitize({...base, items: [{id: 1, type: "innerwall", x: 0, z: 0, rot: 0, length: 15.6, door, doorAt: 0.5}]});
+    return kindOf(p).yard(buildGeometry(p), p).nav;
+  };
+  const at = (n, x, z) => n.rects.some(r => r.inside && x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1);
+  const shut = nav(3), open = nav(1);
+  assert.ok(at(shut, -4, -2) && at(shut, 4, -2), "the side with the doorway");
+  assert.ok(!at(shut, -4, 2) && !at(shut, 4, 2), "the other side is cut off");
+  assert.ok(at(open, -4, 2) && at(open, 4, 2), "through the wall's doorway it is reached");
+});

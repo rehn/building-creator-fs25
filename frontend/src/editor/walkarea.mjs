@@ -60,6 +60,29 @@ export function animalNav({fence, blockers = [], rooms = [], items = [], door = 
       const x = x0 + (i + 0.5) * cell, z = z0 + (k + 0.5) * cell;
       if (rooms.some(r => x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1) && !items.some(b => x > b.x0 && x < b.x1 && z > b.z0 && z < b.z1)) cells[i * nz + k] = 1;
     }
+    // only what can be reached from a doorway: a stretch cut off by an inner wall (or a piece) is not somewhere the animals can be
+    if (doors.length) {
+      const reach = new Uint8Array(nx * nz), queue = [];
+      const nearest = (px, pz) => {   // the walkable cell nearest a point, within 1 m
+        const ci = Math.floor((px - x0) / cell), ck = Math.floor((pz - z0) / cell), R = Math.ceil(1 / cell);
+        let best = null, bd = 1e9;
+        for (let i = Math.max(0, ci - R); i <= Math.min(nx - 1, ci + R); i++) for (let k = Math.max(0, ck - R); k <= Math.min(nz - 1, ck + R); k++) if (cells[i * nz + k]) { const d = Math.hypot(i - ci, k - ck); if (d < bd) { bd = d; best = [i, k]; } }
+        return best;
+      };
+      for (const d of doors) {
+        const m = [(d.c[0] + d.d[0]) / 2, (d.c[1] + d.d[1]) / 2], o = [(d.a[0] + d.b[0]) / 2, (d.a[1] + d.b[1]) / 2], len = Math.hypot(o[0] - m[0], o[1] - m[1]) || 1;
+        const seed = nearest(m[0] - (o[0] - m[0]) / len * cell * 1.5, m[1] - (o[1] - m[1]) / len * cell * 1.5);
+        if (seed && !reach[seed[0] * nz + seed[1]]) { reach[seed[0] * nz + seed[1]] = 1; queue.push(seed); }
+      }
+      while (queue.length) {
+        const [i, k] = queue.pop();
+        for (const [di, dk] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const ni = i + di, nk = k + dk;
+          if (ni >= 0 && nk >= 0 && ni < nx && nk < nz && cells[ni * nz + nk] && !reach[ni * nz + nk]) { reach[ni * nz + nk] = 1; queue.push([ni, nk]); }
+        }
+      }
+      for (let n = 0; n < cells.length; n++) if (!reach[n]) cells[n] = 0;
+    }
     rects.push(...cellRects({x0, z0, nx, nz, cell, cells}, floorY, true));
   }
   const ramps = doors.map(d => ({points: [d.a, d.b, d.c, d.d], y0: 0, y1: floorY}));
