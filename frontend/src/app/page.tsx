@@ -34,7 +34,7 @@ function edited(iso: string) {
  * Pictures of the starting points in "New": made in the browser by an editor that is out of sight (the same picture a saved building gets),
  * one preset at a time, and kept in localStorage until the preset or this version of the pictures changes.
  */
-const THUMB_KEY = "hx-preset-thumbs", THUMB_VERSION = "1";
+const THUMB_KEY = "hx-preset-thumbs", THUMB_VERSION = "2";
 const hashOf = (settings: unknown) => { const t = THUMB_VERSION + JSON.stringify(settings); let h = 5381; for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) | 0; return String(h); };
 const loadThumbs = (): Record<string, { h: string; url: string }> => { try { return JSON.parse(localStorage.getItem(THUMB_KEY) || "{}"); } catch { return {}; } };
 const saveThumbs = (c: Record<string, { h: string; url: string }>) => { try { localStorage.setItem(THUMB_KEY, JSON.stringify(c)); } catch { /* full or blocked: the pictures are made again next time */ } };
@@ -79,7 +79,7 @@ export default function HousesPage() {
         if (stop) return;
         host = document.createElement("div");
         host.className = "editor-host";
-        host.style.cssText = "position:fixed;left:-10000px;top:0;width:900px;height:600px;visibility:hidden;pointer-events:none";
+        host.style.cssText = "position:fixed;left:-10000px;top:0;width:2200px;height:800px;visibility:hidden;pointer-events:none";   // (wide: the 3D view is what is left beside the two panels)
         document.body.appendChild(host);
         ed = createEditor(host, { initial: todo[0].settings });
         for (const x of todo) {
