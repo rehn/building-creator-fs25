@@ -1410,20 +1410,23 @@ function sectionHtml(pid, s, sec, base) {
     + `<p class="hint">1\u00BD is an attic over the full floors, with the knee wall of the roof (Roof, in the main building's card) taken from the section's height.</p>`;
 }
 /** The buttons and sliders of dividersHtml(pid) in host. */
+/** A new section (a divider wall) in the building (pid 0) or in a part; it is chosen in the tree. */
+function addSectionTo(pid) {
+  const w = pid ? (p.wings || []).find(x => x.id === pid) : null;
+  if (pid && !w) return;
+  const had = new Set(((pid ? w.splits : p.splits) || []).map(x => x.id)), next = pid ? addPartSplit(p, pid) : addSplit(p);
+  if (!next) { toast("No room for another section"); return; }
+  if (pid) w.splits = next; else p.splits = next;
+  persist(); rebuild(false);
+  const added = next.find(x => !had.has(x.id));
+  if (added) selectNode("section", {part: pid, index: next.findIndex(x => x.id === added.id) + 1}); else renderTreeUI();
+}
 function bindDividers(host, pid = 0) {
   const w = pid ? (p.wings || []).find(x => x.id === pid) : null;
   if (pid && !w) return;
   const get = () => pid ? (w.splits = w.splits || []) : (p.splits = p.splits || []), keyOf = id => pid ? wingSplitKey(pid, id) : "s" + id;
   const add = host.querySelector("[data-splitadd]");
-  if (add) add.onclick = () => {
-    const next = pid ? addPartSplit(p, pid) : addSplit(p);
-    if (!next) { toast("No room for another section"); return; }
-    const had = new Set(get().map(x => x.id));
-    if (pid) w.splits = next; else p.splits = next;
-    persist(); rebuild(false);
-    const added = next.find(x => !had.has(x.id));
-    if (added) selectNode("section", {part: pid, index: next.findIndex(x => x.id === added.id) + 1}); else renderTreeUI();
-  };
+  if (add) add.onclick = () => addSectionTo(pid);
   host.querySelectorAll("[data-split]").forEach(inp => {
     inp.oninput = () => { const s = get().find(x => x.id === +inp.dataset.split); if (!s) return; s.at = +inp.value; $(`sp${pid}-${s.id}-o`).textContent = s.at.toFixed(2) + " m"; persist(); rebuild(false); };
     inp.onchange = () => { get().sort((x, y) => x.at - y.at); renderTreeUI(); };
@@ -1642,7 +1645,9 @@ function addChildPart(pid) {
 function ctxAdds(kind, v, f) {
   const room = (p.wings || []).length < MAX_WINGS;
   if (kind === "wall") return [{act: "add-window", label: "Add window", on: true}, {act: "add-door", label: "Add door", on: +f === 0}, {act: "add-part", label: "Add part", on: +f === 0 && !isSplitWall(v) && room}];
-  if (kind === "part" || kind === "main") return [{act: "add-part", label: "Add part", on: room}];
+  // (the building is divided into sections; a part is added on one of its walls, so the building's menu has no "add part": a part has both)
+  if (kind === "main") return [{act: "add-section", label: "Add section", on: p.roofType !== "hip" && (p.splits || []).length < MAX_SPLITS}];
+  if (kind === "part") { const w = (p.wings || []).find(x => x.id === +v); return [{act: "add-part", label: "Add part", on: room}, {act: "add-section", label: "Add section", on: !!w && (w.splits || []).length < MAX_SPLITS}]; }
   if (kind === "game") { const have = new Set(objectsNow().map(o => o.type)); return ((kindOf(p).objects || {types: []}).types).filter(t => !have.has(t)).map(t => ({act: "add-obj:" + t, label: "Add " + objectInfo(kindOf(p), t).name.toLowerCase(), on: true})); }
   return [];
 }
@@ -1760,7 +1765,7 @@ function showCtx(x, y, target, adds = []) {
   const r = m.getBoundingClientRect();
   m.style.left = Math.max(4, Math.min(x, window.innerWidth - r.width - 4)) + "px"; m.style.top = Math.max(4, Math.min(y, window.innerHeight - r.height - 4)) + "px";
   const on = (act, fn) => { const b = m.querySelector(`[data-act="${act}"]`); if (b) b.onclick = () => { closeCtx(); fn(); }; };
-  const addRun = {"add-window": () => addOnWall("window"), "add-door": () => addOnWall("door"), "add-part": () => treeKind === "wall" ? addOnWall("part") : addChildPart(treeKind === "part" ? wSel : 0)};
+  const addRun = {"add-window": () => addOnWall("window"), "add-door": () => addOnWall("door"), "add-part": () => treeKind === "wall" ? addOnWall("part") : addChildPart(treeKind === "part" ? wSel : 0), "add-section": () => addSectionTo(treeKind === "part" ? wSel : 0)};
   for (const a of adds) on(a.act, a.act.startsWith("add-obj:") ? () => addObject(a.act.slice(8)) : addRun[a.act]);
   if (target) { on("dup", () => duplicateTarget(target)); on("del", () => deleteTarget(target)); on("up", () => moveStep(target, -1)); on("down", () => moveStep(target, 1)); }
   const first = m.querySelector("button:not([disabled])");
