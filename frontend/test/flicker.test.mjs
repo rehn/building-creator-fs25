@@ -56,6 +56,11 @@ function inOpening(c, geo) {
 function hidden(t, geo, walkIn, F) {
   const c = [0, 1, 2].map(i => (t.pts[0][i] + t.pts[1][i] + t.pts[2][i]) / 3 + 0.005 * t.n[i]);
   const {W, D, top} = geo.dims, ax = Math.abs(c[0]), az = Math.abs(c[2]);
+  // a divider's thickness is solid too (like the walls': the backs of the frames of its openings lie in it)
+  if (walkIn) for (const [key, {w}] of Object.entries(geo.opsByWall)) if (/^(s[0-9]|w[0-9]+D[0-9])$/.test(key)) {
+    const v = [c[0] - w.o[0], c[1] - w.o[1], c[2] - w.o[2]], s = v[0] * w.u[0] + v[2] * w.u[2], d = v[0] * w.n[0] + v[2] * w.n[2];
+    if (s > 0 && s < w.L && d > -WALL_T && d < -0.002) return true;
+  }
   if (c[1] < 0) return true;
   // a house's wing is solid too (its plinth starts 6 cm out from the house's)
   const inWing = (m = 0) => (geo.wings || []).some(({rect: wr}) => c[0] > wr.x0 - m && c[0] < wr.x1 + m && c[2] > wr.z0 - m && c[2] < wr.z1 + m);
@@ -186,6 +191,16 @@ test("no flickering faces in a barn or a house with wings you can walk into", ()
     {...barn, width: 24, wings: [wing("front", 0.1), wing("front", 0.9)]}, {...barn, wings: [wing("left", 0.5, {width: 4})]},
     {wings: [wing("back", 0.5)]}, {floors: 2, wings: [wing("back", 0.5, {floors: 1})]}, {wings: [wing("left", 0.5, {width: 4})]},
     {kind: "chicken", wings: [wing("front", 0.4, {depth: 4})]},
+    // dividers (walls across the building up to the roof), with a door and a window in them
+    {width: 20, depth: 8, splits: [{at: 10}], windows: [{wall: "front", floor: 0, pos: 0.2, type: "door", w: 1, h: 2.1}, {wall: "s1", floor: 0, pos: 0.5, type: "door", w: 1, h: 2.1}, {wall: "s1", floor: 1, pos: 0.5, type: "window", w: 1, h: 1.2, sill: 0.9}]},
+    {...barn, width: 30, splits: [{at: 8}, {at: 20}]}, {width: 8, depth: 20, ridge: "depth", splits: [{at: 10}]}, {width: 20, depth: 8, roofType: "flat", splits: [{at: 10}]},
+    // sections with their own floors (a ceiling at each ground floor's height, the inside faces cut there)
+    {width: 20, depth: 8, floors: 2, splits: [{at: 10, floors: 1}], windows: [{wall: "front", floor: 0, pos: 0.2, type: "door", w: 1, h: 2.1}, {wall: "front", floor: 1, pos: 0.25, type: "window", w: 1, h: 1.2, sill: 0.9}, {wall: "back", floor: 0, pos: 0.75, type: "window", w: 1, h: 1.2, sill: 0.9}, {wall: "s1", floor: 0, pos: 0.5, type: "door", w: 1, h: 2.1}]},
+    {...barn, width: 30, floors: 2, floorHeight: 2.6, splits: [{at: 10, floors: 1, floorHeight: 0}, {at: 20, floors: 2}]},
+    {width: 8, depth: 20, ridge: "depth", floors: 2, splits: [{at: 8, floors: 1}]}, {wings: [wing("back", 0.5, {depth: 10, splits: [{at: 5, floors: 1}]})], floors: 2},
+    // dividers in a part
+    {wings: [wing("back", 0.5, {depth: 10, splits: [{at: 5}]})], windows: [{wall: "front", floor: 0, pos: 0.2, type: "door", w: 1, h: 2.1}, {wall: "w1D1", floor: 0, pos: 0.5, type: "door", w: 1, h: 2.1}, {wall: "w1D1", floor: 1, pos: 0.5, type: "window", w: 1, h: 1.2, sill: 0.9}]},
+    {...barn, wings: [wing("front", 0.35, {depth: 12, splits: [{at: 4}, {at: 8}]})]}, {wings: [wing("right", 0.5, {depth: 9, splits: [{at: 5}]})]},
   ];
   for (const c of cases) {
     const p = sanitize(c), f = flickers(buildGeometry(p), SHELL, {walkIn: true, F: p.foundation});

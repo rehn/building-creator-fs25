@@ -26,6 +26,8 @@ export const OBJECT_TYPES = {
     hint: "Where the animals eat. Put it where they can get to it, inside the fence (against the barn wall or free in the pasture); the long side is where they stand, and the height is the top edge. The feed pad fills it."},
   waterTrough: {name: "Water trough", glyph: null, icon: false, size: [2, 0.7, 0.7],
     hint: "Where the animals drink (the water is automatic). Put it inside the fence, where they can get to it; the long side is where they stand."},
+  workshop: {name: "Vehicle workshop", glyph: "wrench", icon: true, size: [6, 4, 3.5],
+    hint: "Vehicles driven into this box can be repaired, painted and fitted out; the wrench icon marks where the player stands to use the workshop. Put it where a vehicle fits inside the building."},
   info: {name: "Info area", glyph: null, icon: false, size: [10, 10, 3],
     hint: "Standing in it shows the building's info box. It usually goes round the whole building."},
   pasture: {name: "Pasture (fence)", glyph: null, icon: false,

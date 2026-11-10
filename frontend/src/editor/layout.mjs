@@ -44,9 +44,29 @@ export const wingWallKey = (id, part) => `w${id}${part}`;
 export const WING_PARTS = ["End", "Left", "Right"];
 export const WING_WALLS = Array.from({length: HARD_MAX_PARTS}, (_, i) => WING_PARTS.map(s => wingWallKey(i + 1, s))).flat();
 /** The wing a wall key belongs to (its id), or 0 for the house's own four walls. */
-export const wingIdOf = key => { const m = /^w(\d+)(End|Left|Right)$/.exec(key || ""); return m ? +m[1] : 0; };
+export const wingIdOf = key => { const m = /^w(\d+)(End|Left|Right|D\d)$/.exec(key || ""); return m ? +m[1] : 0; };
+/** The key of divider n of a part ("w1D2"): a wall across the part. */
+export const wingSplitKey = (id, n) => `w${id}D${n}`;
+/** Whether a wall key is a divider's (the building's "s1" or a part's "w1D1"). */
+export const isSplitWall = key => /^(s\d+|w\d+D\d)$/.test(key || "");
 /** The roof's thickness (the model's too): a gable-end wing's roof stays under the house's gable overhang. */
 const ROOF_T = 0.16;
+/** Most dividers (walls across the building, see splitsOf) a building can have. */
+export const MAX_SPLITS = 4;
+export const splitKey = id => "s" + id;
+export const SPLIT_WALLS = Array.from({length: MAX_SPLITS}, (_, i) => splitKey(i + 1));
+export const WING_SPLIT_WALLS = Array.from({length: HARD_MAX_PARTS}, (_, i) => Array.from({length: MAX_SPLITS}, (_, n) => wingSplitKey(i + 1, n + 1))).flat();
+/**
+ * The dividers: P.splits = [{id, at (m from the front's left end, or from the back, along the ridge)}], each a wall across the building up to the roof, with the
+ * key "s" + id. {id, key, at, frame}: frame as the other walls', its outer face towards the far end (+x, or +z with the ridge from front to back), L as
+ * long as the building is wide there. None under a hip roof (its wall would have to follow two slopes).
+ */
+export function splitsOf(P) {
+  if (!P || !Array.isArray(P.splits) || P.roofType === "hip") return [];
+  const W = P.width, D = P.depth, F = P.foundation, t = WALL_T, ridgeX = P.ridge === "width";
+  return P.splits.map(s => ({id: s.id, key: splitKey(s.id), at: s.at, floors: s.floors || 0, heights: s.heights || [], half: s.half === true ? true : s.half === false ? false : null,
+    frame: ridgeX ? {o: [-W / 2 + s.at + t / 2, F, D / 2], u: [0, 0, -1], n: [1, 0, 0], L: D} : {o: [-W / 2, F, -D / 2 + s.at + t / 2], u: [1, 0, 0], n: [0, 0, 1], L: W}}));
+}
 /**
  * The house's parts besides the main building (P.wings: {id, wall, pos, width, depth, floors ...}), each as {id, ...} or {id, off: why}. They form a tree:
  * a wing's wall is a wall of the house ("front" ...) or of an earlier wing ("w1Left" ...), so wingIdOf(wall) is its parent's id (0: the house).
@@ -59,24 +79,36 @@ const ROOF_T = 0.16;
  * narrower and moved along its wall when it has to be to fit. A part meets only its parent with its roof: one that would touch (eaves and all)
  * another part, or whose parent is left out, or that can't be built, is {id, off: why}.
  */
+/** The heights of the building's floors: floorHeight for the ground floor, floor2Height / floor3Height above (0 = as the ground floor). */
+export function floorsOf(P) {
+  return Array.from({length: P.floors}, (_, i) => i === 0 ? P.floorHeight : (+P["floor" + (i + 1) + "Height"] > 0 ? +P["floor" + (i + 1) + "Height"] : P.floorHeight));
+}
+/** The walls' height: all the floors (and a knee wall under a half floor). */
+export const totalHeight = P => floorsOf(P).reduce((a, b) => a + b, 0) + (P.halfStorey ? P.kneeWall : 0);
+/** Where floor i starts, above the foundation: the heights before it (a floor past the last, such as a half floor, goes on from the last height). */
+export const floorBase = (hs, i) => { let y = 0; for (let k = 0; k < i; k++) y += hs[Math.min(k, hs.length - 1)]; return y; };
+/** Which floor a height t (above the foundation) is on. */
+export const floorAt = (hs, t) => { let i = 0; while (i < 3 && t >= floorBase(hs, i + 1) - 1e-6) i++; return i; };
 export function wingsOf(P) {
   if (!P || !Array.isArray(P.wings)) return [];
   const W = P.width, D = P.depth, F = P.foundation, main = wallFrames(W, D, F), out = [];
   const ridgeX = P.roofType === "hip" ? W >= D : P.ridge === "width";
   const tanP = Math.tan(P.roofPitch * Math.PI / 180), o = P.overhang, Lr = ridgeX ? W : D, span = ridgeX ? D : W;
-  const top = F + P.floors * P.floorHeight + (P.halfStorey ? P.kneeWall : 0), eaveY = top - o * tanP;
+  const top = F + totalHeight(P), eaveY = top - o * tanP;
   const houseRect = {x0: -W / 2, x1: W / 2, z0: -D / 2, z1: D / 2};
   for (const w of P.wings.slice(0, MAX_WINGS)) {
     const pid = wingIdOf(w.wall), par = pid ? out.find(q => q.id === pid) : null;
     if (pid && !(par && par.frames)) { out.push({id: w.id, off: par ? "The part it stands on is left out." : "The part it stands on is missing."}); continue; }
     const key = par ? w.wall : main[w.wall] ? w.wall : "back", m = par ? par.frames[key] : main[key];
     // what it takes from its parent unless it sets it itself
-    const pFloors = par ? par.floors : P.floors, pFh = par ? par.fh : P.floorHeight, pPitch = par ? par.pitch : P.roofPitch, pHalf = par ? par.half : P.halfStorey;
+    const pFloors = par ? par.floors : P.floors, pHs = par ? par.hs : floorsOf(P), pPitch = par ? par.pitch : P.roofPitch, pHalf = par ? par.half : P.halfStorey;
     const own = +w.floors > 0;
     const floors = Math.max(1, Math.min(pFloors, Math.round(own ? w.floors : pFloors))), half = own ? !!w.half : !!pHalf;
-    const fh = +w.floorHeight > 0 ? Math.min(9, Math.max(2.3, +w.floorHeight)) : pFh;
+    // the heights: its own (floorHeight for the ground floor, floor2Height, floor3Height), else its parent's
+    const mine = i => { const v = +w[i ? "floor" + (i + 1) + "Height" : "floorHeight"]; return v > 0 ? Math.min(9, Math.max(2.3, v)) : 0; };
+    const hs = Array.from({length: floors}, (_, i) => mine(i) || (mine(0) && i ? mine(0) : pHs[Math.min(i, pHs.length - 1)])), fh = hs[0];
     const pitch = +w.pitch > 0 ? Math.min(60, Math.max(5, +w.pitch)) : pPitch;
-    const Hw = floors * fh + (half ? P.kneeWall : 0), topW = F + Hw, tanW = Math.tan(pitch * Math.PI / 180);
+    const Hw = hs.reduce((a, b) => a + b, 0) + (half ? P.kneeWall : 0), topW = F + Hw, tanW = Math.tan(pitch * Math.PI / 180);
     const part = par ? /(End|Left|Right)$/.exec(key)[1] : null;
     // the roof it meets: the house's, or its parent's (a gable roof along the parent's length)
     const rp = par ? {top: F + par.H, tan: par.tanW, span: par.ww} : {top, tan: tanP, span};
@@ -105,21 +137,172 @@ export function wingsOf(P) {
       [wingWallKey(id, "Left")]: {o: at(s0, 0), u: m.n, n: neg(m.u), L: wd},
       [wingWallKey(id, "Right")]: {o: at(s1, wd), u: neg(m.n), n: m.u, L: wd},
     };
+    // its dividers: walls across it, as wide as it is, at their places out from the wall it stands on
+    const splits = (w.splits || []).filter(s => s.at >= 1 && s.at <= wd - 1);
+    for (const s of splits) frames[wingSplitKey(id, s.id)] = {o: at(s0, s.at + WALL_T / 2), u: m.u, n: m.n, L: ww};
     const a = at(s0, 0), b = at(s1, wd);
     const rect = {x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]), z0: Math.min(a[2], b[2]), z1: Math.max(a[2], b[2])};
     // one that touches another part than its parent, eaves and all (two on one wall too close, two meeting at a corner, a part against the house), isn't built
     const g = o - 0.05, others = [...out.filter(q => q.rect && q.id !== pid).map(q => q.rect), ...(par ? [houseRect] : [])];
     const clash = others.find(q => q.x0 - o < rect.x1 + g && rect.x0 - o < q.x1 + g && q.z0 - o < rect.z1 + g && rect.z0 - o < q.z1 + g);
     if (clash) { out.push({id, off: "It is too close to another part (their eaves would touch): move it along the wall or onto another wall."}); continue; }
-    out.push({id, parent: pid, type, wall: key, s0, s1, sc, ww, wd, floors, fh, half, pitch, tanW, H: Hw, frames, rect, at});
+    out.push({id, parent: pid, closed: w.closed === true, splits, type, wall: key, s0, s1, sc, ww, wd, floors, fh, hs, half, pitch, tanW, H: Hw, frames, rect, at});
   }
   return out;
+}
+/**
+ * The heights of the floors of a section of the building (or of a part) with the given number of floors (0 = as the building: base = the building's own heights), the total height
+ * the same: heights are the heights of its floors from the ground up (a number: just the ground floor's), one for each floor but the top, which is what is left (0 or missing: a share of what is
+ * left); none lower than 2.3 m, and no more floors than fit.
+ */
+export function sectionHs(base, floors, heights = [], total = null) {
+  const hl = typeof heights === "number" ? (heights > 0 ? [heights] : []) : (heights || []);
+  const sum = base.reduce((a, b) => a + b, 0), T = total === null ? sum : total;
+  total = T;
+  const n = Math.max(1, Math.min(floors > 0 ? floors : base.length, Math.floor(total / 2.3 + 1e-9)));
+  if (n === base.length && !hl.some(v => v > 0) && Math.abs(T - sum) < 1e-9) return base;
+  if (n === 1) return [total];
+  const out = [];
+  let rest = total;
+  for (let i = 0; i < n - 1; i++) {
+    const want = hl[i] > 0 ? hl[i] : rest / (n - i), h = Math.max(2.3, Math.min(want, rest - (n - 1 - i) * 2.3));
+    out.push(h); rest -= h;
+  }
+  out.push(rest);
+  return out;
+}
+/**
+ * The heights of the floors (hs) when floor i is set to x, the total the same: the floor above it takes or gives back the difference, and if it can't (none under 2.3 m) the next one does, and so on up.
+ * The lower floors have the say: the top floor is never changed (it is what is left). A new array.
+ */
+export function cascadeHeight(hs, i, x, min = 2.3) {
+  const n = hs.length, v = hs.slice();
+  if (i < 0 || i >= n - 1) return v;
+  const total = hs.reduce((a, b) => a + b, 0), hi = total - hs.slice(0, i).reduce((a, b) => a + b, 0) - (n - 1 - i) * min;
+  v[i] = Math.max(min, Math.min(x, hi));
+  let need = hs[i] - v[i];
+  for (let j = i + 1; j < n; j++) {
+    const nj = v[j] + need;
+    if (nj >= min - 1e-9) { v[j] = nj; break; }
+    v[j] = min; need = nj - min;
+  }
+  return v;
+}
+/**
+ * The sections of the building (wid 0) or of a part: [{index, from, to, floors, hs}] along its length (the ridge; the part's depth out from its wall), one for each stretch between
+ * the dividers. The first has the building's own floors; each divider's floors and heights are for the section after it.
+ */
+export function sectionsOf(P, wid = 0) {
+  const wg = wid ? liveWings(P).find(x => x.id === wid) : null;
+  if (wid && !wg) return [];
+  const list = wid ? wg.splits : splitsOf(P), L = wid ? wg.wd : (P.ridge === "width" ? P.width : P.depth), base = wid ? wg.hs : floorsOf(P), out = [];
+  const baseHalf = !!(wid ? wg.half : P.halfStorey), knee = P.kneeWall, totalH = base.reduce((a, b) => a + b, 0) + (baseHalf ? knee : 0);
+  let from = 0, cur = {floors: 0, heights: [], half: null};
+  for (let i = 0; i <= list.length; i++) {
+    // (the walls are as high in every section: with an attic a section's floors have that height less the knee wall, without one (when the building has it) they have the knee wall's height too)
+    const half = cur.half === true ? true : cur.half === false ? false : baseHalf, to = i < list.length ? list[i].at : L, hs = sectionHs(base, cur.floors, cur.heights, totalH - (half ? knee : 0));
+    out.push({index: i, from, to, floors: hs.length, hs, half});
+    from = to; if (i < list.length) cur = list[i];
+  }
+  return out;
+}
+/** The most floors any section of the building (wid 0) or of a part has: what a wall can have windows on (a section can have more floors than the building's own setting). 0 for a part that isn't built. */
+/** Whether wall key is a gable wall (shaped like a gable: an attic window can go in it): a gable end of a gable roof, the end of a part (not under a flat roof), or a divider (shaped like one). */
+export function isGableWall(P, key) {
+  const wid = wingIdOf(key);
+  if (isSplitWall(key)) return wid ? (liveWings(P).find(x => x.id === wid) || {type: "flat"}).type !== "flat" : P.roofType === "gable";
+  if (wid) return key.endsWith("End") && P.roofType !== "flat";
+  return P.roofType === "gable" && (P.ridge === "width" ? key === "left" || key === "right" : key === "front" || key === "back");
+}
+/** Whether wall key has floor f (from 0) somewhere along it: a full floor of one of its sections, or the attic of a section that has one, on a wall an attic window can go in. */
+export function wallHasFloor(P, key, f) {
+  const w = wallsOf(P)[key];
+  if (!w) return false;
+  const gable = isGableWall(P, key);
+  return sectionRuns(P, key, w.L).some(r => f < r.sec.floors || (gable && r.sec.half && f === r.sec.floors));
+}
+/** How the dividers of the building (wid 0) or of a part run: {axis (0 = x, 2 = z), origin (where at = 0 is), sg (the direction at grows in), L (the length), list (the dividers), keyOf, rect (the floor)}, or null. */
+function splitAxisOf(P, wid = 0) {
+  if (!wid) {
+    if (P.roofType === "hip") return null;
+    const axis = P.ridge === "width" ? 0 : 2;
+    return {axis, origin: axis === 0 ? -P.width / 2 : -P.depth / 2, sg: 1, L: axis === 0 ? P.width : P.depth, list: splitsOf(P), keyOf: s => s.key, rect: {x0: -P.width / 2, x1: P.width / 2, z0: -P.depth / 2, z1: P.depth / 2}};
+  }
+  const wg = liveWings(P).find(g => g.id === wid);
+  if (!wg) return null;
+  const fr = wg.frames[wingWallKey(wid, "Left")], axis = Math.abs(fr.u[0]) > 0.5 ? 0 : 2;
+  return {axis, origin: fr.o[axis], sg: Math.sign(fr.u[axis]) || 1, L: wg.wd, list: wg.splits, keyOf: s => wingSplitKey(wid, s.id), rect: wg.rect};
+}
+/** The divider (of the building or of a part) at the point (x, z) in the plan, within tol metres of its middle: {pid, id}, or null. */
+export function dividerAt(P, x, z, tol = 0.35) {
+  for (const wid of [0, ...liveWings(P).map(g => g.id)]) {
+    const a = splitAxisOf(P, wid);
+    if (!a) continue;
+    const [c, o] = a.axis === 0 ? [x, z] : [z, x], lo = a.axis === 0 ? a.rect.z0 : a.rect.x0, hi = a.axis === 0 ? a.rect.z1 : a.rect.x1;
+    if (o < lo - 0.05 || o > hi + 0.05) continue;
+    const s = a.list.find(s => Math.abs(c - (a.origin + a.sg * s.at)) <= tol + WALL_T / 2);
+    if (s) return {pid: wid, id: s.id};
+  }
+  return null;
+}
+/** Where divider id of the building (pid 0) or of a part goes when it is dragged to a point with the coordinate along the length (x or z): its new "at", to 5 cm, at least 2 m from the ends and from the other dividers. */
+export function splitAtFrom(P, pid, id, coord) {
+  const a = splitAxisOf(P, pid);
+  if (!a) return null;
+  const sorted = a.list.slice().sort((u, v) => u.at - v.at), i = sorted.findIndex(s => s.id === id);
+  if (i < 0) return null;
+  const c = Array.isArray(coord) ? coord[a.axis === 0 ? 0 : 2] : coord, lo = i ? sorted[i - 1].at + 2 : 2, hi = i < sorted.length - 1 ? sorted[i + 1].at - 2 : a.L - 2;
+  return Math.round(Math.max(lo, Math.min(hi, (c - a.origin) * a.sg)) * 20) / 20;
+}
+/** The most floors, an attic counted, any section of the building (wid 0) or of a part has. */
+export const maxFloorsWithAttic = (P, wid = 0) => Math.max(0, ...sectionsOf(P, wid).map(s => s.floors + (s.half ? 1 : 0)));
+export const maxFloors = (P, wid = 0) => Math.max(0, ...sectionsOf(P, wid).map(s => s.floors));
+/**
+ * The stretches of wall key (length L) by section: [{a, b, sec}] in the wall's own s, from its left end seen from outside. A wall along the building runs the way the building's length does
+ * (or the other way, on the far side); an end wall is in one section (the first or the last); a divider is in the section with more floors.
+ * secs: the sections (sectionsOf) if the caller has them.
+ */
+export function sectionRuns(P, key, L, secs = null) {
+  const wid = wingIdOf(key);
+  secs = secs || sectionsOf(P, wid);
+  if (!secs.length) return [];
+  if (secs.length === 1) return [{a: 0, b: L, sec: secs[0]}];
+  const one = sec => [{a: 0, b: L, sec}];
+  if (isSplitWall(key)) {
+    const list = wid ? (liveWings(P).find(x => x.id === wid) || {splits: []}).splits : splitsOf(P), i = list.findIndex(s => (wid ? wingSplitKey(wid, s.id) : splitKey(s.id)) === key);
+    const A = secs[Math.max(0, i)], B = secs[Math.min(secs.length - 1, i + 1)];
+    return one(i < 0 ? secs[0] : B.floors >= A.floors ? B : A);
+  }
+  let way;
+  if (wid) way = key.endsWith("Left") ? "fwd" : key.endsWith("Right") ? "rev" : "last";
+  else if (P.ridge === "width") way = {front: "fwd", back: "rev", left: "first", right: "last"}[key];
+  else way = {left: "fwd", right: "rev", back: "first", front: "last"}[key];
+  if (way === "first") return one(secs[0]);
+  if (way === "last" || !way) return one(secs[secs.length - 1]);
+  const runs = secs.map(sc => way === "fwd" ? {a: sc.from, b: Math.min(L, sc.to), sec: sc} : {a: Math.max(0, L - sc.to), b: L - sc.from, sec: sc});
+  return way === "fwd" ? runs : runs.reverse();
+}
+/** The floor of a point s metres along wall key and t metres above the foundation: by the floors of the section the wall has there (never past its last floor, an attic included). */
+export function wallFloorAt(P, key, s, t) {
+  const w = wallsOf(P)[key];
+  const runs = w ? sectionRuns(P, key, w.L) : [], run = runs.find(r => s >= r.a && s < r.b) || runs[runs.length - 1];
+  if (!run) return 0;
+  return Math.max(0, Math.min(floorAt(run.sec.hs, t), run.sec.floors - 1 + (run.sec.half ? 1 : 0)));
+}
+/** The section that contains the point (x, z) in the plan, of the building (wid 0) or a part, or null. */
+export function sectionAtPoint(P, wid, x, z, secs = null) {
+  secs = secs || sectionsOf(P, wid);
+  if (!secs.length) return null;
+  let along;
+  if (wid) { const f = (wallsOf(P)[wingWallKey(wid, "Left")]); if (!f) return secs[0]; along = (x - f.o[0]) * f.u[0] + (z - f.o[2]) * f.u[2]; }
+  else along = P.ridge === "width" ? x + P.width / 2 : z + P.depth / 2;
+  return secs.find(s => along >= s.from && along < s.to) || (along < 0 ? secs[0] : secs[secs.length - 1]);
 }
 /** The wings that fit (not {off}). */
 export const liveWings = P => wingsOf(P).filter(w => w.frames);
 /** Every wall of the building by key: the four, and each wing's three. */
 export function wallsOf(P) {
-  return Object.assign(wallFrames(P.width, P.depth, P.foundation), ...liveWings(P).map(w => w.frames));
+  return Object.assign(wallFrames(P.width, P.depth, P.foundation), ...liveWings(P).map(w => w.frames), ...splitsOf(P).map(s => ({[s.key]: s.frame})));
 }
 
 /** Where an entry of the window list (a window, or a door made from one) is along its wall (length L): [s0, s1]. */
@@ -142,7 +325,7 @@ export const doorsOf = p => (p.windows || []).filter(w => w.type === "door" && w
  */
 export function roomOf(p, openings = []) {
   const W = p.width, D = p.depth, F = p.foundation, t = WALL_T;
-  const H = p.floors * p.floorHeight + (p.halfStorey ? p.kneeWall : 0);
+  const H = totalHeight(p);
   const x0 = -W/2 + t, x1 = W/2 - t, z0 = -D/2 + t, z1 = D/2 - t;
   const frames = wallsOf(p), main = wallFrames(W, D, F);
   // A keep-out: the opening's width plus 30 cm each side, from the wall `clear` into the room.
@@ -152,22 +335,58 @@ export function roomOf(p, openings = []) {
     return {x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]), z0: Math.min(a[1], b[1]), z1: Math.max(a[1], b[1])};
   };
   // every door that opens is kept clear inside (one that stays shut needn't be)
-  const doors = doorsOf(p).filter(w => w.opens !== false && frames[w.wall]).map(w => ({rect: keep(w.wall, ...openingSpan(w, frames[w.wall].L), DOOR_CLEAR), what: "a door"}));
+  // (a door in a divider is kept clear on the other side too: the wall between two rooms)
+  const keepFar = (wall, s0, s1, clear) => {
+    const w = frames[wall], at = (s, d) => [w.o[0] + w.u[0] * s + w.n[0] * d, w.o[2] + w.u[2] * s + w.n[2] * d], a = at(s0 - 0.3, 0), b = at(s1 + 0.3, clear);
+    return {x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]), z0: Math.min(a[1], b[1]), z1: Math.max(a[1], b[1])};
+  };
+  const doors = doorsOf(p).filter(w => w.opens !== false && frames[w.wall]).flatMap(w => {
+    const span = openingSpan(w, frames[w.wall].L), near = {rect: keep(w.wall, ...span, DOOR_CLEAR), what: "a door"};
+    return isSplitWall(w.wall) ? [near, {rect: keepFar(w.wall, ...span, DOOR_CLEAR), what: "a door"}] : [near];
+  });
   const door = doors.length ? doors[0].rect : null;
   const keepOut = [...doors, ...openings.map(o => ({rect: keep(o.wall, o.s0, o.s1, o.clear), what: o.what}))];
   // the floors: the main part's, and each wing's from the main wall's inside face to its far wall's inside face
-  const rects = [{x0, x1, z0, z1}], names = [{back: "back", front: "front", left: "left", right: "right"}];
+  const parts = [{rect: {x0, x1, z0, z1}, nm: {back: "back", front: "front", left: "left", right: "right"}, wid: 0}];
   for (const w of liveWings(p)) {
     const m = frames[w.wall], at = (s, d) => [m.o[0] + m.u[0] * s + m.n[0] * d, m.o[2] + m.u[2] * s + m.n[2] * d];
-    const a = at(w.s0 + t, -t), b = at(w.s1 - t, w.wd - t);
-    rects.push({x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]), z0: Math.min(a[1], b[1]), z1: Math.max(a[1], b[1])});
+    // (a closed part starts at the parent wall's outer face: the wall stays between the rooms)
+    const a = at(w.s0 + t, w.closed ? 0 : -t), b = at(w.s1 - t, w.wd - t);
+    const rect = {x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]), z0: Math.min(a[1], b[1]), z1: Math.max(a[1], b[1])};
     // an edge's outward direction says which of the wing's walls it is
     const key = part => wingWallKey(w.id, part), n = part => w.frames[key(part)].n;
     const dir = {back: [0, -1], front: [0, 1], left: [-1, 0], right: [1, 0]}, nm = {};
     for (const side in dir) for (const part of WING_PARTS) if (Math.abs(n(part)[0] - dir[side][0]) < 1e-6 && Math.abs(n(part)[2] - dir[side][1]) < 1e-6) nm[side] = key(part);
-    names.push(nm);
+    // the edge facing the parent is the parent's wall seen from this side
+    if (w.closed) for (const side in dir) if (!nm[side] && Math.abs(m.n[0] + dir[side][0]) < 1e-6 && Math.abs(m.n[2] + dir[side][1]) < 1e-6) nm[side] = w.wall;
+    parts.push({rect, nm, wid: w.id});
   }
-  return {x0, x1, z0, z1, F, H, door, keepOut, rects, walls: wallSegments(rects, names)};
+  // The room for placing things: each floor cut at its dividers, one rectangle for each section with the wall between them left out (pieces can't cross it, and it is a wall of both: its two
+  // faces are wall stretches named after it). The floor itself (floorRects) is whole: it runs under the walls and the doorways in them.
+  const rects = [], names = [];
+  for (const q of parts) {
+    const secs = sectionsOf(p, q.wid);
+    if (secs.length <= 1) { rects.push({...q.rect, wid: q.wid, sec: 0}); names.push(q.nm); continue; }
+    const wg = q.wid ? liveWings(p).find(g => g.id === q.wid) : null, list = q.wid ? wg.splits : splitsOf(p), keyOf = s => q.wid ? wingSplitKey(q.wid, s.id) : splitKey(s.id);
+    let axis, origin, sg;
+    if (!q.wid) { axis = p.ridge === "width" ? 0 : 2; origin = axis === 0 ? -W / 2 : -D / 2; sg = 1; }
+    else { const fr = frames[wingWallKey(q.wid, "Left")]; axis = Math.abs(fr.u[0]) > 0.5 ? 0 : 2; origin = fr.o[axis]; sg = Math.sign(fr.u[axis]) || 1; }
+    const lo = axis === 0 ? q.rect.x0 : q.rect.z0, hi = axis === 0 ? q.rect.x1 : q.rect.z1;
+    const cuts = list.map(s => ({c: origin + sg * s.at, key: keyOf(s)})).sort((u, v) => u.c - v.c), lowSide = axis === 0 ? "left" : "back", highSide = axis === 0 ? "right" : "front";
+    let start = lo;
+    [...cuts, {c: hi + t / 2, key: null}].forEach((cut, i) => {
+      const end = Math.min(hi, cut.c - t / 2);
+      if (end - start > 0.05) {
+        const nm = {...q.nm};
+        if (i > 0) nm[lowSide] = cuts[i - 1].key;
+        if (cut.key) nm[highSide] = cut.key;
+        rects.push({...q.rect, ...(axis === 0 ? {x0: start, x1: end} : {z0: start, z1: end}), wid: q.wid, sec: sg > 0 ? i : secs.length - 1 - i});
+        names.push(nm);
+      }
+      start = Math.max(start, cut.c + t / 2);
+    });
+  }
+  return {x0, x1, z0, z1, F, H, door, keepOut, rects, floorRects: parts.map(q => q.rect), walls: wallSegments(rects, names)};
 }
 
 const EPS = 1e-6;
@@ -504,6 +723,10 @@ export function furnisher(room, catalog) {
   const freeLine = (c, alongX, width = 0.3) => {
     const line = alongX ? {x0: room.x0, x1: room.x1, z0: c - width / 2, z1: c + width / 2} : {x0: c - width / 2, x1: c + width / 2, z0: room.z0, z1: room.z1};
     let free = [[alongX ? room.x0 : room.z0, alongX ? room.x1 : room.z1]];
+    // (only where the line is in the room: across a divider it is not)
+    const covered = (room.rects || []).filter(r => overlap(r, line)).map(r => alongX ? [r.x0, r.x1] : [r.z0, r.z1]).sort((u, v) => u[0] - v[0]), gaps = [];
+    for (let at = free[0][0], i = 0; i <= covered.length; i++) { const next = i < covered.length ? covered[i] : [free[0][1], free[0][1]]; if (next[0] > at + 1e-6) gaps.push([at, next[0]]); at = Math.max(at, next[1]); }
+    for (const [a, b] of gaps) free = cut(free, a, b);
     for (const r of blocked(0.2)) if (overlap(r, line)) free = cut(free, ...(alongX ? [r.x0, r.x1] : [r.z0, r.z1]));
     return free.sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]))[0] || null;
   };
@@ -515,7 +738,8 @@ export function furnisher(room, catalog) {
 export const MAX_PIPES = 24;
 /** The walls with a gutter along them (a downpipe goes on one): a gable roof's two eave walls, all four under a hip roof, and each wing's two sides. */
 export function eaveWalls(P) {
-  if (P.roofType === "flat") return [];
+  // (a leaning flat roof has a gutter on its low side)
+  if (P.roofType === "flat") return P.roofTilt > 0 ? [{front: "back", back: "front", left: "right", right: "left"}[P.tiltHigh] || "back"] : [];
   const ridgeX = P.roofType === "hip" ? P.width >= P.depth : P.ridge === "width";
   const main = P.roofType === "hip" ? ["front", "back", "left", "right"] : ridgeX ? ["front", "back"] : ["left", "right"];
   return [...main, ...liveWings(P).filter(w => w.type !== "flat").flatMap(w => [wingWallKey(w.id, "Left"), wingWallKey(w.id, "Right")])];

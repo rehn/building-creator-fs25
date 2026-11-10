@@ -15,7 +15,7 @@ test("wings: none by default, a list kept and clamped", () => {
   const p = sanitize({wings: [{wall: "left", pos: 7, width: 99, depth: -1, floors: 9}, {wall: "roof"}, null, {}, {}, {}]});
   assert.equal(p.wings.length, 5, "the unusable entry (null) is dropped");
   assert.deepEqual(p.wings.map(w => w.id), [1, 2, 3, 4, 5]);
-  assert.deepEqual([p.wings[0].wall, p.wings[0].pos, p.wings[0].width, p.wings[0].depth, p.wings[0].floors], ["left", 1, 30, 2, 3]);
+  assert.deepEqual([p.wings[0].wall, p.wings[0].pos, p.wings[0].width, p.wings[0].depth, p.wings[0].floors], ["left", 1, 50, 2, 3]);
   assert.equal(p.wings[1].wall, "back", "an unknown wall becomes the back");
   assert.equal(sanitize({wings: [{id: 3, wall: "front"}, {id: 3, wall: "back"}]}).wings.map(w => w.id).join(), "3,1", "ids are kept, repeats renumbered");
   for (const k of WING_WALLS) assert.ok(WALL_NAMES[k], k);
