@@ -71,7 +71,7 @@ const SHARED_SECTIONS = [
     {k:"halfStorey", label:"Half floor in the roof (1\u00BD-plan)", type:"check"},
     {k:"kneeWall", floorRow:true, label:"Knee wall height", min:0.2, max:1.6, step:0.05, unit:" m"},
     {k:"ceiling", label:"Ceiling over the ground floor (closes the roof space, so you don’t see up to the ridge)", type:"check"},
-    {k:"floorHeight", floorRow:true, label:"Height of the ground floor", min:2.3, max:9, step:0.05, unit:" m"},
+    {k:"floorHeight", floorRow:true, label:"Height of the ground floor", min:2.3, max:12, step:0.05, unit:" m"},
     {k:"floor2Height", floorRow:true, label:"Height of the second floor", min:2.2, max:9, step:0.05, unit:" m", zero:"as the ground floor"},
     {k:"floor3Height", floorRow:true, label:"Height of the third floor", min:2.2, max:9, step:0.05, unit:" m", zero:"as the ground floor"},
     {k:"foundation", label:"Foundation height", min:0, max:1.2, step:0.05, unit:" m"}]},
@@ -673,7 +673,7 @@ function cleanWindows(arr, legacy = {}) {
       : cleanPorch(w.main ? legacy.entrance : "none", legacy.entranceWidth, legacy.entranceDepth);
     return {
       id: i + 1, wall: w.wall, floor: Math.round(clampN(w.floor, 0, 2, 0)), pos: clampN(w.pos, 0, 1, 0.5),
-      w: clampN(w.w, 0.3, door ? 10 : 3, 1), h: clampN(w.h, 0.3, door ? 8 : 2.4, 1.25), sill: clampN(w.sill, 0, 6, 0.85),
+      w: clampN(w.w, 0.3, door ? 20 : 3, 1), h: clampN(w.h, 0.3, door ? 12 : 2.4, 1.25), sill: clampN(w.sill, 0, 6, 0.85),
       ...k, ...porch, ...(door ? {ramp: !!w.ramp, opens: w.opens !== false, swing: w.swing === "in" ? "in" : "out", hinge: w.hinge === "right" ? "right" : "left"} : {}),
       room: pickRoom(w.room), curtain: pickCurtain(w.curtain), curtainColor: pickColor(w.curtainColor)
     };
@@ -1435,8 +1435,8 @@ function openingKit(w) {
  * (the node the game moves it about) and its collision box.
  */
 function buildDoor(w, o, kit, inner, r, out, key) {
-  const slide = o.style === "sliding" || o.style === "sheetslide", pair = isPair(o.s1 - o.s0) || o.style === "sheetslide", g = 0.01, mid = (o.s0 + o.s1) / 2;
-  let spans, dIn, dOut, t0 = o.t0 + g, t1 = o.t1 - g, travel = 0;
+  const pass = o.style === "sheetpass", slide = o.style === "sliding" || o.style === "sheetslide" || pass, pair = isPair(o.s1 - o.s0) || o.style === "sheetslide" || pass, g = 0.01, mid = (o.s0 + o.s1) / 2;
+  let spans, dIn, dOut, t0 = o.t0 + g, t1 = o.t1 - g, travel = 0, travels = null, dIn2 = 0, dOut2 = 0;
   if (o.style === "lowgate") t1 = Math.min(t1, t0 + 1.2);   // (a steel gate as high as a fence: the opening stays open above it)
   if (slide) {
     // over the opening and its frame, 10 cm past each side; the rail above, long enough to slide clear
@@ -1444,20 +1444,40 @@ function buildDoor(w, o, kit, inner, r, out, key) {
     dIn = out + 0.006; dOut = dIn + LEAF_T; t0 = o.t0 + 0.005; t1 = o.t1 + 0.1;
     spans = pair ? [[a, mid - 0.003], [mid + 0.003, b]] : [[a, b]];
     travel = pair ? (o.s1 - o.s0) / 2 + lap : o.s1 - o.s0 + lap;
+    if (pass) {
+      // two tracks: the left half hangs on the rail nearer the wall, the right half on a higher rail further out; they overlap 12 cm in the middle and each slides out to its own side
+      const ov = 0.12, wall = 0.03;
+      dIn2 = dOut + 0.03; dOut2 = dIn2 + LEAF_T;
+      spans = [[a, mid + ov], [mid - ov, b]];
+      travels = [mid + ov - o.s0 + 0.05, o.s1 - (mid - ov) + 0.05];
+      const ryA = t1 + 0.03, ryB = ryA + 0.1;
+      const rail = (r0, r1, ry, di, dOutR) => {
+        kit.box("iron", r0, r1, ry, ry + 0.06, di, dOutR + 0.02);
+        for (let s = r0; s <= r1 + 1e-6; s += Math.max(0.3, (r1 - r0) / Math.max(1, Math.round((r1 - r0) / 1.0)))) {
+          const s0 = Math.min(Math.max(s - 0.025, r0 + 0.02), r1 - 0.07);
+          kit.box("iron", s0, s0 + 0.05, ry + 0.005, ry + 0.055, 0, di + 0.01);
+        }
+      };
+      rail(Math.max(wall, a - travels[0]), mid + ov + 0.1, ryA, dIn, dOut);
+      rail(mid - ov - 0.1, Math.min(w.L - wall, b + travels[1]), ryB, dIn2, dOut2);
+    } else {
     const r0 = Math.max(0.03, a - travel), r1 = Math.min(w.L - 0.03, pair ? b + travel : b), ry = t1 + 0.03;
     kit.box("iron", r0, r1, ry, ry + 0.06, dIn, dOut + 0.02);
     for (let s = r0; s <= r1 + 1e-6; s += Math.max(0.3, (r1 - r0) / Math.max(1, Math.round((r1 - r0) / 1.0)))) {
       const s0 = Math.min(Math.max(s - 0.025, r0 + 0.02), r1 - 0.07);   // (in from the rail's ends: flush faces flicker)
       kit.box("iron", s0, s0 + 0.05, ry + 0.005, ry + 0.055, 0, dIn + 0.01);   // brackets back to the wall
     }
+    }
   } else {
     dIn = -r; dOut = -r + LEAF_T;
     spans = pair ? [[o.s0 + g, mid - g / 2], [mid + g / 2, o.s1 - g]] : [[o.s0 + g, o.s1 - g]];
   }
-  const leaves = [];
+  const leaves = [], D0 = dIn, D1 = dOut, T1 = t1;
   spans.forEach(([s0, s1], k) => {
     // (a pair: each leaf is hinged at its outer edge; a single door at the left (seen from outside) or, if set, the right)
     const before = vcount(), right = pair ? k === 1 : !!o.hingeRight;
+    // (two tracks: the right half is further out and 10 cm taller, up to its own rail)
+    const outer = pass && k === 1, dIn = outer ? dIn2 : D0, dOut = outer ? dOut2 : D1, t1 = outer ? T1 + 0.1 : T1;
     drawLeaf(kit, o.style, {s0, s1, t0, t1, dIn, dOut, right});
     if (slide) for (const u of [0.15, s1 - s0 - 0.2]) kit.box("iron", s0 + u, s0 + u + 0.05, t1, t1 + 0.06, dIn + 0.015, dOut - 0.015);   // hangers up to the rail
     // (a door that doesn't open is drawn the same, but stays put: no leaves for the game to move)
@@ -1465,7 +1485,7 @@ function buildDoor(w, o, kit, inner, r, out, key) {
     const ax = Math.abs(w.u[0]) > 0.5, along = s1 - s0, tall = t1 - t0, thick = dOut - dIn;
     const box = {center: WP(w, (s0 + s1) / 2, (t0 + t1) / 2, (dIn + dOut) / 2), size: ax ? [along, tall, thick] : [thick, tall, along]};
     if (slide) {
-      const v = (right ? 1 : -1) * travel;
+      const v = (right ? 1 : -1) * (travels ? travels[k] : travel);
       leaves.push({hinge: WP(w, s0, o.t0, dIn), motion: {translation: [w.u[0] * v, 0, w.u[2] * v]}, parts: rangesSince(before), box});
     // a door swings out (hinged on the outside of the leaf) or, if chosen (o.swingIn), in (hinged on the inside)
     } else if (o.swingIn) leaves.push({hinge: WP(w, right ? s1 : s0, o.t0, dIn), motion: {rotation: right ? DOOR_OPEN : -DOOR_OPEN}, parts: rangesSince(before), box});
@@ -1960,7 +1980,7 @@ function buildLeaf(fr2, L, F, id) {
   const at = (a, b) => [fr2.o[0] + fr2.u[0] * a + fr2.n[0] * b, fr2.o[1] + fr2.u[1] * a + fr2.n[1] * b], o = fr2.o;
   const u = [fr2.u[0], 0, fr2.u[1]], n = [fr2.n[0], 0, fr2.n[1]];
   const fw = {o: [o[0], F, o[1]], u, n}, bw = {o: [o[0], F, o[1]], u: neg(u), n: neg(n)};
-  const style = L.style || (p.doorStyle === "sliding" || p.doorStyle === "sheetslide" ? "zbrace" : p.doorStyle), hs = 0.008, half = 0.016, g = 0.012;
+  const style = L.style || (p.doorStyle === "sliding" || p.doorStyle === "sheetslide" || p.doorStyle === "sheetpass" ? "zbrace" : p.doorStyle), hs = 0.008, half = 0.016, g = 0.012;
   const s0 = L.s0 + g, s1 = L.s1 - g, t0 = 0.02, t1 = L.h - 0.01, hingeLeft = L.hingeAt === "s1";
   const before = vcount();
   // (the inner doors have their own colour: the leaf's wood is the material "doorIn")

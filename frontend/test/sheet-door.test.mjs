@@ -33,3 +33,21 @@ test("it is corrugated sheet in the door colour, and the export moves both leave
 test("the garage and the machine hall have it to start with", () => {
   for (const id of ["garage", "maskinhall"]) assert.equal(PRESETS.find(x => x.id === id).settings.doorStyle, "sheetslide", id);
 });
+
+test("on two tracks: the halves hang at different depths, overlap in the middle and slide past each other's side", () => {
+  const p = shed({windows: [{wall: "front", floor: 0, pos: 0.5, type: "door", w: 6, h: 3, style: "sheetpass", opens: true}]});
+  const geo = buildGeometry(p), leaves = geo.doors[0].leaves;
+  assert.equal(leaves.length, 2);
+  const zs = leaves.map(l => l.box.center[2]);
+  assert.ok(Math.abs(zs[0] - zs[1]) > 0.05, `two tracks: ${zs.map(v => v.toFixed(3))}`);
+  const x = leaves.map(l => [l.box.center[0] - l.box.size[0] / 2, l.box.center[0] + l.box.size[0] / 2]).sort((a, b) => a[0] - b[0]);
+  assert.ok(x[0][1] > x[1][0] + 0.1, "the halves overlap in the middle");
+  const dx = leaves.map(l => l.motion.translation[0]);
+  assert.ok(dx[0] * dx[1] < 0, "to either side");
+  const xml = buildI3d(p);
+  assert.match(xml, /name="door1Leaf1DoorSheet"/);
+});
+
+test("a door as high as 12 m needs a ground floor of 12 m, and gets one", () => {
+  assert.equal(sanitize({kind: "shed", floorHeight: 12}).floorHeight, 12);
+});

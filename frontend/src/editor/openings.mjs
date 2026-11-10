@@ -21,6 +21,7 @@ export const DOOR_STYLES = [
   {id: "panel", name: "Panelled, glass at the top"},
   {id: "sliding", name: "Sliding barn door"},
   {id: "sheetslide", name: "Sliding sheet-metal door (two halves)"},
+  {id: "sheetpass", name: "Sliding sheet-metal door, two tracks (the halves pass each other)"},
   {id: "gate", name: "Fence gate (stängselgrind)"},
   {id: "lowgate", name: "Low steel gate (grind, as high as a fence)"},
   {id: "hole", name: "Open doorway, framed (no door)"},
@@ -116,7 +117,7 @@ export function drawLeaf(kit, style, L) {
   const S = u => L.right ? L.s1 - u : L.s0 + u;
   const box = (mat, u0, u1, t0, t1, d0, d1, skip) => { const a = S(u0), b = S(u1); kit.box(mat, Math.min(a, b), Math.max(a, b), t0, t1, d0, d1, skip); };
   // details lie on the outside face and, unless L.back is false (an inner door is two leaves back to back), on the inside face too, mirrored
-  const slides = style === "sliding" || style === "sheetslide", sheet = style === "sheetslide";
+  const sheet = style === "sheetslide" || style === "sheetpass", slides = style === "sliding" || sheet;
   const back = L.back !== false && !slides, mir = (d0, d1) => [L.dIn - (d1 - f), L.dIn - (d0 - f)];
   const on = (mat, u0, u1, t0, t1, d0, d1) => {   // lying on the face behind it
     box(mat, u0, u1, t0, t1, d0, d1, "d0");

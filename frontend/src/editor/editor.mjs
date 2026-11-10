@@ -941,7 +941,7 @@ function renderWinCard() {
     html += `<div class="field"><div class="fl"><label for="wf-style">Style</label></div><select id="wf-style">${opt("default", `Same as the building (${own})`, s.style)}${styles.map(x => opt(x.id, x.name, s.style)).join("")}</select></div>`;
     for (const f of WIN_FIELDS) {
       if (door && f.k === "sill") continue;
-      html += door && f.k === "h" ? range(f, 1.5, 8) : door && f.k === "w" ? range(f, 0.3, 10) : range(f);
+      html += door && f.k === "h" ? range(f, 1.5, 12) : door && f.k === "w" ? range(f, 0.3, 20) : range(f);
     }
     if (door) {
       html += `<div class="field"><div class="fl"><label for="wf-porch">In front of the door</label></div><select id="wf-porch">${PORCH_OPTIONS.map(o => opt(o[0], o[1], s.porch)).join("")}</select></div>`;
