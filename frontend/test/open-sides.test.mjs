@@ -44,3 +44,11 @@ test("carport and lean-to presets build and export", () => {
     assert.match(buildI3d(p), /<\/i3D>/);
   }
 });
+
+test("the distance between the posts is a setting (at most that far apart)", () => {
+  assert.equal(shed().postSpacing, 3);
+  const posts = p => new Set(verts(p, "trim").filter(v => Math.abs(v[2] - 2) < 0.2 && v[1] < 0.3).map(v => +v[0].toFixed(2))).size;
+  assert.ok(posts(shed({openFront: true, width: 12, postSpacing: 2})) > posts(shed({openFront: true, width: 12, postSpacing: 6})), "closer posts, more of them");
+  assert.equal(shed({postSpacing: 99}).postSpacing, 6);
+  assert.equal(shed({postSpacing: 0}).postSpacing, 1.5);
+});

@@ -151,11 +151,12 @@ export default {
   plural: "Sheds",
   category: "sheds",
   walkIn: true,
-  defaults: {ceiling: false, insideSame: true, winStyle: "single", doorStyle: "sliding", openFront: false, openBack: false, openLeft: false, openRight: false},
+  defaults: {ceiling: false, insideSame: true, winStyle: "single", doorStyle: "sliding", openFront: false, openBack: false, openLeft: false, openRight: false, postSpacing: 3},
   sections: [
     {title: "Open sides", tab: "building", detail: true, hint: "Leave a side open, as on a carport or a lean-to shed: posts and a beam stand where the wall was. Windows and doors on an open side are left out.", fields: [
       {k: "openFront", label: "Front is open", type: "check"}, {k: "openBack", label: "Back is open", type: "check"},
-      {k: "openLeft", label: "Left side is open", type: "check"}, {k: "openRight", label: "Right side is open", type: "check"}]},
+      {k: "openLeft", label: "Left side is open", type: "check"}, {k: "openRight", label: "Right side is open", type: "check"},
+      {k: "postSpacing", label: "Most space between the posts", min: 1.5, max: 6, step: 0.1, unit: " m"}]},
   ],
   hides: ["Interior", "Kupor (dormers)"],
   /** Settings as this kind uses them: no sleep point, rooms or dormers. */

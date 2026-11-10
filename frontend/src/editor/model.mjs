@@ -2251,7 +2251,7 @@ function build() {
     if (openSide(p, key)) {
       // An open side (a carport's, a lean-to's): no wall, but a post at each end and at most 3 m apart, and a beam along the top (at the walls' top,
       // following a leaning roof, never up into a gable).
-      const w = WS[key], bt = lean ? topOf : () => H, pw = 0.14, n = Math.max(1, Math.ceil(Lw / 3)), at = (t, d, sv) => WP(w, sv, t, d);
+      const w = WS[key], bt = lean ? topOf : () => H, pw = 0.14, n = Math.max(1, Math.ceil(Lw / (p.postSpacing || 3))), at = (t, d, sv) => WP(w, sv, t, d);
       // (the ends stand clear of a closed wall's thickness, and where two open sides meet the front or back one keeps the corner)
       const nb = {front: ["left", "right"], back: ["right", "left"], left: ["back", "front"], right: ["front", "back"]}[key];
       const inset = k => !openSide(p, nb[k]) ? WALL_T + 0.01 : key === "left" || key === "right" ? pw + 0.04 : 0.02, a0 = inset(0), a1 = inset(1);
