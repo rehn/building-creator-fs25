@@ -1230,7 +1230,6 @@ function renderPartCard() {
       + `<div class="field"><div class="fl"><label for="wg-pitch">Roof angle</label><output id="wg-pitch-o">${w.pitch ? w.pitch + "°" : "as the house (" + p.roofPitch + "°)"}</output></div><input type="range" id="wg-pitch" min="0" max="60" step="1" value="${w.pitch}"></div>`
       + `<div class="field"><div class="fl"><label for="wg-vent">Roof ventilators (lanterns on the ridge)</label><output id="wg-vent-o">${w.ventilators || 0}</output></div><input type="range" id="wg-vent" min="0" max="4" step="1" value="${w.ventilators || 0}"></div>`
       + partLookHtml(w)
-      + `<div class="wincard">${totalHeightHtml(w.id)}</div>`
       + dividersHtml(w.id)
       + `<p class="hint">A wing with fewer floors, or a flatter roof, has a lower roof. Roof angle 0 follows the house.</p><div class="row">${wings.length < MAX_WINGS ? `<button type="button" id="wingAddChild">+ Add a part on ${esc(partName(p, w.id))}</button>` : ""}${partSource ? `<button type="button" id="partSave">Save to My parts</button>` : ""}<button type="button" id="partExport">Export this part</button><button type="button" id="wingRemove" class="danger">Remove ${esc(partName(p, w.id))} and what stands on it</button></div></div>`;
   }
@@ -1250,7 +1249,7 @@ function renderPartCard() {
   $("wg-floors").onchange = e => { w.floors = +e.target.value; if (!w.floors) w.half = false; else if (w.half === undefined) w.half = p.halfStorey; changed(); };
   $("wg-half").onchange = e => { w.half = e.target.checked; changed(); };
   bindPassage(w, changed);
-  bindDividers(ed, w.id); bindTotalHeight(ed, w.id);
+  bindDividers(ed, w.id);
   $("wg-pitch").oninput = e => { w.pitch = +e.target.value; $("wg-pitch-o").textContent = w.pitch ? w.pitch + "°" : `as the house (${p.roofPitch}°)`; persist(); rebuild(false); };
   $("wg-pitch").onchange = () => changed();
   $("wg-vent").oninput = e => { w.ventilators = +e.target.value; $("wg-vent-o").textContent = String(w.ventilators); persist(); rebuild(false); };
@@ -1318,25 +1317,6 @@ function treeNavHtml() {
   if (t.game) walk(t.game, 0, "");
   return `<ul class="objlist ptree tree">${rows.join("")}</ul>`;
 }
-/** The height of all the floors together of the building (pid 0) or of a part: a slider that changes the top floor of its first section (the lower floors keep theirs, the other sections follow). */
-function totalHeightHtml(pid = 0) {
-  const sc = sectionsOf(p, pid)[0];
-  if (!sc) return "";
-  const n = sc.hs.length, below = sc.hs.slice(0, n - 1).reduce((a, b) => a + b, 0), total = below + sc.hs[n - 1], fmt = v => (+v).toFixed(2).replace(/\.?0+$/, "");
-  return `<div class="field"><div class="fl"><label for="tot-h${pid}">Height of all the floors together</label><output id="tot-h${pid}-o">${fmt(total)} m</output></div><input type="range" id="tot-h${pid}" min="${(below + 2.3).toFixed(2)}" max="${(below + 9).toFixed(2)}" step="0.05" value="${total.toFixed(2)}"></div>`;
-}
-function bindTotalHeight(host, pid = 0) {
-  const sl = host.querySelector(`#tot-h${pid}`);
-  if (!sl) return;
-  sl.oninput = () => {
-    const patch = setTotalHeight(p, pid, +sl.value);
-    if (!patch) return;
-    applyHeightPatch(patch, pid);
-    const hs = (sectionsOf(p, pid)[0] || {hs: []}).hs, t = hs.reduce((a, b) => a + b, 0);
-    $(`tot-h${pid}-o`).textContent = (+t.toFixed(2)) + " m"; renderTreeNav();
-  };
-  sl.onchange = () => { renderTreeUI(); if (pid) partsChanged(); };
-}
 /** The dividers of the building (pid 0: p.splits) or of a part (its splits): walls across it up to the roof, each with its place along it; a divider is a wall in the tree. */
 function dividersHtml(pid = 0) {
   const w = pid ? (p.wings || []).find(x => x.id === pid) : null;
@@ -1400,7 +1380,6 @@ function mainCardHtml() {
   const wallsLive = wallsOf(p), importWalls = [["Main building", ["front", "back", "left", "right"]], ...liveWings(p).map(g => [partName(p, g.id), ["End", "Left", "Right"].map(s2 => wingWallKey(g.id, s2))])];
   return `<div class="wincard"><p class="hint">${p.width} \u00D7 ${p.depth} m, ${p.floors} floor${p.floors > 1 ? "s" : ""}, ${+floorHeightsOf(p).reduce((x, y) => x + y, 0).toFixed(2)} m high${(p.wings || []).length ? `, ${p.wings.length} part${p.wings.length > 1 ? "s" : ""}` : ""}. Its size, floors, roof, surfaces and inside walls are below; colours are in Settings. Choose a wall in the tree to add windows, doors and parts on it.</p>`
     + `<div class="row">${(p.wings || []).length < MAX_WINGS ? `<button type="button" id="wingAdd">+ Add a part</button>` : ""}</div>`
-    + `<div class="wincard">${totalHeightHtml(0)}</div>`
     + dividersHtml()
     + `<div class="addrow"><button type="button" id="partImport">Import a part\u2026</button><label class="inline">onto <select id="partImportWall">${importWalls.map(([n, ks]) => `<optgroup label="${esc(n)}">${ks.filter(k => wallsLive[k]).map(k => opt(k, wallLabel(p, k), partImportWall)).join("")}</optgroup>`).join("")}</select></label><input type="file" id="partFile" accept=".json,application/json" hidden></div>`
     + myPartsHtml() + `</div>`;
@@ -1574,7 +1553,7 @@ function renderTreeUI() {
   if (treeKind === "main") {
     if ($("wingAdd")) $("wingAdd").onclick = () => addChildPart(0);
     $("partImportWall").onchange = e => { partImportWall = e.target.value; };
-    bindDividers(main, 0); bindTotalHeight(main, 0);
+    bindDividers(main, 0);
     $("partImport").onclick = () => $("partFile").click();
     $("partFile").onchange = async e => {
       const file = e.target.files && e.target.files[0]; e.target.value = "";
