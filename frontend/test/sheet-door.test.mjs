@@ -1,7 +1,7 @@
 // A big sliding door in sheet metal: always two halves that slide apart (towards the two sides) along a rail, made of corrugated sheet in the door colour.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { sanitize, buildGeometry, buildI3d, surfaceSpec, PRESETS } from "../src/editor/model.mjs";
+import { sanitize, buildGeometry, buildI3d, placeableXml, surfaceSpec, PRESETS } from "../src/editor/model.mjs";
 import { DOOR_STYLE_IDS } from "../src/editor/openings.mjs";
 
 const shed = (extra = {}) => sanitize({kind: "shed", width: 8, depth: 6, floors: 1, floorHeight: 3.4, foundation: 0.1, items: [], windows: [{wall: "front", floor: 0, pos: 0.5, type: "door", w: 3, h: 2.8, style: "sheetslide", opens: true}], ...extra});
@@ -50,4 +50,27 @@ test("on two tracks: the halves hang at different depths, overlap in the middle 
 
 test("a door as high as 12 m needs a ground floor of 12 m, and gets one", () => {
   assert.equal(sanitize({kind: "shed", floorHeight: 12}).floorHeight, 12);
+});
+
+test("two tracks: the halves swap places, so each has its own trigger and its own animation (both open = closed again)", () => {
+  const p = shed({windows: [{wall: "front", floor: 0, pos: 0.5, type: "door", w: 6, h: 3, style: "sheetpass", opens: true}]});
+  const leaves = buildGeometry(p).doors[0].leaves;
+  const [l, r] = [...leaves].sort((a, b) => a.box.center[0] - b.box.center[0]);
+  assert.ok(l.motion.translation[0] > 2.5, `the left half slides right (${l.motion.translation[0].toFixed(2)})`);
+  assert.ok(r.motion.translation[0] < -2.5, `the right half slides left (${r.motion.translation[0].toFixed(2)})`);
+  assert.ok(Math.abs(l.motion.translation[0] + r.motion.translation[0]) < 0.3, "as far each way: they end up where the other stood");
+  const i3d = buildI3d(p);
+  assert.match(i3d, /name="door1Leaf1Trigger"/);
+  assert.match(i3d, /name="door1Leaf2Trigger"/);
+  assert.doesNotMatch(i3d, /name="door1Trigger"/);
+  const xml = placeableXml(p, "Hangar");
+  assert.equal([...xml.matchAll(/<animatedObject saveId=/g)].length, 2);
+  assert.match(xml, /triggerNode="door1Leaf1Trigger"/);
+  assert.match(xml, /triggerNode="door1Leaf2Trigger"/);
+});
+
+test("a door with two halves that open together has one trigger", () => {
+  const p = shed();
+  assert.match(buildI3d(p), /name="door1Trigger"/);
+  assert.equal([...placeableXml(p, "Hangar").matchAll(/<animatedObject saveId=/g)].length, 1);
 });

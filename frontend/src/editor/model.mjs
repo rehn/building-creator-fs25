@@ -1449,7 +1449,9 @@ function buildDoor(w, o, kit, inner, r, out, key) {
       const ov = 0.12, wall = 0.03;
       dIn2 = dOut + 0.03; dOut2 = dIn2 + LEAF_T;
       spans = [[a, mid + ov], [mid - ov, b]];
-      travels = [mid + ov - o.s0 + 0.05, o.s1 - (mid - ov) + 0.05];
+      // (they swap places: each slides as far as it takes to stand where the other did, so both open = closed again, and each has its own trigger)
+      const T = (mid - ov) - a;
+      travels = [T, T];
       const ryA = t1 + 0.03, ryB = ryA + 0.1;
       const rail = (r0, r1, ry, di, dOutR) => {
         kit.box("iron", r0, r1, ry, ry + 0.06, di, dOutR + 0.02);
@@ -1458,8 +1460,8 @@ function buildDoor(w, o, kit, inner, r, out, key) {
           kit.box("iron", s0, s0 + 0.05, ry + 0.005, ry + 0.055, 0, di + 0.01);
         }
       };
-      rail(Math.max(wall, a - travels[0]), mid + ov + 0.1, ryA, dIn, dOut);
-      rail(mid - ov - 0.1, Math.min(w.L - wall, b + travels[1]), ryB, dIn2, dOut2);
+      rail(Math.max(wall, a - 0.03), Math.min(w.L - wall, b + 0.03), ryA, dIn, dOut);
+      rail(Math.max(wall, a - 0.03), Math.min(w.L - wall, b + 0.03), ryB, dIn2, dOut2);
     } else {
     const r0 = Math.max(0.03, a - travel), r1 = Math.min(w.L - 0.03, pair ? b + travel : b), ry = t1 + 0.03;
     kit.box("iron", r0, r1, ry, ry + 0.06, dIn, dOut + 0.02);
@@ -1485,13 +1487,13 @@ function buildDoor(w, o, kit, inner, r, out, key) {
     const ax = Math.abs(w.u[0]) > 0.5, along = s1 - s0, tall = t1 - t0, thick = dOut - dIn;
     const box = {center: WP(w, (s0 + s1) / 2, (t0 + t1) / 2, (dIn + dOut) / 2), size: ax ? [along, tall, thick] : [thick, tall, along]};
     if (slide) {
-      const v = (right ? 1 : -1) * (travels ? travels[k] : travel);
-      leaves.push({hinge: WP(w, s0, o.t0, dIn), motion: {translation: [w.u[0] * v, 0, w.u[2] * v]}, parts: rangesSince(before), box});
+      const v = (pass ? (right ? -1 : 1) : (right ? 1 : -1)) * (travels ? travels[k] : travel);
+      leaves.push({hinge: WP(w, s0, o.t0, dIn), motion: {translation: [w.u[0] * v, 0, w.u[2] * v]}, parts: rangesSince(before), box, span: [s0, s1]});
     // a door swings out (hinged on the outside of the leaf) or, if chosen (o.swingIn), in (hinged on the inside)
     } else if (o.swingIn) leaves.push({hinge: WP(w, right ? s1 : s0, o.t0, dIn), motion: {rotation: right ? DOOR_OPEN : -DOOR_OPEN}, parts: rangesSince(before), box});
     else leaves.push({hinge: WP(w, right ? s1 : s0, o.t0, dOut), motion: {rotation: right ? -DOOR_OPEN : DOOR_OPEN}, parts: rangesSince(before), box});
   });
-  if (inner && o.opens) doors.push({wall: key, op: o, slide, leaves});
+  if (inner && o.opens) doors.push({wall: key, op: o, slide, leaves, perLeaf: pass});
 }
 /**
  * inner: build the wall's inside face too, WALL_T behind the outside one (where the opening
@@ -2897,24 +2899,30 @@ function exportParts(p, {withTex = false} = {}) {
         kinematic: true, collisionFilterGroup: "0x1034", collisionFilterMask: "0xfffffbff", nonRenderable: true, castsShadows: false, receiveShadows: false, materialIds: cm})])]);
     doorNodes = [tg("doors", [0, 0, 0], doors.flatMap((d, i) => [
       ...d.leaves.map((leaf, k) => leafNode(leaf, `door${i + 1}Leaf${k + 1}`)),
-      box(`door${i + 1}Trigger`, d.trigger || doorTrigger(geo, d.wall, d.op), trigger("0x20000000", "0x110000")),
+      // (a door whose halves are opened one at a time has a trigger in front of each)
+      ...(d.perLeaf ? d.leaves.map((leaf, k) => box(`door${i + 1}Leaf${k + 1}Trigger`, doorTrigger(geo, d.wall, {s0: leaf.span[0], s1: leaf.span[1]}), trigger("0x20000000", "0x110000")))
+        : [box(`door${i + 1}Trigger`, d.trigger || doorTrigger(geo, d.wall, d.op), trigger("0x20000000", "0x110000"))]),
     ]))];
+    // what the game animates: a door (all its leaves together) or, for a door of halves opened one by one, each half
+    const animated = doors.flatMap((d, i) => d.perLeaf
+      ? d.leaves.map((leaf, k) => ({d, leaves: [leaf], ks: [k], id: `door${i + 1}Leaf${k + 1}`, trig: `door${i + 1}Leaf${k + 1}Trigger`, i}))
+      : [{d, leaves: d.leaves, ks: d.leaves.map((_, k) => k), id: `door${i + 1}`, trig: `door${i + 1}Trigger`, i}]);
     const key = (leaf, t) => leaf.motion.translation ? `translation="${t ? v3(leaf.motion.translation) : "0 0 0"}"` : `rotation="0 ${t ? num(leaf.motion.rotation) : 0} 0"`;
     doorXml = `
     <!-- The doors: walk up to one and use the open/close prompt, as on the base game's barns. A pair of doors opens together. -->
     <animatedObjects>
-${doors.map((d, i) => `        <animatedObject saveId="door${i + 1}">
+${animated.map(({d, leaves: lv, ks, id, trig, i}) => `        <animatedObject saveId="${id}">
             <animation duration="${d.slide ? 3 : 1.5}">
-${d.leaves.map((leaf, k) => `                <part node="door${i + 1}Leaf${k + 1}">
+${lv.map((leaf, j) => `                <part node="door${i + 1}Leaf${ks[j] + 1}">
                     <keyFrame time="0" ${key(leaf, 0)}/>
                     <keyFrame time="1" ${key(leaf, 1)}/>
                 </part>`).join("\n")}
             </animation>
-            <controls triggerNode="door${i + 1}Trigger" posAction="ACTIVATE_HANDTOOL" posText="action_openDoor" negText="action_closeDoor"/>
+            <controls triggerNode="${trig}" posAction="ACTIVATE_HANDTOOL" posText="action_openDoor" negText="action_closeDoor"/>
             <sounds>
-                <moving linkNode="door${i + 1}Leaf1" template="${d.slide ? "slidingGateWoodLoop" : "woodDoorSqueaksSmall"}"/>
-                <posEnd linkNode="door${i + 1}Leaf1" template="woodDoorOpen"/>
-                <negEnd linkNode="door${i + 1}Leaf1" template="${d.slide ? "woodDoorClose" : "woodDoorCloseRandom"}"/>
+                <moving linkNode="door${i + 1}Leaf${ks[0] + 1}" template="${d.slide ? "slidingGateWoodLoop" : "woodDoorSqueaksSmall"}"/>
+                <posEnd linkNode="door${i + 1}Leaf${ks[0] + 1}" template="woodDoorOpen"/>
+                <negEnd linkNode="door${i + 1}Leaf${ks[0] + 1}" template="${d.slide ? "woodDoorClose" : "woodDoorCloseRandom"}"/>
             </sounds>
         </animatedObject>`).join("\n")}
     </animatedObjects>
