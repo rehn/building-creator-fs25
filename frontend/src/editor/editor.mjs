@@ -43,6 +43,7 @@ const MARKUP = `<div class="hx-editor" data-tab="building">
     <p class="hint hx-nomatch" id="noMatches" hidden>Nothing matches. Try another word, like \u201Croof\u201D, \u201Ccolor\u201D or \u201Cdoor\u201D.</p>
   </aside>
   <aside class="hx-panel hx-details" id="details" aria-label="Details of what is chosen in the tree">
+    <div class="hx-subtabs" id="mainSubtabs" role="tablist" hidden><button type="button" role="tab" data-sub="shape">Shape</button><button type="button" role="tab" data-sub="look">Look</button></div>
     <div id="mainShapeHost"></div><div id="mainCard"></div><div id="mainShapeHost2"></div><div id="wallCard"></div><div id="winEditor"></div><div id="wingsEditor"></div>
   </aside>
   <div class="hx-rz" id="rz1" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Resize the left panel"></div>
@@ -541,7 +542,11 @@ let lastGeo = null;
 let showWalkArea = false;   // (paint where the animals can walk on the ground)
 /** The Shape tab's sections live under the main building in the tree while it is chosen (and the Shape tab isn't shown), else in the Shape tab. */
 // (the order of the main building's cards: the shape, then how it is divided, then what it looks like: Size, Roof, Open sides, Sections (the card in between), Surfaces, Inside walls, Kupor)
-const SHAPE_FIRST = ["Size", "Roof", "Open sides"], SHAPE_THEN = ["Surfaces", "Inside walls", "Kupor (dormers)"];
+// (the main building's cards come in two groups, one at a time: Shape (Size, Roof, Kupor, Open sides, Sections) and Look (Surfaces, Inside walls))
+const SHAPE_FIRST = ["Size", "Roof", "Kupor (dormers)", "Open sides"], SHAPE_THEN = ["Surfaces", "Inside walls"];
+let mainSub = remember.get("hx-main-sub") === "look" ? "look" : "shape";
+const subtabs = $("mainSubtabs");
+if (subtabs) subtabs.onclick = e => { const b = e.target.closest("[data-sub]"); if (!b) return; mainSub = b.dataset.sub; remember.set("hx-main-sub", mainSub); placeShape(); };
 function placeShape() {
   const host = $("mainShapeHost"), host2 = $("mainShapeHost2"), home = $("controls-shape");
   if (!host || !host2 || !home) return;
@@ -549,6 +554,12 @@ function placeShape() {
   const rank = (list, d) => { const i = list.indexOf(d.dataset.section); return i < 0 ? list.length : i; };
   const first = shapeSections.filter(d => SHAPE_FIRST.includes(d.dataset.section)).sort((a, b) => rank(SHAPE_FIRST, a) - rank(SHAPE_FIRST, b));
   const then = shapeSections.filter(d => !SHAPE_FIRST.includes(d.dataset.section)).sort((a, b) => rank(SHAPE_THEN, a) - rank(SHAPE_THEN, b));
+  if (subtabs) {
+    subtabs.hidden = !on;
+    subtabs.querySelectorAll("[data-sub]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.sub === mainSub)));
+  }
+  // (only the chosen group is shown; the Sections card is part of Shape)
+  host.hidden = on && mainSub !== "shape"; if ($("mainCard")) $("mainCard").hidden = on && mainSub !== "shape"; host2.hidden = on && mainSub !== "look";
   for (const [list, want] of [[first, on ? host : home], [then, on ? host2 : home]]) {
     // (moved only when they are not there in this order: moving an element under the pointer would end a slider's drag)
     const there = [...want.children].filter(x => list.includes(x));
