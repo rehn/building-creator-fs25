@@ -1352,7 +1352,7 @@ function dividersHtml(pid = 0) {
   if (pid && !w) return "";
   if (!pid && p.roofType === "hip") return `<p class="hint">Sections (walls across the building) need a gable or a flat roof.</p>`;
   const list = (pid ? w.splits : p.splits) || [];
-  return `<div class="wincard"><h3 class="sub">Sections</h3><p class="hint">${list.length ? `${list.length + 1} sections: choose one in the tree to move where it starts and to set its floors, then a floor to set its height.` : "Divide it across into sections with a wall between, each with its own floors. Add one, then choose it in the tree."}</p>`
+  return `<div class="hx-card"><h3 class="hx-card-h">Sections</h3><p class="hint">${list.length ? `${list.length + 1} sections: choose one in the tree to move where it starts and to set its floors, then a floor to set its height.` : "Divide it across into sections with a wall between, each with its own floors. Add one, then choose it in the tree."}</p>`
     + `<div class="row"><button type="button" data-splitadd="1" ${list.length >= MAX_SPLITS ? "disabled" : ""}>+ Add a section</button></div></div>`;
 }
 /** The card of a divider chosen in the tree: its place, the floors after it, and removing it. */
@@ -1407,9 +1407,9 @@ function bindDividers(host, pid = 0) {
 function mainCardHtml() {
   const opt = (v, label, cur) => `<option value="${v}" ${String(v) === String(cur) ? "selected" : ""}>${esc(label)}</option>`;
   const wallsLive = wallsOf(p), importWalls = [["Main building", ["front", "back", "left", "right"]], ...liveWings(p).map(g => [partName(p, g.id), ["End", "Left", "Right"].map(s2 => wingWallKey(g.id, s2))])];
-  return `<div class="wincard"><p class="hint">${p.width} \u00D7 ${p.depth} m, ${p.floors} floor${p.floors > 1 ? "s" : ""}, ${+floorHeightsOf(p).reduce((x, y) => x + y, 0).toFixed(2)} m high${(p.wings || []).length ? `, ${p.wings.length} part${p.wings.length > 1 ? "s" : ""}` : ""}. Its size, floors, roof, surfaces and inside walls are below; colours are in Settings. Choose a wall in the tree to add windows, doors and parts on it.</p>`
+  return `<div class="wincard"><p class="hint">${p.width} \u00D7 ${p.depth} m, ${p.floors} floor${p.floors > 1 ? "s" : ""}, ${+floorHeightsOf(p).reduce((x, y) => x + y, 0).toFixed(2)} m high${(p.wings || []).length ? `, ${p.wings.length} part${p.wings.length > 1 ? "s" : ""}` : ""}. Its size, floors, roof, surfaces and inside walls are below; colours are in Settings. Choose a wall in the tree to add windows, doors and parts on it.</p></div>`
     + dividersHtml()
-    + `<div class="addrow"><button type="button" id="partImport">Import a part\u2026</button><label class="inline">onto <select id="partImportWall">${importWalls.map(([n, ks]) => `<optgroup label="${esc(n)}">${ks.filter(k => wallsLive[k]).map(k => opt(k, wallLabel(p, k), partImportWall)).join("")}</optgroup>`).join("")}</select></label><input type="file" id="partFile" accept=".json,application/json" hidden></div>`
+    + `<div class="hx-card"><h3 class="hx-card-h">Parts to import</h3><div class="addrow"><button type="button" id="partImport">Import a part\u2026</button><label class="inline">onto <select id="partImportWall">${importWalls.map(([n, ks]) => `<optgroup label="${esc(n)}">${ks.filter(k => wallsLive[k]).map(k => opt(k, wallLabel(p, k), partImportWall)).join("")}</optgroup>`).join("")}</select></label><input type="file" id="partFile" accept=".json,application/json" hidden></div>`
     + myPartsHtml() + `</div>`;
 }
 const FLOOR_KEYS = ["floorHeight", "floor2Height", "floor3Height"], FLOOR_LABELS = ["Height of the ground floor", "Height of the second floor", "Height of the third floor"];

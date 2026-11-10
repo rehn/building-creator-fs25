@@ -396,3 +396,7 @@ html:has(.editor-page) { overscroll-behavior: none; }
 /* on hover the text comes up after a short wait (so it doesn't flash when the mouse passes over); it goes at once. A click or the keyboard shows it at once and keeps it open. */
 .hx-q:hover > p.hint { visibility: visible; opacity: 1; pointer-events: auto; transition: opacity .15s .4s, visibility 0s .4s; }
 .hx-q:focus-within > p.hint, .hx-q.open > p.hint { visibility: visible; opacity: 1; pointer-events: auto; transition: opacity .12s; }
+
+/* a card in the details panel that isn't a settings section (Sections, the parts to import): the same look as a section's */
+.hx-details .hx-card { background: rgba(127, 127, 127, .07); border: 1px solid var(--line); border-radius: 10px; padding: 0 14px 12px; margin: 14px 0; }
+.hx-details .hx-card-h { margin: 0 -14px 8px; padding: 10px 14px; font-family: var(--font-display), "Arial Narrow", sans-serif; font-weight: 600; font-size: 19px; background: rgba(127, 127, 127, .13); border-left: 4px solid var(--accent); border-bottom: 1px solid var(--line); border-radius: 10px 10px 0 0; }
