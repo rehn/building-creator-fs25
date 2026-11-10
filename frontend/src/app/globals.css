@@ -430,3 +430,6 @@ select.lang:hover { border-color: var(--muted); }
 
 /* the place of a starting point's picture while it is being made */
 .preset .thumbph { width: calc(100% + 32px); margin: -14px -16px 4px; aspect-ratio: 16 / 10; border-radius: 10px 10px 0 0; background: var(--stage); }
+
+/* the page you are on, in the bar at the top */
+.topbar .btn.current { border-color: var(--accent); }
