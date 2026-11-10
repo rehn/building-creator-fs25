@@ -50,7 +50,7 @@ const MARKUP = `<div class="hx-editor" data-tab="building">
   <section class="hx-stage" id="stage" aria-label="3D preview">
     <canvas id="view"></canvas>
     <div class="readout" id="readout"></div>
-    <div class="orbit-hint" id="orbitHint">Drag to orbit, scroll to zoom</div>
+    <div class="orbit-hint" id="orbitHint">Drag to orbit · right-drag or Shift+drag to move · scroll to zoom · double-click to look from there</div>
     <button type="button" class="hx-walk" id="walkBtn" title="See the building as a person walking round and in it">Walk around</button>
     <button type="button" class="hx-walk hx-walk2" id="walkAreaBtn" aria-pressed="false" hidden title="Where the animals can walk: in the yard, and inside the building where they can go in">Show where the animals can walk</button>
     <div class="hx-inside-bar" id="insideBar" hidden>
@@ -681,9 +681,28 @@ function updateCam() {
 }
 function setupOrbit() {
   const ptrs = new Map(); let pinch = 0, downAt = null;
+  // moving the view: right button, middle button or Shift (and two fingers on a touch screen) pan the point the view turns round, so you can put it inside the building
+  const panIds = new Set();
+  canvas.addEventListener("contextmenu", e => e.preventDefault());
+  const panView = (dx, dy) => {
+    camera.updateMatrixWorld();
+    const m = camera.matrixWorld.elements, k = 2 * view.r * Math.tan(camera.fov * Math.PI / 360) / Math.max(1, canvas.clientHeight);
+    for (let i = 0; i < 3; i++) view.target[i] += (-m[i] * dx + m[4 + i] * dy) * k;
+    view.target[1] = Math.max(0.2, view.target[1]);
+  };
+  // double-click: the view turns round the spot you clicked (nothing there: back to the middle of the building)
+  canvas.addEventListener("dblclick", e => {
+    if (walk.on || ob.on || ins.on) return;
+    const r = canvas.getBoundingClientRect(), v = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    const rc = new THREE.Raycaster(); rc.setFromCamera(v, camera);
+    const hit = rc.intersectObjects(Object.values(meshes))[0];
+    view.target = hit ? [hit.point.x, Math.max(0.2, hit.point.y), hit.point.z] : [0, 3, 0];
+    updateCam();
+  });
   const zoomPlan = k => { ortho.zoom = Math.min(8, Math.max(0.3, ortho.zoom * k)); ortho.updateProjectionMatrix(); needs = true; };
   canvas.addEventListener("pointerdown", e => {
     canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); downAt = ptrs.size === 1 ? [e.clientX, e.clientY] : null;
+    if (e.button === 1 || e.button === 2 || e.shiftKey) { panIds.add(e.pointerId); downAt = null; } else panIds.delete(e.pointerId);
     // The yard's plan view: pressing on an object (or a pasture handle) picks it up.
     if (ob.on && ptrs.size === 1) {
       const q = groundPoint(e), hit = q && objectAt(q);
@@ -784,23 +803,28 @@ function setupOrbit() {
       return;
     }
     if (ptrs.size === 1) {
-      view.theta -= (e.clientX - prev[0]) * 0.008;
-      view.phi = Math.min(1.5, Math.max(0.2, view.phi - (e.clientY - prev[1]) * 0.006));
+      if (panIds.has(e.pointerId)) panView(e.clientX - prev[0], e.clientY - prev[1]);
+      else {
+        view.theta -= (e.clientX - prev[0]) * 0.008;
+        // (from just over the ground up to under the target: you can look up at a roof from inside)
+        view.phi = Math.min(2.7, Math.max(0.05, view.phi - (e.clientY - prev[1]) * 0.006));
+      }
     } else if (ptrs.size === 2) {
       const [a, b] = [...ptrs.values()];
       const d = Math.hypot(a[0]-b[0], a[1]-b[1]);
-      if (pinch) view.r = Math.min(120, Math.max(5, view.r * pinch / d));
+      if (pinch) view.r = Math.min(120, Math.max(0.4, view.r * pinch / d));
       pinch = d;
+      panView((e.clientX - prev[0]) / 2, (e.clientY - prev[1]) / 2);   // (two fingers also move the view)
     }
     updateCam();
   });
-  const end = e => { ptrs.delete(e.pointerId); pinch = 0; };
+  const end = e => { ptrs.delete(e.pointerId); panIds.delete(e.pointerId); pinch = 0; };
   canvas.addEventListener("pointerup", end); canvas.addEventListener("pointercancel", end);
   canvas.addEventListener("wheel", e => {
     e.preventDefault();
     if (walk.on) return;
     if (ins.on && ins.view === "plan") { zoomPlan(Math.exp(-e.deltaY * 0.001)); return; }
-    view.r = Math.min(120, Math.max(3, view.r * Math.exp(e.deltaY * 0.001))); updateCam();
+    view.r = Math.min(120, Math.max(0.4, view.r * Math.exp(e.deltaY * 0.001))); updateCam();
   }, {passive:false});
 }
 
