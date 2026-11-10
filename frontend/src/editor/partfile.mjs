@@ -48,7 +48,7 @@ export function exportPart(p, id) {
       items.push({...rest, a: round(dx * fr.u[0] + dz * fr.u[1]), b: round(dx * fr.n[0] + dz * fr.n[1]), rot: (((rot - fr.turn) % 360) + 360) % 360});
     }
   }
-  return {format: PART_FORMAT, version: 1, name: root.name || `Wing ${id}`, parts, windows, items};
+  return {format: PART_FORMAT, version: 1, name: root.name || `Extension ${id}`, parts, windows, items};
 }
 
 /**
@@ -56,19 +56,19 @@ export function exportPart(p, id) {
  * It goes where the wall has room (its stretch of the ground floor clear of other parts and their eaves, and of openings), as wide as it can be up to its own width.
  */
 export function importPart(p, wallKey, file) {
-  if (!file || (file.format !== PART_FORMAT && file.format !== "house-to-i3d-part") || !Array.isArray(file.parts) || !file.parts.length || file.parts.some(x => !x || typeof x !== "object")) return {error: "That is not a part file."};
+  if (!file || (file.format !== PART_FORMAT && file.format !== "house-to-i3d-part") || !Array.isArray(file.parts) || !file.parts.length || file.parts.some(x => !x || typeof x !== "object")) return {error: "That is not an extension file."};
   if (!wallsOf(p)[wallKey]) return {error: "There is no such wall to put it on."};
   const have = p.wings || [];
-  if (have.length + file.parts.length > MAX_WINGS) return {error: `Too many parts: the building has ${have.length}, this adds ${file.parts.length}, and the most is ${MAX_WINGS}.`};
+  if (have.length + file.parts.length > MAX_WINGS) return {error: `Too many extensions: the building has ${have.length}, this adds ${file.parts.length}, and the most is ${MAX_WINGS}.`};
   const free = []; for (let i = 1; free.length < file.parts.length && i <= 99; i++) if (!have.some(w => w.id === i)) free.push(i);
   const newId = new Map(file.parts.map((x, i) => [num(x.id, i + 1), free[i]]));
   const {L, gaps} = freeStretches(p, wallKey, 0, true), rootIn = file.parts[0];
   const want = Math.max(2.5, num(rootIn.width, 6)), fit = gaps.filter(([a, b]) => b - a >= 2.5).sort((x, y) => (y[1] - y[0]) - (x[1] - x[0]))[0];
-  if (!fit) return {error: "There is no room on that wall for a part: it is full, or its parts are too close."};
+  if (!fit) return {error: "There is no room on that wall for an extension: it is full, or its extensions are too close."};
   const width = Math.min(want, fit[1] - fit[0]), notes = [];
   if (width < want - 1e-6) notes.push(`It is ${width.toFixed(1)} m wide here, not ${want.toFixed(1)} m: that is all the room there is.`);
   const covered = (p.windows || []).filter(w => w.wall === wallKey && w.type !== "door" && w.floor === 0 && w.pos * L > (fit[0] + fit[1]) / 2 - width / 2 && w.pos * L < (fit[0] + fit[1]) / 2 + width / 2).length;
-  if (covered) notes.push(`${covered} window${covered > 1 ? "s" : ""} on that wall ${covered > 1 ? "are" : "is"} behind the part and hidden.`);
+  if (covered) notes.push(`${covered} window${covered > 1 ? "s" : ""} on that wall ${covered > 1 ? "are" : "is"} behind the extension and hidden.`);
   const parts = file.parts.map((x, i) => {
     const {id, wall, pos, ...rest} = x, out = {...rest, id: newId.get(num(id, i + 1))};
     if (i === 0) Object.assign(out, {wall: wallKey, pos: (fit[0] + fit[1]) / 2 / L, width});
@@ -98,8 +98,8 @@ export function importPart(p, wallKey, file) {
       added.push({...rest, x: round(x), z: round(z), rot: (((num(rot) + fr.turn) % 360) + 360) % 360});
     }
     if (missing.size) notes.push(`Pieces this building has no kind of were left out: ${[...missing].join(", ")}.`);
-    if (outside) notes.push(`${outside} piece${outside > 1 ? "s" : ""} didn't fit in the part here and ${outside > 1 ? "were" : "was"} left out.`);
+    if (outside) notes.push(`${outside} piece${outside > 1 ? "s" : ""} didn't fit in the extension here and ${outside > 1 ? "were" : "was"} left out.`);
     items = [...items, ...added.map((it, i) => ({...it, id: next(items) + i + 1}))];
-  } else if (Array.isArray(file.items) && file.items.length && !items) notes.push("This building has no pieces inside, so the part's were left out.");
+  } else if (Array.isArray(file.items) && file.items.length && !items) notes.push("This building has no pieces inside, so the extension's were left out.");
   return {settings: {wings, windows, ...(items ? {items} : {})}, notes};
 }

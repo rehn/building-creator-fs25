@@ -1,7 +1,7 @@
 [
   "+ Window",
   "+ Door",
-  "+ Part",
+  "+ Extension",
   "{wall}, {len} m long. Add something on it:",
   "Floor {n}",
   "{d} m to the middle, from left",
@@ -70,5 +70,6 @@
   "Wall before section 5",
   "Add window",
   "Add door",
-  "Add part"
+  "Add extension",
+  "Main building"
 ]

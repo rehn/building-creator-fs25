@@ -8,18 +8,18 @@ const house = (extra = {}) => sanitize({width: 16, depth: 9, floors: 2, floorHei
   wings: [{id: 1, name: "Pumphus", wall: "back", pos: 0.5, width: 6, depth: 8, floors: 1}, {id: 2, wall: "w1Left", pos: 0.5, width: 3, depth: 3, floors: 0}],
   windows: [{wall: "front", floor: 0, pos: 0.5, type: "door", w: 1.4, h: 2.3}, {wall: "back", floor: 0, pos: 0.1, type: "window", w: 1, h: 1.2, sill: 0.9}, {wall: "back", floor: 0, pos: 0.9, type: "window", w: 1, h: 1.2, sill: 0.9}, {wall: "back", floor: 1, pos: 0.5, type: "window", w: 1, h: 1.2, sill: 0.9}], ...extra});
 
-test("part names: a name of its own, else Wing n; walls are named after their part", () => {
+test("part names: a name of its own, else Extension n; walls are named after their part", () => {
   const p = house();
   assert.equal(p.wings[0].name, "Pumphus");
   assert.equal(p.wings[1].name, "", "no name: empty");
   assert.equal(sanitize({wings: [{wall: "back", name: "  x".repeat(40)}]}).wings[0].name.length <= 40, true, "kept short");
   assert.equal(partName(p, 1), "Pumphus");
-  assert.equal(partName(p, 2), "Wing 2");
+  assert.equal(partName(p, 2), "Extension 2");
   assert.equal(wallLabel(p, "front"), "Front");
   assert.equal(wallLabel(p, "w1Left"), "Pumphus left side");
-  assert.equal(wallLabel(p, "w2End"), "Wing 2 end");
+  assert.equal(wallLabel(p, "w2End"), "Extension 2 end");
   assert.equal(wallLabel(p, "w1Right"), "Pumphus right side");
-  assert.equal(WALL_NAMES.w1Left, "Wing 1 left side", "the plain names stay for the rest of the code");
+  assert.equal(WALL_NAMES.w1Left, "Extension 1 left side", "the plain names stay for the rest of the code");
 });
 
 test("things on a wall: windows, doors and parts in order along it, with where they are", () => {

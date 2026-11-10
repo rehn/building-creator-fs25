@@ -178,6 +178,12 @@ html:has(.editor-page) { overscroll-behavior: none; }
 .hx-panel .selrow select { margin-top: 0; flex: 1; min-width: 0; }
 .hx-panel .selrow button { padding: 5px 10px; }
 .hx-panel .wincard { border-left: 3px solid var(--accent); padding: 2px 0 4px 10px; margin: 8px 0; }
+/* the details panel: each section of settings is a card of its own (a tinted ground, a border, a header bar with an accent edge), so it is easy to see what belongs together */
+.hx-details details[data-section] { background: rgba(127, 127, 127, .07); border: 1px solid var(--line); border-radius: 10px; padding: 0 14px 12px; margin: 14px 0; }
+.hx-details details[data-section] > summary { margin: 0 -14px; padding: 10px 14px; background: rgba(127, 127, 127, .13); border-left: 4px solid var(--accent); border-radius: 10px 10px 0 0; }
+.hx-details details[data-section]:not([open]) > summary { border-radius: 10px; }
+.hx-details details[data-section][open] > summary { margin-bottom: 8px; border-bottom: 1px solid var(--line); }
+.hx-details details[data-section] .hint { margin-top: 0; }
 .hx-panel .warn { color: var(--accent); font-size: 14px; margin: 6px 0; }
 .hx-panel ul.pieces { margin: 4px 0 10px; padding-left: 20px; font-size: 14px; }
 #insideEditor .row { margin-top: 6px; }
@@ -379,3 +385,51 @@ html:has(.editor-page) { overscroll-behavior: none; }
 @media (max-width: 820px) { .hx-editor[data-tab="building"]:not(.searching) #treeNav { max-height: 70vh; resize: vertical; margin-bottom: 10px; } }
 .hx-panel #treeNav { height: 20rem; min-height: 8rem; max-height: 70vh; overflow-y: auto; resize: vertical; margin-bottom: 10px; padding: 6px 4px; border: 1px solid var(--line, #d8d3c6); border-radius: 8px; background: var(--panel, #fff); }
 .hx-panel #treeNav .tree { margin: 0; }
+
+/* help texts: a "?" you hover, focus or tap (see tidyHints in editor.mjs) */
+.hx-q { position: relative; display: inline-flex; float: right; margin: 2px 0 2px 8px; cursor: help; outline: none; }
+.hx-q::before { content: "?"; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--line); color: var(--muted); font: 600 12px var(--font-body), sans-serif; display: flex; align-items: center; justify-content: center; background: var(--field); }
+.hx-q:hover::before, .hx-q:focus-visible::before, .hx-q.open::before { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+/* a "?" in a section's heading sits just left of the + / - sign (placed by position, so it can't end up after it) */
+.hx-panel summary { position: relative; }
+.hx-q.in-head { position: absolute; float: none; right: 30px; top: 50%; margin: 0; transform: translateY(-50%); }
+.hx-details details[data-section] > summary > .hx-q.in-head { right: 44px; }
+.hx-q > p.hint { visibility: hidden; opacity: 0; pointer-events: none; transition: opacity .12s, visibility 0s; position: absolute; z-index: 30; top: 26px; right: 0; width: min(300px, 70vw); margin: 0; padding: 10px 12px; text-align: left; font: 400 13.5px/1.4 var(--font-body), sans-serif; text-transform: none; letter-spacing: 0; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 20px rgba(0, 0, 0, .28); cursor: default; }
+/* on hover the text comes up after a short wait (so it doesn't flash when the mouse passes over); it goes at once. A click or the keyboard shows it at once and keeps it open. */
+.hx-q:hover > p.hint { visibility: visible; opacity: 1; pointer-events: auto; transition: opacity .15s .4s, visibility 0s .4s; }
+.hx-q:focus-within > p.hint, .hx-q.open > p.hint { visibility: visible; opacity: 1; pointer-events: auto; transition: opacity .12s; }
+
+/* a card in the details panel that isn't a settings section (Sections, the parts to import): the same look as a section's */
+.hx-details .hx-card { background: rgba(127, 127, 127, .07); border: 1px solid var(--line); border-radius: 10px; padding: 0 14px 12px; margin: 14px 0; }
+.hx-details .hx-card-h { margin: 0 -14px 8px; padding: 10px 14px; font-family: var(--font-display), "Arial Narrow", sans-serif; font-weight: 600; font-size: 19px; background: rgba(127, 127, 127, .13); border-left: 4px solid var(--accent); border-bottom: 1px solid var(--line); border-radius: 10px 10px 0 0; }
+
+/* every card of the details panel (a window, a door, a floor, a wall, a section, a part ...) has the look of a settings section: a tinted ground, a border, a header bar */
+.hx-details .wincard { background: rgba(127, 127, 127, .07); border: 1px solid var(--line); border-left: 1px solid var(--line); border-radius: 10px; padding: 0 14px 12px; margin: 14px 0; }
+.hx-details .wincard > h3.sub { position: relative; margin: 0 -14px 8px; padding: 10px 14px; font-family: var(--font-display), "Arial Narrow", sans-serif; font-weight: 600; font-size: 19px; background: rgba(127, 127, 127, .13); border-left: 4px solid var(--accent); border-bottom: 1px solid var(--line); border-radius: 10px 10px 0 0; }
+.hx-details .wincard > h3.sub > .hx-q.in-head, .hx-details .hx-card-h > .hx-q.in-head { right: 12px; }
+.hx-details .hx-card-h { position: relative; }
+/* (a card inside a card stays plain, so they don't pile up) */
+.hx-details .wincard .wincard, .hx-details .hx-card .wincard { background: none; border: 0; border-left: 3px solid var(--accent); border-radius: 0; padding: 2px 0 4px 10px; margin: 8px 0; }
+.hx-details .wincard .wincard > h3.sub { margin: 0 0 4px; padding: 0; background: none; border: 0; font-size: 15px; }
+
+/* the main building's two groups of cards, one at a time (like the tabs of the left panel) */
+.hx-subtabs { display: flex; gap: 2px; padding: 6px 12px 0; margin: 0 -12px; border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; background: var(--panel); }
+.hx-subtabs[hidden] { display: none; }
+.hx-subtabs button { flex: 1; justify-content: center; border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: none; padding: 8px 0 7px; font-weight: 600; font-size: 14.5px; color: var(--muted); min-width: 0; }
+.hx-subtabs button:hover { color: var(--ink); background: none; }
+.hx-subtabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+
+/* the language chooser looks like the buttons beside it */
+select.lang {
+  font: inherit; font-weight: 500; color: var(--ink); background-color: var(--field); border: 1px solid var(--line); border-radius: 6px;
+  padding: 7px 30px 7px 12px; cursor: pointer; appearance: none; -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%2398A49C' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 10px center;
+}
+select.lang:hover { border-color: var(--muted); }
+
+/* the place of a starting point's picture while it is being made */
+.preset .thumbph { width: calc(100% + 32px); margin: -14px -16px 4px; aspect-ratio: 16 / 10; border-radius: 10px 10px 0 0; background: var(--stage); }
+
+/* the page you are on, in the bar at the top */
+.topbar .btn.current { border-color: var(--accent); }

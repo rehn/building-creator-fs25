@@ -11,6 +11,8 @@ export const SURFACES = {
   whitewash: {w: 2.0, h: 2.0, px: 512, bump: 1.5},            // limed inside walls
   grime:     {w: 1.6, h: 1.6, px: 512, bump: 1.5},            // the same, splashed and rubbed low down
   timber:    {w: 0.6, h: 2.4, px: 512, bump: 1.5, grain: true}, // rough-sawn beams and tarred boards
+  oldboards: {w: 1.2, h: 2.4, px: 512, bump: 3, grain: true},  // the unpainted inside of a board wall: 15 cm boards, each its own shade, sun-bleached and stained
+  oldtimber: {w: 0.6, h: 2.4, px: 512, bump: 2.6, grain: true}, // the studs: old, grey, cracked and stained
   wood:      {w: 0.5, h: 1.6, px: 512, bump: 1.5, grain: true}, // planed planks and plywood
   boards:    {w: 1.2, h: 2.4, px: 512, bump: 4, grain: true}, // roof boards seen from inside (8 a copy)
   galv:      {w: 0.6, h: 0.6, px: 256, bump: 0.6},            // galvanised steel: spangle
@@ -129,10 +131,10 @@ const PAINT = {
     return [s + 0.03 * (cloud - 0.5) + 0.02 * (fuzz - 0.5), h + 0.1 * fuzz];
   },
   concrete(x, y, N) {
-    const big = fbm(x, y, N, 4, 1), fine = fbm(x, y, N, 32, 2, 2), stain = fbm(x, y, N, 2, 3, 3), dot = hash(x, y, 4);
+    const big = fbm(x, y, N, 4, 1), fine = fbm(x, y, N, 32, 2, 2), stain = fbm(x, y, N, 6, 3, 3), dot = hash(x, y, 4);
     let s = 0.97 + 0.12 * (big - 0.5) + 0.07 * (fine - 0.5) + (dot - 0.5) * 0.07;
     if (dot > 0.986) s -= 0.12;                                 // pores and grit
-    if (stain > 0.56) s *= 1 - Math.min(0.32, (stain - 0.56) * 1.6);   // dark wet and dung stains
+    if (stain > 0.6) s *= 1 - Math.min(0.2, (stain - 0.6) * 1.2);   // dark wet and dung stains (small and soft: a worn floor, not camouflage)
     const scuff = noise(x, y, N, 2, 48, 5);                     // wear across the floor
     if (scuff > 0.82) s *= 1 + (scuff - 0.82) * 0.5;
     return [s, 0.6 * fine + 0.4 * dot - (dot > 0.986 ? 0.5 : 0)];
@@ -162,6 +164,31 @@ const PAINT = {
     let s = (0.96 + 0.12 * (g1 - 0.5) + 0.1 * (g2 - 0.5) + 0.12 * (patch - 0.5) + 0.04 * (fuzz - 0.5)) * (1 - 0.45 * k);
     if (crack) s *= 0.55;
     return [s, 0.5 * g1 + 0.3 * g2 + 0.1 * fuzz - 0.6 * k - (crack ? 0.8 : 0)];
+  },
+  oldboards(x, y, N) {
+    // Boards of old, unpainted timber: each board lighter or darker (some bleached, some stained), long grain with a few knots and cracks at the seams, and the odd stain.
+    const P = N / 8, b = Math.floor(x / P), lx = x - b * P, tone = (hash(b, 0, 91) - 0.5) * 0.3;
+    const g1 = noise(x, y, N, 96, 3, 92 + b), g2 = noise(x, y, N, 24, 2, 120 + b), fine = noise(x, y, N, 128, 6, 94), k = knot(x, y, N, 3, 3, 95, 0.35);
+    const damp = fbm(x, y, N, 3, 96 + b);
+    let s = (0.97 + tone + 0.13 * (g1 - 0.5) + 0.07 * (g2 - 0.5) + 0.04 * (fine - 0.5)) * (1 - 0.35 * k), h = 0.5 + 0.3 * g1 + 0.2 * g2 - 0.5 * k;
+    if (damp > 0.62) s *= 1 - Math.min(0.15, (damp - 0.62) * 1.2);       // a damp stain running down a board
+    const seam = Math.min(lx, P - lx);
+    if (seam < 2.5) { s *= 0.5 + 0.2 * seam; h = 0; }                     // the gap between boards
+    const joint = hash(b, 1, 97) * N;
+    if (hash(b, 2, 98) < 0.3 && wd(y - joint, N) < 1) { s *= 0.7; h = 0.2; }
+    return [s, h];
+  },
+  oldtimber(x, y, N) {
+    // Old studs: darker and greyer than new timber, strong streaks along the grain, many drying cracks, damp stains and knots, and the odd nail hole.
+    const g1 = noise(x, y, N, 96, 3, 71), g2 = noise(x, y, N, 24, 2, 72), patch = fbm(x, y, N, 4, 76), stain = fbm(x, y, N, 8, 77), fuzz = hash(x, y, 73);
+    const lane = Math.floor(x * 16 / N), crackAt = (hash(lane, 0, 74) * 0.6 + 0.2) * N / 16, open = noise(x, y, N, 1, 3, 75 + lane);
+    const crack = hash(lane, 1, 78) < 0.5 && Math.abs(x - lane * N / 16 - crackAt) < 1.1 && open > 0.45;
+    const k = knot(x, y, N, 3, 2, 79, 0.5), nail = hash(Math.floor(x / 6), Math.floor(y / 6), 80) > 0.9985;
+    let s = (0.94 + 0.22 * (g1 - 0.5) + 0.18 * (g2 - 0.5) + 0.3 * (patch - 0.5) + 0.08 * (fuzz - 0.5)) * (1 - 0.5 * k);
+    if (stain > 0.6) s *= 0.85;
+    if (crack) s *= 0.45;
+    if (nail) s *= 0.4;
+    return [s, 0.6 * g1 + 0.4 * g2 + 0.1 * fuzz - 0.7 * k - (crack ? 1 : 0) - (nail ? 0.8 : 0)];
   },
   wood(x, y, N) {
     const g = grain(x, y, N, 14, 41), fine = noise(x, y, N, 128, 8, 42), k = knot(x, y, N, 2, 2, 43, 0.3);

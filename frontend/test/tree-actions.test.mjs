@@ -69,5 +69,5 @@ test("why an opening can't be added: the reason is said, and there is none when 
   assert.match(openingProblem(narrow, "front", "window", 0), /widest|wide|room/i);
   const withPart = sanitize({width: 12, depth: 8, floors: 2, winW: 2, items: [], windows: [{wall: "front", floor: 0, pos: 0.5, type: "door", w: 1, h: 2.1}], wings: [{wall: "back", pos: 0.5, width: 8, depth: 5, floors: 2}]});
   assert.equal(addOpening(withPart, "back", "window", 1), null, "a part that covers both floors leaves only two 1.5 m stretches: too narrow for a 2 m window");
-  assert.match(openingProblem(withPart, "back", "window", 1), /part/i);
+  assert.match(openingProblem(withPart, "back", "window", 1), /extension/i);
 });

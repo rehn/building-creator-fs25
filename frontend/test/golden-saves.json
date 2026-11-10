@@ -402,10 +402,10 @@
   },
   "triangles": {
    "walls": 172,
-   "trim": 390,
+   "trim": 270,
    "roof": 108,
    "glass": 12,
-   "door": 204,
+   "doorSheet": 124,
    "foundation": 24,
    "gutter": 3512,
    "iron": 172,
@@ -441,10 +441,10 @@
   },
   "triangles": {
    "walls": 292,
-   "trim": 854,
+   "trim": 734,
    "roof": 116,
    "glass": 24,
-   "door": 204,
+   "doorSheet": 124,
    "foundation": 36,
    "gutter": 3560,
    "iron": 172,
@@ -462,6 +462,78 @@
    [
     -6.62,
     7
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ },
+ "preset carport": {
+  "parts": [],
+  "windows": 0,
+  "doors": 0,
+  "hidden": 0,
+  "ops": {
+   "front": 0,
+   "back": 0,
+   "right": 0,
+   "left": 0
+  },
+  "triangles": {
+   "walls": 24,
+   "trim": 180,
+   "roof": 10,
+   "foundation": 12,
+   "gutter": 944,
+   "fittings": 386
+  },
+  "box": [
+   [
+    -3.42,
+    3.43
+   ],
+   [
+    0,
+    3.44
+   ],
+   [
+    -2.99,
+    2.9
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ },
+ "preset lider": {
+  "parts": [],
+  "windows": 0,
+  "doors": 0,
+  "hidden": 0,
+  "ops": {
+   "front": 0,
+   "back": 0,
+   "right": 0,
+   "left": 0
+  },
+  "triangles": {
+   "walls": 46,
+   "trim": 144,
+   "roof": 10,
+   "foundation": 12,
+   "gutter": 944,
+   "fittings": 554
+  },
+  "box": [
+   [
+    -4.43,
+    4.43
+   ],
+   [
+    0,
+    3.85
+   ],
+   [
+    -2.4,
+    2.49
    ]
   ],
   "i3dBytes": true,

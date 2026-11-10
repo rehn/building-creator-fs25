@@ -223,7 +223,7 @@ export function applyAnswer(kindId, answer) {
 export function answerProblems(kindId, answer) {
   const a = answer && typeof answer === "object" ? answer : {}, out = [];
   const p = applyAnswer(kindId, answer), asked = Array.isArray(a.wings) ? a.wings.length : 0;
-  wingsOf(p).forEach(w => { if (w.off) out.push(`Wing ${w.id} was left out: ${w.off}`); });
+  wingsOf(p).forEach(w => { if (w.off) out.push(`Extension ${w.id} was left out: ${w.off}`); });
   const askedSections = Array.isArray(a.sections) ? a.sections.length : 0;
   if (askedSections > p.splits.length) out.push(`${askedSections - p.splits.length} of the ${askedSections} sections were dropped (at most 4, none under a hip roof).`);
   if (asked > p.wings.length) out.push(`${asked - p.wings.length} of the ${asked} wings were dropped (at most ${MAX_WINGS}).`);

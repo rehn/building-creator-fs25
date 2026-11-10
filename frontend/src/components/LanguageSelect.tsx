@@ -7,6 +7,7 @@ export function LanguageSelect() {
   return (
     <select
       aria-label="Language"
+      className="lang"
       defaultValue={current}
       translate="no"
       onChange={(e) => {

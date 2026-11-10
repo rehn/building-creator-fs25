@@ -30,3 +30,12 @@ test("corrugated sheet metal: ribs every 10 cm, works on gable and flat roofs", 
   assert.deepEqual(((s) => [s.kind, s.w, s.h])(surfaceSpec(p, "roof")), ["corrugated", 1.6, 2]);
   assert.equal(surfaceSpec(sanitize({roofType: "flat", roofMaterial: "corrugated"}), "roof").kind, "corrugated");
 });
+
+test("corrugated sheet metal as a wall cladding: coarser than on the roof, studs behind it inside", () => {
+  const p = sanitize({kind: "shed", wallCladding: "corrugated", roofMaterial: "corrugated", insideSame: true, items: []});
+  assert.equal(p.wallCladding, "corrugated");
+  const wall = surfaceSpec(p, "walls"), roof = surfaceSpec(p, "roof");
+  assert.equal(wall.kind, "corrugated");
+  assert.ok(wall.w > roof.w * 1.5, `wider ribs on the wall (${wall.w} against ${roof.w})`);
+  assert.equal(sanitize({kind: "shed", wallCladding: "corrugated", wallSplit: "floor", lowerCladding: "corrugated"}).lowerCladding, "corrugated");
+});

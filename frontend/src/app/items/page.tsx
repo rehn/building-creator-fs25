@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { api, type Asset } from "@/lib/api";
 import { useUser } from "@/lib/useUser";
@@ -197,6 +198,7 @@ export default function ItemsPage() {
       <TopBar user={user} />
       <main className="page">
         <div className="page-head">
+          <Link className="btn back" href="/" aria-label="Back to my buildings"><span aria-hidden="true">‹</span> My buildings</Link>
           <h2>My items</h2>
           <button className="primary" type="button" onClick={() => fileInput.current?.click()} disabled={!user || busy}>Import an item</button>
           <input ref={fileInput} type="file" multiple hidden accept=".i3d,.shapes,.obj,.png,.dds" onChange={e => { pick(e.target.files); e.target.value = ""; }} />

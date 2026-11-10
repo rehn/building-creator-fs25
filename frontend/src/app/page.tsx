@@ -30,6 +30,15 @@ function edited(iso: string) {
   return "";
 }
 
+/**
+ * Pictures of the starting points in "New": made in the browser by an editor that is out of sight (the same picture a saved building gets),
+ * one preset at a time, and kept in localStorage until the preset or this version of the pictures changes.
+ */
+const THUMB_KEY = "hx-preset-thumbs", THUMB_VERSION = "2";
+const hashOf = (settings: unknown) => { const t = THUMB_VERSION + JSON.stringify(settings); let h = 5381; for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) | 0; return String(h); };
+const loadThumbs = (): Record<string, { h: string; url: string }> => { try { return JSON.parse(localStorage.getItem(THUMB_KEY) || "{}"); } catch { return {}; } };
+const saveThumbs = (c: Record<string, { h: string; url: string }>) => { try { localStorage.setItem(THUMB_KEY, JSON.stringify(c)); } catch { /* full or blocked: the pictures are made again next time */ } };
+
 export default function HousesPage() {
   const router = useRouter();
   const { user, error: userError } = useUser();
@@ -39,6 +48,9 @@ export default function HousesPage() {
   // "New" is open: the templates, grouped by kind of building.
   const [choosing, setChoosing] = useState(false);
   const [templates, setTemplates] = useState<Preset[]>([]);
+  // the pictures of the starting points (by id), and whether some are still being made
+  const [thumbs, setThumbs] = useState<Record<string, string>>({});
+  const [making, setMaking] = useState(false);
   // buildings ticked to be packed together into one game mod, its title, and how far the packing is
   const [picked, setPicked] = useState<string[]>([]);
   const [modTitle, setModTitle] = useState("My buildings");
@@ -52,6 +64,38 @@ export default function HousesPage() {
       id: "template:" + t.id, name: t.name, blurb: t.blurb, kind: t.kind, category: "", settings: t.settings, thumbnail: t.thumbnail,
     })))).catch(() => setTemplates([]));
   }, [user]);
+
+  useEffect(() => {
+    if (!choosing) return;
+    let stop = false, host: HTMLDivElement | null = null, ed: { setSettings(s: Record<string, unknown>): void; snapshot(): string | null; destroy(): void } | null = null;
+    (async () => {
+      const cache = loadThumbs(), have: Record<string, string> = {}, todo: Preset[] = [];
+      for (const x of presets) { const c = cache[x.id]; if (c && c.h === hashOf(x.settings)) have[x.id] = c.url; else todo.push(x); }
+      setThumbs(have);
+      if (!todo.length) return;
+      setMaking(true);
+      try {
+        const { createEditor } = await import("@/editor/editor.mjs");
+        if (stop) return;
+        host = document.createElement("div");
+        host.className = "editor-host";
+        host.style.cssText = "position:fixed;left:-10000px;top:0;width:2200px;height:800px;visibility:hidden;pointer-events:none";   // (wide: the 3D view is what is left beside the two panels)
+        document.body.appendChild(host);
+        ed = createEditor(host, { initial: todo[0].settings });
+        for (const x of todo) {
+          if (stop) break;
+          ed.setSettings(x.settings);
+          await new Promise(r => setTimeout(r, 1000));   // (the textures are painted a moment after the building is built)
+          const url = stop ? null : ed.snapshot();
+          if (url) { cache[x.id] = { h: hashOf(x.settings), url }; saveThumbs(cache); setThumbs(t => ({ ...t, [x.id]: url })); }
+        }
+      } catch { /* no pictures: the cards work without them */ } finally {
+        ed?.destroy(); host?.remove();
+        if (!stop) setMaking(false);
+      }
+    })();
+    return () => { stop = true; };
+  }, [choosing]);
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -78,7 +122,7 @@ export default function HousesPage() {
           <div className="grid">
             {g.items.map(x => (
               <button type="button" className="preset" key={x.id} onClick={() => create(x)} disabled={busy}>
-                {x.thumbnail && <img src={x.thumbnail} alt="" />}
+                {(x.thumbnail || thumbs[x.id]) ? <img src={x.thumbnail || thumbs[x.id]} alt="" /> : making && !x.id.startsWith("template:") ? <div className="thumbph" aria-hidden="true" /> : null}
                 <b>{x.name}</b>
                 <span>{x.blurb}</span>
               </button>

@@ -1,14 +1,40 @@
 # House to i3d
 
-Build houses for Farming Simulator 25 in the browser and export them as `.i3d` (zipped with textures) to finish in Giants Editor, or as a ready-made game mod. Each house is saved to your account, so you can come back and change it later. Accounts are invite only.
+Build buildings for Farming Simulator 25 in the browser: farmhouses, hen houses, cow and sheep barns, garages, machine halls, carports and sheds. Export them as `.i3d` (zipped with textures) to finish in Giants Editor, or as a ready-made game mod. Each building is saved to your account, so you can come back and change it later. Accounts are invite only.
 
 ```
-backend/    Go API: accounts, invites, projects (SQLite or Postgres)
-frontend/   Next.js app: login, "My houses", the 3D editor
+backend/    Go API: accounts, invites, projects, templates, your items and extensions (SQLite or Postgres)
+frontend/   Next.js app: login, "My buildings", "My items", the 3D editor, the admin pages
 charts/     Helm chart for Kubernetes, and its tests
+docs/       Plans (in Swedish): PLAN.md, PLAN_PARTS.md
 docker-compose.yml
 .github/workflows/ci.yml
 ```
+
+## What you can build
+
+Choose a starting point under **New** (the admin can add more from photos, see below) and change everything in the editor:
+
+| Kind | Starting points | Notes |
+|---|---|---|
+| Farmhouse | Farmhouse | Rooms behind the windows; a sleep point makes it a farmhouse in the game |
+| Hen houses | Garden coop, long hen house, poultry barn | A pasture with a fence, feed pad, egg pallets |
+| Cow barns | Red barn, cowshed, loose-housing barn | Pasture, troughs, feed and animal trailer places, a walking area for the animals |
+| Sheep barns | Fårhus, fårstall, stor fårstall | As the cow barn, with wool pallets |
+| Sheds | Garage, machine hall, woodshed, carport, lean-to (lider) | Open sides, sliding sheet-metal doors, an optional vehicle workshop |
+
+In the editor you can:
+
+- Set the size, floors (with their own heights, and an attic), roof (gable, hip, flat or leaning), foundation, wall cladding (boards, plaster, corrugated sheet metal) with a split between two materials, and the roof covering (tiles, standing seam, falsad plåt, corrugated sheet metal).
+- Add **extensions** (L, T and U shapes, annexes; an extension can carry others) and divide a building into **sections** with their own floors and heights.
+- Put windows and doors on any wall (many styles; doors up to 20 × 12 m, sliding doors, doors that open in the game) and let the editor spread them out for you.
+- Walk into the ground floor, arrange the inside from a catalogue of pieces (or fill it automatically), place the game objects the game needs (feed pad, bale drop, trailer spot, pallets, troughs, a fence you can draw, a vehicle workshop) and look around in first person.
+- Bring your own props from Giants Editor under **My items**, and save extensions you want to reuse.
+- Pick the language (English or Swedish) in the top bar.
+
+Export one building as `.i3d` with its textures, or as a game mod (the placeable XML, i3d, textures and shop picture). On the start page you can tick several buildings and pack them into one mod.
+
+What has been confirmed in FS25 and what has not is noted in [CLAUDE.md](CLAUDE.md).
 
 ## How it fits together
 
@@ -18,9 +44,9 @@ The browser only talks to the Next.js app. Everything under `/api/` is forwarded
 browser ──► web (Next.js, port 3000) ──/api/*──► api (Go, port 8080) ──► SQLite in the "data" volume, or Postgres
 ```
 
-Each house is one row in the database: its name, a thumbnail, and every setting from the editor as one JSON document (windows, dormers, rooms, curtains and the game mod details included). The editor saves about a second after each change.
+Each building is one row in the database: its name, a thumbnail, and every setting from the editor as one JSON document (extensions, sections, windows and doors, the inside, game objects and the game mod details included). Old saves are migrated when they are opened; nothing in the database changes. The editor saves about a second after each change.
 
-The editor itself runs in the browser. `frontend/src/editor/model.mjs` holds the house logic (settings, geometry, i3d export) with no DOM or three.js, so it can be tested in Node. `editor.mjs` adds the controls and the 3D preview.
+The editor itself runs in the browser (three.js for the preview). `frontend/src/editor/model.mjs` holds the logic every building shares (settings, geometry, i3d export, the game mod files) with no DOM, so it can be tested in Node. Each kind of building is a small module in `frontend/src/editor/kinds/`; `layout.mjs` has the walls, extensions, sections and the inside, `openings.mjs` the windows and doors, `editor.mjs` the controls and the preview. Texts are in `frontend/src/i18n/locales/` (English is the key, Swedish is `sv.json`).
 
 ## Run it
 
@@ -56,7 +82,7 @@ The Google button only shows up when both are set.
 
 As the admin, open **Admin** and choose **New from photos**. Pick the kind of building, add photos of a real one and anything you know about it (its length, which photo is the front). Claude reads the photos and suggests the settings, with notes on what it wasn't sure of. You then adjust the building in the editor with the photos above it, and **Publish template**: it shows up under **New** for everyone. Unpublish, rename or delete it on the Admin page; buildings made from it stay.
 
-Claude can read the photos two ways, and the wizard offers both:
+Claude can read the photos two ways, and the wizard offers both (the guide it follows is in `frontend/src/editor/fromPhotos.mjs`):
 
 - **Ask Claude here:** the server sends the photos to the Claude API and fills in the answer. It needs an Anthropic API key in `.env` as `ANTHROPIC_API_KEY` (from the [Anthropic Console](https://console.anthropic.com/)); API use is paid per request, separately from a Claude subscription.
 - **Use Claude in a chat:** copy the prompt the wizard gives you into a chat at [claude.ai](https://claude.ai), attach the same photos, and paste Claude's answer back. No key needed; it's part of your Claude plan.
@@ -155,6 +181,10 @@ Templates from photos: `--set claude.apiKey=...`, or `claude.existingSecret` nam
 
 Put the `web` service behind a reverse proxy with HTTPS (Caddy, Traefik, nginx) and set `PUBLIC_URL` to the https address. Cookies are then marked Secure automatically. Open the app at exactly `PUBLIC_URL`: requests from any other origin are rejected as a CSRF protection.
 
+## Notes for working on it
+
+[CLAUDE.md](CLAUDE.md) describes the code in detail (how each part works, what has been confirmed in the game) and [docs/PLAN.md](docs/PLAN.md) is the plan, in Swedish. The way of working is test first: write the failing test, then the code.
+
 ## Develop
 
 With Go 1.25+ and Node 22+ installed, start everything with one command:
@@ -185,7 +215,7 @@ Write the failing test first, make it pass, then tidy up.
 
 ```sh
 cd backend && go test ./...     # API, database, passwords, config
-cd frontend && npm test         # house model, i3d export, file names, API proxy
+cd frontend && npm test         # building model, kinds, export, translations, API proxy (node --test, no browser needed)
 bash charts/test.sh             # Helm chart: lint and render every setup (needs helm)
 ```
 
@@ -205,21 +235,14 @@ docker run --rm -v "$PWD/frontend:/app" -w /app node:22-alpine sh -c "npm instal
 
 What the tests cover:
 
-- **backend/internal/api**: signing up (admin without invite, everyone else with one), invites that only work once and only for their email, login and logout, rate limiting, Google sign-in against a fake Google, project create/read/update/delete, version conflicts between tabs, users not seeing each other's houses, and cross-site requests being refused.
+- **backend/internal/api**: signing up (admin without invite, everyone else with one), invites that only work once and only for their email, login and logout, rate limiting, Google sign-in against a fake Google, project create/read/update/delete, version conflicts between tabs, users not seeing each other's buildings, templates, your items and extensions, and cross-site requests being refused. **backend/internal/vision** reads photos against a fake Claude API.
 - **backend/internal/store**: the database layer on SQLite and Postgres, including expiry of sessions and invites and two saves of the same version at once.
-- **frontend/test**: settings validation, window generation, valid geometry for every roof type, closed collision for walls, roof, dormers, chimney and entrance, placement areas (leveling, clear, test, tip occlusion), i3d output, rooms and curtains behind the windows, the game mod files (checked against the game's own schemas when they were written), export file names and the API proxy.
+- **frontend/test**: settings validation and old saves (a set of "golden saves" that must keep building the same), window generation, valid geometry for every roof type and kind, extensions and sections, closed collision, faces that would flicker, the inside and its pieces, the animals' walking area, game objects and the vehicle workshop, i3d output, the game mod files (checked against the game's own schemas when they were written), the photo guide, translations, export file names and the API proxy.
 - **charts/test.sh**: the Helm chart with SQLite, Postgres in the release, your own Postgres, HTTPRoute (and the older ingress) and Google sign-in, and the setups it must refuse.
 
 ## Lock files
 
-The first time, create the lock files and commit them so builds are repeatable:
-
-```sh
-cd backend && go mod tidy          # creates go.sum
-cd frontend && npm install         # creates package-lock.json
-```
-
-Or with Docker, as in the test commands above. CI and the Dockerfiles also work without them, but then each build resolves dependencies again.
+`backend/go.sum` and `frontend/package-lock.json` are committed, so builds are repeatable. After changing a dependency, update them (`go mod tidy` in `backend/`, `npm install` in `frontend/`) and commit the result.
 
 ## CI/CD and releases
 
@@ -253,6 +276,7 @@ To release, publish a GitHub release with a tag like `v1.0.0`, for example with 
 | `LISTEN_ADDR` | api | `:8080` | |
 | `TRUST_PROXY` | api | `false` | Use `X-Forwarded-For` for rate limiting. Set `true` only when the API is reachable through the web app alone, as in docker-compose |
 | `API_URL` | web | `http://api:8080` | Where the web app finds the API |
+| `MAX_PARTS` | web | `12` | The most extensions a building can have besides its main part, at any depth (at most 40). Helm: `web.maxParts` |
 
 ## Backups
 

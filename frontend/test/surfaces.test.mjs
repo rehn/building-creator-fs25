@@ -13,7 +13,7 @@ test("surfaces: each has a size in metres, a texture size and a bump strength", 
     assert.ok([128, 256, 512].includes(s.px), k);
     assert.ok(s.bump >= 0, k);
   }
-  for (const k of ["concrete", "whitewash", "grime", "timber", "wood", "boards", "galv", "steel", "plastic", "rubber", "straw", "litter"])
+  for (const k of ["concrete", "whitewash", "grime", "timber", "oldtimber", "oldboards", "wood", "boards", "galv", "steel", "plastic", "rubber", "straw", "litter"])
     assert.ok(SURFACES[k], `missing surface ${k}`);
 });
 

@@ -20,7 +20,7 @@ export const PANEL = WALLPAPERS.length;
 const CORE = "#D8D2C4", TRIM = "#F2EFE8", CORE_T = 0.045, SHEET = 0.005, DOOR_W = 0.9, DOOR_H = 2.05, CASING = 0.07;
 const options = [...WALLPAPERS.map(w => w[0]), "Panel, studs showing (Surfaces: panel on inner walls)"];
 /** The doors an inner wall can have: the building's own style, the models for rooms, or one of the outer swinging styles (not the sliding barn door). */
-const DOOR_LOOKS = [...INNER_DOOR_STYLES, ...DOOR_STYLES.filter(s => s.id !== "sliding" && s.id !== "hole")];
+const DOOR_LOOKS = [...INNER_DOOR_STYLES, ...DOOR_STYLES.filter(s => s.id !== "sliding" && s.id !== "sheetslide" && s.id !== "sheetpass" && s.id !== "hole")];
 
 /** The doorway [x0, x1] of a wall, or null: where it is along the wall (doorAt 0..1), when the wall has room for one. */
 export function doorwayOf(it) {
