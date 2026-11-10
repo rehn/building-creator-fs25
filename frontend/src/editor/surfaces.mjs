@@ -11,6 +11,7 @@ export const SURFACES = {
   whitewash: {w: 2.0, h: 2.0, px: 512, bump: 1.5},            // limed inside walls
   grime:     {w: 1.6, h: 1.6, px: 512, bump: 1.5},            // the same, splashed and rubbed low down
   timber:    {w: 0.6, h: 2.4, px: 512, bump: 1.5, grain: true}, // rough-sawn beams and tarred boards
+  oldtimber: {w: 0.6, h: 2.4, px: 512, bump: 2.6, grain: true}, // the studs: old, grey, cracked and stained
   wood:      {w: 0.5, h: 1.6, px: 512, bump: 1.5, grain: true}, // planed planks and plywood
   boards:    {w: 1.2, h: 2.4, px: 512, bump: 4, grain: true}, // roof boards seen from inside (8 a copy)
   galv:      {w: 0.6, h: 0.6, px: 256, bump: 0.6},            // galvanised steel: spangle
@@ -162,6 +163,18 @@ const PAINT = {
     let s = (0.96 + 0.12 * (g1 - 0.5) + 0.1 * (g2 - 0.5) + 0.12 * (patch - 0.5) + 0.04 * (fuzz - 0.5)) * (1 - 0.45 * k);
     if (crack) s *= 0.55;
     return [s, 0.5 * g1 + 0.3 * g2 + 0.1 * fuzz - 0.6 * k - (crack ? 0.8 : 0)];
+  },
+  oldtimber(x, y, N) {
+    // Old studs: darker and greyer than new timber, strong streaks along the grain, many drying cracks, damp stains and knots, and the odd nail hole.
+    const g1 = noise(x, y, N, 96, 3, 71), g2 = noise(x, y, N, 24, 2, 72), patch = fbm(x, y, N, 4, 76), stain = fbm(x, y, N, 8, 77), fuzz = hash(x, y, 73);
+    const lane = Math.floor(x * 16 / N), crackAt = (hash(lane, 0, 74) * 0.6 + 0.2) * N / 16, open = noise(x, y, N, 1, 3, 75 + lane);
+    const crack = hash(lane, 1, 78) < 0.5 && Math.abs(x - lane * N / 16 - crackAt) < 1.1 && open > 0.45;
+    const k = knot(x, y, N, 3, 2, 79, 0.5), nail = hash(Math.floor(x / 6), Math.floor(y / 6), 80) > 0.9985;
+    let s = (0.94 + 0.22 * (g1 - 0.5) + 0.18 * (g2 - 0.5) + 0.3 * (patch - 0.5) + 0.08 * (fuzz - 0.5)) * (1 - 0.5 * k);
+    if (stain > 0.6) s *= 0.85;
+    if (crack) s *= 0.45;
+    if (nail) s *= 0.4;
+    return [s, 0.6 * g1 + 0.4 * g2 + 0.1 * fuzz - 0.7 * k - (crack ? 1 : 0) - (nail ? 0.8 : 0)];
   },
   wood(x, y, N) {
     const g = grain(x, y, N, 14, 41), fine = noise(x, y, N, 128, 8, 42), k = knot(x, y, N, 2, 2, 43, 0.3);

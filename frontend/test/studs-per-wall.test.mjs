@@ -19,3 +19,12 @@ test("plaster on the lower part of one wall: studs only above it", () => {
 test("a wall that says nothing follows the building", () => {
   assert.equal(tris(barn({wallStyles: {front: {}}})), tris(barn()));
 });
+
+test("the studs look old and used: a surface of their own, in several worn tones (not one clean colour)", () => {
+  const G = buildGeometry(barn()).G.fittings, cols = new Set(), surfs = new Set();
+  for (let k = 0; k < G.c.length; k += 3) { cols.add(G.c.slice(k, k + 3).map(v => v.toFixed(3)).join()); }
+  for (const s of G.s) surfs.add(s);
+  assert.ok(surfs.has("oldtimber"), `a worn timber surface (${[...surfs]})`);
+  const tones = new Set(); for (let k = 0; k < G.c.length; k += 3) if (G.s[k / 3] === "oldtimber") tones.add(G.c.slice(k, k + 3).map(v => v.toFixed(3)).join());
+  assert.ok(tones.size >= 3, `at least three tones (${tones.size})`);
+});

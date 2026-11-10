@@ -1490,10 +1490,11 @@ function buildStuds(w, ops, c) {
   const {tw, BACK, s0i, s1i, split, Hi, ceil, topAt, spacing, studW: st, irr} = c, g = 0.002, hdr = Math.max(0.095, st * 2);
   // (an old barn's studs are uneven: where they stand and how thick they are vary a little, the same way every time)
   const rnd = (i, k) => { const v = Math.sin(i * 12.9898 + k * 78.233 + w.L * 3.1) * 43758.5453; return v - Math.floor(v); };
-  paint("#B99B6B", "timber");
+  // (old studs: a few worn, greyish tones, each stud one of them, on a rough, matte, cracked surface; every colour is a part of its own, so only four)
+  const WORN = ["#A59274", "#968364", "#B0A082", "#857557"], worn = k => paint(WORN[Math.floor(rnd(k, 5) * WORN.length)], "oldtimber");
   const zones = split ? [[0, split, "low"], [split, Infinity, "up"]] : [[0, Infinity, "up"]];
   const top = s => ceil < Infinity ? Hi : topAt(s) - 0.02;
-  const box = (s0, s1, t0, t1) => { if (s1 - s0 > 1e-4 && t1 - t0 > 1e-4) wbox("fittings", w, s0, s1, t0, t1, -tw, -BACK); };
+  const box = (s0, s1, t0, t1) => { if (s1 - s0 > 1e-4 && t1 - t0 > 1e-4) { worn(Math.round((s0 + s1) * 50) + Math.round((t0 + t1) * 31)); wbox("fittings", w, s0, s1, t0, t1, -tw, -BACK); } };
   for (const [z0, z1, name] of zones) {
     const mid = (z0 + Math.min(z1, Hi)) / 2;
     if (!c.wood(mid + 0.001) || z0 >= Hi) continue;

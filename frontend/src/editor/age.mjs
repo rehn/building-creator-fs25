@@ -43,7 +43,7 @@ export function agedColor(hex, years, mat) {
 /* ---------- Surfaces ---------- */
 /** The surface kinds weathering knows: the outside ones (surfaceSpec) and the inside ones (surfaces.mjs). */
 export const AGED_KINDS = ["lockpanel", "horizontal", "vertical", "paintedwood", "plaster", "tiles", "felt", "metal", "seamed", "corrugated", "brick", "concrete",
-  "whitewash", "grime", "timber", "boards", "wood", "galv", "steel", "plastic", "rubber", "straw", "litter", "paperPlain", "paperStripe", "paperFlower"];
+  "whitewash", "grime", "timber", "oldtimber", "boards", "wood", "galv", "steel", "plastic", "rubber", "straw", "litter", "paperPlain", "paperStripe", "paperFlower"];
 
 /**
  * A surface texture {S, H, Mk, N} (shade, height, marks or null; N x N) after years. Returns new maps.
@@ -86,7 +86,7 @@ export function weather({S, H, Mk, N}, kind, years, {outdoor = false} = {}) {
       s *= 1 - 0.12 * t * Math.max(0, fbm(x, y, N, 8, 514) - 0.35);
     } else if (kind.startsWith("paper")) {
       s *= 1 - 0.1 * t * Math.max(0, fbm(x, y, N, 8, 517) - 0.4);                             // yellowed, with damp patches
-    } else if (kind === "timber" || kind === "boards" || kind === "wood") {
+    } else if (kind === "timber" || kind === "oldtimber" || kind === "boards" || kind === "wood") {
       s *= 1 - 0.1 * t;
     } else if (kind === "galv") {
       S2[i] = 1 + (S2[i] - 1) * (1 - 0.4 * Math.min(1, t));                                  // the spangle dulls
