@@ -1,7 +1,7 @@
 // A building from photos: what Claude is told about each kind's settings, and its answer turned into settings.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { photoRequest, photoFields, applyAnswer } from "../src/editor/fromPhotos.mjs";
+import { photoRequest, photoFields, applyAnswer, answerProblems } from "../src/editor/fromPhotos.mjs";
 import { KINDS, fieldsFor, KIND } from "../src/editor/model.mjs";
 
 // Structured outputs take a subset of JSON schema: every object closed and fully required, no ranges.
@@ -184,4 +184,22 @@ test("from photos: what is wrong with an answer is listed for the admin", async 
   const over = {...longBarn, openings: [...longBarn.openings, {wall: "front", type: "window", floor: 0, along: 0.2, width: 1, height: 1, sill: 1, porch: "none", opens: true}]};
   assert.match(answerProblems("cow", over).join(" "), /hidden/);
   assert.deepEqual(answerProblems("house", {settings: {}, openings: []}), [], "a plain house");
+});
+
+test("sections: the answer can divide the building (and a part) across, each section with its floors and its attic", () => {
+  const {schema, guide} = photoRequest("house");
+  assert.ok(schema.properties.sections && schema.required.includes("sections"), "asked for");
+  assert.deepEqual(schema.properties.sections.items.required, ["at", "floors", "attic"]);
+  assert.deepEqual(schema.properties.sections.items.properties.attic.enum, ["as_building", "yes", "no"]);
+  assert.ok(schema.properties.wings.items.required.includes("sections"), "and for each part");
+  assert.match(guide, /Sections/);
+  const wing = {wall: "back", along: 0.5, width: 6, depth: 12, floors: 0, half: false, pitch: 0, name: "", wallCladding: "", wallColor: "", roofMaterial: "", roofColor: "", trimColor: "", sections: [{at: 5, floors: 1, attic: "as_building"}]};
+  const p = applyAnswer("house", {seen: "", notes: "", openings: [], wings: [wing], objects: [], settings: {width: 20, depth: 8, floors: 2, floorHeight: 2.7},
+    sections: [{at: 10, floors: 1, attic: "no"}, {at: 15, floors: 0, attic: "yes"}]});
+  assert.deepEqual(p.splits.map(x => [x.at, x.floors, x.half]), [[10, 1, false], [15, 0, true]]);
+  assert.deepEqual(p.wings[0].splits.map(x => [x.at, x.floors, x.half]), [[5, 1, null]]);
+  // an answer with none (an old one) has none
+  assert.deepEqual(applyAnswer("house", {settings: {width: 20}, openings: []}).splits, []);
+  assert.ok(!answerProblems("house", {settings: {width: 20}, openings: [], sections: [{at: 5, floors: 1, attic: "no"}]}).some(m => /section/i.test(m)));
+  assert.ok(answerProblems("house", {settings: {width: 20, roofType: "hip"}, openings: [], sections: [{at: 5, floors: 1, attic: "no"}]}).some(m => /section/i.test(m)), "dropped under a hip roof");
 });

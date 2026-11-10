@@ -4,7 +4,7 @@
 // the fence, water is automatic. Swedish barn presets: a red ladugård, a small fähus, a lösdriftsstall.
 // Imports only the i3d writer and the pure helpers; the core hands in the rest (see kinds/index.mjs).
 import { tg, shape } from "../i3d.mjs";
-import { roomOf, furnisher, wallsOf, footprint, toWorld, WALL_T } from "../layout.mjs";
+import { roomOf, furnisher, wallsOf, footprint, toWorld, isSplitWall, WALL_T } from "../layout.mjs";
 import { animalNav, navMesh, KEEP } from "../walkarea.mjs";
 import { wallLength, yardFrame, shellOf, teleportFor, withPasture, pastureWallFor, cornerStripes, palletLines, footprintHull, contourClosure, navContourNodes, ccwFence } from "./pasture.mjs";
 import { objectOf, boxOf, iconOf, boxFrom, pastureOf, insidePoly, footprints, blockersOf, animalEntrances } from "../objects.mjs";
@@ -43,6 +43,25 @@ function animalBlockers(it) {
   });
 }
 /**
+ * The walls across the building and across its parts (the walls between sections) as blocks on the floor for the animals, like an inner wall: all of each wall but its framed empty doorways
+ * (a door in it, open or shut, counts as closed: animals don't open doors). [{x0, x1, z0, z1, keep}] in the plan; geo.opsByWall has the openings.
+ */
+function dividerBlocks(p, geo) {
+  const out = [], frames = wallsOf(p);
+  for (const key of Object.keys(frames)) {
+    if (!isSplitWall(key)) continue;
+    const w = frames[key], holes = ((geo.opsByWall || {})[key] || {ops: []}).ops.filter(o => o.kind === "hatch" && o.hole && o.t0 < 0.3).sort((a, b) => a.s0 - b.s0), parts = [];
+    let s = 0;
+    for (const o of holes) { if (o.s0 > s + 0.05) parts.push([s, o.s0]); s = Math.max(s, o.s1); }
+    if (w.L > s + 0.05) parts.push([s, w.L]);
+    for (const [a, b] of parts) {
+      const q = [[a, -WALL_T], [a, 0], [b, -WALL_T], [b, 0]].map(([sv, d]) => [w.o[0] + w.u[0] * sv + w.n[0] * d, w.o[2] + w.u[2] * sv + w.n[2] * d]);
+      out.push({x0: Math.min(...q.map(c => c[0])), x1: Math.max(...q.map(c => c[0])), z0: Math.min(...q.map(c => c[1])), z1: Math.max(...q.map(c => c[1])), keep: KEEP.innerWall});
+    }
+  }
+  return out;
+}
+/**
  * Where the animals walk when they can go inside (p.animalsInside, and the pasture has its doorway): the yard (the fence, less the building and the troughs),
  * the building's floor (less the pieces standing on it), and the ramp through the doorway between them, as {rects, ramp} (walkarea.mjs animalNav). Null otherwise.
  */
@@ -54,8 +73,8 @@ function animalsInside(p, geo, fence, blockers) {
   // (the ramp, and a way out over the margin kept off the wall)
   const F = p.foundation || 0, run = Math.max(F > 0.02 ? Math.max(0.8, F * 5) : 0.6, KEEP.wall + 0.4);
   const at = (s, d) => [w.o[0] + w.u[0] * s + w.n[0] * d, w.o[2] + w.u[2] * s + w.n[2] * d];
-  const rooms = roomOf(p, openings(p)).rects;
-  const items = (p.items || []).flatMap(animalBlockers);
+  const rooms = roomOf(p, openings(p)).floorRects;
+  const items = [...(p.items || []).flatMap(animalBlockers), ...dividerBlocks(p, geo)];
   const nav = animalNav({fence, blockers, rooms, items: items.map(b => ({...b})), doors: entrances.map(e => ({a: at(e.s0, run), b: at(e.s1, run), c: at(e.s1, -WALL_T), d: at(e.s0, -WALL_T)})), floorY: F < 0.03 ? F + 0.03 : F + 0.004});   // (the top of the floor: see FLOOR_LIFT in model.mjs)
   if (!nav) return null;
   nav.blockers = [...wallSlabs(p, entrances), ...items.map(box), ...blockers.filter(b => b.keep === KEEP.trough)];

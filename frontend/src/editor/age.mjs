@@ -42,7 +42,7 @@ export function agedColor(hex, years, mat) {
 
 /* ---------- Surfaces ---------- */
 /** The surface kinds weathering knows: the outside ones (surfaceSpec) and the inside ones (surfaces.mjs). */
-export const AGED_KINDS = ["lockpanel", "horizontal", "vertical", "paintedwood", "plaster", "tiles", "felt", "metal", "brick", "concrete",
+export const AGED_KINDS = ["lockpanel", "horizontal", "vertical", "paintedwood", "plaster", "tiles", "felt", "metal", "seamed", "corrugated", "brick", "concrete",
   "whitewash", "grime", "timber", "boards", "wood", "galv", "steel", "plastic", "rubber", "straw", "litter", "paperPlain", "paperStripe", "paperFlower"];
 
 /**
@@ -75,7 +75,7 @@ export function weather({S, H, Mk, N}, kind, years, {outdoor = false} = {}) {
       const P = N / 4, lip = kind === "tiles" ? Math.exp(-(y % P) / (P * 0.18)) : 0.3, moss = fbm(x, y, N, 12, 509) * 0.75 + lip * 0.35;
       if (moss > 0.86 - 0.1 * t) { mark(i, MOSS); s *= 0.8 + 0.4 * grit; }
       else if (grit > 0.998 - 0.002 * t) mark(i, LICHEN);
-    } else if (kind === "metal") {
+    } else if (kind === "metal" || kind === "seamed" || kind === "corrugated") {
       if (fbm(x, y, N, 16, 510) > 0.88 - 0.08 * t) { mark(i, RUST); s *= 0.75 + 0.35 * grit; }
       s *= 1 - 0.1 * t * noise(x, y, N, 24, 2, 511);                                         // run-off streaks
     } else if (kind === "brick" || kind === "concrete") {

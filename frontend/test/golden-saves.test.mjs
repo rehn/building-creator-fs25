@@ -26,6 +26,11 @@ const SAVES = {
   "old save: the main door in the old settings": {doorWall: "left", doorPos: -0.5, doorW: 1.6, doorH: 2.2, entrance: "gable"},
   "barn, with a ceiling and the inside like the outside": {kind: "cow", ceiling: true, insideSame: true},
   "hen house with wings": {kind: "chicken", wings: [wing({pos: 0.2, width: 3, depth: 3})]},
+  "house, a wall across it with one floor after it": {width: 20, depth: 8, floors: 2, splits: [{at: 10, floors: 1}]},
+  "house, sections with and without an attic": {width: 20, depth: 8, floors: 2, halfStorey: true, splits: [{at: 8, floors: 1, half: false}, {at: 14, floors: 1, half: true}]},
+  "house, floor heights of a section": {width: 20, depth: 8, floors: 3, floorHeight: 2.7, splits: [{at: 10, floors: 3, heights: [3, 2.5]}, {at: 15, floors: 2}]},
+  "barn, walls across it and across a part": {kind: "cow", width: 30, depth: 14, splits: [{at: 10}, {at: 20, floors: 2}], wings: [wing({wall: "front", pos: 0.3, depth: 10, splits: [{at: 5}]})]},
+  "house, a part with a wall across it and a door": {width: 14, depth: 8, wings: [wing({depth: 10, splits: [{at: 5, floors: 1}]})], windows: [{wall: "front", floor: 0, pos: 0.5, type: "door", w: 1.4, h: 2.3}, {wall: "w1D1", floor: 0, pos: 0.5, type: "door", w: 1, h: 2.1}]},
   "house with windows and doors on a wing": {width: 14, depth: 8, wings: [wing()], windows: [
     {wall: "front", floor: 0, pos: 0.5, type: "door", w: 1.4, h: 2.3}, {wall: "w1End", floor: 0, pos: 0.5, type: "window", w: 1, h: 1.2, sill: 0.9}, {wall: "w1Left", floor: 0, pos: 0.5, type: "door", w: 1, h: 2.1}]},
 };
