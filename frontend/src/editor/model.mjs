@@ -2520,6 +2520,19 @@ function build() {
       abox("roof", [-W/2 - oo, top, -D/2 - oo], [W/2 + oo, top + 0.3, D/2 + oo]);
       abox("collision", [-W/2 - oo, top, -D/2 - oo], [W/2 + oo, top + 0.3, D/2 + oo]);
     }
+    // Rafters (reglar) under the roof of a walk-in building without a ceiling: 45 x 145 mm boards across the slope, as far apart as the inside studs are,
+    // from wall to wall; the top of each against the roof's underside (2 mm clear of it).
+    if (hollow && !ceilingC) {
+      const rw = Math.max(0.04, p.studWidth), rd = 0.145, g = 0.002, span2 = tiltSpan === W ? D : W, aIn = span2 / 2 - WALL_T - 0.01, bIn = tiltSpan / 2 - WALL_T - 0.005;
+      const yU = b => top + tanT * (b + tiltSpan / 2) - g, perpA = [-tiltN[2], tiltN[0]];
+      const n = Math.max(1, Math.round((2 * aIn - rw) / Math.max(0.3, p.studSpacing)));
+      if (bIn > 0.2 && aIn > 0.2) for (let i = 0; i <= n; i++) {
+        const a0 = -aIn + rw / 2 + i * (2 * aIn - rw) / n;
+        wornTimber(((i * 7) % 11) / 11);
+        prism("fittings", [[-bIn, yU(-bIn) - rd], [bIn, yU(bIn) - rd], [bIn, yU(bIn)], [-bIn, yU(-bIn)]],
+          ([b, y], k) => [tiltN[0] * b + perpA[0] * (a0 + (k ? rw / 2 : -rw / 2)), y, tiltN[2] * b + perpA[1] * (a0 + (k ? rw / 2 : -rw / 2))]);
+      }
+    }
   }
 
   WINGS.forEach(item => { usePart(item.wing.id); rawUnder = hollow && !ceilingC; buildWingRoof(item); rawUnder = false; usePart(0); });
