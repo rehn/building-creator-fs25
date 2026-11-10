@@ -376,7 +376,7 @@ function syncOutputs() {
   off("battenWidth", !clads.includes("lockpanel"));
   off("splitHeight", p.wallSplit !== "height");
   { const low = zonesUsed() || p.innerCladding === "sameLow"; off("lowerCladding", !low); off("lowerColor", !low); }
-  for (const k of ["studSpacing", "studWidth", "studIrregular"]) off(k, !p.insideSame);
+  for (const k of ["studSpacing", "studWidth", "studIrregular", "insidePanel"]) off(k, !p.insideSame);
   off("roofMaterial", false);
   for (const w of ["Front", "Back", "Left", "Right"]) off("post" + w, !p["open" + w]);
   off("roofTilt", p.roofType !== "flat"); off("tiltHigh", p.roofType !== "flat" || !p.roofTilt);
