@@ -15,7 +15,7 @@ ARG VERSION=dev
 LABEL org.opencontainers.image.title="House to i3d API" org.opencontainers.image.version="${VERSION}"
 COPY --from=build /out/server /server
 COPY --from=build --chown=65532:65532 /out/data /data
-ENV DATABASE_PATH=/data/house-to-i3d.db LISTEN_ADDR=:8080
+ENV DATABASE_PATH=/data/building-creator-fs25.db LISTEN_ADDR=:8080
 VOLUME /data
 EXPOSE 8080
 USER nonroot

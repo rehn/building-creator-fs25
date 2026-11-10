@@ -4,14 +4,14 @@ import (
 	"strings"
 	"testing"
 
-	"house-to-i3d/backend/internal/store"
+	"building-creator-fs25/backend/internal/store"
 )
 
 func partBody(name string) map[string]any {
 	return map[string]any{
 		"name": name,
 		"info": map[string]any{"parts": 2, "windows": 3},
-		"data": map[string]any{"format": "house-to-i3d-part", "version": 1, "name": name, "parts": []any{map[string]any{"id": 1}}, "windows": []any{}, "items": []any{}},
+		"data": map[string]any{"format": "building-creator-fs25-part", "version": 1, "name": name, "parts": []any{map[string]any{"id": 1}}, "windows": []any{}, "items": []any{}},
 	}
 }
 
@@ -30,7 +30,7 @@ func TestPartLifecycleAPI(t *testing.T) {
 		t.Fatalf("list without the files: %+v", list)
 	}
 	got := decode[store.Part](t, c.do("GET", "/api/parts/"+p.ID, nil))
-	if !strings.Contains(string(got.Data), `"house-to-i3d-part"`) {
+	if !strings.Contains(string(got.Data), `"building-creator-fs25-part"`) {
 		t.Fatalf("one with its file: %s", got.Data)
 	}
 	rec = c.do("PATCH", "/api/parts/"+p.ID, map[string]any{"name": "Pumphus med bod"})

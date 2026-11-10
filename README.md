@@ -119,9 +119,9 @@ httpRoute:
 ```
 
 ```sh
-helm install house-to-i3d oci://registry-1.docker.io/rehn/house-to-i3d \
+helm install building-creator-fs25 oci://registry-1.docker.io/rehn/building-creator-fs25 \
   --version 1.0.0 \
-  --namespace house-to-i3d --create-namespace \
+  --namespace building-creator-fs25 --create-namespace \
   -f values.yaml
 ```
 
@@ -130,16 +130,16 @@ helm install house-to-i3d oci://registry-1.docker.io/rehn/house-to-i3d \
 Use the release you want for `--version` (the chart version is the app version, without the `v`). To see every setting:
 
 ```sh
-helm show values oci://registry-1.docker.io/rehn/house-to-i3d --version 1.0.0
+helm show values oci://registry-1.docker.io/rehn/building-creator-fs25 --version 1.0.0
 ```
 
 Upgrade to a newer version with the same values file:
 
 ```sh
-helm upgrade house-to-i3d oci://registry-1.docker.io/rehn/house-to-i3d --version 1.1.0 --namespace house-to-i3d -f values.yaml
+helm upgrade building-creator-fs25 oci://registry-1.docker.io/rehn/building-creator-fs25 --version 1.1.0 --namespace building-creator-fs25 -f values.yaml
 ```
 
-Only the web app is exposed (through the `HTTPRoute`, or the `<release>-web` service if you bring your own proxy). `PUBLIC_URL` comes from the route's first hostname, or set `publicUrl` yourself. Without a route, try it with `kubectl port-forward svc/house-to-i3d-web 3000:3000` and `--set publicUrl=http://localhost:3000`.
+Only the web app is exposed (through the `HTTPRoute`, or the `<release>-web` service if you bring your own proxy). `PUBLIC_URL` comes from the route's first hostname, or set `publicUrl` yourself. Without a route, try it with `kubectl port-forward svc/building-creator-fs25-web 3000:3000` and `--set publicUrl=http://localhost:3000`.
 
 ### Where the data lives
 
@@ -154,7 +154,7 @@ Everything that is stored on disk is in a PersistentVolumeClaim. Pick the databa
 Postgres in the release:
 
 ```sh
-helm install house-to-i3d oci://registry-1.docker.io/rehn/house-to-i3d --version 1.0.0 \
+helm install building-creator-fs25 oci://registry-1.docker.io/rehn/building-creator-fs25 --version 1.0.0 \
   --set adminEmail=you@example.se --set publicUrl=https://hus.example.se \
   --set database.type=postgres
 ```
@@ -165,7 +165,7 @@ Your own Postgres, with the URL in a Secret you manage:
 
 ```sh
 kubectl create secret generic house-db --from-literal=DATABASE_URL='postgres://house:password@db.example.se:5432/house?sslmode=require'
-helm install house-to-i3d oci://registry-1.docker.io/rehn/house-to-i3d --version 1.0.0 \
+helm install building-creator-fs25 oci://registry-1.docker.io/rehn/building-creator-fs25 --version 1.0.0 \
   --set adminEmail=you@example.se --set publicUrl=https://hus.example.se \
   --set database.type=postgres --set database.postgres.deploy=false \
   --set database.postgres.existingSecret=house-db
@@ -251,8 +251,8 @@ What the tests cover:
 | Event | Tests | Docker Hub |
 |---|---|---|
 | Pull request to `main` | Go tests (store on SQLite and Postgres), frontend tests, Next.js build, Helm chart tests | Images built, not pushed |
-| Push to `main` | Same | `house-to-i3d-api:edge`, `house-to-i3d-web:edge` |
-| Release `v1.2.3` published | Same | `1.2.3`, `1.2`, `1` and `latest` for both images, and the Helm chart `1.2.3` at `oci://registry-1.docker.io/rehn/house-to-i3d` |
+| Push to `main` | Same | `building-creator-fs25-api:edge`, `building-creator-fs25-web:edge` |
+| Release `v1.2.3` published | Same | `1.2.3`, `1.2`, `1` and `latest` for both images, and the Helm chart `1.2.3` at `oci://registry-1.docker.io/rehn/building-creator-fs25` |
 
 Images are only built after all tests pass, for `linux/amd64` and `linux/arm64`. The chart is pushed after the images, so a published chart version always has its images.
 
@@ -271,7 +271,7 @@ To release, publish a GitHub release with a tag like `v1.0.0`, for example with 
 | `ADMIN_EMAIL` | api | | Can sign up without an invite and becomes admin |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | api | | Turn on Sign in with Google |
 | `ANTHROPIC_API_KEY` | api | | Lets the admin's template wizard ask Claude to read photos of a building |
-| `DATABASE_PATH` | api | `/data/house-to-i3d.db` | SQLite file |
+| `DATABASE_PATH` | api | `/data/building-creator-fs25.db` | SQLite file |
 | `DATABASE_URL` | api | | `postgres://user:password@host:5432/db`: use Postgres instead of SQLite |
 | `LISTEN_ADDR` | api | `:8080` | |
 | `TRUST_PROXY` | api | `false` | Use `X-Forwarded-For` for rate limiting. Set `true` only when the API is reachable through the web app alone, as in docker-compose |
@@ -283,27 +283,27 @@ To release, publish a GitHub release with a tag like `v1.0.0`, for example with 
 With SQLite, everything is in one file in the `data` volume. To copy it out:
 
 ```sh
-docker compose cp api:/data/house-to-i3d.db ./backup.db
+docker compose cp api:/data/building-creator-fs25.db ./backup.db
 ```
 
 Stop the stack first (`docker compose stop api`) for a copy that's guaranteed consistent.
 
-On Kubernetes with SQLite, the API image has no shell or `tar`, so `kubectl cp` can't read from it. Stop the API, read the file with a short-lived pod that mounts the same PVC, then start the API again (release `house-to-i3d` here):
+On Kubernetes with SQLite, the API image has no shell or `tar`, so `kubectl cp` can't read from it. Stop the API, read the file with a short-lived pod that mounts the same PVC, then start the API again (release `building-creator-fs25` here):
 
 ```sh
-kubectl -n house-to-i3d scale deploy/house-to-i3d-api --replicas=0
-kubectl -n house-to-i3d run backup --rm -i -q --restart=Never --image=alpine:3.22 --overrides='{
+kubectl -n building-creator-fs25 scale deploy/building-creator-fs25-api --replicas=0
+kubectl -n building-creator-fs25 run backup --rm -i -q --restart=Never --image=alpine:3.22 --overrides='{
   "spec": {
-    "volumes": [{"name": "data", "persistentVolumeClaim": {"claimName": "house-to-i3d-data"}}],
+    "volumes": [{"name": "data", "persistentVolumeClaim": {"claimName": "building-creator-fs25-data"}}],
     "containers": [{"name": "backup", "image": "alpine:3.22", "stdin": true,
-      "command": ["cat", "/data/house-to-i3d.db"],
+      "command": ["cat", "/data/building-creator-fs25.db"],
       "volumeMounts": [{"name": "data", "mountPath": "/data", "readOnly": true}]}]
   }}' > backup.db
-kubectl -n house-to-i3d scale deploy/house-to-i3d-api --replicas=1
+kubectl -n building-creator-fs25 scale deploy/building-creator-fs25-api --replicas=1
 ```
 
 With Postgres, use `pg_dump`, for example against the release's server:
 
 ```sh
-kubectl -n house-to-i3d exec house-to-i3d-postgres-0 -- pg_dump -U house house > backup.sql
+kubectl -n building-creator-fs25 exec building-creator-fs25-postgres-0 -- pg_dump -U house house > backup.sql
 ```

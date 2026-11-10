@@ -6,13 +6,13 @@ import (
 	"errors"
 	"net/http"
 
-	"house-to-i3d/backend/internal/store"
+	"building-creator-fs25/backend/internal/store"
 )
 
 const (
 	maxPartBytes = 256 << 10 // a part's file
 	maxInfoBytes = 4 << 10
-	partFormat   = "house-to-i3d-part"
+	partFormat   = "building-creator-fs25-part"
 )
 
 func partError(w http.ResponseWriter, err error) {
@@ -23,7 +23,7 @@ func partError(w http.ResponseWriter, err error) {
 	internalError(w, err)
 }
 
-// validPart: the editor's part file, a JSON object with format "house-to-i3d-part" (the editor checks the rest when it is used).
+// validPart: the editor's part file, a JSON object with format "building-creator-fs25-part" (the editor checks the rest when it is used).
 func validPart(raw []byte) bool {
 	t := bytes.TrimSpace(raw)
 	if len(t) > maxPartBytes || len(t) < 2 || t[0] != '{' {
@@ -32,7 +32,7 @@ func validPart(raw []byte) bool {
 	var f struct {
 		Format string `json:"format"`
 	}
-	return json.Unmarshal(t, &f) == nil && f.Format == partFormat
+	return json.Unmarshal(t, &f) == nil && (f.Format == partFormat || f.Format == "house-to-i3d-part")
 }
 
 func validInfo(raw []byte) bool {

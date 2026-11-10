@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"house-to-i3d/backend/internal/store"
+	"building-creator-fs25/backend/internal/store"
 )
 
 type upload struct {
