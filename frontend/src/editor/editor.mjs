@@ -139,6 +139,11 @@ function installNumberEntry() {
 let searching = false;
 // (the Shape tab's sections: shown in the details panel while the main building is chosen in the tree, see placeShape; declared early, setTab uses them when the editor starts)
 const shapeSections = [];
+// (the main building's two groups of cards; declared here because setTab runs placeShape before the rest of the file is read)
+const SHAPE_FIRST = ["Size", "Roof", "Kupor (dormers)", "Open sides"], SHAPE_THEN = ["Surfaces", "Inside walls"];
+let mainSub = remember.get("hx-main-sub") === "look" ? "look" : "shape";
+const subtabs = $("mainSubtabs");
+if (subtabs) subtabs.onclick = e => { const b = e.target.closest("[data-sub]"); if (!b) return; mainSub = b.dataset.sub; remember.set("hx-main-sub", mainSub); placeShape(); };
 let mainChosen = false;
 const openBeforeSearch = new Map();
 /** Whether text matches every word of the query. */
@@ -543,10 +548,6 @@ let showWalkArea = false;   // (paint where the animals can walk on the ground)
 /** The Shape tab's sections live under the main building in the tree while it is chosen (and the Shape tab isn't shown), else in the Shape tab. */
 // (the order of the main building's cards: the shape, then how it is divided, then what it looks like: Size, Roof, Open sides, Sections (the card in between), Surfaces, Inside walls, Kupor)
 // (the main building's cards come in two groups, one at a time: Shape (Size, Roof, Kupor, Open sides, Sections) and Look (Surfaces, Inside walls))
-const SHAPE_FIRST = ["Size", "Roof", "Kupor (dormers)", "Open sides"], SHAPE_THEN = ["Surfaces", "Inside walls"];
-let mainSub = remember.get("hx-main-sub") === "look" ? "look" : "shape";
-const subtabs = $("mainSubtabs");
-if (subtabs) subtabs.onclick = e => { const b = e.target.closest("[data-sub]"); if (!b) return; mainSub = b.dataset.sub; remember.set("hx-main-sub", mainSub); placeShape(); };
 function placeShape() {
   const host = $("mainShapeHost"), host2 = $("mainShapeHost2"), home = $("controls-shape");
   if (!host || !host2 || !home) return;
