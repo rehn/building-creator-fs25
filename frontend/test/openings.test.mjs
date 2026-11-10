@@ -11,7 +11,7 @@ function recorder() {
   };
   return {kit, parts};
 }
-const MATS = ["door", "trim", "glass", "iron", "gutter"];
+const MATS = ["door", "doorSheet", "trim", "glass", "iron", "gutter"];
 
 test("styles: every style has an id and a name, ids are unique", () => {
   for (const list of [WINDOW_STYLES, DOOR_STYLES]) {
@@ -73,7 +73,7 @@ for (const st of DOOR_STYLES) for (const right of [false, true]) test(`door styl
     assert.ok(rails.length >= 3, "rails");
     assert.ok(rails.slice(1).every((q, i) => q.t[0] - rails[i].t[1] > 0.1), "gaps between the rails");
     assert.ok(!parts.some(q => full(q) && q.s[1] - q.s[0] > leaf.s1 - leaf.s0 - 0.3 && q.t[1] - q.t[0] > 0.3), "no solid leaf");
-  } else assert.ok(parts.some(q => q.mat === "door" && q.s[0] <= leaf.s0 + 1e-9 && q.s[1] >= leaf.s1 - 1e-9 && q.d[0] <= leaf.dIn + 1e-9 && q.d[1] >= leaf.dOut - 1e-9));
+  } else assert.ok(parts.some(q => (q.mat === "door" || q.mat === "doorSheet") && q.s[0] <= leaf.s0 + 1e-9 && q.s[1] >= leaf.s1 - 1e-9 && q.d[0] <= leaf.dIn + 1e-9 && q.d[1] >= leaf.dOut - 1e-9));
   for (const q of parts) {
     assert.ok(MATS.includes(q.mat), q.mat);
     assert.ok(q.s[0] >= leaf.s0 - 1e-9 && q.s[1] <= leaf.s1 + 1e-9 && q.t[0] >= leaf.t0 - 1e-9 && q.t[1] <= leaf.t1 + 1e-9, `${st.id}: ${JSON.stringify(q)} off the leaf`);

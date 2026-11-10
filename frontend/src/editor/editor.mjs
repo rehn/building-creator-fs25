@@ -392,7 +392,7 @@ function syncOutputs() {
 
 const TEX = 1024;
 /** The materials with a surface texture (surfaceSpec), when their settings give them one. */
-const TEXTURED = ["walls", "wallsLow", "wallsIn", "roof", "chimney", "trim", "foundation", "door", "doorIn"];
+const TEXTURED = ["walls", "wallsLow", "wallsIn", "roof", "chimney", "trim", "foundation", "door", "doorSheet", "doorIn"];
 /** Those, and the materials parts with a look of their own have (walls, roof and trim of their own: "roofP1" ...). */
 const texturedNow = () => [...TEXTURED, ...matTable(p).variants.map(v => v.name)];
 function hash(i, j, s) {

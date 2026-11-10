@@ -20,6 +20,7 @@ export const DOOR_STYLES = [
   {id: "xbrace", name: "Barn door with an X brace"},
   {id: "panel", name: "Panelled, glass at the top"},
   {id: "sliding", name: "Sliding barn door"},
+  {id: "sheetslide", name: "Sliding sheet-metal door (two halves)"},
   {id: "gate", name: "Fence gate (stängselgrind)"},
   {id: "lowgate", name: "Low steel gate (grind, as high as a fence)"},
   {id: "hole", name: "Open doorway, framed (no door)"},
@@ -115,7 +116,8 @@ export function drawLeaf(kit, style, L) {
   const S = u => L.right ? L.s1 - u : L.s0 + u;
   const box = (mat, u0, u1, t0, t1, d0, d1, skip) => { const a = S(u0), b = S(u1); kit.box(mat, Math.min(a, b), Math.max(a, b), t0, t1, d0, d1, skip); };
   // details lie on the outside face and, unless L.back is false (an inner door is two leaves back to back), on the inside face too, mirrored
-  const back = L.back !== false && style !== "sliding", mir = (d0, d1) => [L.dIn - (d1 - f), L.dIn - (d0 - f)];
+  const slides = style === "sliding" || style === "sheetslide", sheet = style === "sheetslide";
+  const back = L.back !== false && !slides, mir = (d0, d1) => [L.dIn - (d1 - f), L.dIn - (d0 - f)];
   const on = (mat, u0, u1, t0, t1, d0, d1) => {   // lying on the face behind it
     box(mat, u0, u1, t0, t1, d0, d1, "d0");
     if (back) { const [m0, m1] = mir(d0, d1); box(mat, u0, u1, t0, t1, m0, m1, "d1"); }
@@ -133,7 +135,7 @@ export function drawLeaf(kit, style, L) {
     box("door", 0, hu0, L.t0, L.t1, L.dIn, L.dOut); box("door", hu1, W, L.t0, L.t1, L.dIn, L.dOut);
     box("door", hu0, hu1, L.t0, ha, L.dIn, L.dOut); box("door", hu0, hu1, hb, L.t1, L.dIn, L.dOut);
     box("glass", hu0 + 0.001, hu1 - 0.001, ha + 0.001, hb - 0.001, mid - 0.002, mid + 0.002);   // (1 mm clear of the leaf all round: flush faces flicker)
-  } else if (style !== "gate" && style !== "lowgate") kit.box("door", L.s0, L.s1, L.t0, L.t1, L.dIn, L.dOut);
+  } else if (style !== "gate" && style !== "lowgate") kit.box(sheet ? "doorSheet" : "door", L.s0, L.s1, L.t0, L.t1, L.dIn, L.dOut);
   const boards = () => { for (let u = 0.13; u < W - 0.08; u += 0.13) on("door", u - 0.012, u + 0.012, L.t0 + 0.02, L.t1 - 0.02, f, f + 0.008); };
   // rail: the braced doors' top and bottom boards; iron: strap hinges' heights, resting at f + ironAt
   const rail = 0.13, iron = [];
@@ -154,6 +156,13 @@ export function drawLeaf(kit, style, L) {
     brace(W - st, L.t0 + rail, st, L.t1 - rail, 0.1, f, f + 0.023);
     if (style === "xbrace") iron.push(L.t0 + rail / 2, L.t1 - rail / 2);
     ironAt = 0.025; handleU = W - st / 2; handleAt = 0.025;
+  } else if (sheet) {
+    // a steel frame round the sheet, a little proud of it: stiles, a top and a bottom rail, and a middle rail (the sheet itself is the corrugated leaf)
+    const st = 0.06;
+    on("doorSheet", 0, st, L.t0, L.t1, f, f + 0.02); on("doorSheet", W - st, W, L.t0, L.t1, f, f + 0.02);
+    on("doorSheet", st, W - st, L.t0, L.t0 + 0.1, f, f + 0.02); on("doorSheet", st, W - st, L.t1 - 0.1, L.t1, f, f + 0.02);
+    on("doorSheet", st, W - st, (L.t0 + L.t1) / 2 - 0.04, (L.t0 + L.t1) / 2 + 0.04, f, f + 0.02);
+    handleU = W - st - 0.1; handleAt = 0.02;
   } else if (style === "panel") {
     // stiles and rails round two raised panels, glass at the top
     const st = Math.min(0.11, W * 0.12), top = 0.11, bot = 0.2, mid = 0.1, tg = L.t1 - top, gH = Math.min(0.55, H * 0.28), tm = tg - gH;
@@ -215,7 +224,7 @@ export function drawLeaf(kit, style, L) {
   // handles near the free edge: a plate on the face and a lever (a pull bar on a sliding door), outside and in
   const ht = Math.min(L.t0 + 1.05, L.t1 - 0.2), hu = handleU, o0 = f + handleAt;
   on("iron", hu - 0.02, hu + 0.02, ht - 0.09, ht + 0.09, o0, o0 + 0.004);
-  if (style === "sliding") {
+  if (slides) {
     on("iron", hu - 0.012, hu + 0.012, ht - 0.07, ht + 0.07, o0 + 0.004, o0 + 0.05);
   } else {
     // the lever points back towards the hinge (u is measured from it on either leaf)

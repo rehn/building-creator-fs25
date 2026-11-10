@@ -180,13 +180,13 @@ export default {
       ...falu, width: 6, depth: 6, floors: 1, floorHeight: 3.2, foundation: 0.2, foundationColor: "#8C8A84", roofType: "gable", ridge: "width", roofPitch: 28, overhang: 0.4,
       roofMaterial: "tiles", roofColor: "#2B2D2F", chimney: false, gutters: true, downpipes: 2, ventilators: 0,
       winFront: 0, winBack: 1, winLeft: 1, winRight: 1, winW: 0.9, winH: 0.7, sill: 1.5,
-      doorWall: "front", doorPos: 0, doorW: 3, doorH: 2.6, doorColor: "#F2EFE8", entrance: "none", doorStyle: "sliding",
+      doorWall: "front", doorPos: 0, doorW: 3, doorH: 2.6, doorColor: "#F2EFE8", entrance: "none", doorStyle: "sheetslide",
       modPrice: 18000, modUpkeep: 40}},
     {id: "maskinhall", name: "Maskinhall", blurb: "20 × 12 m machine hall with a low metal roof and a tall sliding door, for tractors and implements.", settings: {
       wallCladding: "lockpanel", wallColor: "#A8A398", trimColor: "#3B3F42", width: 20, depth: 12, floors: 1, floorHeight: 5, foundation: 0.3, foundationColor: "#8C8A84",
       roofType: "gable", ridge: "width", roofPitch: 14, overhang: 0.5, roofMaterial: "metal", roofColor: "#4A4F52", chimney: false, gutters: true, downpipes: 2, ventilators: 2,
       winFront: 0, winBack: 6, winLeft: 0, winRight: 0, winW: 1.4, winH: 0.6, sill: 3.4,
-      doorWall: "front", doorPos: 0, doorW: 6, doorH: 4.4, doorColor: "#3B3F42", entrance: "none", doorStyle: "sliding", winStyle: "single",
+      doorWall: "front", doorPos: 0, doorW: 6, doorH: 4.4, doorColor: "#3B3F42", entrance: "none", doorStyle: "sheetslide", winStyle: "single",
       modPrice: 65000, modUpkeep: 120}},
     {id: "carport", name: "Carport", blurb: "6 × 5 m carport with the front and one side open, a gently leaning corrugated roof and a closed back.", settings: {
       wallCladding: "vertical", wallColor: "#3B3F42", trimColor: "#3B3F42", width: 6, depth: 5, floors: 1, floorHeight: 2.6, foundation: 0.1, foundationColor: "#8C8A84",

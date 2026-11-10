@@ -824,7 +824,7 @@ export function slugify(name) {
 export const WP = (w,s,t,d) => [w.o[0] + w.u[0]*s + w.n[0]*d, w.o[1] + t, w.o[2] + w.u[2]*s + w.n[2]*d];
 // fittings: a walk-in barn's inside (whitewashed walls, litter, nests, perches, feeders), vertex
 // colored like the curtains and exported as one plain part per color.
-export const MATS = ["walls","wallsLow","wallsIn","trim","roof","glass","door","doorIn","foundation","chimney","gutter","iron","interior","curtain","fittings"];
+export const MATS = ["walls","wallsLow","wallsIn","trim","roof","glass","door","doorSheet","doorIn","foundation","chimney","gutter","iron","interior","curtain","fittings"];
 /**
  * Texture atlas for the rooms behind the windows (u, v from the bottom left, as [u0, v0, u1, v1]).
  * Four room types (living room, bedroom, kitchen, study), each with its own back wall,
@@ -1435,7 +1435,7 @@ function openingKit(w) {
  * (the node the game moves it about) and its collision box.
  */
 function buildDoor(w, o, kit, inner, r, out, key) {
-  const slide = o.style === "sliding", pair = isPair(o.s1 - o.s0), g = 0.01, mid = (o.s0 + o.s1) / 2;
+  const slide = o.style === "sliding" || o.style === "sheetslide", pair = isPair(o.s1 - o.s0) || o.style === "sheetslide", g = 0.01, mid = (o.s0 + o.s1) / 2;
   let spans, dIn, dOut, t0 = o.t0 + g, t1 = o.t1 - g, travel = 0;
   if (o.style === "lowgate") t1 = Math.min(t1, t0 + 1.2);   // (a steel gate as high as a fence: the opening stays open above it)
   if (slide) {
@@ -1960,7 +1960,7 @@ function buildLeaf(fr2, L, F, id) {
   const at = (a, b) => [fr2.o[0] + fr2.u[0] * a + fr2.n[0] * b, fr2.o[1] + fr2.u[1] * a + fr2.n[1] * b], o = fr2.o;
   const u = [fr2.u[0], 0, fr2.u[1]], n = [fr2.n[0], 0, fr2.n[1]];
   const fw = {o: [o[0], F, o[1]], u, n}, bw = {o: [o[0], F, o[1]], u: neg(u), n: neg(n)};
-  const style = L.style || (p.doorStyle === "sliding" ? "zbrace" : p.doorStyle), hs = 0.008, half = 0.016, g = 0.012;
+  const style = L.style || (p.doorStyle === "sliding" || p.doorStyle === "sheetslide" ? "zbrace" : p.doorStyle), hs = 0.008, half = 0.016, g = 0.012;
   const s0 = L.s0 + g, s1 = L.s1 - g, t0 = 0.02, t1 = L.h - 0.01, hingeLeft = L.hingeAt === "s1";
   const before = vcount();
   // (the inner doors have their own colour: the leaf's wood is the material "doorIn")
@@ -2666,7 +2666,7 @@ export function colorFor(p, m) {
 function chosenColor(p, m) {
   const v = variantOf(p, m);
   if (v) return v.color;
-  return {walls:p.wallColor, wallsLow:p.lowerColor, wallsIn:p.innerCladding === "same" ? p.wallColor : p.innerCladding === "sameLow" ? p.lowerColor : p.innerColor, trim:p.trimColor, roof:p.roofColor, glass:"#7396AB", door:p.doorColor, doorIn:p.innerDoorColor, foundation:p.foundationColor, chimney:p.chimneyColor, gutter:p.gutterColor, iron:"#2C2D2F", interior:"#B8AE9C", curtain:p.curtainColor, fittings:"#E9E4D8"}[m];
+  return {walls:p.wallColor, wallsLow:p.lowerColor, wallsIn:p.innerCladding === "same" ? p.wallColor : p.innerCladding === "sameLow" ? p.lowerColor : p.innerColor, trim:p.trimColor, roof:p.roofColor, glass:"#7396AB", door:p.doorColor, doorSheet:p.doorColor, doorIn:p.innerDoorColor, foundation:p.foundationColor, chimney:p.chimneyColor, gutter:p.gutterColor, iron:"#2C2D2F", interior:"#B8AE9C", curtain:p.curtainColor, fittings:"#E9E4D8"}[m];
 }
 /** The texture of material m (null: plain colour): its kind, the metres one copy covers (w, h) and the building's age. */
 export function surfaceSpec(p, m) {
@@ -2681,12 +2681,13 @@ function baseSpec(p, m) {
     : m === "wallsIn" ? (p.innerCladding === "same" ? p.wallCladding : p.innerCladding === "sameLow" ? p.lowerCladding : p.innerCladding)
     : m === "roof" ? (p.roofType === "flat" && !["metal", "seamed", "corrugated"].includes(p.roofMaterial) ? "felt" : p.roofMaterial === "plain" ? null : p.roofMaterial)
     : m === "chimney" ? (p.chimneyStyle === "brick" ? "brick" : null)
+    : m === "doorSheet" ? "corrugated"
     : m === "trim" || m === "door" || m === "doorIn" ? "paintedwood"
     : m === "foundation" ? "concrete" : null;
   if (!kind) return null;
   const sp = p.panelSpacing;
   // (corrugated sheet: ribs every 10 cm on a roof, every 20 cm on a wall)
-  if (kind === "corrugated") { const wall = v ? v.slot !== "roof" : m !== "roof"; return {kind, w: wall ? 3.2 : 1.6, h: wall ? 2.4 : 2}; }
+  if (kind === "corrugated") { const wall = v ? v.slot !== "roof" : m !== "roof"; return {kind, w: m === "doorSheet" ? 2.4 : wall ? 3.2 : 1.6, h: wall ? 2.4 : 2}; }
   if (kind === "lockpanel") { const n = Math.max(2, Math.round(1.2 / sp)); return {kind, n, bw: Math.min(0.8, p.battenWidth / sp), w: n*sp, h: n*sp}; }
   if (kind === "vertical" || kind === "horizontal") { const n = Math.max(2, Math.round(1.2 / sp)); return {kind, n, w: n*sp, h: n*sp}; }
   if (kind === "tiles") return {kind, w: 1.2, h: 1.36};
