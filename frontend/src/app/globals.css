@@ -178,6 +178,12 @@ html:has(.editor-page) { overscroll-behavior: none; }
 .hx-panel .selrow select { margin-top: 0; flex: 1; min-width: 0; }
 .hx-panel .selrow button { padding: 5px 10px; }
 .hx-panel .wincard { border-left: 3px solid var(--accent); padding: 2px 0 4px 10px; margin: 8px 0; }
+/* the details panel: each section of settings is a card of its own (a tinted ground, a border, a header bar with an accent edge), so it is easy to see what belongs together */
+.hx-details details[data-section] { background: rgba(127, 127, 127, .07); border: 1px solid var(--line); border-radius: 10px; padding: 0 14px 12px; margin: 14px 0; }
+.hx-details details[data-section] > summary { margin: 0 -14px; padding: 10px 14px; background: rgba(127, 127, 127, .13); border-left: 4px solid var(--accent); border-radius: 10px 10px 0 0; }
+.hx-details details[data-section]:not([open]) > summary { border-radius: 10px; }
+.hx-details details[data-section][open] > summary { margin-bottom: 8px; border-bottom: 1px solid var(--line); }
+.hx-details details[data-section] .hint { margin-top: 0; }
 .hx-panel .warn { color: var(--accent); font-size: 14px; margin: 6px 0; }
 .hx-panel ul.pieces { margin: 4px 0 10px; padding-left: 20px; font-size: 14px; }
 #insideEditor .row { margin-top: 6px; }
