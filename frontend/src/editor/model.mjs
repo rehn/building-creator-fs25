@@ -57,7 +57,7 @@ const pickRoom = v => ROOM_TYPES.includes(v) ? v : "auto";
 const pickCurtain = v => CURTAIN_STYLES.includes(v) ? v : "default";
 const pickColor = v => typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v) ? v : "default";
 /** What the walls can be clad in: [id, name]. */
-const CLADDING = [["lockpanel","Board and batten (lockpanel)"],["horizontal","Horizontal boards"],["vertical","Vertical boards (stående plank)"],["plaster","Plaster"]];
+const CLADDING = [["lockpanel","Board and batten (lockpanel)"],["horizontal","Horizontal boards"],["vertical","Vertical boards (stående plank)"],["plaster","Plaster"],["corrugated","Corrugated sheet metal (korrugerad plåt)"]];
 /** The editor's tabs, one for each thing you do: [id, name]. Every section is in one of them (its tab). */
 export const TABS = [["building", "Building"], ["inside", "Inside"], ["settings", "Settings"], ["game", "Game"]];
 /** Editor sections every building shares (kinds hide the ones they don't use, see kind.hides). */
@@ -1591,7 +1591,7 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
     const Xi = uniq([s0i, s1i, L/2, ...ops.flatMap(o => [o.s0, o.s1]), ...(p.papers || []).filter(x => x.wall === key).flatMap(x => [x.s0, x.s1])]).filter(s => s > s0i - 1e-6 && s < s1i + 1e-6);
     // (a barn's: whitewash, greyer and grubbier along the bottom where the animals rub and muck splashes)
     // (like the outside: each zone as it is outside: boards show studs, plaster is plaster, the split is where it is outside)
-    const same = !!p.insideSame, WOOD = ["lockpanel", "horizontal", "vertical"], BACK = 0.03;
+    const same = !!p.insideSame, WOOD = ["lockpanel", "horizontal", "vertical", "corrugated"], BACK = 0.03;   // (sheet metal has studs behind it too)
     // (the wall's own panel and colour, set for that wall, go before the part's: its inside is like its outside, with studs only behind boards)
     const ps = {...partStyle(p, wingIdOf(key)), ...((p.wallStyles || {})[key] || {})};
     const cladOf = t => split && t < split ? ps.lowerCladding : ps.wallCladding, colOf = t => split && t < split ? ps.lowerColor : ps.wallColor;
@@ -1617,7 +1617,7 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
           // (unpainted: the boards' backs are raw, worn timber like the studs, not the outside's paint)
           // (boards of old timber in the same worn tones, running the way the outside boards do)
           // (one tone for the whole panel: the boards differ in the texture; a tone per cell showed as bands where the cells meet)
-          if (p.insidePanel === "raw") { wornTimber(0.3, "oldboards"); poly("fittings", c.map(q => WP(w, q[0], q[1], -BACK)), neg(w.n), null, cladOf(ct) === "horizontal" ? w.u : UP); }
+          if (p.insidePanel === "raw" && cladOf(ct) !== "corrugated") { wornTimber(0.3, "oldboards"); poly("fittings", c.map(q => WP(w, q[0], q[1], -BACK)), neg(w.n), null, cladOf(ct) === "horizontal" ? w.u : UP); }
           else poly(split && ct < split ? "wallsLow" : "walls", c.map(q => WP(w, q[0], q[1], -BACK)), neg(w.n));
         }
         continue;
@@ -2685,6 +2685,8 @@ function baseSpec(p, m) {
     : m === "foundation" ? "concrete" : null;
   if (!kind) return null;
   const sp = p.panelSpacing;
+  // (corrugated sheet: ribs every 10 cm on a roof, every 20 cm on a wall)
+  if (kind === "corrugated") { const wall = v ? v.slot !== "roof" : m !== "roof"; return {kind, w: wall ? 3.2 : 1.6, h: wall ? 2.4 : 2}; }
   if (kind === "lockpanel") { const n = Math.max(2, Math.round(1.2 / sp)); return {kind, n, bw: Math.min(0.8, p.battenWidth / sp), w: n*sp, h: n*sp}; }
   if (kind === "vertical" || kind === "horizontal") { const n = Math.max(2, Math.round(1.2 / sp)); return {kind, n, w: n*sp, h: n*sp}; }
   if (kind === "tiles") return {kind, w: 1.2, h: 1.36};

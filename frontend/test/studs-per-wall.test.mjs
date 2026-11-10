@@ -37,3 +37,11 @@ test("the inside of the boards can be left unpainted: raw, worn timber like the 
   assert.ok(raw.G.walls.i.length < painted.G.walls.i.length, "the painted backs of the boards are gone");
   assert.equal(barn({insidePanel: "nonsense"}).insidePanel, "painted");
 });
+
+test("a wall of corrugated sheet has studs inside, and the unpainted-panel setting leaves its sheet alone", () => {
+  const sheet = barn({wallCladding: "corrugated"}), plain = barn({wallCladding: "plaster"});
+  const studs = p => buildGeometry(p).G.fittings.s.filter(s => s === "oldtimber").length;
+  assert.ok(studs(sheet) > studs(plain) + 200, "studs behind the sheet");
+  const raw = buildGeometry(barn({wallCladding: "corrugated", insidePanel: "raw"})).G.fittings.s.filter(s => s === "oldboards").length;
+  assert.equal(raw, 0, "no boards behind sheet metal");
+});
