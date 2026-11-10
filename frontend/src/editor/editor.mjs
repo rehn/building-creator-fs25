@@ -570,6 +570,10 @@ let hintQueued = false;
 const hintObs = new MutationObserver(() => { if (hintQueued) return; hintQueued = true; requestAnimationFrame(() => { hintQueued = false; tidyHints(); }); });
 hintObs.observe(editorEl, {childList: true, subtree: true});
 cleanups.push(() => hintObs.disconnect());
+// (a text opened with a click closes when you click anywhere else)
+const closeHints = e => editorEl.querySelectorAll(".hx-q.open").forEach(q => { if (!q.contains(e.target)) q.classList.remove("open"); });
+document.addEventListener("click", closeHints);
+cleanups.push(() => document.removeEventListener("click", closeHints));
 tidyHints();
 // the wall the "Things on a wall" view shows, and the floor a new window goes on
 let wvWall = "front", wvFloor = 0, wvPart = 0, wvSec = 0, wSel = null, partImportWall = "back";

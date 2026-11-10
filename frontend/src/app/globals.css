@@ -392,5 +392,7 @@ html:has(.editor-page) { overscroll-behavior: none; }
 .hx-q:hover::before, .hx-q:focus-visible::before, .hx-q.open::before { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
 .hx-q.in-head { float: none; margin: 0 8px 0 auto; }
 .hx-panel summary > .hx-q.in-head { margin-left: auto; margin-right: 10px; }
-.hx-q > p.hint { display: none; position: absolute; z-index: 30; top: 26px; right: 0; width: min(300px, 70vw); margin: 0; padding: 10px 12px; text-align: left; font: 400 13.5px/1.4 var(--font-body), sans-serif; text-transform: none; letter-spacing: 0; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 20px rgba(0, 0, 0, .28); cursor: default; }
-.hx-q:hover > p.hint, .hx-q:focus-within > p.hint, .hx-q.open > p.hint { display: block; }
+.hx-q > p.hint { visibility: hidden; opacity: 0; pointer-events: none; transition: opacity .12s, visibility 0s; position: absolute; z-index: 30; top: 26px; right: 0; width: min(300px, 70vw); margin: 0; padding: 10px 12px; text-align: left; font: 400 13.5px/1.4 var(--font-body), sans-serif; text-transform: none; letter-spacing: 0; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 20px rgba(0, 0, 0, .28); cursor: default; }
+/* on hover the text comes up after a short wait (so it doesn't flash when the mouse passes over); it goes at once. A click or the keyboard shows it at once and keeps it open. */
+.hx-q:hover > p.hint { visibility: visible; opacity: 1; pointer-events: auto; transition: opacity .15s .4s, visibility 0s .4s; }
+.hx-q:focus-within > p.hint, .hx-q.open > p.hint { visibility: visible; opacity: 1; pointer-events: auto; transition: opacity .12s; }
