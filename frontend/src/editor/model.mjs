@@ -96,7 +96,7 @@ const SHARED_SECTIONS = [
   {title:"Doors", tab:"settings", hint:"The style of every door. The doors themselves are in the Building tab: choose one there (or tap it in the preview) to move it, change its size or give it a porch or canopy.", fields:[
     {k:"doorStyle", label:"Style", type:"select", options:DOOR_STYLES.map(s => [s.id, s.name])}]},
   {title:"Inside", label:"Furniture and pieces", tab:"inside", custom:"inside", hint:"The pieces inside the building. Fill it automatically to match its size, then change it as you like.", fields:[]},
-  {title:"Surfaces", tab:"settings", hint:"Panel and split for the whole building. A single wall can have its own panel, colour and split: choose it in the Building tab.", fields:[
+  {title:"Surfaces", tab:"building", detail:true, hint:"Panel, split and roof look of the building (its parts follow it unless they have a look of their own). A single wall can have its own panel, colour and split: choose it in the tree.", fields:[
     {k:"wallCladding", label:"Wall cladding (the upper part when split)", type:"select", options:CLADDING},
     {k:"wallSplit", label:"Two materials on the walls", type:"select", options:[["one","No, one material"],["floor","Yes, split at the top of the ground floor"],["height","Yes, split at a height"]]},
     {k:"splitHeight", label:"Split height, above the ground floor's floor", min:0.5, max:10, step:0.05, unit:" m"},

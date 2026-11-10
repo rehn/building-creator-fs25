@@ -714,7 +714,6 @@
   "Its own colour": "Egen färg",
   "Go back": "Tillbaka",
   "What the outer walls look like from inside: like the outside (studs behind boards, plaster as plaster, the same split in two materials), or the kind's own finish. Wallpaper goes over either: one for every wall here, or sections along a single wall (one for each room behind it): choose the wall in the Building tab.": "Hur ytterväggarna ser ut inifrån: som utsidan (reglar bakom bräder, puts som puts, samma delning i två material), eller typens egen yta. Tapet läggs över båda: en för alla väggar här, eller sektioner längs en enskild vägg (en för varje rum bakom den): välj väggen i fliken Byggnad.",
-  "Panel and split for the whole building. A single wall can have its own panel, colour and split: choose it in the Building tab.": "Panel och delning för hela byggnaden. En enskild vägg kan ha egen panel, färg och delning: välj den i fliken Byggnad.",
   "Downpipes on this wall": "Stuprör på den här väggen",
   "Downpipe {n}": "Stuprör {n}",
   "Spread them evenly": "Fördela dem jämnt",
@@ -825,5 +824,6 @@
   "Vehicle lift": "Fordonslyft",
   "Vehicle workshop": "Fordonsverkstad",
   "Workbench": "Arbetsbänk",
-  "Workshop": "Verkstad"
+  "Workshop": "Verkstad",
+  "Panel, split and roof look of the building (its parts follow it unless they have a look of their own). A single wall can have its own panel, colour and split: choose it in the tree.": "Panel, delning och taktäckning för byggnaden (dess delar följer den om de inte har eget utseende). En enskild vägg kan ha egen panel, färg och delning: välj den i trädet."
 }
