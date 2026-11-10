@@ -390,7 +390,7 @@ html:has(.editor-page) { overscroll-behavior: none; }
 .hx-q { position: relative; display: inline-flex; float: right; margin: 2px 0 2px 8px; cursor: help; outline: none; }
 .hx-q::before { content: "?"; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--line); color: var(--muted); font: 600 12px var(--font-body), sans-serif; display: flex; align-items: center; justify-content: center; background: var(--field); }
 .hx-q:hover::before, .hx-q:focus-visible::before, .hx-q.open::before { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
-.hx-q.in-head { float: none; margin: 0 8px 0 auto; order: 2; }
+.hx-q.in-head { float: none; margin: 0 8px 0 auto; }
 .hx-panel summary > .hx-q.in-head { margin-left: auto; margin-right: 10px; }
 .hx-q > p.hint { display: none; position: absolute; z-index: 30; top: 26px; right: 0; width: min(300px, 70vw); margin: 0; padding: 10px 12px; text-align: left; font: 400 13.5px/1.4 var(--font-body), sans-serif; text-transform: none; letter-spacing: 0; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 20px rgba(0, 0, 0, .28); cursor: default; }
 .hx-q:hover > p.hint, .hx-q:focus-within > p.hint, .hx-q.open > p.hint { display: block; }
