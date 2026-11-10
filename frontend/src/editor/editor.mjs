@@ -1645,9 +1645,9 @@ function addChildPart(pid) {
 function ctxAdds(kind, v, f) {
   const room = (p.wings || []).length < MAX_WINGS;
   if (kind === "wall") return [{act: "add-window", label: "Add window", on: true}, {act: "add-door", label: "Add door", on: +f === 0}, {act: "add-part", label: "Add part", on: +f === 0 && !isSplitWall(v) && room}];
-  // (the building is divided into sections; a part is added on one of its walls, so the building's menu has no "add part": a part has both)
+  // (a part is added on a wall, so the menus of the building and of a part have no "add part": the walls under them have; what they are divided into is sections)
   if (kind === "main") return [{act: "add-section", label: "Add section", on: p.roofType !== "hip" && (p.splits || []).length < MAX_SPLITS}];
-  if (kind === "part") { const w = (p.wings || []).find(x => x.id === +v); return [{act: "add-part", label: "Add part", on: room}, {act: "add-section", label: "Add section", on: !!w && (w.splits || []).length < MAX_SPLITS}]; }
+  if (kind === "part") { const w = (p.wings || []).find(x => x.id === +v); return [{act: "add-section", label: "Add section", on: !!w && (w.splits || []).length < MAX_SPLITS}]; }
   if (kind === "game") { const have = new Set(objectsNow().map(o => o.type)); return ((kindOf(p).objects || {types: []}).types).filter(t => !have.has(t)).map(t => ({act: "add-obj:" + t, label: "Add " + objectInfo(kindOf(p), t).name.toLowerCase(), on: true})); }
   return [];
 }
