@@ -546,6 +546,31 @@ function placeShape() {
   const want = mainChosen && editorEl.dataset.tab === "building" && !searching ? host : home;
   for (const d of shapeSections) if (d.parentElement !== want) want.appendChild(d);
 }
+/**
+ * Every help text (a p.hint in the panels) sits behind a small "?": hover it, focus it or tap it to read the text. A hint right under a section's heading
+ * goes into the heading's row; any other floats to the right of what it is in. (Texts that say what is wrong, not what a thing is, are marked class "keep" and stay.)
+ */
+// (what a hint says about the thing as it is now, or that something is missing or not allowed, stays in view: it is a status, not a help text)
+const STATUS_HINT = /^(\d|Height |Post |The download|Loading|Nothing|This building has no|Choose an object|Press a post|Click a piece in the building|Doors can only|This is the building|An empty doorway|No opening|A flat roof has no|Sections \(walls|Kupor need|Items you import|This section has no|The first section has)|m long\. Add something/;
+function tidyHints() {
+  for (const h of editorEl.querySelectorAll(".hx-panel p.hint:not(.keep)")) {
+    if (h.closest(".hx-q")) continue;
+    const text = h.textContent.trim();
+    if (text.length < 40 || STATUS_HINT.test(text)) { h.classList.add("keep"); continue; }
+    const q = document.createElement("span"), prev = h.previousElementSibling, head = prev && prev.tagName === "SUMMARY" ? prev : null;
+    q.className = "hx-q" + (head ? " in-head" : ""); q.tabIndex = 0; q.setAttribute("role", "button"); q.setAttribute("aria-label", "Help");
+    h.replaceWith(q); q.appendChild(h);
+    if (head) head.appendChild(q);
+    const flip = e => { e.preventDefault(); e.stopPropagation(); q.classList.toggle("open"); };
+    q.addEventListener("click", flip);
+    q.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") flip(e); else if (e.key === "Escape") q.classList.remove("open"); });
+  }
+}
+let hintQueued = false;
+const hintObs = new MutationObserver(() => { if (hintQueued) return; hintQueued = true; requestAnimationFrame(() => { hintQueued = false; tidyHints(); }); });
+hintObs.observe(editorEl, {childList: true, subtree: true});
+cleanups.push(() => hintObs.disconnect());
+tidyHints();
 // the wall the "Things on a wall" view shows, and the floor a new window goes on
 let wvWall = "front", wvFloor = 0, wvPart = 0, wvSec = 0, wSel = null, partImportWall = "back";
 const walk = {on: false, pos: {x: 0, y: 0, z: 0}, yaw: 0, pitch: 0, keys: new Set(), last: 0, walker: null, eye: 1.65, ey: 0};
@@ -1394,7 +1419,7 @@ function floorCardHtml() {
   const walls = `<p class="hint">The walls of this floor are below it in the tree: choose one to put windows, doors and parts on it and to set how it looks.</p>`;
   if (sectioned) {
     const n = sc.floors, attic = sc.half && wvFloor === n;
-    if (wvFloor >= n && !attic) return `<div class="wincard"><h3 class="sub">${title}</h3><p class="hint">This section has no such floor: what is listed here is hidden.</p></div>`;
+    if (wvFloor >= n && !attic) return `<div class="wincard"><h3 class="sub">${title}</h3><p class="hint keep">This section has no such floor: what is listed here is hidden.</p></div>`;
     if (attic) return `<div class="wincard"><h3 class="sub">${title}</h3><div id="floorFieldHost"></div>${walls}</div>`;
     const total = sc.hs.reduce((a, b) => a + b, 0), below = sc.hs.slice(0, wvFloor).reduce((a, b) => a + b, 0), hi = total - below - (n - 1 - wvFloor) * 2.3;
     const own = wvFloor === n - 1

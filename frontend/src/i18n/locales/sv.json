@@ -826,5 +826,6 @@
   "Vehicle workshop": "Fordonsverkstad",
   "Workbench": "Arbetsbänk",
   "Workshop": "Verkstad",
-  "Panel, split and roof look of the building (its parts follow it unless they have a look of their own). A single wall can have its own panel, colour and split: choose it in the tree.": "Panel, delning och taktäckning för byggnaden (dess delar följer den om de inte har eget utseende). En enskild vägg kan ha egen panel, färg och delning: välj den i trädet."
+  "Panel, split and roof look of the building (its parts follow it unless they have a look of their own). A single wall can have its own panel, colour and split: choose it in the tree.": "Panel, delning och taktäckning för byggnaden (dess delar följer den om de inte har eget utseende). En enskild vägg kan ha egen panel, färg och delning: välj den i trädet.",
+  "Help": "Hjälp"
 }
