@@ -19,6 +19,8 @@ const DOOR_CLEAR = 1.2;
 const MAX_ITEMS = 200;
 
 /** Each wall: o = its start corner at floor height F, u = along it, n = out of the building, L = length. */
+/** Whether one of the building's four walls is left open (a carport's or lean-to's side: posts and a beam instead): the settings openFront, openBack, openLeft, openRight. */
+export const openSide = (P, key) => ["front", "back", "left", "right"].includes(key) && !!P["open" + key[0].toUpperCase() + key.slice(1)];
 export function wallFrames(W, D, F) {
   return {
     front: {o: [-W/2, F, D/2], u: [1, 0, 0], n: [0, 0, 1], L: W},

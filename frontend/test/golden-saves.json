@@ -467,6 +467,78 @@
   "i3dBytes": true,
   "xml": true
  },
+ "preset carport": {
+  "parts": [],
+  "windows": 0,
+  "doors": 0,
+  "hidden": 0,
+  "ops": {
+   "front": 0,
+   "back": 0,
+   "right": 0,
+   "left": 0
+  },
+  "triangles": {
+   "walls": 24,
+   "trim": 180,
+   "roof": 10,
+   "foundation": 12,
+   "gutter": 944,
+   "fittings": 266
+  },
+  "box": [
+   [
+    -3.42,
+    3.43
+   ],
+   [
+    0,
+    3.44
+   ],
+   [
+    -2.99,
+    2.9
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ },
+ "preset lider": {
+  "parts": [],
+  "windows": 0,
+  "doors": 0,
+  "hidden": 0,
+  "ops": {
+   "front": 0,
+   "back": 0,
+   "right": 0,
+   "left": 0
+  },
+  "triangles": {
+   "walls": 46,
+   "trim": 144,
+   "roof": 10,
+   "foundation": 12,
+   "gutter": 944,
+   "fittings": 386
+  },
+  "box": [
+   [
+    -4.43,
+    4.43
+   ],
+   [
+    0,
+    3.85
+   ],
+   [
+    -2.4,
+    2.49
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ },
  "preset vedbod": {
   "parts": [],
   "windows": 4,

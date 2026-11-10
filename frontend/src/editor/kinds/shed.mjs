@@ -151,8 +151,12 @@ export default {
   plural: "Sheds",
   category: "sheds",
   walkIn: true,
-  defaults: {ceiling: false, insideSame: true, winStyle: "single", doorStyle: "sliding"},
-  sections: [],
+  defaults: {ceiling: false, insideSame: true, winStyle: "single", doorStyle: "sliding", openFront: false, openBack: false, openLeft: false, openRight: false},
+  sections: [
+    {title: "Open sides", tab: "building", detail: true, hint: "Leave a side open, as on a carport or a lean-to shed: posts and a beam stand where the wall was. Windows and doors on an open side are left out.", fields: [
+      {k: "openFront", label: "Front is open", type: "check"}, {k: "openBack", label: "Back is open", type: "check"},
+      {k: "openLeft", label: "Left side is open", type: "check"}, {k: "openRight", label: "Right side is open", type: "check"}]},
+  ],
   hides: ["Interior", "Kupor (dormers)"],
   /** Settings as this kind uses them: no sleep point, rooms or dormers. */
   normalize: p => ({...p, interior: false, dormers: []}),
@@ -180,6 +184,14 @@ export default {
       winFront: 0, winBack: 6, winLeft: 0, winRight: 0, winW: 1.4, winH: 0.6, sill: 3.4,
       doorWall: "front", doorPos: 0, doorW: 6, doorH: 4.4, doorColor: "#3B3F42", entrance: "none", doorStyle: "sliding", winStyle: "single",
       modPrice: 65000, modUpkeep: 120}},
+    {id: "carport", name: "Carport", blurb: "6 × 5 m carport with the front and one side open, a gently leaning corrugated roof and a closed back.", settings: {
+      wallCladding: "vertical", wallColor: "#3B3F42", trimColor: "#3B3F42", width: 6, depth: 5, floors: 1, floorHeight: 2.6, foundation: 0.1, foundationColor: "#8C8A84",
+      roofType: "flat", roofTilt: 6, tiltHigh: "front", overhang: 0.4, roofMaterial: "corrugated", roofColor: "#3B3F42", chimney: false, gutters: true, downpipes: 1, ventilators: 0,
+      winFront: 0, winBack: 0, winLeft: 0, winRight: 0, openFront: true, openRight: true, modPrice: 6000, modUpkeep: 10}},
+    {id: "lider", name: "Lider", blurb: "8 × 4 m open-fronted shed with a lean-to roof of falsad plåt, for machines and firewood.", settings: {
+      wallCladding: "vertical", wallColor: "#6E4B33", trimColor: "#4A3322", width: 8, depth: 4, floors: 1, floorHeight: 2.8, foundation: 0.1, foundationColor: "#8C8A84",
+      roofType: "flat", roofTilt: 10, tiltHigh: "back", overhang: 0.5, roofMaterial: "seamed", roofColor: "#2B2D2F", chimney: false, gutters: true, downpipes: 1, ventilators: 0,
+      winFront: 0, winBack: 0, winLeft: 0, winRight: 0, openFront: true, modPrice: 8000, modUpkeep: 15}},
     {id: "vedbod", name: "Vedbod", blurb: "5 × 3 m woodshed with plank walls and a plain door, for tools and firewood.", settings: {
       wallCladding: "vertical", wallColor: "#6E4B33", trimColor: "#4A3322", width: 5, depth: 3, floors: 1, floorHeight: 2.3, foundation: 0.15, foundationColor: "#8C8A84",
       roofType: "gable", ridge: "width", roofPitch: 25, overhang: 0.4, roofMaterial: "metal", roofColor: "#3B3F42", chimney: false, gutters: false, downpipes: 0, ventilators: 0,

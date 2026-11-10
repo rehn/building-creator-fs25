@@ -3,7 +3,7 @@
 // Pure functions with no DOM or three.js, so they run (and are tested) in Node.
 import { I3dDoc, tg, shape, refNode, boxMesh, splitByColor, mappingsFor, num, v3 } from "./i3d.mjs";
 import { KINDS, kindOf } from "./kinds/index.mjs";
-import { WALL_T, wallFrames, wallsOf, liveWings, wingsOf, wingIdOf, eaveWalls, autoPipes, cleanPipes, cleanPapers, WING_PARTS, MAX_WINGS, HARD_MAX_PARTS, setMaxParts, WING_WALLS, wingWallKey, wingSplitKey, WING_SPLIT_WALLS, isSplitWall, openingSpan, splitsOf, sectionsOf, sectionRuns, sectionAtPoint, maxFloors, maxFloorsWithAttic, wallHasFloor, isGableWall, cascadeHeight, dividerAt, splitAtFrom, splitKey, SPLIT_WALLS, MAX_SPLITS, floorsOf, totalHeight, floorBase, floorAt, roomOf, footprint, toWorld, cleanItems, problems } from "./layout.mjs";
+import { WALL_T, openSide, wallFrames, wallsOf, liveWings, wingsOf, wingIdOf, eaveWalls, autoPipes, cleanPipes, cleanPapers, WING_PARTS, MAX_WINGS, HARD_MAX_PARTS, setMaxParts, WING_WALLS, wingWallKey, wingSplitKey, WING_SPLIT_WALLS, isSplitWall, openingSpan, splitsOf, sectionsOf, sectionRuns, sectionAtPoint, maxFloors, maxFloorsWithAttic, wallHasFloor, isGableWall, cascadeHeight, dividerAt, splitAtFrom, splitKey, SPLIT_WALLS, MAX_SPLITS, floorsOf, totalHeight, floorBase, floorAt, roomOf, footprint, toWorld, cleanItems, problems } from "./layout.mjs";
 import { withAssets, placement, assetFolder } from "./assets.mjs";
 import { SURFACES } from "./surfaces.mjs";
 import { agedColor } from "./age.mjs";
@@ -719,6 +719,7 @@ export function clampField(f, v) {
  * Clean settings from anywhere (a save, an import, a preset): the building's kind (a farmhouse if
  * none or unknown), every setting it has clamped to its range, and the kind's own rules applied.
  */
+const MAIN_WALLS = ["front", "back", "left", "right"];
 export function sanitize(obj) {
   if (!obj || typeof obj !== "object") obj = {};
   const kind = kindOf(obj), defs = {...DEFAULTS, ...kind.defaults}, fields = fieldsFor(kind);
@@ -744,8 +745,11 @@ export function sanitize(obj) {
   // (the windows and doors of a part that is gone go with it; a part that is only left out for now keeps them)
   { const ids = new Set(out.wings.map(w => w.id)); ws = ws.filter(w => !wingIdOf(w.wall) || ids.has(wingIdOf(w.wall))); }
   { const keys = new Set([...out.splits.map(s => splitKey(s.id)), ...out.wings.flatMap(g => g.splits.map(s => wingSplitKey(g.id, s.id)))]); ws = ws.filter(w => !(SPLIT_WALLS.includes(w.wall) || WING_SPLIT_WALLS.includes(w.wall)) || keys.has(w.wall)); }
-  if (!ws.some(w => w.type === "door" && walls[w.wall])) ws = cleanWindows([...ws, legacyDoor(obj, out, kind)]);
-  out.windows = Array.isArray(src) ? ws : genAll(out, obj, ws);
+  // (an open side has no wall to put a window or door in, and a building with one is not asked to have a door)
+  const anyOpen = MAIN_WALLS.some(k => openSide(out, k));
+  ws = ws.filter(w => !openSide(out, w.wall));
+  if (!anyOpen && !ws.some(w => w.type === "door" && walls[w.wall])) ws = cleanWindows([...ws, legacyDoor(obj, out, kind)]);
+  out.windows = Array.isArray(src) ? ws : genAll(out, obj, ws).filter(w => !openSide(out, w.wall));
   out.dormers = Array.isArray(obj.dormers) ? cleanDormers(obj.dormers) : [];
   // the downpipes: the save's, or placed from the house's count per side (saves from before they were a list)
   out.pipes = Array.isArray(obj.pipes) ? cleanPipes(obj.pipes, out) : autoPipes(out);
@@ -2244,6 +2248,31 @@ function build() {
     // (a tilted flat roof: the wall's top at its start and end, from how far along the tilt each is)
     const lean = tiltR > 0 ? [0, Lw].map(s => tiltRise(WS[key], s)) : null;
     const topOf = sv => lean ? H + lean[0] + (lean[1] - lean[0]) * sv / Lw : H + R * Math.max(0, 1 - Math.abs(sv - Lw/2) / (Lw/2));
+    if (openSide(p, key)) {
+      // An open side (a carport's, a lean-to's): no wall, but a post at each end and at most 3 m apart, and a beam along the top (at the walls' top,
+      // following a leaning roof, never up into a gable).
+      const w = WS[key], bt = lean ? topOf : () => H, pw = 0.14, n = Math.max(1, Math.ceil(Lw / 3)), at = (t, d, sv) => WP(w, sv, t, d);
+      // (the ends stand clear of a closed wall's thickness, and where two open sides meet the front or back one keeps the corner)
+      const nb = {front: ["left", "right"], back: ["right", "left"], left: ["back", "front"], right: ["front", "back"]}[key];
+      const inset = k => !openSide(p, nb[k]) ? WALL_T + 0.01 : key === "left" || key === "right" ? pw + 0.04 : 0.02, a0 = inset(0), a1 = inset(1);
+      for (let i = 0; i <= n; i++) {
+        const s0 = a0 + i * (Lw - a0 - a1 - pw) / n, top = Math.min(bt(s0), bt(s0 + pw)) - 0.22;
+        wbox("trim", w, s0, s0 + pw, 0, top, -pw - 0.02, -0.02);
+        if (hollow) wbox("collision", w, s0, s0 + pw, 0, top, -pw - 0.02, -0.02);
+      }
+      const e0 = a0, e1 = Lw - a1, c = (sv, t, d) => at(t, d, sv);
+      const q = (a, b, ta, tb) => [c(a, ta(a), -0.02), c(b, ta(b), -0.02), c(b, tb(b), -0.02), c(a, tb(a), -0.02)];
+      const lo = sv => bt(sv) - 0.22, hi = sv => bt(sv), dIn = -pw - 0.02;
+      solid("trim", [
+        q(e0, e1, lo, hi),
+        [c(e1, lo(e1), dIn), c(e0, lo(e0), dIn), c(e0, hi(e0), dIn), c(e1, hi(e1), dIn)],
+        [c(e0, hi(e0), -0.02), c(e1, hi(e1), -0.02), c(e1, hi(e1), dIn), c(e0, hi(e0), dIn)],
+        [c(e0, lo(e0), dIn), c(e1, lo(e1), dIn), c(e1, lo(e1), -0.02), c(e0, lo(e0), -0.02)],
+        [c(e0, lo(e0), dIn), c(e0, lo(e0), -0.02), c(e0, hi(e0), -0.02), c(e0, hi(e0), dIn)],
+        [c(e1, lo(e1), -0.02), c(e1, lo(e1), dIn), c(e1, hi(e1), dIn), c(e1, hi(e1), -0.02)]]);
+      opsByWall[key] = {w, ops: [], open: true};
+      continue;
+    }
     const ops = layoutWall(key, Lw, hs, topOf, wingCover(key), wingCap(key));
     // Eave walls' inside faces reach into the roof slab (which sits lower further in), staying below its top.
     const inner = hollow ? {lift: R > 0 || p.roofType === "flat" ? 0 : Math.min(WALL_T * tanP, th - 0.02)} : null;
@@ -2412,6 +2441,7 @@ function build() {
     // each wing's floor, then every wall (the house's and the wings') the same way
     if (F > 0.01) for (const {wing: wg} of WINGS) { const a = wg.at(wg.s0, 0), b = wg.at(wg.s1, wg.wd); abox("collision", [Math.min(a[0], b[0]), 0, Math.min(a[2], b[2])], [Math.max(a[0], b[0]), F, Math.max(a[2], b[2])]); }
     for (const key of Object.keys(opsByWall)) {
+      if (opsByWall[key].open) continue;
       const wid = wingIdOf(key), Hh = wid ? WINGS.find(x => x.wing.id === wid).wing.H : H;
       const w = opsByWall[key].w, gaps = opsByWall[key].ops.filter(o => (o.kind === "door" && o.opens) || o.kind === "open" || (o.kind === "hatch" && (o.t1 >= 1.8 || o.hole))).sort((a, b) => a.s0 - b.s0);
       const slab = (s0, s1, t0, t1) => { if (s1 - s0 > 1e-6 && t1 - t0 > 1e-6) wbox("collision", w, s0, s1, t0, t1, -WALL_T, 0); };
