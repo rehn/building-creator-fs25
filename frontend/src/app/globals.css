@@ -427,3 +427,6 @@ select.lang {
   background-repeat: no-repeat; background-position: right 10px center;
 }
 select.lang:hover { border-color: var(--muted); }
+
+/* the place of a starting point's picture while it is being made */
+.preset .thumbph { width: calc(100% + 32px); margin: -14px -16px 4px; aspect-ratio: 16 / 10; border-radius: 10px 10px 0 0; background: var(--stage); }
