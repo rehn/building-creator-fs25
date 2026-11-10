@@ -1116,7 +1116,7 @@ const hsOf = key => { const wid = wingIdOf(key), wg = wid && liveWings(p).find(x
 
 // the materials of the part being built (walls, wallsLow, roof, trim -> its own variants), or null for the building's own
 let partMats = null, MATLIST = MATS;
-function poly(mat, pts, hint, uvf) {
+function poly(mat, pts, hint, uvf, grainDir = null) {
   pts = pts.filter((q,i) => { const r = pts[(i+1) % pts.length]; return Math.hypot(...sub(q,r)) > 1e-6; });
   if (pts.length < 3) return;
   let n = norm(cross(sub(pts[1],pts[0]), sub(pts[2],pts[0])));
@@ -1142,7 +1142,8 @@ function poly(mat, pts, hint, uvf) {
     // length, whatever its angle (sloped fascia, soffits, frames, beams), and u across it.
     let along = null, best = -1;
     pts.forEach((q, k) => { const e = sub(pts[(k + 1) % pts.length], q), l = Math.hypot(...e); if (l > best) { best = l; along = e; } });
-    const v = norm(along), u = norm(cross(n, v));
+    // (a grainDir says where the boards run, whatever the face's shape: a wall's boards, standing or lying)
+    const v = norm(grainDir && Math.abs(dot(norm(grainDir), n)) < 0.9 ? grainDir : along), u = norm(cross(n, v));
     uvs = pts.map(q => [dot(q, u), dot(q, v)]);
   }
   // An inside surface's uvs count copies of its texture.
@@ -1488,8 +1489,8 @@ function buildDoor(w, o, kit, inner, r, out, key) {
  * c: L, tw, BACK (the boards' backs), s0i..s1i (the stretch the inside covers), split, Hi (top of the inside), ceil, topAt(s), wood(t), bare(s).
  */
 /** Old, unpainted timber: one of four worn greyish-brown tones (u 0..1), on the rough "oldtimber" surface. */
-const WORN = ["#A59274", "#968364", "#B0A082", "#857557"];
-const wornTimber = u => paint(WORN[Math.min(WORN.length - 1, Math.floor(u * WORN.length))], "oldtimber");
+const WORN = ["#A59274", "#968364", "#B0A082", "#857557"], WORN_PANEL = ["#C2B291", "#B6A685", "#CBBD9E", "#AC9C7C"];
+const wornTimber = (u, surf = "oldtimber") => { const L = surf === "boards" ? WORN_PANEL : WORN; return paint(L[Math.min(L.length - 1, Math.floor(u * L.length))], surf); };
 function buildStuds(w, ops, c) {
   const {tw, BACK, s0i, s1i, split, Hi, ceil, topAt, spacing, studW: st, irr} = c, g = 0.002, hdr = Math.max(0.095, st * 2);
   // (an old barn's studs are uneven: where they stand and how thick they are vary a little, the same way every time)
@@ -1614,7 +1615,8 @@ function buildWall(w, ops, H, gableRise, F, {topAt = () => H, dormer = null, inn
       if (timber) {
         if (c.length >= 3) {
           // (unpainted: the boards' backs are raw, worn timber like the studs, not the outside's paint)
-          if (p.insidePanel === "raw") { wornTimber(((Math.round(cs * 40) * 7 + Math.round(ct * 25) * 13) % 17) / 17); poly("fittings", c.map(q => WP(w, q[0], q[1], -BACK)), neg(w.n)); }
+          // (boards of old timber in the same worn tones, running the way the outside boards do)
+          if (p.insidePanel === "raw") { wornTimber(((Math.round(cs * 40) * 7 + Math.round(ct * 25) * 13) % 17) / 17, "boards"); poly("fittings", c.map(q => WP(w, q[0], q[1], -BACK)), neg(w.n), null, cladOf(ct) === "horizontal" ? w.u : UP); }
           else poly(split && ct < split ? "wallsLow" : "walls", c.map(q => WP(w, q[0], q[1], -BACK)), neg(w.n));
         }
         continue;
