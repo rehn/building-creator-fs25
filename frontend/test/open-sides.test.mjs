@@ -46,9 +46,13 @@ test("carport and lean-to presets build and export", () => {
 });
 
 test("the distance between the posts is a setting (at most that far apart)", () => {
-  assert.equal(shed().postSpacing, 3);
+  assert.equal(shed().postFront, 3);
   const posts = p => new Set(verts(p, "trim").filter(v => Math.abs(v[2] - 2) < 0.2 && v[1] < 0.3).map(v => +v[0].toFixed(2))).size;
-  assert.ok(posts(shed({openFront: true, width: 12, postSpacing: 2})) > posts(shed({openFront: true, width: 12, postSpacing: 6})), "closer posts, more of them");
-  assert.equal(shed({postSpacing: 99}).postSpacing, 6);
-  assert.equal(shed({postSpacing: 0}).postSpacing, 1.5);
+  assert.ok(posts(shed({openFront: true, width: 12, postFront: 2})) > posts(shed({openFront: true, width: 12, postFront: 6})), "closer posts, more of them");
+  assert.equal(shed({postRight: 99}).postRight, 6);
+  assert.equal(shed({postLeft: 0}).postLeft, 1.5);
+  // (each side has its own: closer posts at the front leave the right side alone)
+  const side = (p, x) => new Set(verts(p, "trim").filter(v => Math.abs(v[0] - x) < 0.2 && v[1] < 0.3).map(v => +v[2].toFixed(2))).size;
+  const a = shed({openFront: true, openRight: true, width: 6, depth: 12, postFront: 1.5, postRight: 6}), b = shed({openFront: true, openRight: true, width: 6, depth: 12, postFront: 6, postRight: 6});
+  assert.equal(side(a, 3), side(b, 3), "the right side's posts don't follow the front's");
 });

@@ -378,6 +378,7 @@ function syncOutputs() {
   { const low = zonesUsed() || p.innerCladding === "sameLow"; off("lowerCladding", !low); off("lowerColor", !low); }
   for (const k of ["studSpacing", "studWidth", "studIrregular"]) off(k, !p.insideSame);
   off("roofMaterial", false);
+  for (const w of ["Front", "Back", "Left", "Right"]) off("post" + w, !p["open" + w]);
   off("roofTilt", p.roofType !== "flat"); off("tiltHigh", p.roofType !== "flat" || !p.roofTilt);
   off("chimneyStyle", !p.chimney);
   off("kneeWall", !(p.halfStorey || (p.splits || []).some(x => x.half === true) || (p.wings || []).some(w => w.half || (w.splits || []).some(x => x.half === true))));   // (a section's attic has the knee wall too)
