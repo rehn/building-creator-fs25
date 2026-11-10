@@ -402,3 +402,12 @@ html:has(.editor-page) { overscroll-behavior: none; }
 /* a card in the details panel that isn't a settings section (Sections, the parts to import): the same look as a section's */
 .hx-details .hx-card { background: rgba(127, 127, 127, .07); border: 1px solid var(--line); border-radius: 10px; padding: 0 14px 12px; margin: 14px 0; }
 .hx-details .hx-card-h { margin: 0 -14px 8px; padding: 10px 14px; font-family: var(--font-display), "Arial Narrow", sans-serif; font-weight: 600; font-size: 19px; background: rgba(127, 127, 127, .13); border-left: 4px solid var(--accent); border-bottom: 1px solid var(--line); border-radius: 10px 10px 0 0; }
+
+/* every card of the details panel (a window, a door, a floor, a wall, a section, a part ...) has the look of a settings section: a tinted ground, a border, a header bar */
+.hx-details .wincard { background: rgba(127, 127, 127, .07); border: 1px solid var(--line); border-left: 1px solid var(--line); border-radius: 10px; padding: 0 14px 12px; margin: 14px 0; }
+.hx-details .wincard > h3.sub { position: relative; margin: 0 -14px 8px; padding: 10px 14px; font-family: var(--font-display), "Arial Narrow", sans-serif; font-weight: 600; font-size: 19px; background: rgba(127, 127, 127, .13); border-left: 4px solid var(--accent); border-bottom: 1px solid var(--line); border-radius: 10px 10px 0 0; }
+.hx-details .wincard > h3.sub > .hx-q.in-head, .hx-details .hx-card-h > .hx-q.in-head { right: 12px; }
+.hx-details .hx-card-h { position: relative; }
+/* (a card inside a card stays plain, so they don't pile up) */
+.hx-details .wincard .wincard, .hx-details .hx-card .wincard { background: none; border: 0; border-left: 3px solid var(--accent); border-radius: 0; padding: 2px 0 4px 10px; margin: 8px 0; }
+.hx-details .wincard .wincard > h3.sub { margin: 0 0 4px; padding: 0; background: none; border: 0; font-size: 15px; }

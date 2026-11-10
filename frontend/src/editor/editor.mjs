@@ -566,7 +566,7 @@ function tidyHints() {
     if (h.closest(".hx-q")) continue;
     const text = h.textContent.trim();
     if (text.length < 40 || STATUS_HINT.test(text)) { h.classList.add("keep"); continue; }
-    const q = document.createElement("span"), prev = h.previousElementSibling, head = prev && prev.tagName === "SUMMARY" ? prev : null;
+    const q = document.createElement("span"), prev = h.previousElementSibling, head = prev && (prev.tagName === "SUMMARY" || prev.matches("h3.sub, h3.hx-card-h")) ? prev : null;
     q.className = "hx-q" + (head ? " in-head" : ""); q.tabIndex = 0; q.setAttribute("role", "button"); q.setAttribute("aria-label", "Help");
     h.replaceWith(q); q.appendChild(h);
     if (head) head.appendChild(q);
@@ -993,7 +993,7 @@ function renderWinCard() {
     const own = (styles.find(x => x.id === (door ? p.doorStyle : p.winStyle)) || styles[0]).name.toLowerCase();
     const opt = (v, label, cur) => `<option value="${v}" ${v === cur ? "selected" : ""}>${esc(label)}</option>`;
     const range = (f, lo = f.min, hi = f.max) => `<div class="field"><div class="fl"><label for="wf-${f.k}">${f.label}</label><output id="wf-${f.k}-o">${winOut(f, s)}</output></div><input type="range" id="wf-${f.k}" data-k="${f.k}" min="${lo}" max="${hi}" step="${f.step}" value="${s[f.k]}" ${f.k === "pos" ? `data-scale="${wallLen(s.wall)}"` : ""}></div>`;
-    html += `<div class="wincard"><p class="warn" id="winWarn" ${s._hidden ? "" : "hidden"}>This overlaps a door or another window, so it’s hidden. Move it or make it smaller.</p>`;
+    html += `<div class="wincard"><h3 class="sub">${door ? "Door" : "Window"}</h3><p class="warn" id="winWarn" ${s._hidden ? "" : "hidden"}>This overlaps a door or another window, so it’s hidden. Move it or make it smaller.</p>`;
     // a window on the ground floor can be a door (and back)
     html += `<div class="field"><div class="fl"><label for="wf-type">This is a</label></div><select id="wf-type" ${lastDoor ? "disabled" : ""}>${opt("window", "Window", s.type)}${s.floor === 0 ? opt("door", "Door", s.type) : ""}</select></div>`;
     if (lastDoor) html += `<p class="hint">This is the building’s only door, so it stays a door. Make another window a door first to remove this one or make it a window.</p>`;
@@ -1283,7 +1283,7 @@ function renderPartCard() {
     // the walls it can stand on: the house's and those of the parts before it in the list (its parent is one of them)
     const before = wings.slice(0, wings.findIndex(x => x.id === w.id)), onWalls = [...["front", "back", "left", "right"], ...before.flatMap(e => WING_PARTS.map(s => wingWallKey(e.id, s)))];
     const range = f => `<div class="field"><div class="fl"><label for="wg-${f.k}">${f.label}</label><output id="wg-${f.k}-o">${f.k === "pos" ? (w.pos * wallL).toFixed(2) : (+w[f.k]).toFixed(2)} m</output></div><input type="range" id="wg-${f.k}" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}" value="${w[f.k]}" ${f.k === "pos" ? `data-scale="${wallL}"` : ""}></div>`;
-    html += `<div class="wincard"><div class="field"><div class="fl"><label for="wg-name">Name</label></div><input type="text" id="wg-name" maxlength="40" value="${esc(w.name || "")}" placeholder="${esc(`Wing ${w.id}`)}"></div>`
+    html += `<div class="wincard"><h3 class="sub" translate="no">${esc(partName(p, w.id))}</h3><div class="field"><div class="fl"><label for="wg-name">Name</label></div><input type="text" id="wg-name" maxlength="40" value="${esc(w.name || "")}" placeholder="${esc(`Wing ${w.id}`)}"></div>`
       + `<div class="field"><div class="fl"><label for="wg-wall">On the wall</label></div><select id="wg-wall">${onWalls.map(k => opt(k, wallLabel(p, k), w.wall)).join("")}</select></div>`
       + WING_FIELDS.map(range).join("")
       + `<div class="field"><div class="fl"><label for="wg-floors">Floors</label></div><select id="wg-floors">${opt(0, `As the house (${p.floors}${p.halfStorey ? "½" : ""})`, w.floors)}${[1, 2, 3].map(n => opt(n, `${n}${n < p.floors ? " (lower than the house)" : n > p.floors ? " (taller than the house)" : ""}`, w.floors)).join("")}</select></div>`
@@ -1534,7 +1534,7 @@ function wallCardBody() {
   // (the floors the wall can have: the most of its sections, and the attic when there is one: choosing a later floor in the tree must not fall back to the ground floor)
   const floorsHere = Math.max(maxFloorsWithAttic(p, wid), (wf ? wf.floors : p.floors) + ((wf ? wf.half : p.halfStorey) ? 1 : 0));
   if (wvFloor >= floorsHere) wvFloor = 0;
-  return `<div class="wincard"><p class="hint">${esc(wallLabel(p, wvWall))}, ${esc(floorNameIn(wid, wvFloor, wvSec).toLowerCase())}, ${L.toFixed(1)} m long. Add something on it:</p><div class="addrow"><button type="button" data-wvadd="window">+ Window</button><button type="button" data-wvadd="door" ${wvFloor === 0 ? "" : 'disabled title="Doors go on the ground floor"'}>+ Door</button>`
+  return `<div class="wincard"><h3 class="sub">${esc(wallLabel(p, wvWall))}</h3><p class="hint">${esc(wallLabel(p, wvWall))}, ${esc(floorNameIn(wid, wvFloor, wvSec).toLowerCase())}, ${L.toFixed(1)} m long. Add something on it:</p><div class="addrow"><button type="button" data-wvadd="window">+ Window</button><button type="button" data-wvadd="door" ${wvFloor === 0 ? "" : 'disabled title="Doors go on the ground floor"'}>+ Door</button>`
     + `<button type="button" data-wvadd="part" ${(p.wings || []).length >= MAX_WINGS || wvFloor !== 0 || isSplitWall(wvWall) ? "disabled" : ""}${wvFloor !== 0 ? ' title="Parts stand on the ground floor"' : ""}>+ Part</button>`
     + `</div></div>` + `<div class="wincard"><h3 class="sub">Look of this wall</h3><div id="wallLookW">${wallLookHtml(wvWall)}</div><div id="zonesEditorW"></div></div>`
     + `<div class="wincard"><h3 class="sub">Wallpaper on the inside</h3><div id="papersEditorW"></div></div>`
@@ -1825,7 +1825,7 @@ function renderObjectsCard(ed) {
   if (o) {
     const t = objectInfo(kind, o.type), must = spec.required.includes(o.type), range = (k, label, lo, hi, step, v, unit = " m") =>
       `<div class="field"><div class="fl"><label for="ob-${k}">${label}</label><output id="ob-${k}-o">${(+v).toFixed(2)}${unit}</output></div><input type="range" id="ob-${k}" data-k="${k}" min="${lo}" max="${hi}" step="${step}" value="${v}"></div>`;
-    html += `<div class="wincard"><p class="hint">${esc(t.hint)}</p>${pr.has(o.id) ? `<p class="warn">${esc(pr.get(o.id))}.</p>` : ""}`;
+    html += `<div class="wincard"><h3 class="sub">${esc(t.name)}</h3><p class="hint">${esc(t.hint)}</p>${pr.has(o.id) ? `<p class="warn">${esc(pr.get(o.id))}.</p>` : ""}`;
     if (o.type === "pasture") {
       const pa = pastureOf(p), ps = spec.pasture;
       html += `<div class="field"><div class="fl"><label for="ob-wall">Wall</label></div><select id="ob-wall">${WALLS.map(k => opt(k, WALL_NAMES[k], o.wall)).join("")}</select></div>`;
