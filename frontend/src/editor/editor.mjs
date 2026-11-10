@@ -1428,11 +1428,9 @@ function bindDividers(host, pid = 0) {
   host.querySelectorAll("[data-splitrm]").forEach(btn => btn.onclick = () => removeDivider(pid, +btn.dataset.splitrm));
 }
 /** The main building's card: what is where, adding a part, and parts from a file or from My parts. */
+/** The card of the main building: its sections (the rest of what it has is in the sections below it, see placeShape). */
 function mainCardHtml() {
-  const opt = (v, label, cur) => `<option value="${v}" ${String(v) === String(cur) ? "selected" : ""}>${esc(label)}</option>`;
-  const wallsLive = wallsOf(p), importWalls = [["Main building", ["front", "back", "left", "right"]], ...liveWings(p).map(g => [partName(p, g.id), ["End", "Left", "Right"].map(s2 => wingWallKey(g.id, s2))])];
-  return `<div class="wincard"><p class="hint">${p.width} \u00D7 ${p.depth} m, ${p.floors} floor${p.floors > 1 ? "s" : ""}, ${+floorHeightsOf(p).reduce((x, y) => x + y, 0).toFixed(2)} m high${(p.wings || []).length ? `, ${p.wings.length} part${p.wings.length > 1 ? "s" : ""}` : ""}. Its size, floors, roof, surfaces and inside walls are below; colours are in Settings. Choose a wall in the tree to add windows, doors and parts on it.</p></div>`
-    + dividersHtml();
+  return dividersHtml();
 }
 const FLOOR_KEYS = ["floorHeight", "floor2Height", "floor3Height"], FLOOR_LABELS = ["Height of the ground floor", "Height of the second floor", "Height of the third floor"];
 /** A floor of the building or of a part: its height (the attic's: the knee wall). */
