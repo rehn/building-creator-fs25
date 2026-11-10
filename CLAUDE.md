@@ -59,7 +59,7 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
   installNumberEntry; a slider whose number is not its own value has data-scale, e.g. a window's position in metres).
   Mod of several buildings (start page, app/page.tsx pack()): tick boxes on the cards; each building is opened in a hidden createEditor, ed.exportInto(folder, name)
   (editor.mjs fillMod: house.xml, house.i3d, textures, items, store.png), then modDescXmlMulti lists them all (model.mjs); icon.png from the first.
-  Editor panel: one panel with a tab for each task (TABS in model.mjs: building, inside, settings, game; the Shape sections (Size, Roof, Kupor, Surfaces: detail: true) have no tab of their own, they are the main building's card in the details panel; Settings = window and door defaults, Colors, Rooms and curtains, Inside walls; every SCHEMA section has a tab and may have a label: the
+  Editor panel: one panel with a tab for each task (TABS in model.mjs: building, inside, settings, game; the Shape sections (Size, Roof, Kupor, Surfaces, Inside walls: detail: true) have no tab of their own, they are the main building's card in the details panel; Settings = window and door defaults, Colors, Rooms and curtains; every SCHEMA section has a tab and may have a label: the
   name shown; kinds' own sections are tab "game"), a search box (editor.mjs applySearch: all tabs at once, sections and [data-k] rows with all the words) and settings
   that don't apply hidden (class na, syncOutputs off()).
   Fence drawn by hand: the pasture object has optional points [[x, z] ...] (up to MAX_FENCE_POINTS, objects.mjs); pastureOf() then uses them as the fence, in order (wall, a and b
