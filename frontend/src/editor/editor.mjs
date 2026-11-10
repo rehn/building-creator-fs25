@@ -43,7 +43,7 @@ const MARKUP = `<div class="hx-editor" data-tab="building">
     <p class="hint hx-nomatch" id="noMatches" hidden>Nothing matches. Try another word, like \u201Croof\u201D, \u201Ccolor\u201D or \u201Cdoor\u201D.</p>
   </aside>
   <aside class="hx-panel hx-details" id="details" aria-label="Details of what is chosen in the tree">
-    <div id="mainCard"></div><div id="mainShapeHost"></div><div id="wallCard"></div><div id="winEditor"></div><div id="wingsEditor"></div>
+    <div id="mainShapeHost"></div><div id="mainCard"></div><div id="mainShapeHost2"></div><div id="wallCard"></div><div id="winEditor"></div><div id="wingsEditor"></div>
   </aside>
   <div class="hx-rz" id="rz1" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Resize the left panel"></div>
   <div class="hx-rz" id="rz2" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Resize the details panel"></div>
@@ -540,11 +540,20 @@ const readout = $("readout");
 let lastGeo = null;
 let showWalkArea = false;   // (paint where the animals can walk on the ground)
 /** The Shape tab's sections live under the main building in the tree while it is chosen (and the Shape tab isn't shown), else in the Shape tab. */
+// (the order of the main building's cards: the shape, then how it is divided, then what it looks like: Size, Roof, Open sides, Sections (the card in between), Surfaces, Inside walls, Kupor)
+const SHAPE_FIRST = ["Size", "Roof", "Open sides"], SHAPE_THEN = ["Surfaces", "Inside walls", "Kupor (dormers)"];
 function placeShape() {
-  const host = $("mainShapeHost"), home = $("controls-shape");
-  if (!host || !home) return;
-  const want = mainChosen && editorEl.dataset.tab === "building" && !searching ? host : home;
-  for (const d of shapeSections) if (d.parentElement !== want) want.appendChild(d);
+  const host = $("mainShapeHost"), host2 = $("mainShapeHost2"), home = $("controls-shape");
+  if (!host || !host2 || !home) return;
+  const on = mainChosen && editorEl.dataset.tab === "building" && !searching;
+  const rank = (list, d) => { const i = list.indexOf(d.dataset.section); return i < 0 ? list.length : i; };
+  const first = shapeSections.filter(d => SHAPE_FIRST.includes(d.dataset.section)).sort((a, b) => rank(SHAPE_FIRST, a) - rank(SHAPE_FIRST, b));
+  const then = shapeSections.filter(d => !SHAPE_FIRST.includes(d.dataset.section)).sort((a, b) => rank(SHAPE_THEN, a) - rank(SHAPE_THEN, b));
+  for (const [list, want] of [[first, on ? host : home], [then, on ? host2 : home]]) {
+    // (moved only when they are not there in this order: moving an element under the pointer would end a slider's drag)
+    const there = [...want.children].filter(x => list.includes(x));
+    if (there.length !== list.length || there.some((x, i) => x !== list[i])) for (const d of list) want.appendChild(d);
+  }
 }
 /**
  * Every help text (a p.hint in the panels) sits behind a small "?": hover it, focus it or tap it to read the text. A hint right under a section's heading
