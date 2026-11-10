@@ -175,7 +175,7 @@ test("from photos: what is wrong with an answer is listed for the admin", async 
   // a wing in the pasture, one too close to another, and a feed pad inside the building
   const bad = {...longBarn, pasture: {wall: "back", depth: 25}, wings: [{...longBarn.wings[0], wall: "back"}, {...longBarn.wings[0], wall: "back", along: 0.9}], objects: [{type: "food", wall: "back", along: 0.5, out: 0.5}]};
   const msgs = answerProblems("cow", bad).join(" | ");
-  assert.match(msgs, /Wing 2 was left out: It is too close/);
+  assert.match(msgs, /Extension 2 was left out: It is too close/);
   assert.match(msgs, /wing stands in the pasture/i);
   assert.match(msgs, /Feed pad: It.s in the building/);
   // too many cows for the floor

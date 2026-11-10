@@ -62,7 +62,7 @@ const CLADDING = [["lockpanel","Board and batten (lockpanel)"],["horizontal","Ho
 export const TABS = [["building", "Building"], ["inside", "Inside"], ["settings", "Settings"], ["game", "Game"]];
 /** Editor sections every building shares (kinds hide the ones they don't use, see kind.hides). */
 const SHARED_SECTIONS = [
-  {title:"Building", label:"Parts, walls and openings", tab:"building", custom:"tree", hint:"The building as a tree: the main building, its walls, and on each wall its windows, doors and parts (a part has walls of its own, with their things). Choose one to change it, and add a window, a door or a part on a wall. Tap a wall, a window or a door in the preview to find it here.", fields:[]},
+  {title:"Building", label:"Extensions, walls and openings", tab:"building", custom:"tree", hint:"The building as a tree: the main building, its walls, and on each wall its windows, doors and extensions (an extension has walls of its own, with their things). Choose one to change it, and add a window, a door or an extension on a wall. Tap a wall, a window or a door in the preview to find it here.", fields:[]},
   // tab: where the editor shows the section (TABS); label: its name there, when not the title (the title is also its id).
   {title:"Size", tab:"building", detail:true, fields:[
     {k:"width", label:"Front wall length", min:2.5, max:60, step:0.1, unit:" m"},
@@ -96,7 +96,7 @@ const SHARED_SECTIONS = [
   {title:"Doors", tab:"settings", hint:"The style of every door. The doors themselves are in the Building tab: choose one there (or tap it in the preview) to move it, change its size or give it a porch or canopy.", fields:[
     {k:"doorStyle", label:"Style", type:"select", options:DOOR_STYLES.map(s => [s.id, s.name])}]},
   {title:"Inside", label:"Furniture and pieces", tab:"inside", custom:"inside", hint:"The pieces inside the building. Fill it automatically to match its size, then change it as you like.", fields:[]},
-  {title:"Surfaces", tab:"building", detail:true, hint:"Panel, split and roof look of the building (its parts follow it unless they have a look of their own). A single wall can have its own panel, colour and split: choose it in the tree.", fields:[
+  {title:"Surfaces", tab:"building", detail:true, hint:"Panel, split and roof look of the building (its extensions follow it unless they have a look of their own). A single wall can have its own panel, colour and split: choose it in the tree.", fields:[
     {k:"wallCladding", label:"Wall cladding (the upper part when split)", type:"select", options:CLADDING},
     {k:"wallSplit", label:"Two materials on the walls", type:"select", options:[["one","No, one material"],["floor","Yes, split at the top of the ground floor"],["height","Yes, split at a height"]]},
     {k:"splitHeight", label:"Split height, above the ground floor's floor", min:0.5, max:10, step:0.05, unit:" m"},
@@ -161,7 +161,7 @@ export const FIELD = {};
 SCHEMA.forEach(g => g.fields.forEach(f => FIELD[f.k] = FIELD[f.k] || f));
 export const WALLS = ["front", "back", "left", "right"];
 export const WALL_NAMES = {front:"Front", back:"Back", left:"Left side", right:"Right side", ...Object.fromEntries(SPLIT_WALLS.map((k, i) => [k, `Wall before section ${i + 2}`])),
-  ...Object.fromEntries(Array.from({length: HARD_MAX_PARTS}, (_, i) => [[wingWallKey(i + 1, "End"), `Wing ${i + 1} end`], [wingWallKey(i + 1, "Left"), `Wing ${i + 1} left side`], [wingWallKey(i + 1, "Right"), `Wing ${i + 1} right side`]]).flat())};
+  ...Object.fromEntries(Array.from({length: HARD_MAX_PARTS}, (_, i) => [[wingWallKey(i + 1, "End"), `Extension ${i + 1} end`], [wingWallKey(i + 1, "Left"), `Extension ${i + 1} left side`], [wingWallKey(i + 1, "Right"), `Extension ${i + 1} right side`]]).flat())};
 export { WING_WALLS, MAX_WINGS, HARD_MAX_PARTS, setMaxParts };
 /** A wing's sliders (the wall and floors are selects): the settings of a wing in p.wings. */
 export const WING_FIELDS = [
@@ -237,7 +237,7 @@ export function moveBeside(P, item, target, after) {
   const wings = (P.wings || []).map(w => { const c = find("part", w.id); return c === null ? w : {...w, pos: c}; });
   void posOf;
   const live = liveWings({...P, windows, wings});
-  if (group.some(g => g.kind === "part" && !live.some(l => l.id === g.id))) return {error: "A part doesn't fit there."};
+  if (group.some(g => g.kind === "part" && !live.some(l => l.id === g.id))) return {error: "An extension doesn't fit there."};
   return {windows, wings};
 }
 /**
@@ -260,9 +260,9 @@ export function moveToWall(P, item, key, floor, near = null, after = true, at = 
     if (c === null) return {error: "There isn't room for it there."};
     return {windows: P.windows.map(x => x.id === here.id ? {...x, wall: key, floor, pos: c / L} : x)};
   }
-  if (floor !== 0) return {error: "Parts stand on the ground floor."};
+  if (floor !== 0) return {error: "Extensions stand on the ground floor."};
   const gone = new Set([here.id]); for (let again = true; again;) { again = false; for (const x of P.wings) if (!gone.has(x.id) && gone.has(wingIdOf(x.wall))) { gone.add(x.id); again = true; } }
-  if (wid && gone.has(wid)) return {error: "A part can't stand on itself or on what stands on it."};
+  if (wid && gone.has(wid)) return {error: "An extension can't stand on itself or on what stands on it."};
   const mine = liveWings(P).find(g => g.id === here.id), w = mine ? mine.ww : here.width, Q = {...P, wings: P.wings.filter(x => x.id !== here.id)}, {gaps} = freeStretches(Q, key, 0, true);
   const c = fitCentre(gaps, w, near ? (after ? c0 + w / 2 : c0 - w / 2) : c0);
   if (c === null) return {error: "There isn't room for it there."};
@@ -501,7 +501,7 @@ const variantOf = (p, m) => /P\d+$/.test(m) ? matTable(p).variants.find(v => v.n
 /** Every material the building uses: the shared ones, then the parts' own. */
 export const matList = p => [...MATS, ...matTable(p).variants.map(v => v.name)];
 /** A part's name: its own, else "Wing n". */
-export const partName = (p, id) => { const w = (p.wings || []).find(x => x.id === id); return w && w.name ? w.name : `Wing ${id}`; };
+export const partName = (p, id) => { const w = (p.wings || []).find(x => x.id === id); return w && w.name ? w.name : `Extension ${id}`; };
 /** A wall's name for the editor: the house's own, or "<part's name> end | left side | right side". */
 export function wallLabel(p, key) {
   const id = wingIdOf(key), side = /(End|Left|Right)$/.exec(key || ""), dv = /D(\d)$/.exec(key || "");
@@ -566,7 +566,7 @@ export function buildingTree(p) {
     return {type: "part", id: it.id, s0: it.s0, s1: it.s1, ...(it.off ? {off: it.off} : {}), children: it.off ? [] : sectionNodes(it.id, [...["End", "Left", "Right"].map(s => wingWallKey(it.id, s)), ...((lw || {}).splits || []).map(s => wingSplitKey(it.id, s.id))])};
   };
   const children = sectionNodes(0, ["front", "back", "left", "right", ...splitsOf(p).map(s => s.key)]);
-  const lost = (p.wings || []).filter(w => !seen.has(w.id)).map(w => ({type: "part", id: w.id, off: "It is left out: the part it stands on is.", children: []}));
+  const lost = (p.wings || []).filter(w => !seen.has(w.id)).map(w => ({type: "part", id: w.id, off: "It is left out: the extension it stands on is.", children: []}));
   // the game objects (the sleep point, feed places, the pasture ...): a node of their own after the building, when the kind has any
   const ko = kindOf(p).objects, game = ko && ko.types && ko.types.length ? {type: "game", children: (p.objects || []).map(o => ({type: "object", id: o.id, otype: o.type, name: objectInfo(kindOf(p), o.type).name}))} : null;
   return {type: "main", children, lost, game};
@@ -612,8 +612,8 @@ export function openingProblem(P, key, kind, floor = 0, at = null) {
   const {L, gaps: free} = freeStretches(P, key, floor), gaps = gapsWithFloor(P, key, floor, free), widest = Math.max(0, ...gaps.map(([a, b]) => b - a));
   if (widest >= w + 0.01) return null;
   const partHere = wallItems(P, key).some(i => i.kind === "part" && (floor < i.floors || i.off));
-  if (!gaps.length) return partHere ? "A part stands against this wall there and takes the whole floor." : free.length ? "No section of this wall has that floor with room for it." : `The wall is only ${L.toFixed(1)} m: nothing is left once 30 cm at each end and 20 cm beside other things are kept clear.`;
-  return `The widest free stretch is ${widest.toFixed(2)} m, and ${door ? "the door" : "the window"} is ${(+w).toFixed(2)} m wide (30 cm at the ends and 20 cm beside other things are kept clear${partHere ? ", and a part takes some of the wall" : ""}).`;
+  if (!gaps.length) return partHere ? "An extension stands against this wall there and takes the whole floor." : free.length ? "No section of this wall has that floor with room for it." : `The wall is only ${L.toFixed(1)} m: nothing is left once 30 cm at each end and 20 cm beside other things are kept clear.`;
+  return `The widest free stretch is ${widest.toFixed(2)} m, and ${door ? "the door" : "the window"} is ${(+w).toFixed(2)} m wide (30 cm at the ends and 20 cm beside other things are kept clear${partHere ? ", and an extension takes some of the wall" : ""}).`;
 }
 export function addOpening(P, key, kind, floor = 0, at = null) {
   if (!wallsOf(P)[key]) return null;

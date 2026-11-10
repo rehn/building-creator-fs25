@@ -68,8 +68,8 @@ test("import a part: onto another part's wall, beside what is there, and on a ba
 
 test("import a part: not a part file, too many parts, no room, no such wall: an error, nothing changed", () => {
   const f = exportPart(source(), 3), p = target();
-  assert.match(importPart(p, "back", {format: "something"}).error, /part/i);
-  assert.match(importPart(p, "back", null).error, /part/i);
+  assert.match(importPart(p, "back", {format: "something"}).error, /extension/i);
+  assert.match(importPart(p, "back", null).error, /extension/i);
   assert.match(importPart(p, "nope", f).error, /wall/i);
   const full = sanitize({...target(), wings: Array.from({length: 11}, (_, i) => ({id: i + 1, wall: "back", pos: 0.5, width: 3, depth: 3}))});
   assert.equal(full.wings.length, 11);

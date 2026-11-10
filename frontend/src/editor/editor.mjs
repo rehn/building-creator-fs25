@@ -1154,7 +1154,7 @@ function renderPipesUI() {
 /** A part more on a wall (the house's or a part's), with windows on its walls like a new wing has. */
 function addPart(wall) {
   const next = addPartOn(p, wall);
-  if (!next) { toast("No room for a part on that wall: it is full, or the most parts is reached"); return false; }
+  if (!next) { toast("No room for an extension on that wall: it is full, or the most extensions is reached"); return false; }
   const id = next[next.length - 1].id;
   p.wings = next;
   { const d = addPartDoor(p, id); if (d) p.windows = d; }   // (the wall between it and what it stands on is whole, with a door in it)
@@ -1204,7 +1204,7 @@ function bindPartLook(ed, w, changed, pid) {
   });
 }
 /** Puts a part file on the wall chosen for imports; says how it went. */
-function applyPart(data, wall = partImportWall, message = "Part imported.") {
+function applyPart(data, wall = partImportWall, message = "Extension imported.") {
   const before = (p.wings || []).length, r = importPart(p, wall, data);
   if (r.error) { toast(r.error); return false; }
   const q = sanitize({...p, ...r.settings});
@@ -1225,29 +1225,29 @@ async function loadMyParts() {
 }
 function myPartsHtml() {
   if (!partSource) return "";
-  if (myParts === null) { loadMyParts(); return `<p class="hint">Loading your parts\u2026</p>`; }
-  const info = it => [it.info && it.info.parts ? `${it.info.parts} part${it.info.parts > 1 ? "s" : ""}` : "", it.info && it.info.items ? `${it.info.items} piece${it.info.items > 1 ? "s" : ""}` : "", it.shared ? "shared" : ""].filter(Boolean).join(", ");
+  if (myParts === null) { loadMyParts(); return `<p class="hint">Loading your extensions\u2026</p>`; }
+  const info = it => [it.info && it.info.parts ? `${it.info.parts} extension${it.info.parts > 1 ? "s" : ""}` : "", it.info && it.info.items ? `${it.info.items} piece${it.info.items > 1 ? "s" : ""}` : "", it.shared ? "shared" : ""].filter(Boolean).join(", ");
   const rows = myParts.map(it => `<li><button type="button" data-usepart="${it.id}" title="Put it on the wall chosen above">${esc(it.name)} <span class="muted">${esc(info(it))}</span></button>`
     + (myPartsAdmin && it.mine ? ` <button type="button" class="small" data-sharepart="${it.id}" data-shared="${it.shared}">${it.shared ? "Stop sharing" : "Share with everyone"}</button>` : "")
     + (it.mine ? ` <button type="button" class="small danger" data-delpart="${it.id}" aria-label="Delete ${esc(it.name)}">Delete</button>` : "") + `</li>`).join("");
-  return `<div class="myparts"><h4>My parts</h4>` + (rows ? `<ul class="objlist">${rows}</ul>` : `<p class="hint">Nothing saved yet. Choose a part and press “Save to My parts” to use it in other buildings.</p>`) + `</div>`;
+  return `<div class="myparts"><h4>My extensions</h4>` + (rows ? `<ul class="objlist">${rows}</ul>` : `<p class="hint">Nothing saved yet. Choose an extension and press “Save to My extensions” to use it in other buildings.</p>`) + `</div>`;
 }
 function bindMyParts(ed) {
   if (!partSource) return;
   ed.querySelectorAll("[data-usepart]").forEach(b => b.onclick = async () => {
-    try { const full = await partSource.get(b.dataset.usepart); applyPart(full.data); } catch { toast("Couldn't load that part. Try again."); }
+    try { const full = await partSource.get(b.dataset.usepart); applyPart(full.data); } catch { toast("Couldn't load that extension. Try again."); }
   });
   ed.querySelectorAll("[data-sharepart]").forEach(b => b.onclick = async () => {
     try { await partSource.update(b.dataset.sharepart, {shared: b.dataset.shared !== "true"}); myParts = null; renderWingsUI(); } catch { toast("Couldn't change that. Try again."); }
   });
   ed.querySelectorAll("[data-delpart]").forEach(b => b.onclick = async () => {
-    if (!window.confirm(t("Delete this saved part? Buildings that already have it are not changed."))) return;
+    if (!window.confirm(t("Delete this saved extension? Buildings that already have it are not changed."))) return;
     try { await partSource.remove(b.dataset.delpart); myParts = null; renderWingsUI(); toast("Deleted"); } catch { toast("Couldn't delete it. Try again."); }
   });
   if ($("partSave")) $("partSave").onclick = async () => {
     const w = (p.wings || []).find(x => x.id === wSel), f = w && exportPart(p, w.id);
     if (!f) return;
-    try { await partSource.save({name: f.name, info: {parts: f.parts.length, windows: f.windows.length, items: f.items.length}, data: f}); myParts = null; renderWingsUI(); toast(`${f.name} saved to My parts`); }
+    try { await partSource.save({name: f.name, info: {parts: f.parts.length, windows: f.windows.length, items: f.items.length}, data: f}); myParts = null; renderWingsUI(); toast(`${f.name} saved to My extensions`); }
     catch (e) { toast((e && e.message) || "Couldn't save it. Try again."); }
   };
 }
@@ -1283,7 +1283,7 @@ function renderPartCard() {
     // the walls it can stand on: the house's and those of the parts before it in the list (its parent is one of them)
     const before = wings.slice(0, wings.findIndex(x => x.id === w.id)), onWalls = [...["front", "back", "left", "right"], ...before.flatMap(e => WING_PARTS.map(s => wingWallKey(e.id, s)))];
     const range = f => `<div class="field"><div class="fl"><label for="wg-${f.k}">${f.label}</label><output id="wg-${f.k}-o">${f.k === "pos" ? (w.pos * wallL).toFixed(2) : (+w[f.k]).toFixed(2)} m</output></div><input type="range" id="wg-${f.k}" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}" value="${w[f.k]}" ${f.k === "pos" ? `data-scale="${wallL}"` : ""}></div>`;
-    html += `<div class="wincard"><h3 class="sub" translate="no">${esc(partName(p, w.id))}</h3><div class="field"><div class="fl"><label for="wg-name">Name</label></div><input type="text" id="wg-name" maxlength="40" value="${esc(w.name || "")}" placeholder="${esc(`Wing ${w.id}`)}"></div>`
+    html += `<div class="wincard"><h3 class="sub" translate="no">${esc(partName(p, w.id))}</h3><div class="field"><div class="fl"><label for="wg-name">Name</label></div><input type="text" id="wg-name" maxlength="40" value="${esc(w.name || "")}" placeholder="${esc(`Extension ${w.id}`)}"></div>`
       + `<div class="field"><div class="fl"><label for="wg-wall">On the wall</label></div><select id="wg-wall">${onWalls.map(k => opt(k, wallLabel(p, k), w.wall)).join("")}</select></div>`
       + WING_FIELDS.map(range).join("")
       + `<div class="field"><div class="fl"><label for="wg-floors">Floors</label></div><select id="wg-floors">${opt(0, `As the house (${p.floors}${p.halfStorey ? "½" : ""})`, w.floors)}${[1, 2, 3].map(n => opt(n, `${n}${n < p.floors ? " (lower than the house)" : n > p.floors ? " (taller than the house)" : ""}`, w.floors)).join("")}</select></div>`
@@ -1293,7 +1293,7 @@ function renderPartCard() {
       + `<div class="field"><div class="fl"><label for="wg-vent">Roof ventilators (lanterns on the ridge)</label><output id="wg-vent-o">${w.ventilators || 0}</output></div><input type="range" id="wg-vent" min="0" max="4" step="1" value="${w.ventilators || 0}"></div>`
       + partLookHtml(w)
       + dividersHtml(w.id)
-      + `<p class="hint">A wing with fewer floors, or a flatter roof, has a lower roof. Roof angle 0 follows the house.</p><div class="row">${wings.length < MAX_WINGS ? `<button type="button" id="wingAddChild">+ Add a part on ${esc(partName(p, w.id))}</button>` : ""}${partSource ? `<button type="button" id="partSave">Save to My parts</button>` : ""}<button type="button" id="partExport">Export this part</button><button type="button" id="wingRemove" class="danger">Remove ${esc(partName(p, w.id))} and what stands on it</button></div></div>`;
+      + `<p class="hint">An extension with fewer floors, or a flatter roof, has a lower roof. Roof angle 0 follows the house.</p><div class="row">${wings.length < MAX_WINGS ? `<button type="button" id="wingAddChild">+ Add an extension on ${esc(partName(p, w.id))}</button>` : ""}${partSource ? `<button type="button" id="partSave">Save to My extensions</button>` : ""}<button type="button" id="partExport">Export this extension</button><button type="button" id="wingRemove" class="danger">Remove ${esc(partName(p, w.id))} and what stands on it</button></div></div>`;
   }
   ed.innerHTML = html;
   const changed = partsChanged;
@@ -1358,7 +1358,7 @@ function treeNavHtml() {
     if (n.type === "section") return `Section ${n.index + 1} <span class="muted">${fmt(n.from)}\u2013${fmt(n.to)} m, ${n.floors} floor${n.floors > 1 ? "s" : ""}</span>`;
     if (n.type === "wall") return `${esc(wallLabel(p, n.key))}${n.span ? ` <span class="muted">${fmt(n.span[0])}\u2013${fmt(n.span[1])} m</span>` : ""}`;
     if (n.type === "floor") { const h = floorHeightOf(n.part, n.floor, n.section); return `${esc(floorNameIn(n.part, n.floor, n.section))}${n.missing ? ` <span class="muted">(not in this section)</span>` : h ? ` <span class="muted">${fmt(h)} m</span>` : ""}`; }
-    if (n.type === "part") { const l = live.find(x => x.id === n.id); return `${esc(partName(p, n.id))} <span class="muted">${l ? `${fmt(l.ww)} \u00D7 ${fmt(l.wd)} m` : "part"}</span>`; }
+    if (n.type === "part") { const l = live.find(x => x.id === n.id); return `${esc(partName(p, n.id))} <span class="muted">${l ? `${fmt(l.ww)} \u00D7 ${fmt(l.wd)} m` : "extension"}</span>`; }
     return `${n.type === "door" ? "Door" : "Window"} <span class="muted">${fmt(n.s0)}\u2013${fmt(n.s1)} m</span>`;
   };
   if (treeReveal) {
@@ -1452,7 +1452,7 @@ function floorCardHtml() {
   if (wvFloor >= Math.max(maxFloorsWithAttic(p, wvPart), floors + (half ? 1 : 0))) wvFloor = 0;
   const fmt = v => (+v).toFixed(2).replace(/\.?0+$/, "");
   const title = `${esc(floorNameIn(wvPart, wvFloor, wvSec))}${sectioned ? " \u2013 section " + (wvSec + 1) : ""}${w ? " \u2013 " + esc(partName(p, w.id)) : ""}`;
-  const walls = `<p class="hint">The walls of this floor are below it in the tree: choose one to put windows, doors and parts on it and to set how it looks.</p>`;
+  const walls = `<p class="hint">The walls of this floor are below it in the tree: choose one to put windows, doors and extensions on it and to set how it looks.</p>`;
   if (sectioned) {
     const n = sc.floors, attic = sc.half && wvFloor === n;
     if (wvFloor >= n && !attic) return `<div class="wincard"><h3 class="sub">${title}</h3><p class="hint keep">This section has no such floor: what is listed here is hidden.</p></div>`;
@@ -1474,11 +1474,11 @@ function sectionCardHtml() {
   const w = wvPart ? (p.wings || []).find(x => x.id === wvPart) : null, lw = wvPart ? liveWings(p).find(x => x.id === wvPart) : null, splits = wvPart ? (lw || {splits: []}).splits : splitsOf(p), dv = wvSec > 0 ? splits[wvSec - 1] : null;
   const fmt = v => (+v).toFixed(2).replace(/\.?0+$/, ""), total = sc.hs.reduce((a, b) => a + b, 0), L = wvPart ? (lw ? lw.wd : w.depth) : (p.ridge === "width" ? p.width : p.depth);
   const base = wvPart ? (lw ? lw.hs : []) : floorHeightsOf(p);
-  return `<div class="wincard"><h3 class="sub">Section ${wvSec + 1}${w ? " \u2013 " + esc(partName(p, w.id)) : ""}</h3><p class="hint">${fmt(sc.from)} to ${fmt(sc.to)} m along ${w ? "the part" : "the building"}: ${sc.floors} floor${sc.floors > 1 ? "s" : ""}, ${fmt(total)} m high. Choose a floor of it in the tree to set its height.</p>`
+  return `<div class="wincard"><h3 class="sub">Section ${wvSec + 1}${w ? " \u2013 " + esc(partName(p, w.id)) : ""}</h3><p class="hint">${fmt(sc.from)} to ${fmt(sc.to)} m along ${w ? "the extension" : "the building"}: ${sc.floors} floor${sc.floors > 1 ? "s" : ""}, ${fmt(total)} m high. Choose a floor of it in the tree to set its height.</p>`
     + (dv ? `<div class="field"><div class="fl"><label for="sp${wvPart}-${dv.id}">Starts at</label><output id="sp${wvPart}-${dv.id}-o">${dv.at.toFixed(2)} m</output></div><input type="range" id="sp${wvPart}-${dv.id}" data-split="${dv.id}" min="2" max="${Math.max(2, L - 2)}" step="0.05" value="${dv.at}"></div>`
         + sectionHtml(wvPart, dv, sc, base)
         + `<div class="addrow"><button type="button" data-gosplit="${dv.id}">Go to the wall it starts with</button><button type="button" class="danger" data-splitrm="${dv.id}">Remove this section</button></div>`
-      : `<p class="hint">The first section has the ${w ? "part's" : "building's"} own floors: ${w ? "set them in the part's card" : "set how many with Full floors, below"}.</p>`) + `</div>`;
+      : `<p class="hint">The first section has the ${w ? "extension's" : "building's"} own floors: ${w ? "set them in the extension's card" : "set how many with Full floors, below"}.</p>`) + `</div>`;
 }
 /** Puts the settings row of the chosen floor in its card (the main building's: the rows of the schema; a part's have their own slider). */
 function bindFloorCard() {
@@ -1538,7 +1538,7 @@ function wallCardBody() {
   const floorsHere = Math.max(maxFloorsWithAttic(p, wid), (wf ? wf.floors : p.floors) + ((wf ? wf.half : p.halfStorey) ? 1 : 0));
   if (wvFloor >= floorsHere) wvFloor = 0;
   return `<div class="wincard"><h3 class="sub">${esc(wallLabel(p, wvWall))}</h3><p class="hint">${esc(wallLabel(p, wvWall))}, ${esc(floorNameIn(wid, wvFloor, wvSec).toLowerCase())}, ${L.toFixed(1)} m long. Add something on it:</p><div class="addrow"><button type="button" data-wvadd="window">+ Window</button><button type="button" data-wvadd="door" ${wvFloor === 0 ? "" : 'disabled title="Doors go on the ground floor"'}>+ Door</button>`
-    + `<button type="button" data-wvadd="part" ${(p.wings || []).length >= MAX_WINGS || wvFloor !== 0 || isSplitWall(wvWall) ? "disabled" : ""}${wvFloor !== 0 ? ' title="Parts stand on the ground floor"' : ""}>+ Part</button>`
+    + `<button type="button" data-wvadd="part" ${(p.wings || []).length >= MAX_WINGS || wvFloor !== 0 || isSplitWall(wvWall) ? "disabled" : ""}${wvFloor !== 0 ? ' title="Extensions stand on the ground floor"' : ""}>+ Extension</button>`
     + `</div></div>` + `<div class="wincard"><h3 class="sub">Look of this wall</h3><div id="wallLookW">${wallLookHtml(wvWall)}</div><div id="zonesEditorW"></div></div>`
     + `<div class="wincard"><h3 class="sub">Wallpaper on the inside</h3><div id="papersEditorW"></div></div>`
     + pipesCardHtml(wvWall);
@@ -1635,8 +1635,8 @@ function addOnWall(kind) {
 }
 /** A part on the main building (on the first wall with room) or on part pid (on a side or its end). */
 function addChildPart(pid) {
-  if (pid) { if (!["Left", "Right", "End"].some(sd => addPart(wingWallKey(pid, sd)))) toast(`No room for a part on ${partName(p, pid)}`); }
-  else if (!["back", "front", "right", "left"].some(k => addPart(k))) toast("No room for another part on the main building");
+  if (pid) { if (!["Left", "Right", "End"].some(sd => addPart(wingWallKey(pid, sd)))) toast(`No room for an extension on ${partName(p, pid)}`); }
+  else if (!["back", "front", "right", "left"].some(k => addPart(k))) toast("No room for another extension on the main building");
 }
 /**
  * What can be added from a tree node, for the menu: [{act, label, on}] (on: whether it can be tried): a window, a door and a part on a wall (a door on the ground floor only, a part on the ground floor of a
@@ -1644,7 +1644,7 @@ function addChildPart(pid) {
  */
 function ctxAdds(kind, v, f) {
   const room = (p.wings || []).length < MAX_WINGS;
-  if (kind === "wall") return [{act: "add-window", label: "Add window", on: true}, {act: "add-door", label: "Add door", on: +f === 0}, {act: "add-part", label: "Add part", on: +f === 0 && !isSplitWall(v) && room}];
+  if (kind === "wall") return [{act: "add-window", label: "Add window", on: true}, {act: "add-door", label: "Add door", on: +f === 0}, {act: "add-part", label: "Add extension", on: +f === 0 && !isSplitWall(v) && room}];
   // (a part is added on a wall, so the menus of the building and of a part have no "add part": the walls under them have; what they are divided into is sections)
   if (kind === "main") return [{act: "add-section", label: "Add section", on: p.roofType !== "hip" && (p.splits || []).length < MAX_SPLITS}];
   if (kind === "part") { const w = (p.wings || []).find(x => x.id === +v); return [{act: "add-section", label: "Add section", on: !!w && (w.splits || []).length < MAX_SPLITS}]; }
@@ -1686,7 +1686,7 @@ function duplicateWindow(id) {
 function duplicatePart(id) {
   const w = (p.wings || []).find(x => x.id === id), f = w && exportPart(p, id);
   if (!f) return false;
-  return applyPart(f, w.wall, "Part copied.");
+  return applyPart(f, w.wall, "Extension copied.");
 }
 function duplicateDivider(pid, id) {
   const r = duplicateSplit(p, pid, id);

@@ -100,7 +100,7 @@ export function wingsOf(P) {
   const houseRect = {x0: -W / 2, x1: W / 2, z0: -D / 2, z1: D / 2};
   for (const w of P.wings.slice(0, MAX_WINGS)) {
     const pid = wingIdOf(w.wall), par = pid ? out.find(q => q.id === pid) : null;
-    if (pid && !(par && par.frames)) { out.push({id: w.id, off: par ? "The part it stands on is left out." : "The part it stands on is missing."}); continue; }
+    if (pid && !(par && par.frames)) { out.push({id: w.id, off: par ? "The extension it stands on is left out." : "The extension it stands on is missing."}); continue; }
     const key = par ? w.wall : main[w.wall] ? w.wall : "back", m = par ? par.frames[key] : main[key];
     // what it takes from its parent unless it sets it itself
     const pFloors = par ? par.floors : P.floors, pHs = par ? par.hs : floorsOf(P), pPitch = par ? par.pitch : P.roofPitch, pHalf = par ? par.half : P.halfStorey;
@@ -147,7 +147,7 @@ export function wingsOf(P) {
     // one that touches another part than its parent, eaves and all (two on one wall too close, two meeting at a corner, a part against the house), isn't built
     const g = o - 0.05, others = [...out.filter(q => q.rect && q.id !== pid).map(q => q.rect), ...(par ? [houseRect] : [])];
     const clash = others.find(q => q.x0 - o < rect.x1 + g && rect.x0 - o < q.x1 + g && q.z0 - o < rect.z1 + g && rect.z0 - o < q.z1 + g);
-    if (clash) { out.push({id, off: "It is too close to another part (their eaves would touch): move it along the wall or onto another wall."}); continue; }
+    if (clash) { out.push({id, off: "It is too close to another extension (their eaves would touch): move it along the wall or onto another wall."}); continue; }
     out.push({id, parent: pid, closed: w.closed === true, splits, type, wall: key, s0, s1, sc, ww, wd, floors, fh, hs, half, pitch, tanW, H: Hw, frames, rect, at});
   }
   return out;
