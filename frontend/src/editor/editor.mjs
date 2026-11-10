@@ -1408,9 +1408,7 @@ function mainCardHtml() {
   const opt = (v, label, cur) => `<option value="${v}" ${String(v) === String(cur) ? "selected" : ""}>${esc(label)}</option>`;
   const wallsLive = wallsOf(p), importWalls = [["Main building", ["front", "back", "left", "right"]], ...liveWings(p).map(g => [partName(p, g.id), ["End", "Left", "Right"].map(s2 => wingWallKey(g.id, s2))])];
   return `<div class="wincard"><p class="hint">${p.width} \u00D7 ${p.depth} m, ${p.floors} floor${p.floors > 1 ? "s" : ""}, ${+floorHeightsOf(p).reduce((x, y) => x + y, 0).toFixed(2)} m high${(p.wings || []).length ? `, ${p.wings.length} part${p.wings.length > 1 ? "s" : ""}` : ""}. Its size, floors, roof, surfaces and inside walls are below; colours are in Settings. Choose a wall in the tree to add windows, doors and parts on it.</p></div>`
-    + dividersHtml()
-    + `<div class="hx-card"><h3 class="hx-card-h">Parts to import</h3><div class="addrow"><button type="button" id="partImport">Import a part\u2026</button><label class="inline">onto <select id="partImportWall">${importWalls.map(([n, ks]) => `<optgroup label="${esc(n)}">${ks.filter(k => wallsLive[k]).map(k => opt(k, wallLabel(p, k), partImportWall)).join("")}</optgroup>`).join("")}</select></label><input type="file" id="partFile" accept=".json,application/json" hidden></div>`
-    + myPartsHtml() + `</div>`;
+    + dividersHtml();
 }
 const FLOOR_KEYS = ["floorHeight", "floor2Height", "floor3Height"], FLOOR_LABELS = ["Height of the ground floor", "Height of the second floor", "Height of the third floor"];
 /** A floor of the building or of a part: its height (the attic's: the knee wall). */
@@ -1579,16 +1577,7 @@ function renderTreeUI() {
   if (treeKind === "game" || treeKind === "object") renderObjectsCard(wall);
   if (treeKind === "section" || treeKind === "floor") wall.querySelectorAll("[data-gosplit]").forEach(b => b.onclick = () => selectNode("wall", splitNodeArg(wvPart ? wingSplitKey(wvPart, +b.dataset.gosplit) : "s" + b.dataset.gosplit)));
   if (treeKind === "main") {
-    $("partImportWall").onchange = e => { partImportWall = e.target.value; };
     bindDividers(main, 0);
-    $("partImport").onclick = () => $("partFile").click();
-    $("partFile").onchange = async e => {
-      const file = e.target.files && e.target.files[0]; e.target.value = "";
-      if (!file) return;
-      let data; try { data = JSON.parse(await file.text()); } catch { toast("That file isn't a part file (it isn't JSON)"); return; }
-      applyPart(data);
-    };
-    bindMyParts(main);
   }
   if (treeKind === "section") bindDividers(wall, wvPart);
   if (treeKind === "wall" && isSplitWall(wvWall)) wall.querySelectorAll("[data-gosection]").forEach(b => b.onclick = () => selectNode("section", {part: wingIdOf(wvWall), index: +b.dataset.gosection}));

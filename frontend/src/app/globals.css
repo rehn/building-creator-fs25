@@ -390,8 +390,10 @@ html:has(.editor-page) { overscroll-behavior: none; }
 .hx-q { position: relative; display: inline-flex; float: right; margin: 2px 0 2px 8px; cursor: help; outline: none; }
 .hx-q::before { content: "?"; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--line); color: var(--muted); font: 600 12px var(--font-body), sans-serif; display: flex; align-items: center; justify-content: center; background: var(--field); }
 .hx-q:hover::before, .hx-q:focus-visible::before, .hx-q.open::before { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
-.hx-q.in-head { float: none; margin: 0 8px 0 auto; }
-.hx-panel summary > .hx-q.in-head { margin-left: auto; margin-right: 10px; }
+/* a "?" in a section's heading sits just left of the + / - sign (placed by position, so it can't end up after it) */
+.hx-panel summary { position: relative; }
+.hx-q.in-head { position: absolute; float: none; right: 30px; top: 50%; margin: 0; transform: translateY(-50%); }
+.hx-details details[data-section] > summary > .hx-q.in-head { right: 44px; }
 .hx-q > p.hint { visibility: hidden; opacity: 0; pointer-events: none; transition: opacity .12s, visibility 0s; position: absolute; z-index: 30; top: 26px; right: 0; width: min(300px, 70vw); margin: 0; padding: 10px 12px; text-align: left; font: 400 13.5px/1.4 var(--font-body), sans-serif; text-transform: none; letter-spacing: 0; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 20px rgba(0, 0, 0, .28); cursor: default; }
 /* on hover the text comes up after a short wait (so it doesn't flash when the mouse passes over); it goes at once. A click or the keyboard shows it at once and keeps it open. */
 .hx-q:hover > p.hint { visibility: visible; opacity: 1; pointer-events: auto; transition: opacity .15s .4s, visibility 0s .4s; }
