@@ -32,7 +32,7 @@ test("the studs look old and used: a surface of their own, in several worn tones
 test("the inside of the boards can be left unpainted: raw, worn timber like the studs", () => {
   const painted = buildGeometry(barn()), raw = buildGeometry(barn({insidePanel: "raw"}));
   assert.equal(barn().insidePanel, "painted", "painted to start with");
-  const old = g => g.G.fittings.s.filter(s => s === "boards").length;
+  const old = g => g.G.fittings.s.filter(s => s === "oldboards").length;
   assert.ok(old(raw) > old(painted) + 100, `more worn boards (${old(raw)} against ${old(painted)})`);
   assert.ok(raw.G.walls.i.length < painted.G.walls.i.length, "the painted backs of the boards are gone");
   assert.equal(barn({insidePanel: "nonsense"}).insidePanel, "painted");
