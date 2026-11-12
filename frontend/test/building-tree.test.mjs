@@ -72,11 +72,12 @@ test("the Building tab comes first and holds the tree; the parts are no longer a
 test("the game objects are a node of their own after the building: each object, by the name its kind gives it", () => {
   const cow = sanitize({kind: "cow", width: 16, depth: 9}), t = buildingTree(cow);
   assert.equal(t.game.type, "game");
-  assert.ok(t.game.children.length >= 3, "the pasture, the troughs ...");
-  assert.deepEqual(t.game.children.map(c => c.type), t.game.children.map(() => "object"));
-  assert.ok(t.game.children.every(c => Number.isInteger(c.id) && c.name && c.otype), "id, name and type");
-  assert.ok(t.game.children.some(c => c.otype === "pasture"));
-  assert.deepEqual(t.game.children.map(c => c.id), cow.objects.map(o => o.id), "in the order they are saved");
+  const flat = t.game.children.flatMap(c => c.type === "group" ? c.children : [c]);
+  assert.ok(flat.length >= 3, "the pasture, the troughs ...");
+  assert.deepEqual(flat.map(c => c.type), flat.map(() => "object"));
+  assert.ok(flat.every(c => Number.isInteger(c.id) && c.name && c.otype), "id, name and type");
+  assert.ok(flat.some(c => c.otype === "pasture"));
+  assert.deepEqual([...flat.map(c => c.id)].sort(), cow.objects.map(o => o.id).sort(), "all of them");
   // a building without any (the kinds' lists decide) has no node
   assert.ok(buildingTree(sanitize({})).game === null || buildingTree(sanitize({})).game.type === "game");
 });

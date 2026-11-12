@@ -4,8 +4,9 @@
 import { tg, shape } from "../i3d.mjs";
 import { roomOf, furnisher } from "../layout.mjs";
 import { OPPOSITE, wallLength, yardFrame, shellOf, teleportFor, withPasture, pastureWallFor, cornerStripes, palletLines, contourClosure, navContourNodes, ccwFence } from "./pasture.mjs";
-import { objectOf, boxOf, iconOf, boxFrom, pastureOf, blockersOf, footprints } from "../objects.mjs";
+import { objectOf, objectsOf, boxOf, iconOf, boxFrom, pastureOf, blockersOf, footprints } from "../objects.mjs";
 import { tone, shade, strawBale } from "./props.mjs";
+import { troughFrom, drawTrough } from "./cow.mjs";
 import { INNER_WALL } from "./innerwall.mjs";
 import { placeOnWall, placeOnBuilding } from "../places.mjs";
 
@@ -451,8 +452,16 @@ export default {
   autoFurnish,
   summary,
   scene,
-  objects: {types: ["food", "loading", "pallets", "info", "pasture"], required: ["food", "loading", "pallets", "info", "pasture"],
-    pasture: {minWidth: MIN_PASTURE_WIDTH, depth: [6, 40]}, defaults: defaultObjects},
+  // (feeders and drinkers outside are only for looks: the game feeds the hens from the feed pad)
+  objects: {types: ["food", "loading", "pallets", "info", "feedTrough", "waterTrough", "pasture"], required: ["food", "loading", "pallets", "info", "pasture"],
+    pasture: {minWidth: MIN_PASTURE_WIDTH, depth: [6, 40]}, defaults: defaultObjects,
+    labels: {
+      feedTrough: {name: "Feeder", hint: "A feeder for the hens in the pasture, for looks (the game feeds the hens from the feed pad). Put it inside the fence."},
+      waterTrough: {name: "Drinker", hint: "A drinker for the hens in the pasture, for looks (the water is automatic). Put it inside the fence."},
+    }},
+  outside: c => {
+    for (const o of [...objectsOf(c.p, "feedTrough"), ...objectsOf(c.p, "waterTrough")]) drawTrough(c, troughFrom(o, null, []));
+  },
   presets: [
     {id: "gardenCoop", name: "Red garden coop", blurb: "4 × 3 m coop for 30 hens, red boards with white trim.", settings: {
       hens: 30, fenceDepth: 8,

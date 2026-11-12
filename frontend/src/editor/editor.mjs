@@ -18,9 +18,9 @@ import { DOUBLE_DOOR_FROM } from "./openings.mjs";
 import { cleanPapers, wallBreaks, pieceGroups, roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, History, roomBox, wingsOf, liveWings, isSplitWall, MAX_SPLITS, wingSplitKey, sectionsOf, sectionRuns, splitsOf, maxFloors, maxFloorsWithAttic, wallFloorAt, dividerAt, splitAtFrom, floorsOf as floorHeightsOf, wingIdOf, wingWallKey, WING_PARTS, wallsOf, eaveWalls, autoPipes, pipePositions } from "./layout.mjs";
 import { makeWalker } from "./walk.mjs";
 import { exportPart, importPart } from "./partfile.mjs";
-import { OBJECT_TYPES, objectInfo, OBJECT_LIMITS, GAP_LIMITS, objectOf, pastureOf, snapBox, snapPasture, objectProblems, objectWarnings, fencePoints, snapFencePoint, MAX_FENCE_POINTS } from "./objects.mjs";
-import { setAssets, catalogFor, usedAssets } from "./model.mjs";
-import { readObj, assetFolder, flattenI3d } from "./assets.mjs";
+import { OBJECT_TYPES, objectInfo, OBJECT_LIMITS, GAP_LIMITS, objectOf, pastureOf, snapBox, snapPasture, objectProblems, objectWarnings, fencePoints, snapFencePoint, MAX_FENCE_POINTS, MANY, MAX_TROUGHS, nextTroughSpot, TROUGH_KINDS } from "./objects.mjs";
+import { setAssets, catalogFor, usedAssets, troughLooks } from "./model.mjs";
+import { readObj, assetFolder, flattenI3d, assetSize, normalizeMeta, turnedSize } from "./assets.mjs";
 import { paintInterior, paintGlass } from "./interior.mjs";
 import { SURFACES, paintSurface, normalFromHeight } from "./surfaces.mjs";
 import { weather, MASK_RGB } from "./age.mjs";
@@ -1346,7 +1346,9 @@ function selectNode(kind, v) {
   if (kind === "wall") { wvWall = typeof v === "string" ? v : v.key; if (typeof v !== "string") { wvFloor = v.floor; wvSec = v.section || 0; } }
   if (kind === "floor") { wvPart = v.part; wvFloor = v.floor; wvSec = v.section || 0; }
   if (kind === "section") { wvPart = v.part; wvSec = v.index; }
-  if (kind === "object") ob.sel = v;
+  if (kind === "object") { ob.sel = v; ob.pt = null; }
+  if (kind === "group") { treeKind = "game"; ob.sel = null; ob.pt = null; }   // (a folder of troughs: the card of the game objects, where they are added)
+  if (kind === "post") { treeKind = "object"; ob.sel = v.id; ob.pt = v.index; }   // (a post of the fence drawn by hand: its object is chosen, and the post in it)
   if (searching) clearSearch();
   setTab("building");
   const det = $("treeEditor") && $("treeEditor").closest("details"); if (det) det.open = true;
@@ -1354,18 +1356,20 @@ function selectNode(kind, v) {
   const card = {main: "mainCard", wall: "wallCard", floor: "wallCard", section: "wallCard", game: "wallCard", object: "wallCard", win: "winEditor", part: "wingsEditor"}[kind];
   if (card && $(card) && !window.matchMedia("(max-width: 820px)").matches) $(card).scrollIntoView({block: "nearest"});
 }
-const nodeKey = n => n.type === "main" ? "main" : n.type === "game" ? "game" : n.type === "object" ? "object:" + n.id : n.type === "section" ? `section:${n.part}:${n.index}` : n.type === "wall" ? `wall:${n.key}:${n.floor}:${n.section || 0}` : n.type === "floor" ? `floor:${n.part}:${n.floor}:${n.section || 0}` : n.type === "part" ? "part:" + n.id : "win:" + n.id;
+const nodeKey = n => n.type === "main" ? "main" : n.type === "game" ? "game" : n.type === "group" ? "group:" + n.otype : n.type === "object" ? "object:" + n.id : n.type === "post" ? `post:${n.id}:${n.index}` : n.type === "section" ? `section:${n.part}:${n.index}` : n.type === "wall" ? `wall:${n.key}:${n.floor}:${n.section || 0}` : n.type === "floor" ? `floor:${n.part}:${n.floor}:${n.section || 0}` : n.type === "part" ? "part:" + n.id : "win:" + n.id;
 /** What selectNode takes for a node written by nodeKey as kind:v:f:sc. */
-const nodeArg = (kind, v, f, sc) => kind === "wall" ? {key: v, floor: +f, section: +sc || 0} : kind === "floor" ? {part: +v, floor: +f, section: +sc || 0} : kind === "section" ? {part: +v, index: +f} : kind === "main" || kind === "game" ? null : +v;
+const nodeArg = (kind, v, f, sc) => kind === "wall" ? {key: v, floor: +f, section: +sc || 0} : kind === "floor" ? {part: +v, floor: +f, section: +sc || 0} : kind === "section" ? {part: +v, index: +f} : kind === "post" ? {id: +v, index: +f} : kind === "main" || kind === "game" ? null : kind === "group" ? v : +v;
 /** The tree node of a divider's wall: it is under the section with more floors. */
 const splitNodeArg = key => { const runs = sectionRuns(p, key, (wallsOf(p)[key] || {L: 1}).L); return {key, floor: 0, section: runs.length ? runs[0].sec.index : 0}; };
 function treeNavHtml() {
   const t = buildingTree(p), live = liveWings(p), fmt = v => (+v).toFixed(2).replace(/\.?0+$/, "");
   const multi = id => (id ? (live.find(x => x.id === id) || {floors: 1}).floors : p.floors) > 1;
-  const isSel = n => n.type === "main" ? treeKind === "main" : n.type === "game" ? treeKind === "game" : n.type === "object" ? treeKind === "object" && ob.sel === n.id : n.type === "section" ? treeKind === "section" && wvPart === n.part && wvSec === n.index : n.type === "wall" ? treeKind === "wall" && wvWall === n.key && wvFloor === n.floor && wvSec === (n.section || 0) : n.type === "floor" ? treeKind === "floor" && wvPart === n.part && wvFloor === n.floor && wvSec === (n.section || 0) : n.type === "part" ? treeKind === "part" && wSel === n.id : treeKind === "win" && selId === n.id;
+  const isSel = n => n.type === "main" ? treeKind === "main" : n.type === "game" ? treeKind === "game" : n.type === "group" ? false : n.type === "object" ? treeKind === "object" && ob.sel === n.id && !((n.children || []).length && ob.pt !== null && ob.pt < n.children.length) : n.type === "post" ? treeKind === "object" && ob.sel === n.id && ob.pt === n.index : n.type === "section" ? treeKind === "section" && wvPart === n.part && wvSec === n.index : n.type === "wall" ? treeKind === "wall" && wvWall === n.key && wvFloor === n.floor && wvSec === (n.section || 0) : n.type === "floor" ? treeKind === "floor" && wvPart === n.part && wvFloor === n.floor && wvSec === (n.section || 0) : n.type === "part" ? treeKind === "part" && wSel === n.id : treeKind === "win" && selId === n.id;
   const label = (n, parentKey) => {
+    if (n.type === "group") return `${esc(n.name)} <span class="muted">${n.children.length}</span>`;
     if (n.type === "game") return `Game objects <span class="muted">${(n.children || []).length}</span>`;
-    if (n.type === "object") return esc(n.name);
+    if (n.type === "object") return esc(n.name) + ((n.children || []).length ? ` <span class="muted">${n.children.length} posts</span>` : "");
+    if (n.type === "post") return esc(n.name) + (n.role ? ` <span class="muted">${n.role === "start" ? "start" : "stop"}</span>` : "");
     if (n.type === "main") return `Main building <span class="muted">${p.width} \u00D7 ${p.depth} m</span>`;
     if (n.type === "section") return `Section ${n.index + 1} <span class="muted">${fmt(n.from)}\u2013${fmt(n.to)} m, ${n.floors} floor${n.floors > 1 ? "s" : ""}</span>`;
     if (n.type === "wall") return `${esc(wallLabel(p, n.key))}${n.span ? ` <span class="muted">${fmt(n.span[0])}\u2013${fmt(n.span[1])} m</span>` : ""}`;
@@ -1660,7 +1664,8 @@ function ctxAdds(kind, v, f) {
   // (a part is added on a wall, so the menus of the building and of a part have no "add part": the walls under them have; what they are divided into is sections)
   if (kind === "main") return [{act: "add-section", label: "Add section", on: p.roofType !== "hip" && (p.splits || []).length < MAX_SPLITS}];
   if (kind === "part") { const w = (p.wings || []).find(x => x.id === +v); return [{act: "add-section", label: "Add section", on: !!w && (w.splits || []).length < MAX_SPLITS}]; }
-  if (kind === "game") { const have = new Set(objectsNow().map(o => o.type)); return ((kindOf(p).objects || {types: []}).types).filter(t => !have.has(t)).map(t => ({act: "add-obj:" + t, label: "Add " + objectInfo(kindOf(p), t).name.toLowerCase(), on: true})); }
+  if (kind === "group") return objectsNow().filter(o => o.type === v).length < MAX_TROUGHS ? [{act: "add-obj:" + v, label: "Add " + objectInfo(kindOf(p), v).name.toLowerCase(), on: true}] : [];
+  if (kind === "game") { const have = new Set(objectsNow().map(o => o.type)); return ((kindOf(p).objects || {types: []}).types).filter(t => MANY.includes(t) ? objectsNow().filter(o => o.type === t).length < MAX_TROUGHS : !have.has(t)).map(t => ({act: "add-obj:" + t, label: "Add " + objectInfo(kindOf(p), t).name.toLowerCase(), on: true})); }
   return [];
 }
 /* ---------- Duplicating and deleting what is chosen in the tree: the context menu, Ctrl+D and Delete ---------- */
@@ -1818,7 +1823,7 @@ const BOX_SLIDERS = [["x", "Left / right (+ to the right)", 0.25], ["z", "Back /
   ["d", "Depth (back to front)", 0.05], ["h", "Height", 0.05], ["ix", "Icon left / right", 0.05], ["iz", "Icon back / front", 0.05]];
 const objectsNow = () => p.objects || [];
 const selObject = () => objectsNow().find(o => o.id === ob.sel) || null;
-const objName = o => objectInfo(kindOf(p), o.type).name;
+const objName = o => { const name = objectInfo(kindOf(p), o.type).name, same = objectsNow().filter(x => x.type === o.type); return same.length > 1 ? `${name} ${same.indexOf(same.find(x => x.id === o.id)) + 1}` : name; };
 /** An edit to the objects: snapped, saved and built. */
 function setObjects(list, sel = ob.sel) {
   p.objects = list; ob.sel = sel;
@@ -1833,7 +1838,8 @@ function renderObjectsCard(ed) {
   const group = treeKind === "game";
   if (!list.some(o => o.id === ob.sel)) ob.sel = null;
   const opt = (v, label, cur) => `<option value="${v}" ${v === cur ? "selected" : ""}>${esc(label)}</option>`;
-  const missing = spec.types.filter(t => !list.some(o => o.type === t));
+  // (one of each, but any number of feed and water troughs)
+  const missing = spec.types.filter(t => MANY.includes(t) ? list.filter(o => o.type === t).length < MAX_TROUGHS : !list.some(o => o.type === t));
   let html = `<div class="row"><button type="button" class="primary" id="objPlan" ${renderer ? "" : "disabled"}>${ob.on ? "Done moving" : "Move them in the plan view"}</button></div>`;
   if (group) html += `<p class="hint">What the game needs around the building: where you sleep, tip feed, drop bales, load animals, collect eggs, and the pasture's fence. Add and remove them here, and drag them into place in the plan view.</p>`;
   if (group) html += objectWarnings(p).map(w => `<p class="warn">${esc(w)}</p>`).join("");
@@ -1842,7 +1848,7 @@ function renderObjectsCard(ed) {
   if (o) {
     const t = objectInfo(kind, o.type), must = spec.required.includes(o.type), range = (k, label, lo, hi, step, v, unit = " m") =>
       `<div class="field"><div class="fl"><label for="ob-${k}">${label}</label><output id="ob-${k}-o">${(+v).toFixed(2)}${unit}</output></div><input type="range" id="ob-${k}" data-k="${k}" min="${lo}" max="${hi}" step="${step}" value="${v}"></div>`;
-    html += `<div class="wincard"><h3 class="sub">${esc(t.name)}</h3><p class="hint">${esc(t.hint)}</p>${pr.has(o.id) ? `<p class="warn">${esc(pr.get(o.id))}.</p>` : ""}`;
+    html += `<div class="wincard"><h3 class="sub">${esc(t.name)}</h3><p class="hint">${esc(t.hint)}</p>${MANY.includes(o.type) && TROUGH_KINDS.includes(p.kind) && list.filter(x => x.type === o.type).length > 1 ? `<p class="hint">There are several: the animals use all of them, but the game shows the amount of feed (or water) in the first one only.</p>` : ""}${pr.has(o.id) ? `<p class="warn">${esc(pr.get(o.id))}.</p>` : ""}`;
     if (o.type === "pasture") {
       const pa = pastureOf(p), ps = spec.pasture;
       html += `<div class="field"><div class="fl"><label for="ob-wall">Wall</label></div><select id="ob-wall">${WALLS.map(k => opt(k, WALL_NAMES[k], o.wall)).join("")}</select></div>`;
@@ -1870,10 +1876,18 @@ function renderObjectsCard(ed) {
         html += range("gapW", "Opening: width", GAP_LIMITS.w[0], GAP_LIMITS.w[1], 0.05, pa.gapW);
         html += range("gapH", "Opening: height", GAP_LIMITS.h[0], GAP_LIMITS.h[1], 0.05, pa.gapH);
       }
-    } else for (const [k, label, step] of BOX_SLIDERS) {
+    } else {
+      // a trough can look like one of the user's items: its size is the model's
+      const looks = o.type === "feedTrough" || o.type === "waterTrough" ? troughLooks(p, o.type) : null, shown = looks && looks.find(a => a.id === o.asset);
+      if (looks && (looks.length || o.asset)) html += `<div class="field"><div class="fl"><label for="ob-look">Look</label></div><select id="ob-look">${opt("", "Plank trough (built in)", o.asset || "")}${looks.map(a => opt(a.id, a.name, o.asset || "")).join("")}${o.asset && !shown ? opt(o.asset, "(an item no longer in your list)", o.asset) : ""}</select></div>`
+        + (shown ? `<p class="hint">Its size comes from the model: ${assetSize(normalizeMeta(shown.meta)).map(v => v.toFixed(2)).join(" × ")} m.</p>`
+          + `<div class="field"><div class="fl"><label for="ob-rot">Rotation</label><output id="ob-rot-o">${Math.round(o.rot || 0)}°</output></div><input type="range" id="ob-rot" data-turn min="0" max="359" step="1" value="${Math.round(o.rot || 0)}"></div>` : "");
+      for (const [k, label, step] of BOX_SLIDERS) {
       if ((k === "ix" || k === "iz") && !t.icon) continue;
+      if (shown && (k === "w" || k === "d" || k === "h")) continue;
       const [lo, hi] = OBJECT_LIMITS[k];
       html += range(k, label, lo, hi, step, o[k]);
+      }
     }
     html += `<div class="row">${o.type !== "pasture" ? `<button type="button" id="objTurn">Turn</button>` : ""}<button type="button" id="objRemove" class="danger" ${must ? `disabled title="The ${esc(kind.name.toLowerCase())} needs it"` : ""}>Remove</button></div></div>`;
   } else if (group) html += `<p class="hint">Choose an object in the tree to change it, or move them in the plan view.</p>`;
@@ -1884,7 +1898,25 @@ function renderObjectsCard(ed) {
   if ($("objAuto")) $("objAuto").onclick = () => { setObjects(sanitize({...p, objects: spec.defaults({...p})}).objects, null); toast("Game objects placed where they go automatically"); };
   if (!o) return;
   const swap = next => setObjects(sanitize({...p, objects: list.map(x => x.id === o.id ? next : x)}).objects, o.id);
-  ed.querySelectorAll(".wincard input[type=range]").forEach(inp => {
+  // a look's rotation: the model turns about its middle; the footprint is the box round it
+  const turned = c => {
+    const a = troughLooks(p, c.type).find(x => x.id === c.asset);
+    if (!a) return c;
+    const rot = ((c.rot || 0) % 360 + 360) % 360, [w, d] = turnedSize(normalizeMeta(a.meta), rot), n = {...c, w, d};
+    if (rot) n.rot = rot; else delete n.rot;
+    return n;
+  };
+  if ($("ob-rot")) {
+    const inp = $("ob-rot");
+    inp.oninput = () => {
+      const next = turned({...selObject(), rot: +inp.value});
+      p.objects = objectsNow().map(x => x.id === next.id ? next : x);
+      $("ob-rot-o").textContent = `${Math.round(+inp.value)}°`;
+      applyKindRules(); rebuild(false);
+    };
+    inp.onchange = () => swap(snapObj(turned({...selObject(), rot: +inp.value})));
+  }
+  ed.querySelectorAll(".wincard input[type=range]:not([data-turn])").forEach(inp => {
     inp.oninput = () => {
       const k = inp.dataset.k, cur = selObject(), next = {...cur, [k]: +inp.value};
       p.objects = objectsNow().map(x => x.id === cur.id ? next : x);
@@ -1921,7 +1953,17 @@ function renderObjectsCard(ed) {
     const pts = c.points.filter((_, j) => j !== ob.pt); ob.pt = null;
     swap({...c, points: pts});
   };
-  if ($("objTurn")) $("objTurn").onclick = () => { const c = selObject(); swap(snapObj({...c, w: c.d, d: c.w, ix: -c.iz, iz: c.ix})); };
+  if ($("ob-look")) $("ob-look").onchange = e => {
+    const c = {...selObject()}, a = troughLooks(p, c.type).find(x => x.id === e.target.value);
+    if (!e.target.value) { delete c.asset; delete c.rot; }
+    else if (a) { const [w, d, h] = assetSize(normalizeMeta(a.meta)); delete c.rot; Object.assign(c, {asset: a.id, w, d, h}); }
+    else return;
+    swap(snapObj(c));
+  };
+  if ($("objTurn")) $("objTurn").onclick = () => {
+    const c = selObject(), a = c.asset && troughLooks(p, c.type).find(x => x.id === c.asset);
+    if (a) { swap(snapObj(turned({...c, rot: (c.rot || 0) + 90}))); return; }   // an item's look: a quarter more, the footprint follows
+    swap(snapObj({...c, w: c.d, d: c.w, ix: -c.iz, iz: c.ix})); };
   $("objRemove").onclick = () => removeObject(o.id);
 }
 
@@ -1929,7 +1971,7 @@ function renderObjectsCard(ed) {
 function renderObjectsUI() { if (treeKind === "game" || treeKind === "object") renderTreeUI(); else renderTreeNav(); }
 /** A new object of a type the building lacks, where the kind puts it to start with. */
 function addObject(type) {
-  const kind = kindOf(p), spec = kind.objects, list = objectsNow(), def = spec.defaults({...p}).find(x => x.type === type), id = list.reduce((m, x) => Math.max(m, x.id), 0) + 1;
+  const kind = kindOf(p), spec = kind.objects, list = objectsNow(), def = MANY.includes(type) && (list.some(o => o.type === type) || !spec.defaults({...p}).some(x => x.type === type)) ? nextTroughSpot(p, type) : spec.defaults({...p}).find(x => x.type === type), id = list.reduce((m, x) => Math.max(m, x.id), 0) + 1;
   setObjects(sanitize({...p, objects: [...list, {...(def || {type, x: p.width / 2 + 3, z: 0}), id}]}).objects, id);
   toast(`${objectInfo(kind, type).name} added`);
   selectNode("object", id);
