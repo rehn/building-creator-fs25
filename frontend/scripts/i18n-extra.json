@@ -71,5 +71,7 @@
   "Add window",
   "Add door",
   "Add extension",
-  "Main building"
+  "Main building",
+  "(an item no longer in your list)",
+  "Its size comes from the model: {value} m."
 ]

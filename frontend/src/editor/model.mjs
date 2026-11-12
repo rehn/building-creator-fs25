@@ -4,7 +4,7 @@
 import { I3dDoc, tg, shape, refNode, boxMesh, splitByColor, mappingsFor, num, v3 } from "./i3d.mjs";
 import { KINDS, kindOf } from "./kinds/index.mjs";
 import { WALL_T, openSide, wallFrames, wallsOf, liveWings, wingsOf, wingIdOf, eaveWalls, autoPipes, cleanPipes, cleanPapers, WING_PARTS, MAX_WINGS, HARD_MAX_PARTS, setMaxParts, WING_WALLS, wingWallKey, wingSplitKey, WING_SPLIT_WALLS, isSplitWall, openingSpan, splitsOf, sectionsOf, sectionRuns, sectionAtPoint, maxFloors, maxFloorsWithAttic, wallHasFloor, isGableWall, cascadeHeight, dividerAt, splitAtFrom, splitKey, SPLIT_WALLS, MAX_SPLITS, floorsOf, totalHeight, floorBase, floorAt, roomOf, footprint, toWorld, cleanItems, problems } from "./layout.mjs";
-import { withAssets, placement, assetFolder } from "./assets.mjs";
+import { withAssets, placement, assetFolder, normalizeMeta, troughAssets } from "./assets.mjs";
 import { SURFACES } from "./surfaces.mjs";
 import { agedColor } from "./age.mjs";
 import { cleanObjects, objectOf, boxOf, objectInfo } from "./objects.mjs";
@@ -527,6 +527,21 @@ export function wallItems(p, key) {
   }
   return out.sort((a, b) => a.s0 - b.s0 || a.s1 - b.s1);
 }
+/** An object's name in the tree: its type's, numbered when the building has several of that type. */
+/** The feed troughs are one folder and the water troughs another (where the first of each stands in the list), with the troughs under them. */
+function groupTroughs(p, nodes) {
+  const out = [], made = {};
+  for (const n of nodes) {
+    if (n.otype !== "feedTrough" && n.otype !== "waterTrough") { out.push(n); continue; }
+    if (!made[n.otype]) { made[n.otype] = {type: "group", otype: n.otype, name: objectInfo(kindOf(p), n.otype).name + "s", children: []}; out.push(made[n.otype]); }
+    made[n.otype].children.push(n);
+  }
+  return out;
+}
+function objectName(p, o) {
+  const name = objectInfo(kindOf(p), o.type).name, same = (p.objects || []).filter(x => x.type === o.type);
+  return same.length > 1 ? `${name} ${same.indexOf(o) + 1}` : name;
+}
 /**
  * The building as a tree for the editor: {type: "main", children, lost: [parts]}. The children are floors {type: "floor", part (0 = the main building, else the part), floor, section, children: its walls}, or,
  * when there are dividers, sections {type: "section", part, index, from, to, floors, children: floors}. A wall {type: "wall", key, floor, section, span?, children}: a wall along the building is in every
@@ -568,7 +583,9 @@ export function buildingTree(p) {
   const children = sectionNodes(0, ["front", "back", "left", "right", ...splitsOf(p).map(s => s.key)]);
   const lost = (p.wings || []).filter(w => !seen.has(w.id)).map(w => ({type: "part", id: w.id, off: "It is left out: the extension it stands on is.", children: []}));
   // the game objects (the sleep point, feed places, the pasture ...): a node of their own after the building, when the kind has any
-  const ko = kindOf(p).objects, game = ko && ko.types && ko.types.length ? {type: "game", children: (p.objects || []).map(o => ({type: "object", id: o.id, otype: o.type, name: objectInfo(kindOf(p), o.type).name}))} : null;
+  const ko = kindOf(p).objects, game = ko && ko.types && ko.types.length ? {type: "game", children: groupTroughs(p, (p.objects || []).map(o => ({type: "object", id: o.id, otype: o.type, name: objectName(p, o),
+    // a fence drawn by hand is a folder of its posts
+    ...(o.type === "pasture" && o.points ? {children: o.points.map((_, i) => ({type: "post", id: o.id, index: i, name: `Post ${i + 1}`, role: i === 0 ? "start" : i === o.points.length - 1 ? "stop" : ""}))} : {})})))} : null;
   return {type: "main", children, lost, game};
 }
 /** The free stretches of a wall [s0, s1] on a floor: 30 cm from its ends and 20 cm from what stands there (a part blocks the floors it covers). forPart: for a part, which may stand over windows. */
@@ -783,6 +800,8 @@ export function catalogFor(p) {
   const kind = kindOf(p);
   return kind.catalog ? withAssets(kind.catalog, ASSETS, kind.id, p.items) : {};
 }
+/** The user's items that can be the look of a feed or water trough in this building (type: feedTrough | waterTrough). */
+export const troughLooks = (p, type) => troughAssets(ASSETS, type, p.kind);
 /** The imported items placed in the building (and inside its walls): what an export has to pack. */
 export function usedAssets(p) {
   const seen = new Map();
@@ -2668,7 +2687,15 @@ function build() {
     buildRoofFrame(ext, span, top, ridgeY, tanP, M, th, p.ventilators > 0 ? ventSpots(p.ventilators, ridgeHalf) : [], a => { const g = WINGS.find(({wing, WG}) => !wing.parent && WG && WG.cut && a > WG.cut[0] - 0.1 && a < WG.cut[1] + 0.1); return g ? {side: g.WG.s} : false; });
   }
   // Things the kind puts outside its walls (a cow barn's troughs), drawn in "fittings" and "collision".
-  if (kind.outside) kind.outside({p, geo: {opsByWall, dims: {W, D}}, abox, cyl, paint});
+  // (asset: an item of the user's placed outside, on the ground, centred on x, z; false where there is none, so the kind builds its own)
+  const asset = (id, x, z, rot = 0) => {
+    const found = ASSETS.find(q => q.id === id);
+    if (!found) return false;
+    const a = {...found, meta: normalizeMeta(found.meta)};
+    refs.push({asset: a, item: {x, z, rot}, ...placement(a.meta, {x, z, rot}, 0)});
+    return true;
+  };
+  if (kind.outside) kind.outside({p, geo: {opsByWall, dims: {W, D}}, abox, cyl, paint, asset});
   // The placed pieces last (tests find a piece's vertices after the empty barn's).
   if (hollow) buildInside(kind, F, H);
   dims = {W, D, top, ridgeY, F};

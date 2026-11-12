@@ -41,6 +41,9 @@ export const OBJECT_LIMITS = {x: [-80, 80], z: [-80, 80], w: [0.5, 70], d: [0.5,
 export const GAP_LIMITS = {w: [0.8, 10], h: [1.2, 8]};
 export const GAP_DEFAULT = {w: 1.6, h: 2.2};
 export const TROUGH_KINDS = ["cow", "sheep"];
+/** The objects a building can have several of (the rest are one each), and how many. */
+export const MANY = ["feedTrough", "waterTrough"];
+export const MAX_TROUGHS = 8;
 const GRID = 0.25, CORNER_SNAP = 0.6;
 
 const num = (v, d) => { v = +v; return Number.isFinite(v) ? v : d; };
@@ -59,7 +62,8 @@ export function cleanObjects(list, kind, p) {
   const spec = specOf(kind), out = [], seen = new Set();
   let id = 0;
   for (const o of Array.isArray(list) ? list : []) {
-    if (!o || !spec.types.includes(o.type) || seen.has(o.type)) continue;
+    const many = o && MANY.includes(o.type);
+    if (!o || !spec.types.includes(o.type) || (many ? out.filter(x => x.type === o.type).length >= MAX_TROUGHS : seen.has(o.type))) continue;
     const c = o.type === "pasture" ? cleanPasture(o, spec.pasture, p) : cleanBox(o);
     if (!c) continue;
     seen.add(o.type); out.push({id: ++id, ...c});
@@ -71,9 +75,14 @@ export function cleanObjects(list, kind, p) {
   }
   return out;
 }
+/** A turn in degrees kept between 0 and 360 and to a tenth; 0 for anything else. */
+const turnOf = v => { v = typeof v === "number" || typeof v === "string" && v.trim() !== "" ? +v : NaN; return Number.isFinite(v) ? Math.round((((v % 360) + 360) % 360) * 10) / 10 % 360 : 0; };
 function cleanBox(o) {
   const def = OBJECT_TYPES[o.type].size, L = OBJECT_LIMITS;
-  return {type: o.type, x: round(clamp(num(o.x, 0), L.x)), z: round(clamp(num(o.z, 0), L.z)),
+  // a trough can look like one of the user's items (its id; assets.mjs, use feedTrough | waterTrough)
+  const look = (o.type === "feedTrough" || o.type === "waterTrough") && typeof o.asset === "string" && o.asset
+    ? {asset: o.asset.slice(0, 64), ...(turnOf(o.rot) ? {rot: turnOf(o.rot)} : {})} : {};   // (turned any angle; width and depth are the box round the turned model)
+  return {type: o.type, ...look, x: round(clamp(num(o.x, 0), L.x)), z: round(clamp(num(o.z, 0), L.z)),
     w: round(clamp(num(o.w, def[0]), L.w)), d: round(clamp(num(o.d, def[1]), L.d)), h: round(clamp(num(o.h, def[2]), L.h)),
     ix: round(clamp(num(o.ix, 0), L.ix)), iz: round(clamp(num(o.iz, 0), L.iz))};
 }
@@ -96,8 +105,10 @@ function cleanPasture(o, ps = {minWidth: 0, depth: [2, 60]}, p) {
     ...(o.noGap ? {noGap: true} : {}), ...(o.gapRamp ? {gapRamp: true} : {}), ...(pts.length >= 2 ? {points: pts} : {})};
 }
 
-/** The building's object of a type, or null. */
+/** The building's object of a type (the first, if it can have several), or null. */
 export const objectOf = (p, type) => (p.objects || []).find(o => o.type === type) || null;
+/** All the building's objects of a type, in order. */
+export const objectsOf = (p, type) => (p.objects || []).filter(o => o.type === type);
 /** A box object as a world-axis box {center, size}, standing on the ground. */
 export const boxOf = o => ({center: [o.x, o.h / 2, o.z], size: [o.w, o.h, o.d]});
 /** Where a box object's icon is, on the ground. */
@@ -253,5 +264,28 @@ export function objectWarnings(p) {
     out.push("The animals stay outside: there is no open doorway on the pasture side. Turn the pasture's doorway on, or make a door there an empty framed doorway (style \"Open doorway, framed\").");
   for (const t of ["feedTrough", "waterTrough"]) if (!objectOf(p, t))
     out.push(t === "feedTrough" ? "No feed trough: the animals have nothing to eat from. Add one under Game objects." : "No water trough: the animals have nothing to drink from. Add one under Game objects.");
+  return out;
+}
+
+/**
+ * Where one more trough of a type can go: like the last one it has (size, look), moved sideways or along until it is inside the
+ * fence and clear of the building and the other boxes; the same spot if nothing is free. Without a trough of the type: the type's own size,
+ * in the middle of the pasture. {x, z, w, d, h, asset?, rot?} (no id or type).
+ */
+export function nextTroughSpot(p, type) {
+  const list = objectsOf(p, type), last = list[list.length - 1], size = OBJECT_TYPES[type].size, pa = pastureOf(p);
+  const from = last || (pa ? {x: (pa.rect.x0 + pa.rect.x1) / 2, z: (pa.rect.z0 + pa.rect.z1) / 2, w: size[0], d: size[1], h: size[2]} : {x: 0, z: 0, w: size[0], d: size[1], h: size[2]});
+  const {x, z, w, d, h, asset, rot} = from, out = {type, x, z, w, d, h, ...(asset ? {asset} : {}), ...(rot ? {rot} : {})};
+  const others = (p.objects || []).filter(o => o.type !== "pasture" && o.type !== "info").map(rectOf), feet = footprints(p);
+  const free = (cx, cz) => {
+    const r = rectOf({x: cx, z: cz, w, d});
+    return !feet.some(f => overlap(r, f, 0.01)) && !others.some(f => overlap(r, f, 0.01)) && (!pa || insidePoly(pa.fence, cx, cz));
+  };
+  const gap = 0.3;
+  if (!last && free(x, z)) return out;
+  for (let k = 1; k <= 24; k++) for (const [dx, dz] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+    const cx = round(x + dx * k * (dx ? w + gap : d + gap)), cz = round(z + dz * k * (dz ? d + gap : w + gap));
+    if (free(cx, cz)) return {...out, x: cx, z: cz};
+  }
   return out;
 }

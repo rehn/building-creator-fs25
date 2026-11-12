@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   assetType, assetIdOf, readI3d, missingFiles, readObj, normalizeMeta, assetSize, assetDef, withAssets,
-  placement, assetFolder, flattenI3d, nameFromFile,
+  placement, assetFolder, flattenI3d, nameFromFile, splitItems, troughAssets, importSettings, withImportSettings, turnedSize,
 } from "../src/editor/assets.mjs";
 
 // What Giants Editor writes for a prop: the collision is the root (nonRenderable), the mesh a child,
@@ -130,4 +130,127 @@ test("assetFolder and flattenI3d: the item's files side by side in their own fol
 test("nameFromFile: a readable name from the file name", () => {
   assert.equal(nameFromFile("cow-feeder.i3d"), "Cow feeder");
   assert.equal(nameFromFile("animalFeedersCow.i3d"), "Animal feeders cow");
+});
+
+// An export of several selected nodes: one i3d with a node each, one .obj in world coordinates
+// (what Giants Editor writes: "g <node name>" before each node's faces, numbering of corners global).
+const MULTI_I3D = `<?xml version="1.0" encoding="iso-8859-1"?>
+<i3D name="feeders.i3d" version="1.6">
+  <Files>
+    <File fileId="1" filename="hen_diffuse.png"/>
+    <File fileId="2" filename="hen_normal.png"/>
+    <File fileId="3" filename="cow_diffuse.png"/>
+  </Files>
+  <Materials>
+    <Material name="hen_mat" materialId="6"><Texture fileId="1"/><Normalmap fileId="2"/></Material>
+    <Material name="cow_mat" materialId="9"><Texture fileId="3"/></Material>
+    <Material name="lambert1" materialId="5" diffuseColor="0.5 0.5 0.5 1"/>
+  </Materials>
+  <Shapes externalShapesFile="feeders.i3d.shapes"/>
+  <Scene>
+    <Shape name="hen" translation="1 0 -1" shapeId="1" nodeId="22" materialIds="6"/>
+    <Shape name="cow" translation="2 0.2 0" shapeId="2" nodeId="28" nonRenderable="true" materialIds="5">
+      <Shape name="visual" translation="0 0.01 0" shapeId="3" nodeId="29" materialIds="9"/>
+    </Shape>
+  </Scene>
+</i3D>`;
+// hen: a triangle 1..2 x, z -1.5..-0.5; cow: a collision triangle and a visual triangle, x 2..4
+const MULTI_OBJ = `# Wavefront OBJ file
+g default
+v 1 0 -1.5
+v 2 0 -1.5
+v 1 0.5 -0.5
+v 2 0 0
+v 4 0 0
+v 2 1 0
+v 2 0.2 0
+v 4 0.2 0
+v 2 0.7 0
+vt 0 0
+vt 1 0
+vt 0 1
+vn 0 0 1
+s off
+g hen
+f 1/1/1 2/2/1 3/3/1
+g default
+g cow
+f 4/1/1 5/2/1 6/3/1
+g visual
+f 7/1/1 8/2/1 9/3/1
+`;
+
+test("splitItems: each node of an export is an item of its own, at its own origin", () => {
+  const parts = splitItems(MULTI_I3D, MULTI_OBJ);
+  assert.deepEqual(parts.map(p => p.name), ["Hen", "Cow"]);
+  assert.deepEqual(parts.map(p => p.i3dFile), ["hen.i3d", "cow.i3d"]);
+  assert.deepEqual(parts.map(p => p.objFile), ["hen.obj", "cow.obj"]);
+  const [hen, cow] = parts;
+  // only its own node, put at the origin
+  assert.match(hen.i3d, /<Shape name="hen" shapeId="1"/);
+  assert.doesNotMatch(hen.i3d, /name="cow"/);
+  assert.doesNotMatch(hen.i3d, /translation/);
+  assert.match(cow.i3d, /<Shape name="visual" translation="0 0\.01 0"/, "a child keeps its place in its parent");
+  assert.match(hen.i3d, /externalShapesFile="feeders\.i3d\.shapes"/);
+  // only the materials and files it uses
+  assert.match(hen.i3d, /hen_mat/); assert.doesNotMatch(hen.i3d, /cow_mat|cow_diffuse|lambert1/);
+  assert.match(hen.i3d, /hen_diffuse\.png/); assert.match(hen.i3d, /hen_normal\.png/);
+  assert.match(cow.i3d, /cow_mat/); assert.match(cow.i3d, /lambert1/); assert.doesNotMatch(cow.i3d, /hen_/);
+  assert.equal(hen.shapesFile, "feeders.i3d.shapes");
+  // the .obj: its faces only, moved by the node's translation, so the box is round the origin
+  const h = readObj(hen.obj, readI3d(hen.i3d).hidden);
+  assert.deepEqual(h.box, {min: [0, 0, -0.5], max: [1, 0.5, 0.5]});
+  assert.equal(h.positions.length, 9);
+  const c = readObj(cow.obj, readI3d(cow.i3d).hidden);
+  assert.deepEqual(c.box, {min: [0, 0, 0], max: [2, 0.5, 0]}, "the collision (nonRenderable) is left out, as for any item");
+  assert.deepEqual(readI3d(cow.i3d).hidden, ["cow"]);
+  assert.match(cow.obj, /^g cow$/m, "the hidden group stays, under its name");
+});
+
+test("splitItems: texture coordinates and normals come along, renumbered", () => {
+  const [, cow] = splitItems(MULTI_I3D, MULTI_OBJ);
+  assert.match(cow.obj, /^f 1\/1\/1 2\/2\/1 3\/3\/1$/m);
+  assert.equal(cow.obj.match(/^v /gm).length, 6, "only the corners its faces use");
+  assert.equal(cow.obj.match(/^vn /gm).length, 1);
+});
+
+test("splitItems: an export of one node gives one item (nothing to split)", () => {
+  const one = MULTI_I3D.replace(/<Shape name="cow"[\s\S]*?<\/Shape>\n/, "");
+  assert.equal(splitItems(one, MULTI_OBJ).length, 1);
+});
+
+test("splitItems: a node with no faces in the .obj is an error that names it", () => {
+  assert.throws(() => splitItems(MULTI_I3D, MULTI_OBJ.replace("g hen", "g other")), /hen/);
+});
+
+test("use: an item is furniture unless it says it is a trough; troughs are for the kinds they name", () => {
+  assert.equal(normalizeMeta({}).use, "piece");
+  assert.equal(normalizeMeta({use: "waterTrough"}).use, "waterTrough");
+  assert.equal(normalizeMeta({use: "roof"}).use, "piece");
+  const a = (id, use, kinds) => ({id, name: id, meta: normalizeMeta({use, kinds, box: {min: [0, 0, 0], max: [1, 1, 1]}})});
+  const list = [a("f", "feedTrough", ["cow"]), a("w", "waterTrough", []), a("p", "piece", []), a("g", "feedTrough", ["sheep"])];
+  assert.deepEqual(Object.keys(withAssets({}, list, "cow", [])), ["asset:p"], "furniture only");
+  assert.deepEqual(troughAssets(list, "feedTrough", "cow").map(x => x.id), ["f"]);
+  assert.deepEqual(troughAssets(list, "waterTrough", "sheep").map(x => x.id), ["w"], "no kinds: every kind with troughs");
+});
+
+test("import settings: what you chose last time is the start of the next import (not the model's own box or files)", () => {
+  const chosen = normalizeMeta({i3d: "a.i3d", obj: "a.obj", hidden: ["x"], box: {min: [0, 0, 0], max: [2, 1, 1]}, use: "waterTrough", mount: "wall", turn: 90, kinds: ["cow", "sheep"]});
+  const saved = importSettings(chosen, true);
+  assert.deepEqual(saved, {use: "waterTrough", mount: "wall", turn: 90, kinds: ["cow", "sheep"], shared: true});
+  const next = normalizeMeta({i3d: "b.i3d", obj: "b.obj", box: {min: [0, 0, 0], max: [1, 1, 1]}});
+  const m = withImportSettings(next, saved);
+  assert.deepEqual([m.use, m.mount, m.turn, m.kinds, m.i3d, m.box.max[0]], ["waterTrough", "wall", 90, ["cow", "sheep"], "b.i3d", 1]);
+  assert.deepEqual(withImportSettings(next, null), next, "nothing saved yet");
+  assert.equal(withImportSettings(next, {use: "bogus", turn: 45}).turn, 0, "damaged settings are cleaned");
+});
+
+test("turnedSize: the footprint of a model turned any angle is the box round it", () => {
+  const meta = normalizeMeta({box: {min: [0, 0, -0.4], max: [2.4, 0.6, 0.4]}});   // 2.4 x 0.8 x 0.6
+  assert.deepEqual(turnedSize(meta, 0), [2.4, 0.8, 0.6]);
+  assert.deepEqual(turnedSize(meta, 90), [0.8, 2.4, 0.6]);
+  assert.deepEqual(turnedSize(meta, 180), [2.4, 0.8, 0.6]);
+  const [w, d, h] = turnedSize(meta, 45);
+  assert.equal(w, d); assert.equal(w, 2.263); assert.equal(h, 0.6);   // (2.4 + 0.8) / sqrt(2)
+  assert.deepEqual(turnedSize(normalizeMeta({...meta, turn: 90}), 0), [0.8, 2.4, 0.6], "the model's own turn counts");
 });
