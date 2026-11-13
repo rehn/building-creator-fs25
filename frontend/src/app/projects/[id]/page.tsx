@@ -75,6 +75,17 @@ export default function ProjectPage() {
     }
   }
 
+  // The model files other programs read are made here and kept by the server, for the version this save gave.
+  async function sendModel(v: number, data: Settings, name: string) {
+    if (!editor.current) return;
+    try {
+      await api.putModel(id, v, await editor.current.modelFiles(name, data));
+    } catch (e) {
+      if (e instanceof ApiError && e.code === "version_conflict") return; // saved again meanwhile: that save sends its own
+      throw e;
+    }
+  }
+
   const flush = useCallback(async () => {
     clearTimeout(timer.current);
     if (statusRef.current === "conflict") return;
@@ -89,6 +100,7 @@ export default function ProjectPage() {
       const p = await api.updateProject(id, { ...patch, thumbnail, version: version.current });
       version.current = p.version;
       savedName.current = p.name;
+      if (patch.data) await sendModel(p.version, patch.data, p.name);
       set(pending.current.data || pending.current.name !== undefined ? "dirty" : "saved");
     } catch (e) {
       pending.current = { ...patch, ...pending.current };
@@ -181,8 +193,8 @@ export default function ProjectPage() {
       {project
         ? <Editor author={authorName(user)} initial={project.data} onChange={s => queue({ data: s })} onReady={ed => {
             editor.current = ed;
-            // a new house has no preview yet: save once so the list shows one
-            if (ed && !project.thumbnail) queue({ data: ed.getSettings() }, 1500);
+            // a new house has no preview or model files yet: save once so the list shows one and other programs get the model
+            if (ed && (!project.thumbnail || !project.modelVersion)) queue({ data: ed.getSettings() }, 1500);
           }} />
         : <p className="loading">Loading…</p>}
     </div>

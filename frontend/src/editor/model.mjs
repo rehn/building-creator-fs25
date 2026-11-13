@@ -3081,7 +3081,7 @@ const shopName = name => String(name || "").trim() || "House";
  * The placeable (store item) XML for the mod: shop data and the same blocks as placeableSnippet. The game reads the shop picture and the i3d
  * relative to the mod's root, not to the XML: in a mod of several buildings each is in a folder, so dir ("farmhouse/") goes in front of them.
  */
-export function placeableXml(p, name, {dir = ""} = {}) {
+export function placeableXml(p, name, {dir = "", image = true} = {}) {
   const {kind, blocks, p: q} = exportParts(p), {type, fn, shop} = kind.placeable(q);
   return `<?xml version="1.0" encoding="utf-8" standalone="no" ?>
 <placeable type="${type}">
@@ -3091,8 +3091,8 @@ export function placeableXml(p, name, {dir = ""} = {}) {
         <functions>
 ${[].concat(fn).map(f => `            <function>${f}</function>`).join("\n")}
         </functions>
-        <image>${dir}${MOD_FILES.store}</image>
-        <canBeSold>true</canBeSold>
+${image ? `        <image>${dir}${MOD_FILES.store}</image>
+` : ""}        <canBeSold>true</canBeSold>
         <showInStore>true</showInStore>
         <price>${Math.round(q.modPrice)}</price>
         <lifetime>1000</lifetime>
@@ -3152,7 +3152,7 @@ export function defaultModDescription(p) {
 }
 
 /** modDesc.xml for the mod. author: used when the house has no author of its own (the logged-in user). */
-export function modDescXml(p, name, {author = ""} = {}) {
+export function modDescXml(p, name, {author = "", icon = true} = {}) {
   const desc = p.modDescription || defaultModDescription(p);
   return `<?xml version="1.0" encoding="utf-8" standalone="no" ?>
 <modDesc descVersion="${MOD_DESC_VERSION}">
@@ -3164,8 +3164,8 @@ export function modDescXml(p, name, {author = ""} = {}) {
     <description>
         <en>${cdata(desc)}</en>
     </description>
-    <iconFilename>${MOD_FILES.icon}</iconFilename>
-    <multiplayer supported="true"/>
+${icon ? `    <iconFilename>${MOD_FILES.icon}</iconFilename>
+` : ""}    <multiplayer supported="true"/>
     <storeItems>
         <storeItem xmlFilename="${MOD_FILES.xml}"/>
     </storeItems>

@@ -863,6 +863,5 @@
   "Made {when}": "Skapad {when}",
   "Last used {when}": "Senast använd {when}",
   "Never used": "Aldrig använd",
-  "Send the token as": "Skicka token som",
-  "The model couldn't be made from this building.": "Modellen kunde inte göras av den här byggnaden."
+  "Send the token as": "Skicka token som"
 }

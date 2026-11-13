@@ -101,6 +101,7 @@ func (s *Server) routes() {
 	m.HandleFunc("PATCH /api/projects/{id}", s.requireUser(s.updateProject))
 	m.HandleFunc("DELETE /api/projects/{id}", s.requireUser(s.deleteProject))
 	m.HandleFunc("POST /api/projects/{id}/duplicate", s.requireUser(s.duplicateProject))
+	m.HandleFunc("PUT /api/projects/{id}/model", s.requireUser(s.putModel))
 
 	m.HandleFunc("GET /api/tokens", s.requireUser(s.listTokens))
 	m.HandleFunc("POST /api/tokens", s.requireUser(s.createToken))
@@ -108,6 +109,9 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /api/v1/buildings", s.requireToken(s.listBuildings))
 	m.HandleFunc("GET /api/v1/buildings/{id}", s.requireToken(s.getBuilding))
 	m.HandleFunc("GET /api/v1/buildings/{id}/icon", s.requireToken(s.buildingIcon))
+	for _, file := range modelFiles {
+		m.HandleFunc("GET /api/v1/buildings/{id}/"+file, s.requireToken(s.modelFile(file)))
+	}
 
 	m.HandleFunc("GET /api/assets", s.requireUser(s.listAssets))
 	m.HandleFunc("POST /api/assets", s.requireUser(s.createAsset))

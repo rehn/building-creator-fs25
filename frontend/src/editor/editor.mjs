@@ -18,6 +18,7 @@ import { DOUBLE_DOOR_FROM } from "./openings.mjs";
 import { cleanPapers, wallBreaks, pieceGroups, roomOf, problems, footprint, snapItem, itemAt, placeNew, rotateItem, History, roomBox, wingsOf, liveWings, isSplitWall, MAX_SPLITS, wingSplitKey, sectionsOf, sectionRuns, splitsOf, maxFloors, maxFloorsWithAttic, wallFloorAt, dividerAt, splitAtFrom, floorsOf as floorHeightsOf, wingIdOf, wingWallKey, WING_PARTS, wallsOf, eaveWalls, autoPipes, pipePositions } from "./layout.mjs";
 import { makeWalker } from "./walk.mjs";
 import { exportPart, importPart } from "./partfile.mjs";
+import { modelBundle } from "./bundle.mjs";
 import { OBJECT_TYPES, objectInfo, OBJECT_LIMITS, GAP_LIMITS, objectOf, pastureOf, snapBox, snapPasture, objectProblems, objectWarnings, fencePoints, snapFencePoint, MAX_FENCE_POINTS, MANY, MAX_TROUGHS, nextTroughSpot, TROUGH_KINDS } from "./objects.mjs";
 import { setAssets, catalogFor, usedAssets, troughLooks } from "./model.mjs";
 import { readObj, assetFolder, flattenI3d, assetSize, normalizeMeta, turnedSize } from "./assets.mjs";
@@ -3088,5 +3089,7 @@ initThree();
 rebuild(true);
 loadAssets();
 
-return {getSettings: () => serialize(p), setSettings, exportModel, exportMod, exportInto, exportSettings, importSettings, snapshot, toast, destroy};
+/** The files the server keeps for other programs (obj, mtl, game mod zip) of a building with these settings (the editor's own while not given). */
+const modelFiles = (name, settings) => modelBundle(settings || p, name, {author});
+return {getSettings: () => serialize(p), setSettings, modelFiles, exportModel, exportMod, exportInto, exportSettings, importSettings, snapshot, toast, destroy};
 }
