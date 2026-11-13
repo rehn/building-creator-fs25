@@ -3029,17 +3029,21 @@ async function exportMod(name) {
     saveFile(`${mod}.zip`, await zip.generateAsync({type: "blob"}), () => toast("The download didn\u2019t start. Try again or use another browser."));
   } catch (e) { toast("Couldn\u2019t pack the mod. Try again."); }
 }
+/** What "Export model" gives: a zip with a folder of house.i3d, placeable_snippet.xml, textures and imported items. */
+async function modelZip(name, type = "blob") {
+  const zip = new JSZip(), dir = zip.folder(slugify(name));
+  dir.file("house.i3d", buildI3d(p, {withTex: true}));
+  dir.file("placeable_snippet.xml", placeableSnippet(p));
+  await addTextures(dir);
+  await addItems(dir);
+  return zip.generateAsync({type, compression: "DEFLATE"});
+}
 async function exportModel(name) {
   const slug = slugify(name);
   const plain = () => showText("house.i3d", buildI3d(p, {withTex: false}));
   toast("Packing the model and textures\u2026");
   try {
-    const zip = new JSZip(), dir = zip.folder(slug);
-    dir.file("house.i3d", buildI3d(p, {withTex: true}));
-    dir.file("placeable_snippet.xml", placeableSnippet(p));
-    await addTextures(dir);
-    await addItems(dir);
-    saveFile(`${slug}.zip`, await zip.generateAsync({type: "blob"}), plain);
+    saveFile(`${slug}.zip`, await modelZip(name), plain);
   } catch (e) { plain(); }
 }
 function exportSettings(name) { saveFile(`${slugify(name)}-settings.json`, JSON.stringify(serialize(p), null, 2)); }
@@ -3089,7 +3093,21 @@ initThree();
 rebuild(true);
 loadAssets();
 
-/** The files the server keeps for other programs (obj, mtl, game mod zip) of a building with these settings (the editor's own while not given). */
-const modelFiles = (name, settings) => modelBundle(settings || p, name, {author});
+/**
+ * The OBJ and MTL are made from the settings given; the game mod is the full one (as "Download game mod": textures, imported items, shop
+ * picture) of the building as the editor holds it now. If packing that fails the plain one (colours only) is sent instead.
+ */
+const modelFiles = async (name, settings) => {
+  const files = await modelBundle(settings || p, name, {author});
+  try {
+    const zip = new JSZip();
+    zip.file("modDesc.xml", modDescXml(p, name, {author}));
+    const icon = await fillMod(zip, name);
+    if (icon) zip.file(MOD_FILES.icon, icon);
+    files.mod = await zip.generateAsync({type: "uint8array", compression: "DEFLATE"});
+  } catch (e) { console.warn("The full game mod could not be packed; sending the plain one:", e); toast("Model files for the API: " + (e && e.message || e)); }
+  try { files.export = await modelZip(name, "uint8array"); } catch (e) { console.warn("The model export could not be packed:", e); toast("Model export for the API: " + (e && e.message || e)); }
+  return files;
+};
 return {getSettings: () => serialize(p), setSettings, modelFiles, exportModel, exportMod, exportInto, exportSettings, importSettings, snapshot, toast, destroy};
 }

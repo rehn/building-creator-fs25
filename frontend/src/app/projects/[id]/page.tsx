@@ -197,7 +197,10 @@ export default function ProjectPage() {
         ? <Editor author={authorName(user)} initial={project.data} onChange={s => queue({ data: s })} onReady={ed => {
             editor.current = ed;
             // a new house has no preview or model files yet: save once so the list shows one and other programs get the model
-            if (ed && (!project.thumbnail || !project.modelVersion)) queue({ data: ed.getSettings() }, 1500);
+            // (and once more for a model made before the game mod in it was the full one, with textures)
+            let full = true;
+            try { full = localStorage.getItem("model-full-2:" + id) === "1"; localStorage.setItem("model-full-2:" + id, "1"); } catch { /* no storage */ }
+            if (ed && (!project.thumbnail || !project.modelVersion || !full)) queue({ data: ed.getSettings() }, 1500);
           }} />
         : <p className="loading">Loading…</p>}
     </div>

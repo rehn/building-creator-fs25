@@ -30,7 +30,7 @@ func modZip(t *testing.T, names ...string) []byte {
 func putModel(c *client, id string, version int64, files map[string][]byte) *httptest.ResponseRecorder {
 	var body bytes.Buffer
 	mw := multipart.NewWriter(&body)
-	for _, name := range []string{"obj", "mtl", "mod"} {
+	for _, name := range []string{"obj", "mtl", "mod", "export"} {
 		if data, ok := files[name]; ok {
 			w, _ := mw.CreateFormFile(name, name)
 			w.Write(data)
@@ -105,6 +105,15 @@ func TestModelFilesAPI(t *testing.T) {
 	}
 	if i3d := bearer(t, srv, tok, "/api/v1/buildings/"+p.ID+"/model.i3d"); i3d.Body.String() != "<!-- house.i3d -->" {
 		t.Fatalf("i3d out of the zip: %q", i3d.Body.String())
+	}
+
+	// the editor's full zip has folder entries and textures, and an export zip comes with it
+	full := modZip(t, "modDesc.xml", "house.xml", "house.i3d", "textures/", "textures/walls_diffuse.png")
+	files := goodModel(t, "v 7 8 9\n")
+	files["mod"], files["export"] = full, modZip(t, "stugan/", "stugan/house.i3d")
+	expect(t, putModel(c, p.ID, saved.Version, files), 204)
+	if g := bearer(t, srv, tok, "/api/v1/buildings/"+p.ID+"/mod.zip"); !bytes.Equal(g.Body.Bytes(), files["export"]) {
+		t.Fatal("mod.zip is the export zip")
 	}
 
 	// ETag: the same version is not sent twice
