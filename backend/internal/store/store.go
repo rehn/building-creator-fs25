@@ -103,6 +103,16 @@ CREATE TABLE IF NOT EXISTS parts (
 	updated_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS parts_user ON parts(user_id, updated_at DESC);
+CREATE TABLE IF NOT EXISTS api_tokens (
+	id           TEXT    PRIMARY KEY,
+	user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	name         TEXT    NOT NULL,
+	token_hash   TEXT    NOT NULL UNIQUE,
+	prefix       TEXT    NOT NULL,
+	created_at   INTEGER NOT NULL,
+	last_used_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS api_tokens_user ON api_tokens(user_id);
 CREATE TABLE IF NOT EXISTS templates (
 	id         TEXT    PRIMARY KEY,
 	kind       TEXT    NOT NULL,
@@ -195,6 +205,16 @@ CREATE TABLE IF NOT EXISTS parts (
 	updated_at BIGINT  NOT NULL
 );
 CREATE INDEX IF NOT EXISTS parts_user ON parts(user_id, updated_at DESC);
+CREATE TABLE IF NOT EXISTS api_tokens (
+	id           TEXT    PRIMARY KEY,
+	user_id      BIGINT  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	name         TEXT    NOT NULL,
+	token_hash   TEXT    NOT NULL UNIQUE,
+	prefix       TEXT    NOT NULL,
+	created_at   BIGINT  NOT NULL,
+	last_used_at BIGINT
+);
+CREATE INDEX IF NOT EXISTS api_tokens_user ON api_tokens(user_id);
 CREATE TABLE IF NOT EXISTS templates (
 	id         TEXT    PRIMARY KEY,
 	kind       TEXT    NOT NULL,

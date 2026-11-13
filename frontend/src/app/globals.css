@@ -433,3 +433,8 @@ select.lang:hover { border-color: var(--muted); }
 
 /* the page you are on, in the bar at the top */
 .topbar .btn.current { border-color: var(--accent); }
+
+/* API access */
+.token-new { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 12px 0; display: flex; flex-direction: column; gap: 8px; }
+.token-new input { width: 100%; font-family: ui-monospace, monospace; }
+.api-doc { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; overflow-x: auto; font-size: 13px; line-height: 1.5; }

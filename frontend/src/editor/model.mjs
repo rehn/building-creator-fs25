@@ -3030,6 +3030,36 @@ export function buildI3d(p, opts) {
   return doc.write(root);
 }
 
+/**
+ * The building as a Wavefront OBJ for programs that draw it (metres, y up, same coordinates as the i3d): {obj, mtl}. One group
+ * and material per visual part, named as in the i3d; colours only (no textures), glass see-through where the game's is. The
+ * collision mesh and the game's trigger boxes are left out.
+ */
+export function buildObj(p) {
+  p = normalize(p);
+  const {G} = buildGeometry(p), obj = ["# House to i3d", "mtllib model.mtl"], mtl = ["# House to i3d"];
+  let base = 0;
+  for (const m of matList(p)) {
+    const whole = G[m];
+    if (!whole || !whole.i.length) continue;
+    const pieces = m === "curtain" || m === "fittings" ? splitByColor(whole).map((g, j) => ({name: j ? `${m}${j + 1}` : m, g})) : [{name: m, g: whole}];
+    for (const {name, g} of pieces) {
+      const kd = g.color ? v3(g.color) : rgb(colorFor(p, m)).replace(/ 1$/, ""), glassy = m === "glass" && seeThroughGlass(p);
+      mtl.push(`newmtl ${name}`, `Kd ${kd}`, "Ka 0 0 0", "Ks 0 0 0", `d ${glassy ? GLASS_ALPHA : 1}`, "");
+      obj.push(`g ${name}`, `usemtl ${name}`);
+      for (let k = 0; k < g.p.length; k += 3) obj.push(`v ${num(g.p[k])} ${num(g.p[k + 1])} ${num(g.p[k + 2])}`);
+      for (let k = 0; k < g.n.length; k += 3) obj.push(`vn ${num(g.n[k])} ${num(g.n[k + 1])} ${num(g.n[k + 2])}`);
+      for (let k = 0; k < g.uv.length; k += 2) obj.push(`vt ${num(g.uv[k])} ${num(g.uv[k + 1])}`);
+      for (let k = 0; k < g.i.length; k += 3) {
+        const [a, b, c] = [g.i[k], g.i[k + 1], g.i[k + 2]].map(i => base + i + 1);
+        obj.push(`f ${a}/${a}/${a} ${b}/${b}/${b} ${c}/${c}/${c}`);
+      }
+      base += g.p.length / 3;
+    }
+  }
+  return {obj: obj.join("\n") + "\n", mtl: mtl.join("\n")};
+}
+
 /** Blocks to paste into a placeable XML, with i3dMappings that match the i3d buildI3d writes. */
 export function placeableSnippet(p = DEFAULTS) {
   const {kind, blocks, p: q} = exportParts(p), note = kind.placeable(q).note;

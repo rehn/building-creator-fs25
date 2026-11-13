@@ -102,6 +102,13 @@ func (s *Server) routes() {
 	m.HandleFunc("DELETE /api/projects/{id}", s.requireUser(s.deleteProject))
 	m.HandleFunc("POST /api/projects/{id}/duplicate", s.requireUser(s.duplicateProject))
 
+	m.HandleFunc("GET /api/tokens", s.requireUser(s.listTokens))
+	m.HandleFunc("POST /api/tokens", s.requireUser(s.createToken))
+	m.HandleFunc("DELETE /api/tokens/{id}", s.requireUser(s.deleteToken))
+	m.HandleFunc("GET /api/v1/buildings", s.requireToken(s.listBuildings))
+	m.HandleFunc("GET /api/v1/buildings/{id}", s.requireToken(s.getBuilding))
+	m.HandleFunc("GET /api/v1/buildings/{id}/icon", s.requireToken(s.buildingIcon))
+
 	m.HandleFunc("GET /api/assets", s.requireUser(s.listAssets))
 	m.HandleFunc("POST /api/assets", s.requireUser(s.createAsset))
 	m.HandleFunc("PATCH /api/assets/{id}", s.requireUser(s.updateAsset))
@@ -135,6 +142,9 @@ func (s *Server) routes() {
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+	if strings.HasPrefix(r.URL.Path, "/api/v1/") && cors(w, r) {
+		return
+	}
 	if !s.sameOrigin(r) {
 		writeError(w, http.StatusForbidden, "bad_origin", "Requests must come from the app itself.")
 		return

@@ -51,6 +51,16 @@ export interface SavedPart {
   updatedAt: string;
 }
 
+/** An API token for another program (token: the secret itself, only when it was just made). */
+export interface ApiToken {
+  id: string;
+  name: string;
+  prefix: string;
+  token?: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
 /** A starting design the admin made for everyone, usually from photos (Claude suggests, the admin adjusts). */
 export interface Template {
   id: string;
@@ -134,6 +144,10 @@ export const api = {
     if (!res.ok) throw new ApiError(res.status, "file", `Couldn't load ${name} (${res.status}).`);
     return res.arrayBuffer();
   },
+
+  tokens: () => request<ApiToken[]>("GET", "/tokens"),
+  createToken: (name: string) => request<ApiToken>("POST", "/tokens", { name }),
+  deleteToken: (id: string) => request<void>("DELETE", "/tokens/" + encodeURIComponent(id)),
 
   parts: () => request<SavedPart[]>("GET", "/parts"),
   part: (id: string) => request<SavedPart>("GET", "/parts/" + encodeURIComponent(id)),

@@ -17,6 +17,7 @@ export function TopBar({ user }: { user: User | null }) {
       {user && <span className="who" translate="no">{user.name}</span>}
       {user && <Link className={"btn" + (path === "/" ? " current" : "")} href="/" aria-current={path === "/" ? "page" : undefined}>My buildings</Link>}
       {user && <Link className={"btn" + (path.startsWith("/items") ? " current" : "")} href="/items" aria-current={path.startsWith("/items") ? "page" : undefined}>My items</Link>}
+      {user && <Link className={"btn" + (path.startsWith("/api-access") ? " current" : "")} href="/api-access" aria-current={path.startsWith("/api-access") ? "page" : undefined}>API</Link>}
       {user?.isAdmin && <Link className="btn" href="/admin">Admin</Link>}
       <LanguageSelect />
       {user && <button type="button" onClick={logout}>Log out</button>}
