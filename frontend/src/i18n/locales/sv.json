@@ -847,5 +847,22 @@
   "Drinker": "Vattenho",
   "A feeder for the hens in the pasture, for looks (the game feeds the hens from the feed pad). Put it inside the fence.": "En foderho för hönsen i hagen, bara för utseendet (spelet matar hönsen från foderplatsen). Placera den innanför staketet.",
   "A drinker for the hens in the pasture, for looks (the water is automatic). Put it inside the fence.": "En vattenho för hönsen i hagen, bara för utseendet (vattnet är automatiskt). Placera den innanför staketet.",
-  "There are several: the animals use all of them, but the game shows the amount of feed (or water) in the first one only.": "Det finns flera: djuren använder alla, men spelet visar mängden foder (eller vatten) bara i den första."
+  "There are several: the animals use all of them, but the game shows the amount of feed (or water) in the first one only.": "Det finns flera: djuren använder alla, men spelet visar mängden foder (eller vatten) bara i den första.",
+  "API access": "API-åtkomst",
+  "Name of the program": "Programmets namn",
+  "My viewer": "Min visare",
+  "Make a token": "Skapa token",
+  "New token": "Ny token",
+  "Token": "Token",
+  "Copy the token now.": "Kopiera token nu.",
+  "It is only shown this once. If you lose it, delete it and make a new one.": "Den visas bara den här gången. Tappar du bort den, ta bort den och skapa en ny.",
+  "Loading your tokens…": "Hämtar dina tokens …",
+  "No tokens yet": "Inga tokens än",
+  "Make one to let a program in.": "Skapa en för att släppa in ett program.",
+  "Delete the token “{name}”? Programs that use it stop working.": "Ta bort token ”{name}”? Program som använder den slutar fungera.",
+  "Made {when}": "Skapad {when}",
+  "Last used {when}": "Senast använd {when}",
+  "Never used": "Aldrig använd",
+  "Send the token as": "Skicka token som",
+  "The model couldn't be made from this building.": "Modellen kunde inte göras av den här byggnaden."
 }
