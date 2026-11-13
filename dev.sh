@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Starts the app locally for testing: Go API on :8080 and Next.js dev server on :3000.
+# Starts the app locally for testing: Go API on :8080 (API_PORT in .env changes it) and Next.js dev server on :3000.
 # Needs Go 1.25+ and Node 22+. Stop with Ctrl+C.
 #
 #   ./dev.sh          start (data is kept in .dev/ between runs)
@@ -27,10 +27,11 @@ set -a; source .env; set +a
 
 export PUBLIC_URL=http://localhost:3000
 export DATABASE_PATH=$root/.dev/building-creator-fs25.db
-export LISTEN_ADDR=127.0.0.1:8080
-export API_URL=http://127.0.0.1:8080
+API_PORT=${API_PORT:-8080}
+export LISTEN_ADDR=127.0.0.1:$API_PORT
+export API_URL=http://127.0.0.1:$API_PORT
 
-for port in 8080 3000; do
+for port in $API_PORT 3000; do
   if (exec 3<>/dev/tcp/127.0.0.1/$port) 2>/dev/null; then
     echo "Port $port is already in use. Stop whatever runs there (another ./dev.sh?) and try again." >&2
     exit 1
