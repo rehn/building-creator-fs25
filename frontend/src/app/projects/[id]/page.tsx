@@ -82,6 +82,9 @@ export default function ProjectPage() {
       await api.putModel(id, v, await editor.current.modelFiles(name, data));
     } catch (e) {
       if (e instanceof ApiError && e.code === "version_conflict") return; // saved again meanwhile: that save sends its own
+      // The settings are saved. Only a failure that may pass (no connection, a server error) is tried again; a refusal (an older server
+      // without the route, a file too big) would only repeat itself with every save.
+      if (e instanceof ApiError && e.status >= 400 && e.status < 500) return;
       throw e;
     }
   }
