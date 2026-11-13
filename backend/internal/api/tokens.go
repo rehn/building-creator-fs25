@@ -101,24 +101,34 @@ func (s *Server) requireToken(next userHandler) http.HandlerFunc {
 
 // building is what the API tells another program about a building. Settings (what the editor saves) only when one is fetched.
 type building struct {
-	ID        string          `json:"id"`
-	Name      string          `json:"name"`
-	Kind      string          `json:"kind"`
-	Icon      string          `json:"icon"` // path of the picture, "" without one
-	I3d       string          `json:"i3d"`  // paths of the model files
-	Obj       string          `json:"obj"`
-	Version   int64           `json:"version"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Kind string `json:"kind"`
+	Icon string `json:"icon"` // path of the picture, "" without one
+	I3d  string `json:"i3d"`  // paths of the model files
+	Obj  string `json:"obj"`
+	Mtl  string `json:"mtl"` // the colours the obj refers to
+	Mod  string `json:"mod"` // the game mod (zip: modDesc, placeable XML, i3d)
+	// Version is the version of the files served (the building's own version until its first model is stored). It goes up with
+	// every save that sends a model, so a program can keep what it made from a model for as long as the version is the same.
+	Version int64 `json:"version"`
+	// HasModel: the files above exist. Buildings not saved since the models were kept have none (404) until they are saved again.
+	HasModel  bool            `json:"hasModel"`
 	UpdatedAt time.Time       `json:"updatedAt"`
 	Settings  json.RawMessage `json:"settings,omitempty"`
 }
 
-func newBuilding(id, name, kind string, hasIcon bool, version int64, updated time.Time) building {
+func newBuilding(p store.ProjectSummary, kind string) building {
 	if kind == "" {
 		kind = "house"
 	}
+	id, version := p.ID, p.Version
+	if p.ModelVersion > 0 {
+		version = p.ModelVersion
+	}
 	base := "/api/v1/buildings/" + id
-	b := building{ID: id, Name: name, Kind: kind, Version: version, UpdatedAt: updated, I3d: base + "/model.i3d", Obj: base + "/model.obj"}
-	if hasIcon {
+	b := building{ID: id, Name: p.Name, Kind: kind, Version: version, HasModel: p.ModelVersion > 0, UpdatedAt: p.UpdatedAt, I3d: base + "/model.i3d", Obj: base + "/model.obj", Mtl: base + "/model.mtl", Mod: base + "/mod.zip"}
+	if p.Thumbnail != "" {
 		b.Icon = base + "/icon"
 	}
 	return b
@@ -132,7 +142,7 @@ func (s *Server) listBuildings(w http.ResponseWriter, r *http.Request, u store.U
 	}
 	out := make([]building, 0, len(list))
 	for _, p := range list {
-		out = append(out, newBuilding(p.ID, p.Name, p.Kind, p.Thumbnail != "", p.Version, p.UpdatedAt))
+		out = append(out, newBuilding(p, p.Kind))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"buildings": out})
 }
@@ -147,7 +157,7 @@ func (s *Server) getBuilding(w http.ResponseWriter, r *http.Request, u store.Use
 		Kind string `json:"kind"`
 	}
 	_ = json.Unmarshal(p.Data, &d)
-	b := newBuilding(p.ID, p.Name, d.Kind, p.Thumbnail != "", p.Version, p.UpdatedAt)
+	b := newBuilding(p.ProjectSummary, d.Kind)
 	b.Settings = p.Data
 	writeJSON(w, http.StatusOK, b)
 }
@@ -176,7 +186,7 @@ func (s *Server) buildingIcon(w http.ResponseWriter, r *http.Request, u store.Us
 func cors(w http.ResponseWriter, r *http.Request) (done bool) {
 	h := w.Header()
 	h.Set("Access-Control-Allow-Origin", "*")
-	h.Set("Access-Control-Expose-Headers", "Content-Disposition")
+	h.Set("Access-Control-Expose-Headers", "Content-Disposition, ETag")
 	if r.Method != http.MethodOptions {
 		return false
 	}

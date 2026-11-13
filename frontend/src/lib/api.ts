@@ -16,6 +16,8 @@ export interface ProjectSummary {
   /** Kind of building, only in the list ("" or missing: a farmhouse). */
   kind?: string;
   version: number;
+  /** The version the server's model files were made from; 0 or missing: it has none yet. */
+  modelVersion?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -131,6 +133,14 @@ export const api = {
   updateProject: (id: string, patch: { name?: string; data?: Record<string, unknown>; thumbnail?: string; version?: number }) =>
     request<Project>("PATCH", "/projects/" + encodeURIComponent(id), patch),
   deleteProject: (id: string) => request<void>("DELETE", "/projects/" + encodeURIComponent(id)),
+  /** The model files (obj, mtl, game mod zip) made from saved version `version`, for other programs to read. */
+  putModel: (id: string, version: number, files: { obj: string; mtl: string; mod: Uint8Array }) => {
+    const form = new FormData();
+    form.append("obj", new Blob([files.obj], { type: "text/plain" }), "model.obj");
+    form.append("mtl", new Blob([files.mtl], { type: "text/plain" }), "model.mtl");
+    form.append("mod", new Blob([files.mod as BlobPart], { type: "application/zip" }), "mod.zip");
+    return send<void>("PUT", "/projects/" + encodeURIComponent(id) + "/model?version=" + version, form);
+  },
   duplicateProject: (id: string) => request<Project>("POST", "/projects/" + encodeURIComponent(id) + "/duplicate"),
 
   assets: () => request<Asset[]>("GET", "/assets"),

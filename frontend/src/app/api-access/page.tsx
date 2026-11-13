@@ -92,13 +92,17 @@ export default function ApiAccessPage() {
         <h3 className="item-group">How to use it</h3>
         <p className="hint">Send the token as <code>Authorization: Bearer &lt;token&gt;</code>. All answers are JSON except the model files.</p>
         <pre className="api-doc" translate="no">{`GET ${origin}/api/v1/buildings
-  -> { "buildings": [ { "id", "name", "kind", "icon", "i3d", "obj", "version", "updatedAt" } ] }
+  -> { "buildings": [ { "id", "name", "kind", "icon", "i3d", "obj", "mtl", "mod", "version", "hasModel", "updatedAt" } ] }
      kind: house, chicken, cow, sheep, shed
+     version: goes up every time the building is saved; the files below are of that version
+     hasModel: false for a building not saved since the files were kept (its files give 404 until it is saved again)
 GET ${origin}/api/v1/buildings/{id}             the same, plus "settings" (what the editor saves)
 GET ${origin}/api/v1/buildings/{id}/icon        the picture (PNG or JPEG)
-GET ${origin}/api/v1/buildings/{id}/model.i3d   the model for Giants Editor (no textures)
 GET ${origin}/api/v1/buildings/{id}/model.obj   the model to draw: metres, y up, one group per material
 GET ${origin}/api/v1/buildings/{id}/model.mtl   the colours the .obj refers to
+GET ${origin}/api/v1/buildings/{id}/mod.zip     the game mod: modDesc.xml, house.xml, house.i3d (plain colours, no shop picture)
+GET ${origin}/api/v1/buildings/{id}/model.i3d   house.i3d from the mod, for Giants Editor
+  The files carry an ETag of the version: send If-None-Match to get 304 when nothing changed.
 
 curl -H "Authorization: Bearer bc_..." ${origin}/api/v1/buildings`}</pre>
       </main>

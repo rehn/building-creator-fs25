@@ -103,6 +103,14 @@ CREATE TABLE IF NOT EXISTS parts (
 	updated_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS parts_user ON parts(user_id, updated_at DESC);
+CREATE TABLE IF NOT EXISTS project_models (
+	project_id TEXT    PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+	version    INTEGER NOT NULL,
+	obj        BLOB    NOT NULL,
+	mtl        BLOB    NOT NULL,
+	mod_zip    BLOB    NOT NULL,
+	updated_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS api_tokens (
 	id           TEXT    PRIMARY KEY,
 	user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -205,6 +213,14 @@ CREATE TABLE IF NOT EXISTS parts (
 	updated_at BIGINT  NOT NULL
 );
 CREATE INDEX IF NOT EXISTS parts_user ON parts(user_id, updated_at DESC);
+CREATE TABLE IF NOT EXISTS project_models (
+	project_id TEXT    PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+	version    BIGINT  NOT NULL,
+	obj        BYTEA   NOT NULL,
+	mtl        BYTEA   NOT NULL,
+	mod_zip    BYTEA   NOT NULL,
+	updated_at BIGINT  NOT NULL
+);
 CREATE TABLE IF NOT EXISTS api_tokens (
 	id           TEXT    PRIMARY KEY,
 	user_id      BIGINT  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -660,6 +676,8 @@ type ProjectSummary struct {
 	// Kind is the kind of building (data.kind, "" when it's missing or not text);
 	// only set by ListProjects, so the list can group buildings without loading their data.
 	Kind string `json:"kind,omitempty"`
+	// ModelVersion is the version the stored model files (see Model) were made from; 0: the building has none yet.
+	ModelVersion int64 `json:"modelVersion"`
 }
 
 type Project struct {
@@ -686,7 +704,7 @@ func scanProject(row scanner) (Project, error) {
 	var p Project
 	var data string
 	var created, updated int64
-	err := row.Scan(&p.ID, &p.Name, &p.Thumbnail, &p.Version, &created, &updated, &data)
+	err := row.Scan(&p.ID, &p.Name, &p.Thumbnail, &p.Version, &created, &updated, &data, &p.ModelVersion)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Project{}, ErrNotFound
 	}
@@ -698,7 +716,10 @@ func scanProject(row scanner) (Project, error) {
 	return p, nil
 }
 
-const projectCols = "id, name, thumbnail, version, created_at, updated_at, data"
+const projectCols = "id, name, thumbnail, version, created_at, updated_at, data, " + modelVersionSQL
+
+// the version of the building's stored model, 0 without one
+const modelVersionSQL = "COALESCE((SELECT m.version FROM project_models m WHERE m.project_id = projects.id), 0)"
 
 func (s *Store) CreateProject(ctx context.Context, userID int64, name string, data json.RawMessage) (Project, error) {
 	return s.insertProject(ctx, userID, name, data, "")
@@ -721,7 +742,7 @@ func (s *Store) ListProjects(ctx context.Context, userID int64) ([]ProjectSummar
 	if s.dialect == postgres {
 		kind = `CASE WHEN jsonb_typeof(data::jsonb -> 'kind') = 'string' THEN data::jsonb ->> 'kind' ELSE '' END`
 	}
-	rows, err := s.query(ctx, `SELECT id, name, thumbnail, version, created_at, updated_at, `+kind+` FROM projects WHERE user_id = ? ORDER BY updated_at DESC, id`, userID)
+	rows, err := s.query(ctx, `SELECT id, name, thumbnail, version, created_at, updated_at, `+kind+`, `+modelVersionSQL+` FROM projects WHERE user_id = ? ORDER BY updated_at DESC, id`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -730,7 +751,7 @@ func (s *Store) ListProjects(ctx context.Context, userID int64) ([]ProjectSummar
 	for rows.Next() {
 		var p ProjectSummary
 		var created, updated int64
-		if err := rows.Scan(&p.ID, &p.Name, &p.Thumbnail, &p.Version, &created, &updated, &p.Kind); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Thumbnail, &p.Version, &created, &updated, &p.Kind, &p.ModelVersion); err != nil {
 			return nil, err
 		}
 		p.CreatedAt, p.UpdatedAt = time.UnixMilli(created), time.UnixMilli(updated)
