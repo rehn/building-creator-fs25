@@ -863,5 +863,12 @@
   "Made {when}": "Skapad {when}",
   "Last used {when}": "Senast använd {when}",
   "Never used": "Aldrig använd",
-  "Send the token as": "Skicka token som"
+  "Send the token as": "Skicka token som",
+  "Ground in the pasture": "Mark i hagen",
+  "Grass": "Gräs",
+  "Dirt": "Jord",
+  "Mud": "Lera",
+  "Gravel": "Grus",
+  "Sand": "Sand",
+  "Forest floor": "Skogsmark"
 }

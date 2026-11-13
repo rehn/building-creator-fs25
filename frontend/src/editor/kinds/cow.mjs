@@ -12,6 +12,8 @@ import { placeOnWall, placeOnBuilding } from "../places.mjs";
 import { tone, shade, arc, strawBale, strawLitter } from "./props.mjs";
 import { INNER_WALL } from "./innerwall.mjs";
 
+/** What the pasture is painted with (ground types of the game's groundTypes.xml): grass is the living meadow the animals graze. */
+export const PASTURE_GROUNDS = [["grass", "Grass"], ["dirt", "Dirt"], ["animalMud", "Mud"], ["gravel", "Gravel"], ["sand", "Sand"], ["forestGround", "Forest floor"]];
 /** About one cow per 6 m² of floor; at most 100 (the base game's biggest pasture barn takes 99). */
 export const M2_PER_COW = 6;
 export const MAX_COWS = 100;
@@ -554,7 +556,7 @@ ${pts.map((_, i) => `                <node node="navContourNode${i + 1}"/>`).joi
             <createTask weedState="0">
                 <fruit type="MEADOW" growthState="greenSmall"/>
                 <ground type="NONE"/>
-                <terrainGroundType name="grass"/>
+                <terrainGroundType name="${PASTURE_GROUNDS.some(g => g[0] === p.pastureGround) ? p.pastureGround : "grass"}"/>
             </createTask>
             <clearTask>
                 <fruit type="UNKNOWN" growthState="0"/>
@@ -581,11 +583,12 @@ export default {
   walkIn: true,
   glyph: "cow",
   yard: (geo, p) => cowYard(geo, p),
-  defaults: {ceiling: false, insideSame: true, animalsInside: true, cows: 12, pastureWall: "back", fenceDepth: 15, winStyle: "stall", doorStyle: "xbrace"},
+  defaults: {ceiling: false, insideSame: true, animalsInside: true, pastureGround: "grass", cows: 12, pastureWall: "back", fenceDepth: 15, winStyle: "stall", doorStyle: "xbrace"},
   sections: [
     {title: "Cows", tab: "game", hint: "Cows graze in the pasture and come in through a wide doorway in the pasture side; they eat and drink at troughs along that wall. Fill feed (or drop bales) at the feed place outside the fence; water is automatic. The pasture, the feed pad and the rest are under Game objects. This is a barn without milking (like the game’s small cow barn).", fields: [
       {k: "cows", label: "Cows", min: 1, max: MAX_COWS, step: 1},
-      {k: "animalsInside", label: "The animals can walk inside through the doorway", type: "check"}]},
+      {k: "pastureGround", cardRow: true, label: "Ground in the pasture", type: "select", options: PASTURE_GROUNDS},
+      {k: "animalsInside", cardRow: true, label: "The animals can walk inside through the doorway", type: "check"}]},
   ],
   hides: ["Interior", "Kupor (dormers)"],
   /**
