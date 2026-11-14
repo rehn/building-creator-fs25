@@ -10,6 +10,7 @@ import {
 } from "./model.mjs";
 import { WINDOW_STYLES, DOOR_STYLES, PORCH_OPTIONS, PORCH_W, PORCH_D, WING_FIELDS, MAX_WINGS } from "./model.mjs";
 import { pieceSheet, pieceMeshes, buildingTree, matList, matTable, slotOf, partStyle, splitAtOf, wallLabel, partName, wallItems, addOpening, addPartOn, addSplit, addPartSplit, duplicateOpening, duplicateSplit, moveBeside, moveToWall, openingProblem, setSectionFloorHeight, setTotalHeight, addPartDoor } from "./model.mjs";
+import { lodKeeps } from "./model.mjs";
 import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, henYard, henCap, seeThroughGlass, kindOf } from "./model.mjs";
 import { cowYard } from "./kinds/cow.mjs";
 import { WALLPAPERS } from "./kinds/innerwall.mjs";
@@ -55,6 +56,7 @@ const MARKUP = `<div class="hx-editor" data-tab="building">
     <div class="orbit-hint" id="orbitHint">Drag to orbit · right-drag or Shift+drag to move · scroll to zoom · double-click to look from there</div>
     <button type="button" class="hx-walk" id="walkBtn" title="See the building as a person walking round and in it">Walk around</button>
     <button type="button" class="hx-walk hx-walk2" id="walkAreaBtn" aria-pressed="false" hidden title="Where the animals can walk: in the yard, and inside the building where they can go in">Show where the animals can walk</button>
+    <button type="button" class="hx-walk hx-walk3" id="lodBtn" aria-pressed="false" hidden title="Switch between the detailed model and the simple one the game shows from far away (set the distance under Game > Shop and mod)">Detail: close up</button>
     <div class="hx-inside-bar" id="insideBar" hidden>
       <div class="seg" role="group" aria-label="View">
         <button type="button" id="viewPlan" aria-pressed="true">Plan</button><button type="button" id="view3d" aria-pressed="false">3D</button>
@@ -2816,6 +2818,18 @@ function paintWalkArea(yard) {
   btn.title = t("Animals can walk on about {n} m²: in the yard, and inside the building where they can go in", {n: Math.round(m2)});
   needs = true;
 }
+// The detail toggle: the far view shows only what the game's simple model (LOD1 in the i3d) keeps.
+let showFar = false;
+function applyLod() {
+  const on = p.lodDistance > 0;
+  if (!on) showFar = false;
+  const btn = $("lodBtn");
+  btn.hidden = !on;
+  btn.setAttribute("aria-pressed", String(showFar));
+  btn.textContent = showFar ? t("Detail: far away (from {m} m)", {m: p.lodDistance}) : t("Detail: close up");
+  for (const [m, o] of Object.entries(meshes)) o.visible = !showFar || lodKeeps(m);
+  needs = true;
+}
 function rebuild(fit) {
   const geo = buildGeometry(p);
   lastGeo = geo;
@@ -2864,7 +2878,8 @@ function rebuild(fit) {
   }
   refreshWin(); refreshDorm(); renderInsideUI();
   if ($("objPlan")) $("objPlan").disabled = !renderer;
-  Object.keys(G).forEach(m => tris += G[m].i.length / 3);
+  applyLod();
+  Object.keys(G).forEach(m => { if (!showFar || lodKeeps(m)) tris += G[m].i.length / 3; });
   readout.innerHTML = `<span><b>${dims.W.toFixed(1)} \u00D7 ${dims.D.toFixed(1)} m</b>${wingsNow.map(w => ` + <b>${w.ww.toFixed(1)} × ${w.wd.toFixed(1)} m</b> wing`).join("")} footprint</span><span><b>${dims.ridgeY.toFixed(1)} m</b> to the top</span><span><b>${tris.toLocaleString()}</b> triangles</span>`;
 }
 
@@ -2954,6 +2969,7 @@ function leaveWalk() {
   $("view").style.cursor = "";
   updateCam(); updateHighlight(); updatePlacesMarker();
 }
+$("lodBtn").onclick = () => { showFar = !showFar; rebuild(false); };
 $("walkBtn").onclick = () => walk.on ? leaveWalk() : enterWalk();
 $("walkAreaBtn").onclick = () => { showWalkArea = !showWalkArea; $("walkAreaBtn").setAttribute("aria-pressed", String(showWalkArea)); $("walkAreaBtn").textContent = showWalkArea ? "Hide where the animals can walk" : "Show where the animals can walk"; if (lastGeo) updateYardMarker(lastGeo); needs = true; };
 cleanups.push(() => { window.removeEventListener("keydown", walkKey); window.removeEventListener("keyup", walkKey); });

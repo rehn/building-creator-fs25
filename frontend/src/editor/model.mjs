@@ -29,7 +29,7 @@ export const DEFAULTS = {
   gutters:true, downpipes:2, gutterColor:"#3B3F42",
   wallColor:"#8E2A1E", trimColor:"#F2EFE8", roofColor:"#2B2D2F", doorColor:"#3E5A4A", innerDoorColor:"#E9E3D3", foundationColor:"#6E6E6A",
   interior:true, loftBacking:true, insidePaper:"none", curtainStyle:"sides", curtainColor:"#EFE9DC", ventilators:0, age:0,
-  modPrice:75000, modUpkeep:75, modAuthor:"", modDescription:""
+  modPrice:75000, modUpkeep:75, modAuthor:"", modDescription:"", lodDistance:80
 };
 /** Curtain layouts: [id, name]. Windows can pick one or follow the house's choice ("default"). */
 export const CURTAIN_OPTIONS = [["sides","Side panels and valance"],["panels","Side panels"],["valance","Valance only"],["cafe","Caf\u00E9 curtain and valance"],["none","No curtains"]];
@@ -132,6 +132,7 @@ const SHARED_SECTIONS = [
   {title:"Game mod", label:"Shop and mod", tab:"game", hint:"Used by \u201CExport game mod\u201D: what the house costs in the shop and who made it. The project name is the name in the shop.", fields:[
     {k:"modPrice", label:"Price", min:0, max:2000000, step:500, money:true},
     {k:"modUpkeep", label:"Daily upkeep", min:0, max:5000, step:5, money:true},
+    {k:"lodDistance", label:"Simple model from this distance (0: always the detailed one)", min:0, max:300, step:10, unit:" m"},
     {k:"modAuthor", label:"Author (empty: your name)", type:"text", max:60},
     {k:"modDescription", label:"Description in the mod list (empty: made for you)", type:"text", max:1000, multiline:true}]}
 ];
@@ -2841,6 +2842,10 @@ export const seeThroughGlass = p => !!p.interior || kindOf(p).walkIn;
 /** Opacity of the window glass when it is see-through. */
 export const GLASS_ALPHA = 0.35;
 const NO_SHADOW = ["glass", "interior", "curtain"];
+/** Materials (and their per-part variants, curtain2 ...) the far-away model leaves out: the inside, gutters and downpipes, ironwork. */
+const LOD_LEFT_OUT = /^(wallsIn|doorIn|gutter|iron|interior|curtain|fittings)/;
+/** True when the far-away model (LOD1) keeps material m (the editor's "far" view hides the others). */
+export const lodKeeps = m => !LOD_LEFT_OUT.test(m);
 export function rgb(hex) { const n = parseInt(hex.slice(1), 16); return [(n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255].map(v => num(v)).join(" ") + " 1"; }
 
 /** The material for one visual part (m: its material kind, g: its mesh). */
@@ -2898,11 +2903,17 @@ function exportParts(p, {withTex = false} = {}) {
   }
   const mats = {};
   const matOf = (m, name, g) => g.color ? materialFor(doc, p, m, name, g, withTex) : (mats[m] = mats[m] || materialFor(doc, p, m, name, g, withTex));
-  const visuals = [];
+  const visuals = [], far = [];
   for (const {name, m, g} of parts) {
     const uv = scaledUV(p, m, g);
-    visuals.push(shape(name, {shapeId: doc.shape(name, g, {uv}), castsShadows: !(NO_SHADOW.includes(m) && (m !== "glass" || seeThroughGlass(p))), receiveShadows: true, materialIds: matOf(m, name, g)}));
+    const attrs = {shapeId: doc.shape(name, g, {uv}), castsShadows: !(NO_SHADOW.includes(m) && (m !== "glass" || seeThroughGlass(p))), receiveShadows: true, materialIds: matOf(m, name, g)};
+    visuals.push(shape(name, attrs));
+    // the simple model far away: the outside shell, the same meshes (no inside, gutters or ironwork: too small to see)
+    if (lodKeeps(m)) far.push(shape(name, attrs));
   }
+  // visuals_lod: LOD0 = everything, LOD1 = the shell (the game shows the next one from each distance of lodDistance)
+  const lod = p.lodDistance > 0 && far.length < visuals.length;
+  const visualNodes = lod ? [tg("visuals_lod", [0, 0, 0], [tg("LOD0", [0, 0, 0], visuals), tg("LOD1", [0, 0, 0], far)], {lodDistance: `0 ${num(p.lodDistance)}`})] : visuals;
   const cm = doc.material("collision_mat", {diffuseColor: "1 0 1 1"});
   const collision = shape("collision", {shapeId: doc.shape("collision", geo.collision, {cpu: true}), static: true, collisionFilterGroup: "0x3e",
     collisionFilterMask: "0xfffffbff", nonRenderable: true, castsShadows: false, receiveShadows: false, materialIds: cm});
@@ -2977,7 +2988,7 @@ ${lv.map((leaf, j) => `                <part node="door${i + 1}Leaf${ks[j] + 1}"
     rect("level", A.level),
     corner("testAreas", "testArea", t.min, t.max),
     corner("tipOcclusionUpdateAreas", "tipOcclusionUpdateArea", [t.min[0], 0, t.min[2]], [t.max[0], 0, t.max[2]]),
-    tg("visuals", [0, 0, 0], visuals),
+    tg("visuals", [0, 0, 0], visualNodes),
     tg("collisions", [0, 0, 0], [collision]),
     ...doorNodes,
     ...own.nodes,
