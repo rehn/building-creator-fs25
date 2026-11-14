@@ -513,7 +513,7 @@ ${y.bales ? `        <triggerMarker node="markerBales" filename="$data/shared/as
     <husbandry saveId="Animals_${cfg.animal}" hasStatistics="false">
         <!-- The walking area is made from the fence when the barn is placed; the barn and troughs are blocked out. -->
         <animals type="${cfg.animal}" baseMaxNumAnimals="${n}" maxNumAnimals="${n}">
-            ${y.nav ? '<navigation shape="navigationMeshShape"/>' : '<navigation rootNode="navigationRootNode"/>'}
+            ${y.nav ? '<navigation rootNode="navigationRootNode" shape="navigationMeshShape"/>' : '<navigation rootNode="navigationRootNode"/>'}
             <loadingTrigger node="loadingTrigger"/>
         </animals>
         <food capacity="${n * cfg.foodPer}">
