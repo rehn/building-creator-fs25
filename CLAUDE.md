@@ -280,6 +280,8 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 
 - Studs inside (buildStuds, "Inside like the outside" = insideSame): drawn where the inside is timber: a zone whose panel is boards (lockpanel, horizontal, vertical) and has no wallpaper; spacing/width/unevenness are studSpacing/studWidth/studIrregular (Settings > Inside walls). The panel of a zone is the wall's own (p.wallStyles[key], set under "Look of this wall"), else its part's, else the building's: a plastered wall has none (test/studs-per-wall.test.mjs).
 
+- LOD (i3d): setting lodDistance (default 80 m, 0 = off; Game > Shop and mod). model.mjs exportParts writes visuals_lod (lodDistance "0 N") with LOD0 = every part and LOD1 = the outside shell: the same shapeIds, so no extra geometry; LOD_LEFT_OUT / lodKeeps leave out wallsIn, doorIn, gutter (gutters and downpipes), iron, interior, curtain, fittings (and their variants). No LOD group when nothing would be left out. Editor: the button "Detail: close up / far away" (lodBtn, applyLod) hides the same materials in the preview and counts triangles for that level (test/lod.test.mjs). Not tried in-game.
+
 ## Dev environment (WSL)
 - ./dev.sh starts API (:8080) + Next dev server (:3000); data in .dev/ (gitignored),
   ./dev.sh --reset wipes it. Reachable from the Windows browser at localhost:3000.
