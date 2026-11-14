@@ -554,14 +554,15 @@ ${pts.map((_, i) => `                <node node="navContourNode${i + 1}"/>`).joi
             <fruitType name="GRASS" eatableStartGrowthState="greenMiddle" eatableEndGrowthState="harvestReady" eatenGrowthState="greenSmall"/>
             <fruitType name="MEADOW" eatableStartGrowthState="greenMiddle" eatableEndGrowthState="harvestReady" eatenGrowthState="greenSmall"/>
             <createTask weedState="0">
-                <fruit type="MEADOW" growthState="greenSmall"/>
+                <!-- Grass grows in the pasture only when the ground is grass; any other ground is painted bare, as the base game's farm stable does (grass would cover it). -->
+                <fruit type="${(PASTURE_GROUNDS.some(g => g[0] === p.pastureGround) ? p.pastureGround : "grass") === "grass" ? "MEADOW" : "UNKNOWN"}" growthState="${(PASTURE_GROUNDS.some(g => g[0] === p.pastureGround) ? p.pastureGround : "grass") === "grass" ? "greenSmall" : "0"}"/>
                 <ground type="NONE"/>
                 <terrainGroundType name="${PASTURE_GROUNDS.some(g => g[0] === p.pastureGround) ? p.pastureGround : "grass"}"/>
             </createTask>
             <clearTask>
                 <fruit type="UNKNOWN" growthState="0"/>
                 <ground type="NONE"/>
-                <terrainGroundType name="dirt"/>
+                <terrainGroundType name="${p.groundUnder && p.groundUnder !== "auto" ? p.groundUnder : "dirt"}"/>
                 <polygon>
 ${footprintHull(p).map((_, i) => `                    <node node="clearAreaPoint${i + 1}"/>`).join("\n")}
                 </polygon>

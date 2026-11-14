@@ -19,7 +19,7 @@ export { henYard, henCap, HENS_PER_M2, MAX_HENS } from "./kinds/chicken.mjs";
 /** Settings every building has. A kind adds its own (kind.defaults). */
 export const DEFAULTS = {
   kind:"house",
-  width:10, depth:7, floors:2, floorHeight:2.7, floor2Height:0, floor3Height:0, foundation:0.4, halfStorey:false, ceiling:true, insideSame:false, insidePanel:"painted", studSpacing:0.6, studWidth:0.045, studIrregular:0, kneeWall:0.9,
+  width:10, depth:7, floors:2, floorHeight:2.7, floor2Height:0, floor3Height:0, foundation:0.4, groundUnder:"auto", halfStorey:false, ceiling:true, insideSame:false, insidePanel:"painted", studSpacing:0.6, studWidth:0.045, studIrregular:0, kneeWall:0.9,
   wing:false, wingWall:"back", wingPos:0.15, wingWidth:6, wingDepth:5,
   roofType:"gable", roofTilt:0, tiltHigh:"front", ridge:"width", roofPitch:38, overhang:0.5, chimney:true,
   winFront:2, winBack:3, winLeft:1, winRight:1, winW:1.0, winH:1.25, sill:0.85, winStyle:"casement",
@@ -74,7 +74,8 @@ const SHARED_SECTIONS = [
     {k:"floorHeight", floorRow:true, label:"Height of the ground floor", min:2.3, max:12, step:0.05, unit:" m"},
     {k:"floor2Height", floorRow:true, label:"Height of the second floor", min:2.2, max:9, step:0.05, unit:" m", zero:"as the ground floor"},
     {k:"floor3Height", floorRow:true, label:"Height of the third floor", min:2.2, max:9, step:0.05, unit:" m", zero:"as the ground floor"},
-    {k:"foundation", label:"Foundation height", min:0, max:1.2, step:0.05, unit:" m"}]},
+    {k:"foundation", label:"Foundation height (0: no cast plinth, the floor on the ground)", min:0, max:1.2, step:0.05, unit:" m"},
+    {k:"groundUnder", label:"Ground under the building", type:"select", options:[["auto", "Default (grass for a house, dirt for a barn)"], ["dirt", "Dirt"], ["animalMud", "Mud"], ["gravel", "Gravel"], ["sand", "Sand"], ["grass", "Grass"], ["concrete", "Concrete"], ["asphalt", "Asphalt"]]}]},
   {title:"Roof", tab:"building", detail:true, fields:[
     {k:"roofType", label:"Roof type", type:"select", options:[["gable","Gable"],["hip","Hip"],["flat","Flat"]]},
     {k:"roofMaterial", label:"Roof covering", type:"select", options:[["tiles","Concrete tiles"],["metal","Standing seam metal"],["seamed","Swedish sheet metal (falsad plåt)"],["corrugated","Corrugated sheet metal (korrugerad plåt)"],["plain","Plain color"]]},
@@ -3003,7 +3004,7 @@ ${lv.map((leaf, j) => `                <part node="door${i + 1}Leaf${ks[j] + 1}"
     <!-- An animal building paints dirt under itself, like the base game's barns (a house keeps its grass). Other ground types: gravel, asphalt, concrete, grass ... -->
     <leveling requireLeveling="true" maxSmoothDistance="3" maxSlope="75" maxEdgeAngle="30">
         <levelAreas>
-            <levelArea startNode="levelAreaStart01" widthNode="levelAreaWidth01" heightNode="levelAreaHeight01"${kind.id === "house" ? "" : ' groundType="dirt"'}/>
+            <levelArea startNode="levelAreaStart01" widthNode="levelAreaWidth01" heightNode="levelAreaHeight01"${p.groundUnder && p.groundUnder !== "auto" ? ` groundType="${p.groundUnder}"` : kind.id === "house" ? "" : ' groundType="dirt"'}/>
         </levelAreas>
     </leveling>
 

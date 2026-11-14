@@ -14,6 +14,11 @@ for (const kind of ["cow", "sheep"]) {
       assert.equal(createGround(placeableXml(p, "x")), g);
     }
   });
+  test(`${kind} barn: only a grass pasture grows grass, other ground is painted bare`, () => {
+    const fruit = g => /<createTask[\s\S]*?<fruit type="(\w+)"/.exec(placeableXml(sanitize({kind, pastureGround: g}), "x"))[1];
+    assert.equal(fruit("grass"), "MEADOW");
+    for (const g of ["dirt", "animalMud", "gravel"]) assert.equal(fruit(g), "UNKNOWN");
+  });
   test(`${kind} barn: an unknown pasture ground is dropped`, () => {
     assert.equal(sanitize({kind, pastureGround: "lava"}).pastureGround, "grass");
   });
