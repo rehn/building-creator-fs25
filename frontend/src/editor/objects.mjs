@@ -26,7 +26,11 @@ export const OBJECT_TYPES = {
     hint: "Where the animals eat. Put it where they can get to it, inside the fence (against the barn wall or free in the pasture); the long side is where they stand, and the height is the top edge. The feed pad fills it."},
   waterTrough: {name: "Water trough", glyph: null, icon: false, size: [2, 0.7, 0.7],
     hint: "Where the animals drink (the water is automatic). Put it inside the fence, where they can get to it; the long side is where they stand."},
-  workshop: {name: "Vehicle workshop", glyph: "wrench", icon: true, size: [6, 4, 3.5],
+  counter: {name: "Shop counter", glyph: "cart", icon: true, indoors: true, size: [2, 1.2, 2.2],
+    hint: "Walk into the box to open the vehicle shop; the shopping icon floats over it. It goes inside the building, by the counter."},
+  spawn: {name: "Vehicle spawn area", glyph: null, icon: false, size: [12, 5, 3],
+    hint: "Where a bought vehicle appears: vehicles line up along the long side of the box. Keep it on open ground outside the building, with room for the biggest machine you sell."},
+  workshop: {name: "Vehicle workshop", glyph: "wrench", icon: true, indoors: true, size: [6, 4, 3.5],
     hint: "Vehicles driven into this box can be repaired, painted and fitted out; the wrench icon marks where the player stands to use the workshop. Put it where a vehicle fits inside the building."},
   info: {name: "Info area", glyph: null, icon: false, size: [10, 10, 3],
     hint: "Standing in it shows the building's info box. It usually goes round the whole building."},
@@ -149,7 +153,7 @@ export function pastureOf(p, o = objectOf(p, "pasture")) {
 /** Box objects snap to a 25 cm grid and are kept out of the building (pushed out the shortest way). */
 export function snapBox(o, p) {
   let x = snap(o.x), z = snap(o.z);
-  if (o.type !== "info") for (const r of footprints(p)) {
+  if (o.type !== "info" && !OBJECT_TYPES[o.type].indoors) for (const r of footprints(p)) {
     const hx = o.w / 2, hz = o.d / 2;
     if (x + hx <= r.x0 || x - hx >= r.x1 || z + hz <= r.z0 || z - hz >= r.z1) continue;
     const moves = [[r.x0 - hx - x, 0], [r.x1 + hx - x, 0], [0, r.z0 - hz - z], [0, r.z1 + hz - z]];
@@ -215,6 +219,7 @@ export function objectProblems(p) {
   const out = new Map(), boxes = (p.objects || []).filter(o => o.type !== "pasture" && o.type !== "info"), past = pastureOf(p);
   for (const o of boxes) {
     const r = rectOf(o), trough = o.type === "feedTrough" || o.type === "waterTrough";
+    if (OBJECT_TYPES[o.type].indoors) continue;   // (the shop counter and the workshop belong inside)
     if (footprints(p).some(f => overlap(r, f, 0.01))) out.set(o.id, "It’s in the building");
     else if (trough) { if (past && !insidePoly(past.fence, o.x, o.z)) out.set(o.id, "The animals can’t reach it: put it inside the fence"); }
     else if (past && overlap(r, past.rect, 0.01)) out.set(o.id, "It’s in the pasture, behind the fence");

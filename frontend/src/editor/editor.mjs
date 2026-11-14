@@ -2556,7 +2556,7 @@ function makePlacesMarker() {
   const group = new THREE.Group(), boxGeo = new THREE.BoxGeometry(1, 1, 1), edgeGeo = new THREE.EdgesGeometry(boxGeo);
   const boxes = {}, icons = {}, textures = {};
   // one canvas texture per glyph, drawn in white on a coloured circle
-  const GLYPHS = {sleep: ["#2f6fd0", drawBed], food: ["#d07a1f", drawFeed], bales: ["#c0901a", drawBale], hen: ["#3f9a43", drawHen], cow: ["#3f9a43", drawCow], sheep: ["#3f9a43", drawSheep], pallet: ["#c9a514", drawPallet], wrench: ["#5a6a78", drawWrench]};
+  const GLYPHS = {sleep: ["#2f6fd0", drawBed], food: ["#d07a1f", drawFeed], bales: ["#c0901a", drawBale], hen: ["#3f9a43", drawHen], cow: ["#3f9a43", drawCow], sheep: ["#3f9a43", drawSheep], pallet: ["#c9a514", drawPallet], wrench: ["#5a6a78", drawWrench], cart: ["#2f8f6f", drawCart]};
   const texture = glyph => {
     if (!textures[glyph]) {
       const c = document.createElement("canvas"); c.width = c.height = 128;
@@ -2652,6 +2652,11 @@ function drawBed(x) {
   x.fillRect(96, 74, 8, 20);             // foot
   x.beginPath(); x.arc(50, 64, 9, 0, Math.PI * 2); x.fill();  // pillow / head
   x.fillRect(62, 56, 42, 16);            // blanket
+}
+function drawCart(x, bg) {
+  // A shopping trolley: a basket on two wheels with a handle.
+  x.beginPath(); x.moveTo(26, 36); x.lineTo(40, 36); x.lineTo(50, 82); x.lineTo(98, 82); x.lineTo(108, 48); x.lineTo(44, 48); x.lineWidth = 9; x.strokeStyle = x.fillStyle; x.lineJoin = "round"; x.stroke();
+  x.beginPath(); x.arc(58, 98, 8, 0, Math.PI * 2); x.arc(90, 98, 8, 0, Math.PI * 2); x.fill();
 }
 function drawWrench(x, bg) {
   // A spanner: a long handle with an open jaw at the top.
@@ -3009,8 +3014,8 @@ function renderStoreImage(size) {
  * One building's files for a game mod, into dir (a zip or a folder of one): the placeable XML, the i3d, its textures and imported
  * items and the shop picture. Returns the 256 px icon as a PNG blob (or null), for the mod's own icon.
  */
-async function fillMod(dir, name, prefix = "") {
-  dir.file(MOD_FILES.xml, placeableXml(p, name, {dir: prefix}));
+async function fillMod(dir, name, prefix = "", mod = modName(name)) {
+  dir.file(MOD_FILES.xml, placeableXml(p, name, {dir: prefix, mod}));
   dir.file(MOD_FILES.i3d, buildI3d(p, {withTex: true}));
   await addTextures(dir);
   await addItems(dir);
@@ -3019,9 +3024,9 @@ async function fillMod(dir, name, prefix = "") {
   return icon ? await canvasBlob(icon) : null;
 }
 /** For a mod of several buildings: this one's files into folder dir (named prefix, "folder/": the game reads the XML's paths from the mod's root); {icon, description, author} for the modDesc. */
-async function exportInto(dir, name, prefix = "") {
-  const icon = await fillMod(dir, name, prefix);
-  return {icon, description: p.modDescription || defaultModDescription(p), author: p.modAuthor || author};
+async function exportInto(dir, name, prefix = "", mod = modName(name)) {
+  const icon = await fillMod(dir, name, prefix, mod);
+  return {icon, description: p.modDescription || defaultModDescription(p), author: p.modAuthor || author, types: kindOf(p).modTypes || []};
 }
 /** The house as a game mod: FS25_Name.zip with modDesc, store XML, i3d, textures, icon and shop picture. */
 async function exportMod(name) {
