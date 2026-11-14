@@ -24,7 +24,7 @@ const (
 )
 
 // modelFiles are the file names of /api/v1/buildings/{id}/...
-var modelFiles = []string{"model.obj", "model.mtl", "mod.zip", "model.i3d"}
+var modelFiles = []string{"model.obj", "model.mtl", "mod.zip", "model.i3d", "model.zip", "game-mod.zip"}
 
 // requiredInMod are the files a game mod zip must have, at its root.
 var requiredInMod = []string{"modDesc.xml", "house.xml", "house.i3d"}
@@ -53,13 +53,26 @@ func (s *Server) putModel(w http.ResponseWriter, r *http.Request, u store.User) 
 			writeError(w, http.StatusBadRequest, "invalid_model", "The file "+name+" is missing.")
 			return
 		}
-		data, err := io.ReadAll(io.LimitReader(f, maxObjBytes+1))
+		data, err := io.ReadAll(io.LimitReader(f, maxModelBytes+1))
 		f.Close()
-		if err != nil || len(data) == 0 || (name == "obj" && len(data) > maxObjBytes) {
+		if err != nil || len(data) == 0 || (name != "mod" && len(data) > maxObjBytes) {
 			writeError(w, http.StatusBadRequest, "invalid_model", "The file "+name+" is empty or too big.")
 			return
 		}
 		*dst = data
+	}
+	// The export zip is optional (an older editor sends none): what "Export model" gives.
+	if f, _, err := r.FormFile("export"); err == nil {
+		m.Export, err = io.ReadAll(io.LimitReader(f, maxModelBytes+1))
+		f.Close()
+		if err != nil || len(m.Export) > maxModelBytes {
+			writeError(w, http.StatusBadRequest, "invalid_model", "The file export is too big.")
+			return
+		}
+		if _, err := zip.NewReader(bytes.NewReader(m.Export), int64(len(m.Export))); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_model", "The export is not a zip file.")
+			return
+		}
 	}
 	if msg := checkModZip(m.Mod); msg != "" {
 		writeError(w, http.StatusBadRequest, "invalid_model", msg)
@@ -84,7 +97,7 @@ func checkModZip(data []byte) string {
 	}
 	have, total := map[string]bool{}, uint64(0)
 	for _, f := range zr.File {
-		n := f.Name
+		n := strings.TrimSuffix(f.Name, "/") // a folder entry, as the editor's zip has for textures/
 		if n == "" || strings.HasPrefix(n, "/") || strings.Contains(n, "\\") || path.Clean(n) != n || strings.HasPrefix(n, "..") {
 			return "The mod has a file name that is not allowed."
 		}
@@ -153,7 +166,21 @@ func (s *Server) modelFile(file string) func(http.ResponseWriter, *http.Request,
 		case "model.mtl":
 			body = m.Mtl
 		case "mod.zip":
+			// What "Export model" gives (one folder with house.i3d, textures, items); a building saved without it gets the game mod.
+			if len(m.Export) > 0 {
+				body, ctype, name = m.Export, "application/zip", strings.ToLower(modFileName(p.Name)[len("FS25_"):])+".zip"
+			} else {
+				body, ctype, name = m.Mod, "application/zip", modFileName(p.Name)+".zip"
+			}
+		case "game-mod.zip":
+			// The game mod itself (modDesc.xml, house.xml, house.i3d, textures, items, shop picture), which a map builder unpacks into a map.
 			body, ctype, name = m.Mod, "application/zip", modFileName(p.Name)+".zip"
+		case "model.zip":
+			if len(m.Export) == 0 {
+				writeError(w, http.StatusNotFound, "not_found", "This building has no export yet. Open it in the editor and save it again.")
+				return
+			}
+			body, ctype, name = m.Export, "application/zip", strings.ToLower(modFileName(p.Name)[len("FS25_"):])+".zip"
 		case "model.i3d":
 			if body, err = fileInZip(m.Mod, "house.i3d"); err != nil {
 				internalError(w, err)

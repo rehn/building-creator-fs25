@@ -100,8 +100,10 @@ GET ${origin}/api/v1/buildings/{id}             the same, plus "settings" (what 
 GET ${origin}/api/v1/buildings/{id}/icon        the picture (PNG or JPEG)
 GET ${origin}/api/v1/buildings/{id}/model.obj   the model to draw: metres, y up, one group per material
 GET ${origin}/api/v1/buildings/{id}/model.mtl   the colours the .obj refers to
-GET ${origin}/api/v1/buildings/{id}/mod.zip     the game mod: modDesc.xml, house.xml, house.i3d (plain colours, no shop picture)
-GET ${origin}/api/v1/buildings/{id}/model.i3d   house.i3d from the mod, for Giants Editor
+GET ${origin}/api/v1/buildings/{id}/mod.zip     the same zip as Export model: house.i3d, placeable_snippet.xml, textures, imported items
+GET ${origin}/api/v1/buildings/{id}/model.zip   the same file as mod.zip
+GET ${origin}/api/v1/buildings/{id}/game-mod.zip   the game mod: modDesc.xml, house.xml (shop data), house.i3d, textures, imported items, shop picture
+GET ${origin}/api/v1/buildings/{id}/model.i3d  house.i3d from the mod, for Giants Editor
   The files carry an ETag of the version: send If-None-Match to get 304 when nothing changed.
 
 curl -H "Authorization: Bearer bc_..." ${origin}/api/v1/buildings`}</pre>

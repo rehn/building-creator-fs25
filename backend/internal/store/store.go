@@ -285,7 +285,10 @@ func openPostgres(url string) (*Store, error) {
 		if err := execAll(context.Background(), tx.Tx, schemaPostgres); err != nil {
 			return err
 		}
-		_, err := tx.exec(context.Background(), `ALTER TABLE assets ADD COLUMN IF NOT EXISTS shared BOOLEAN NOT NULL DEFAULT FALSE`)
+		if _, err := tx.exec(context.Background(), `ALTER TABLE assets ADD COLUMN IF NOT EXISTS shared BOOLEAN NOT NULL DEFAULT FALSE`); err != nil {
+			return err
+		}
+		_, err := tx.exec(context.Background(), `ALTER TABLE project_models ADD COLUMN IF NOT EXISTS export_zip BYTEA NOT NULL DEFAULT ''::bytea`)
 		return err
 	})
 	if err != nil {
@@ -328,6 +331,10 @@ func openSQLite(path string) (*Store, error) {
 		return nil, fmt.Errorf("creating schema: %w", err)
 	}
 	if err := addColumnSQLite(db, "assets", "shared", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("updating schema: %w", err)
+	}
+	if err := addColumnSQLite(db, "project_models", "export_zip", "BLOB NOT NULL DEFAULT x''"); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("updating schema: %w", err)
 	}

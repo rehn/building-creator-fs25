@@ -134,11 +134,12 @@ export const api = {
     request<Project>("PATCH", "/projects/" + encodeURIComponent(id), patch),
   deleteProject: (id: string) => request<void>("DELETE", "/projects/" + encodeURIComponent(id)),
   /** The model files (obj, mtl, game mod zip) made from saved version `version`, for other programs to read. */
-  putModel: (id: string, version: number, files: { obj: string; mtl: string; mod: Uint8Array }) => {
+  putModel: (id: string, version: number, files: { obj: string; mtl: string; mod: Uint8Array; export?: Uint8Array }) => {
     const form = new FormData();
     form.append("obj", new Blob([files.obj], { type: "text/plain" }), "model.obj");
     form.append("mtl", new Blob([files.mtl], { type: "text/plain" }), "model.mtl");
     form.append("mod", new Blob([files.mod as BlobPart], { type: "application/zip" }), "mod.zip");
+    if (files.export) form.append("export", new Blob([files.export as BlobPart], { type: "application/zip" }), "model.zip");
     return send<void>("PUT", "/projects/" + encodeURIComponent(id) + "/model?version=" + version, form);
   },
   duplicateProject: (id: string) => request<Project>("POST", "/projects/" + encodeURIComponent(id) + "/duplicate"),
