@@ -73,7 +73,7 @@ test("a fence drawn clockwise is turned to go counter-clockwise, as the game's f
 
 test("the navigation shape gets its i3dMapping (the game said: Index not found: navigationMeshShape)", () => {
   const xml = placeableXml(sanitize({kind: "cow"}), "x");
-  assert.ok(/<navigation shape="navigationMeshShape"\/>/.test(xml));
+  assert.ok(/<navigation rootNode="navigationRootNode" shape="navigationMeshShape"\/>/.test(xml));
   assert.ok(/<i3dMapping id="navigationMeshShape" node="[^"]+"\/>/.test(xml), "the mapping");
 });
 
