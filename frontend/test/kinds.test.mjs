@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { KINDS, CATEGORIES, kindOf, groupByKind } from "../src/editor/kinds/index.mjs";
-import { PRESETS, SCHEMA, sanitize, buildI3d, placeableXml, placeableSnippet, defaultModDescription } from "../src/editor/model.mjs";
+import { PRESETS, SCHEMA, sanitize, buildI3d, placeableXml, placeableSnippet, defaultModDescription, modName } from "../src/editor/model.mjs";
 
 // Every kind of building is a module with the same shape (see src/editor/kinds/index.mjs).
 test("kinds: every kind has the whole interface", () => {
@@ -41,7 +41,7 @@ test("presets: every preset of every kind makes a valid project and exports", ()
     const p = sanitize(x.settings);
     assert.equal(p.kind, x.kind, `${x.id}: kind`);
     assert.ok(CATEGORIES.some(c => c.id === x.category), `${x.id}: category`);
-    const { type } = kindOf(p).placeable(p);
+    const { type } = kindOf(p).placeable(p, { mod: modName(x.name) });
     assert.match(placeableXml(p, x.name), new RegExp(`<placeable type="${type}">`), x.id);
     assert.match(placeableSnippet(p), /<i3dMappings>/, x.id);
     assert.match(buildI3d(p), /<\/i3D>/, x.id);

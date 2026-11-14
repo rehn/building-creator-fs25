@@ -158,7 +158,7 @@ export default function HousesPage() {
     const ids = picked.filter(id => houses?.some(h => h.id === id));
     if (!ids.length) return;
     const [{ createEditor }, { default: JSZip }] = await Promise.all([import("@/editor/editor.mjs"), import("jszip")]);
-    const zip = new JSZip(), entries: { xml: string }[] = [], notes: string[] = [], used = new Set<string>();
+    const zip = new JSZip(), entries: { xml: string }[] = [], notes: string[] = [], used = new Set<string>(), types = new Map<string, { name: string; parent: string; specializations: string[] }>();
     let icon: Blob | null = null, author = authorName(user);
     try {
       for (let i = 0; i < ids.length; i++) {
@@ -175,7 +175,8 @@ export default function HousesPage() {
         document.body.appendChild(host);
         const ed = createEditor(host, { initial: proj.data as Record<string, unknown>, author, assets: { list: api.assets, file: api.assetFile } });
         try {
-          const info = await ed.exportInto(zip.folder(slug)!, h.name, slug + "/");
+          const info = await ed.exportInto(zip.folder(slug)!, h.name, slug + "/", modName(modTitle));
+          for (const ty of info.types) types.set(ty.name, ty);
           entries.push({ xml: slug + "/house.xml" });
           if (!icon && info.icon) icon = info.icon;
           if (info.author && !author) author = info.author;
@@ -183,7 +184,7 @@ export default function HousesPage() {
         } finally { ed.destroy(); host.remove(); }
       }
       setPacking({ done: ids.length, total: ids.length, name: "" });
-      zip.file("modDesc.xml", modDescXmlMulti(entries, { title: modTitle, description: notes.join("\n\n"), author }));
+      zip.file("modDesc.xml", modDescXmlMulti(entries, { title: modTitle, description: notes.join("\n\n"), author, types: [...types.values()] }));
       if (icon) zip.file("icon.png", icon);
       const blob = await zip.generateAsync({ type: "blob" });
       const a = document.createElement("a");

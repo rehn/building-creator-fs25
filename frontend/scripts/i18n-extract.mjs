@@ -12,7 +12,7 @@ function* files(dir) {
   for (const n of readdirSync(dir)) {
     const f = join(dir, n);
     if (statSync(f).isDirectory()) { if (n !== "i18n") yield* files(f); }
-    else if (/\.(mjs|tsx?)$/.test(n)) yield f;
+    else if (/\.(mjs|tsx?)$/.test(n) && n !== "vehicles.mjs") yield f;   // (vehicles.mjs: the game's own vehicle names, not ours to translate)
   }
 }
 

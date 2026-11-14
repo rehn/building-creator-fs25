@@ -10,7 +10,8 @@
 //   defaults, sections    its own settings and the editor sections for them (shown first)
 //   hides                 titles of shared editor sections it doesn't use
 //   normalize(p)          the settings as this kind uses them (applied when loading and exporting)
-//   placeable(p)          FS25 placeable type, shop function and shop category
+//   placeable(p, {mod})   FS25 placeable type, shop function and shop category (mod: the mod's name, for a type the mod defines itself)
+//   modTypes              optional: placeable types the mod's modDesc.xml defines [{name, parent, specializations}]
 //   description(p)        default text for the mod list
 //   furnish(c)            walk-in kinds: builds the inside (c: drawing context from the core)
 //   scene(c)              extra i3d nodes, placeable XML and ground areas (c: export context)
@@ -22,8 +23,9 @@ import chicken from "./chicken.mjs";
 import cow from "./cow.mjs";
 import sheep from "./sheep.mjs";
 import shed from "./shed.mjs";
+import dealership from "./dealership.mjs";
 
-export const KINDS = [house, chicken, cow, sheep, shed];
+export const KINDS = [house, chicken, cow, sheep, shed, dealership];
 export const KIND = Object.fromEntries(KINDS.map(k => [k.id, k]));
 /** The kind of a project's settings; saves without one are farmhouses. */
 export const kindOf = p => KIND[p && p.kind] || house;
@@ -42,5 +44,6 @@ export const CATEGORIES = [
   {id: "homes", name: "Homes", blurb: "Farmhouses you can sleep in."},
   {id: "animals", name: "Animal buildings", blurb: "Barns with a pasture, feeding and products."},
   {id: "sheds", name: "Sheds and storage", blurb: "Machine sheds and storage halls."},
+  {id: "shops", name: "Shops", blurb: "Places where the player buys vehicles."},
   {id: "workshops", name: "Workshops", blurb: "Places to repair and paint vehicles."},
 ];

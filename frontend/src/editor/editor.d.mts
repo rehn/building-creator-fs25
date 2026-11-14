@@ -5,7 +5,7 @@ export interface EditorHandle {
   exportModel(name: string): Promise<void>;
   exportMod(name: string): Promise<void>;
   /** One building's mod files into a folder of a zip (for a mod of several buildings): the icon blob, description and author for the modDesc. */
-  exportInto(dir: { file(name: string, data: unknown): unknown }, name: string, prefix?: string): Promise<{ icon: Blob | null; description: string; author: string }>;
+  exportInto(dir: { file(name: string, data: unknown): unknown }, name: string, prefix?: string, mod?: string): Promise<{ icon: Blob | null; description: string; author: string; types: { name: string; parent: string; specializations: string[] }[] }>;
   /** The model files the server keeps (for other programs): OBJ and MTL text and the game mod zip. Of these settings, or the editor's own. */
   modelFiles(name: string, settings?: Settings): Promise<{ obj: string; mtl: string; mod: Uint8Array; export?: Uint8Array }>;
   exportSettings(name: string): void;
