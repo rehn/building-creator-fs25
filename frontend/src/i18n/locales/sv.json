@@ -196,7 +196,11 @@
   "Floors": "Våningar",
   "Flush with the wall": "I liv med väggen",
   "For the admin: what the app can't match and what to check": "För admin: vad appen inte kan matcha och vad som bör kontrolleras",
-  "Foundation height": "Grundhöjd",
+  "Foundation height (0: no cast plinth, the floor on the ground)": "Grundhöjd (0: ingen gjuten sockel, golvet på marken)",
+  "Ground under the building": "Mark under byggnaden",
+  "Default (grass for a house, dirt for a barn)": "Standard (gräs för ett hus, jord för en ladugård)",
+  "Concrete": "Betong",
+  "Asphalt": "Asfalt",
   "Four panels (fyllningsdörr)": "Fyllningsdörr",
   "Freezer (frys)": "Frys",
   "Fridge (kylskåp)": "Kylskåp",
@@ -863,5 +867,12 @@
   "Made {when}": "Skapad {when}",
   "Last used {when}": "Senast använd {when}",
   "Never used": "Aldrig använd",
-  "Send the token as": "Skicka token som"
+  "Send the token as": "Skicka token som",
+  "Ground in the pasture": "Mark i hagen",
+  "Grass": "Gräs",
+  "Dirt": "Jord",
+  "Mud": "Lera",
+  "Gravel": "Grus",
+  "Sand": "Sand",
+  "Forest floor": "Skogsmark"
 }

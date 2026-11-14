@@ -318,7 +318,7 @@ SCHEMA.forEach(g => {
       el = document.createElement("div"); el.className = "field";
       el.innerHTML = `<div class="fl"><label for="${id}">${f.label}</label><output id="${id}-o"></output></div><input type="range" id="${id}" min="${f.min}" max="${f.max}" step="${f.step}">`;
     }
-    if (f.floorRow) floorRows[f.k] = el; else wrap.appendChild(el);
+    if (f.floorRow || f.cardRow) floorRows[f.k] = el; else wrap.appendChild(el);
     el.dataset.k = f.k;
     const input = el.querySelector("input,select,textarea");
     inputs[f.k] = input;
@@ -1897,6 +1897,12 @@ function renderObjectsCard(ed) {
   $("objPlan").onclick = () => ob.on ? leaveObjects() : enterObjects();
   ed.querySelectorAll("[data-addobj]").forEach(b => b.onclick = () => addObject(b.dataset.addobj));
   if ($("objAuto")) $("objAuto").onclick = () => { setObjects(sanitize({...p, objects: spec.defaults({...p})}).objects, null); toast("Game objects placed where they go automatically"); };
+  // the settings that belong to the fence (the kind's cardRow fields: the ground, animals walking inside) sit in the pasture's card
+  if (o && o.type === "pasture") {
+    const at = $("objRemove").parentNode;
+    for (const f of Object.values(fieldsFor(kind))) if (f.cardRow && floorRows[f.k]) at.parentNode.insertBefore(floorRows[f.k], at);
+    syncOutputs();
+  }
   if (!o) return;
   const swap = next => setObjects(sanitize({...p, objects: list.map(x => x.id === o.id ? next : x)}).objects, o.id);
   // a look's rotation: the model turns about its middle; the footprint is the box round it

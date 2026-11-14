@@ -4,7 +4,7 @@
 // (cow.mjs): the same yard, outside troughs, game objects and export, with its own animal, pieces and presets.
 import { roomOf, furnisher } from "../layout.mjs";
 import { withPasture } from "./pasture.mjs";
-import { COW, COLORS, CATALOG as COW_CATALOG, openings, cowYard, outsideOf, sceneOf, defaultsOf } from "./cow.mjs";
+import { COW, PASTURE_GROUNDS, COLORS, CATALOG as COW_CATALOG, openings, cowYard, outsideOf, sceneOf, defaultsOf } from "./cow.mjs";
 import { tone } from "./props.mjs";
 import { INNER_WALL } from "./innerwall.mjs";
 
@@ -76,11 +76,12 @@ export default {
   category: "animals",
   walkIn: true,
   glyph: "sheep",
-  defaults: {ceiling: false, insideSame: true, animalsInside: true, sheep: 20, pastureWall: "back", fenceDepth: 14, winStyle: "stall", doorStyle: "xbrace"},
+  defaults: {ceiling: false, insideSame: true, animalsInside: true, pastureGround: "grass", sheep: 20, pastureWall: "back", fenceDepth: 14, winStyle: "stall", doorStyle: "xbrace"},
   sections: [
     {title: "Sheep", tab: "game", hint: "Sheep graze in the pasture and come in through a doorway in the pasture side; they eat hay and drink at troughs along that wall. Fill feed (or drop bales) at the feed place outside the fence; water is automatic. Wool comes out on pallets beside the barn. The pasture, the feed pad, the wool pallets and the rest are under Game objects.", fields: [
       {k: "sheep", label: "Sheep", min: 1, max: MAX_SHEEP, step: 1},
-      {k: "animalsInside", label: "The animals can walk inside through the doorway", type: "check"}]},
+      {k: "pastureGround", cardRow: true, label: "Ground in the pasture", type: "select", options: PASTURE_GROUNDS},
+      {k: "animalsInside", cardRow: true, label: "The animals can walk inside through the doorway", type: "check"}]},
   ],
   hides: ["Interior", "Kupor (dormers)"],
   /** Settings as this kind uses them: no sleep point, rooms or dormers; at least 6 x 6 m; no more sheep than fit. */
