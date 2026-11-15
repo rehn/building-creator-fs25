@@ -10,7 +10,8 @@ import {
 } from "./model.mjs";
 import { WINDOW_STYLES, DOOR_STYLES, PORCH_OPTIONS, PORCH_W, PORCH_D, WING_FIELDS, MAX_WINGS } from "./model.mjs";
 import { pieceSheet, pieceMeshes, buildingTree, matList, matTable, slotOf, partStyle, splitAtOf, wallLabel, partName, wallItems, addOpening, addPartOn, addSplit, addPartSplit, duplicateOpening, duplicateSplit, moveBeside, moveToWall, openingProblem, setSectionFloorHeight, setTotalHeight, addPartDoor } from "./model.mjs";
-import { lodKeeps } from "./model.mjs";
+import { lodKeeps, matTexture } from "./model.mjs";
+import { encodeDds } from "./dds.mjs";
 import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, henYard, henCap, seeThroughGlass, kindOf } from "./model.mjs";
 import { cowYard } from "./kinds/cow.mjs";
 import { WALLPAPERS } from "./kinds/innerwall.mjs";
@@ -2986,22 +2987,27 @@ function saveFile(name, data, fallback) {
   } catch (e) { (fallback || (() => showText(name, typeof data === "string" ? data : "")))(); }
 }
 const canvasBlob = c => new Promise(res => c.toBlob(res, "image/png"));
+/** A canvas as a DDS file (DXT with mips), for the game's textures. */
+const canvasDds = c => {
+  const {width, height} = c, px = c.getContext("2d").getImageData(0, 0, width, height).data;
+  return encodeDds(width, height, px);
+};
 /** Adds the texture files that buildI3d(p, {withTex: true}) refers to. */
 async function addTextures(dir) {
   for (const m of texturedNow()) {
     if (!G[m] || !G[m].i.length) continue;
     const st = ensureSurface(m); if (!st) continue;
-    dir.file(`textures/${m}_diffuse.png`, await canvasBlob(st.diffuse));
-    dir.file(`textures/${m}_normal.png`, await canvasBlob(st.base.normal));
+    dir.file(matTexture(m).diffuse, canvasDds(st.diffuse));
+    dir.file(matTexture(m).normal, canvasDds(st.base.normal));
   }
   // The inside: each colour of a surface its own diffuse, one normal map per surface.
   for (const t of fittingTextures(p, G)) {
     const base = fitBase(t.surf, p.age);
-    dir.file(t.diffuse, await canvasBlob(compose(base.S, t.color, base.Mk, base.N)));
-    dir.file(t.normal, await canvasBlob(base.normal));
+    dir.file(t.diffuse, canvasDds(compose(base.S, t.color, base.Mk, base.N)));
+    dir.file(t.normal, canvasDds(base.normal));
   }
-  if (p.interior) dir.file("textures/interior_diffuse.png", await canvasBlob(interiorCanvas()));
-  if (seeThroughGlass(p)) dir.file("textures/glass_diffuse.png", await canvasBlob(paintGlass(document)));
+  if (p.interior) dir.file(matTexture("interior").diffuse, canvasDds(interiorCanvas()));
+  if (seeThroughGlass(p)) dir.file(matTexture("glass").diffuse, canvasDds(paintGlass(document)));
 }
 /** Square picture of the house from the front corner on a transparent background, for the shop. */
 function renderStoreImage(size) {

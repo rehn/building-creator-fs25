@@ -61,8 +61,8 @@ test("inner wall: wallpaper on each side as its own surface, in the export too",
   assert.ok(by["paperFlower#e6cf82"]);
   for (const [, , surf] of WALLPAPERS) assert.ok(SURFACES[surf], surf);
   const xml = buildI3d(p, {withTex: true});
-  assert.match(xml, /textures\/fit_paperStripe_8fa6b8\.png/);
-  assert.match(xml, /textures\/fit_paperFlower_e6cf82\.png/);
+  assert.match(xml, /textures\/fit_paperStripe_8fa6b8.dds/);
+  assert.match(xml, /textures\/fit_paperFlower_e6cf82.dds/);
   // one colour or another: the surface follows the choice
   const plain = fittingTextures(house([wall({paperA: 1, paperB: 1})])).map(t => t.surf);
   assert.ok(plain.includes("paperPlain") && !plain.includes("paperStripe"));

@@ -2853,8 +2853,10 @@ const hexOf = rgb01 => "#" + rgb01.map(v => Math.round(v * 255).toString(16).pad
 /** Texture files of an inside part with a surface: its own diffuse (the surface in its colour) and the surface's normal map. */
 export function fitTexture(surf, rgb01) {
   const color = hexOf(rgb01);
-  return {surf, color, diffuse: `textures/fit_${surf}_${color.slice(1)}.png`, normal: `textures/fit_${surf}_normal.png`};
+  return {surf, color, diffuse: `textures/fit_${surf}_${color.slice(1)}.dds`, normal: `textures/fit_${surf}_normal.dds`};
 }
+/** Texture files of a material (walls, roof ...) in the export: DDS with mips, as the game wants (the game warns about PNG). */
+export const matTexture = m => ({diffuse: `textures/${m}_diffuse.dds`, normal: `textures/${m}_normal.dds`});
 /** Every texture the textured export of the fittings needs, once each: [{surf, color, diffuse, normal}]. */
 export function fittingTextures(p, G = buildGeometry(normalize(p)).G) {
   const out = new Map();
@@ -2864,10 +2866,10 @@ export function fittingTextures(p, G = buildGeometry(normalize(p)).G) {
 function materialFor(doc, p, m, name, g, withTex) {
   if (g.color && withTex && g.surf) { const t = fitTexture(g.surf, g.color); return doc.material(`${name}_mat`, {}, [["Texture", t.diffuse], ["Normalmap", t.normal]]); }
   if (g.color) return doc.material(`${name}_mat`, {diffuseColor: `${v3(g.color)} 1`});
-  if (withTex && surfaceSpec(p, m)) return doc.material(`${m}_mat`, {}, [["Texture", `textures/${m}_diffuse.png`], ["Normalmap", `textures/${m}_normal.png`]]);
+  if (withTex && surfaceSpec(p, m)) return doc.material(`${m}_mat`, {}, [["Texture", matTexture(m).diffuse], ["Normalmap", matTexture(m).normal]]);
   // See-through glass and the room atlas: base-game style alphaBlending on a texture.
   const glassy = m === "glass" && seeThroughGlass(p);
-  if (withTex && (glassy || m === "interior")) return doc.material(`${m}_mat`, {alphaBlending: glassy || undefined}, [["Texture", `textures/${m}_diffuse.png`]]);
+  if (withTex && (glassy || m === "interior")) return doc.material(`${m}_mat`, {alphaBlending: glassy || undefined}, [["Texture", matTexture(m).diffuse]]);
   if (glassy) return doc.material(`${m}_mat`, {diffuseColor: rgb(colorFor(p, m)).replace(/ 1$/, " " + GLASS_ALPHA), alphaBlending: true});
   return doc.material(`${m}_mat`, {diffuseColor: rgb(colorFor(p, m))});
 }

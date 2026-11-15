@@ -63,7 +63,7 @@ test("wall zones: a wing, a walk-in barn and the export have them too", () => {
   assert.ok(verts(G.wallsLow).some(([, , z]) => z < -w.depth / 2 - 1), "the wing's lower walls");
   const barn = sanitize({...PRESETS.find(x => x.id === "ladugard").settings, floors: 2, wallSplit: "floor", lowerCladding: "plaster"});
   assert.ok(buildGeometry(barn).G.wallsLow.i.length > 0, "a barn's");
-  assert.match(buildI3d(w, {withTex: true}), /textures\/wallsLow_diffuse\.png/);
+  assert.match(buildI3d(w, {withTex: true}), /textures\/wallsLow_diffuse.dds/);
   assert.doesNotMatch(buildI3d(sanitize({}), {withTex: true}), /wallsLow/);
 });
 

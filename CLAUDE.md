@@ -282,6 +282,8 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 
 - LOD (i3d): setting lodDistance (default 80 m, 0 = off; Game > Shop and mod). model.mjs exportParts writes visuals_lod (lodDistance "0 N") with LOD0 = every part and LOD1 = the outside shell: the same shapeIds, so no extra geometry; LOD_LEFT_OUT / lodKeeps leave out wallsIn, doorIn, gutter (gutters and downpipes), iron, interior, curtain, fittings (and their variants). No LOD group when nothing would be left out. Editor: the button "Detail: close up / far away" (lodBtn, applyLod) hides the same materials in the preview and counts triangles for that level (test/lod.test.mjs). Not tried in-game.
 
+- Textures in the export are DDS with mips (src/editor/dds.mjs encodeDds: DXT1, DXT5 when something is see-through, 2 x 2 averaged mip chain; matTexture(m), fitTexture in model.mjs give the names textures/<m>_diffuse.dds ...; editor.mjs addTextures/canvasDds). PNG made the game warn "raw format" and "CPU mip generation ... please build mips" for every texture. The game's own normal maps are DXT1 too. The warning "i3d contains non-binary indexed triangle sets" stays (only Giants Editor writes the binary .shapes). icon.png and store.png are still PNG. Not tried in-game.
+
 ## Dev environment (WSL)
 - ./dev.sh starts API (:8080) + Next dev server (:3000); data in .dev/ (gitignored),
   ./dev.sh --reset wipes it. Reachable from the Windows browser at localhost:3000.
