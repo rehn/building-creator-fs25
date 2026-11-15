@@ -397,7 +397,7 @@
   "Ka 0 0 0": "Ka 0 0 0",
   "Kd {kd}": "Kd {kd}",
   "Keep my version": "Keep my version",
-  "Keep the meshes in a binary shapes file, like Giants Editor (experimental: the game then has no warning about text meshes)": "Keep the meshes in a binary shapes file, like Giants Editor (experimental: the game then has no warning about text meshes)",
+  "Keep the meshes in a binary shapes file, like Giants Editor (loads faster, and the game has no warning about text meshes)": "Keep the meshes in a binary shapes file, like Giants Editor (loads faster, and the game has no warning about text meshes)",
   "Kind of building": "Kind of building",
   "Kitchen": "Kitchen",
   "Kitchen counter (köksbänk)": "Kitchen counter (köksbänk)",

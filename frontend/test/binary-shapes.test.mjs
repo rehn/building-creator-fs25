@@ -7,12 +7,12 @@ import { readShapes, OPT } from "../src/editor/shapes.mjs";
 const make = (id, extra = {}) => sanitize({...PRESETS.find(x => x.id === id).settings, ...extra});
 const text = data => typeof data === "string" ? data : new TextDecoder().decode(data);
 
-test("off to start with: one file, the meshes in the XML", () => {
-  assert.equal(make("ladugard").binaryShapes, false);
-  const files = i3dFiles(make("ladugard"));
+test("on to start with; off: one file, the meshes in the XML", () => {
+  assert.equal(make("ladugard").binaryShapes, true);
+  const files = i3dFiles(make("ladugard", {binaryShapes: false}));
   assert.deepEqual(Object.keys(files), ["house.i3d"]);
   assert.match(files["house.i3d"], /<IndexedTriangleSet /);
-  assert.equal(files["house.i3d"], buildI3d(make("ladugard")));
+  assert.equal(files["house.i3d"], buildI3d(make("ladugard", {binaryShapes: false})));
 });
 
 test("on: house.i3d points at house.i3d.shapes and has no meshes of its own", () => {
@@ -26,7 +26,7 @@ test("on: house.i3d points at house.i3d.shapes and has no meshes of its own", ()
 
 test("every shape the scene uses is in the file, with the same id; the rest of the i3d is unchanged", () => {
   for (const id of ["ladugard", "farmhouse", "maskinaffar", "garage", "farhus"]) {
-    const on = i3dFiles(make(id, {binaryShapes: true})), off = i3dFiles(make(id));
+    const on = i3dFiles(make(id, {binaryShapes: true})), off = i3dFiles(make(id, {binaryShapes: false}));
     const used = [...on["house.i3d"].matchAll(/<Shape [^>]*shapeId="(\d+)"/g)].map(m => +m[1]);
     const shapes = readShapes(on["house.i3d.shapes"]);
     assert.deepEqual([...new Set(used)].sort((a, b) => a - b), shapes.map(s => s.id).sort((a, b) => a - b), id);
@@ -37,7 +37,7 @@ test("every shape the scene uses is in the file, with the same id; the rest of t
 });
 
 test("the meshes are the same ones: positions, uvs and triangles as the XML has them", () => {
-  const p = make("ladugard"), on = i3dFiles({...p, binaryShapes: true}), off = i3dFiles(p);
+  const p = make("ladugard", {binaryShapes: false}), on = i3dFiles({...p, binaryShapes: true}), off = i3dFiles(p);
   const shapes = readShapes(on["house.i3d.shapes"]);
   for (const m of [...off["house.i3d"].matchAll(/<IndexedTriangleSet name="([^"]+)" shapeId="(\d+)"[^>]*>([\s\S]*?)<\/IndexedTriangleSet>/g)]) {
     const s = shapes.find(x => x.id === +m[2]); assert.ok(s, m[1]);
@@ -67,7 +67,7 @@ test("collision and triggers are kept in memory (mesh usage 256), what is drawn 
 });
 
 test("the shapes file and the i3d together are well under the XML they replace (about 60 percent)", () => {
-  const files = i3dFiles(make("ladugard", {binaryShapes: true})), xml = i3dFiles(make("ladugard"))["house.i3d"];
+  const files = i3dFiles(make("ladugard", {binaryShapes: true})), xml = i3dFiles(make("ladugard", {binaryShapes: false}))["house.i3d"];
   assert.ok(files["house.i3d"].length + files["house.i3d.shapes"].length < xml.length * 0.75, `${files["house.i3d"].length + files["house.i3d.shapes"].length} vs ${xml.length}`);
 });
 
