@@ -10,7 +10,7 @@ import {
 } from "./model.mjs";
 import { WINDOW_STYLES, DOOR_STYLES, PORCH_OPTIONS, PORCH_W, PORCH_D, WING_FIELDS, MAX_WINGS } from "./model.mjs";
 import { pieceSheet, pieceMeshes, buildingTree, matList, matTable, slotOf, partStyle, splitAtOf, wallLabel, partName, wallItems, addOpening, addPartOn, addSplit, addPartSplit, duplicateOpening, duplicateSplit, moveBeside, moveToWall, openingProblem, setSectionFloorHeight, setTotalHeight, addPartDoor } from "./model.mjs";
-import { lodKeeps, matTexture } from "./model.mjs";
+import { lodKeeps, matTexture, i3dFiles } from "./model.mjs";
 import { encodeDds } from "./dds.mjs";
 import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, henYard, henCap, seeThroughGlass, kindOf } from "./model.mjs";
 import { cowYard } from "./kinds/cow.mjs";
@@ -2992,6 +2992,10 @@ const canvasDds = c => {
   const {width, height} = c, px = c.getContext("2d").getImageData(0, 0, width, height).data;
   return encodeDds(width, height, px);
 };
+/** Adds house.i3d, and with the setting for binary shapes house.i3d.shapes beside it. */
+function addI3d(dir) {
+  for (const [name, data] of Object.entries(i3dFiles(p, {withTex: true}))) dir.file(name, data);
+}
 /** Adds the texture files that buildI3d(p, {withTex: true}) refers to. */
 async function addTextures(dir) {
   for (const m of texturedNow()) {
@@ -3038,7 +3042,7 @@ function renderStoreImage(size) {
  */
 async function fillMod(dir, name, prefix = "", mod = modName(name)) {
   dir.file(MOD_FILES.xml, placeableXml(p, name, {dir: prefix, mod}));
-  dir.file(MOD_FILES.i3d, buildI3d(p, {withTex: true}));
+  addI3d(dir);
   await addTextures(dir);
   await addItems(dir);
   const store = renderStoreImage(512), icon = renderStoreImage(256);
@@ -3065,7 +3069,7 @@ async function exportMod(name) {
 /** What "Export model" gives: a zip with a folder of house.i3d, placeable_snippet.xml, textures and imported items. */
 async function modelZip(name, type = "blob") {
   const zip = new JSZip(), dir = zip.folder(slugify(name));
-  dir.file("house.i3d", buildI3d(p, {withTex: true}));
+  addI3d(dir);
   dir.file("placeable_snippet.xml", placeableSnippet(p));
   await addTextures(dir);
   await addItems(dir);

@@ -29,7 +29,7 @@ export const DEFAULTS = {
   gutters:true, downpipes:2, gutterColor:"#3B3F42",
   wallColor:"#8E2A1E", trimColor:"#F2EFE8", roofColor:"#2B2D2F", doorColor:"#3E5A4A", innerDoorColor:"#E9E3D3", foundationColor:"#6E6E6A",
   interior:true, loftBacking:true, insidePaper:"none", curtainStyle:"sides", curtainColor:"#EFE9DC", ventilators:0, age:0,
-  modPrice:75000, modUpkeep:75, modAuthor:"", modDescription:"", lodDistance:80
+  modPrice:75000, modUpkeep:75, modAuthor:"", modDescription:"", lodDistance:80, binaryShapes:false
 };
 /** Curtain layouts: [id, name]. Windows can pick one or follow the house's choice ("default"). */
 export const CURTAIN_OPTIONS = [["sides","Side panels and valance"],["panels","Side panels"],["valance","Valance only"],["cafe","Caf\u00E9 curtain and valance"],["none","No curtains"]];
@@ -133,6 +133,7 @@ const SHARED_SECTIONS = [
     {k:"modPrice", label:"Price", min:0, max:2000000, step:500, money:true},
     {k:"modUpkeep", label:"Daily upkeep", min:0, max:5000, step:5, money:true},
     {k:"lodDistance", label:"Simple model from this distance (0: always the detailed one)", min:0, max:300, step:10, unit:" m"},
+    {k:"binaryShapes", label:"Keep the meshes in a binary shapes file, like Giants Editor (experimental: the game then has no warning about text meshes)", type:"check"},
     {k:"modAuthor", label:"Author (empty: your name)", type:"text", max:60},
     {k:"modDescription", label:"Description in the mod list (empty: made for you)", type:"text", max:1000, multiline:true}]}
 ];
@@ -3042,6 +3043,16 @@ ${maps.join("\n")}
 export function buildI3d(p, opts) {
   const {doc, root} = exportParts(p, opts);
   return doc.write(root);
+}
+
+/**
+ * The i3d as files by name: {"house.i3d": text}, or with the setting binaryShapes also "house.i3d.shapes" (Uint8Array) holding the meshes the way
+ * Giants Editor saves them, which the game loads without its "non-binary indexed triangle sets" warning. opts as buildI3d's.
+ */
+export function i3dFiles(p, opts) {
+  const {p: q, doc, root} = exportParts(p, opts), name = MOD_FILES.i3d;
+  if (!q.binaryShapes) return {[name]: doc.write(root)};
+  return {[name]: doc.write(root, {shapesFile: name + ".shapes"}), [name + ".shapes"]: doc.shapesData()};
 }
 
 /**
