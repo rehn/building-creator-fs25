@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/base64"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"log"
 	"net/http"
@@ -116,6 +117,62 @@ type building struct {
 	HasModel  bool            `json:"hasModel"`
 	UpdatedAt time.Time       `json:"updatedAt"`
 	Settings  json.RawMessage `json:"settings,omitempty"`
+	// Placeable: what the game needs to load the building's house.xml (only when one is fetched, and it has a model).
+	Placeable *placeableInfo `json:"placeable,omitempty"`
+}
+
+// placeableInfo is the type of the building's placeable. A building of a kind the game has no type for (the dealership) comes with
+// types its mod defines in its modDesc, named "<mod name>.<name>" in house.xml: a program that copies house.xml into another mod (a map)
+// has to define them there (<placeableTypes> in that mod's modDesc) and name its own mod in the type, or the game says "Unknown type".
+type placeableInfo struct {
+	Type        string       `json:"type"`        // as house.xml says: "gardenShed", "FS25_Maskinaffar.dealership"
+	CustomTypes []customType `json:"customTypes"` // the types the mod's modDesc defines (empty for the game's own)
+}
+
+type customType struct {
+	Name            string   `json:"name"` // without the mod name
+	Parent          string   `json:"parent"`
+	ClassName       string   `json:"className"`
+	Filename        string   `json:"filename"`
+	Specializations []string `json:"specializations"`
+}
+
+// placeableOf reads the placeable type and the mod's own types out of its game mod zip; nil if it has no house.xml.
+func placeableOf(mod []byte) *placeableInfo {
+	houseXML, err := fileInZip(mod, "house.xml")
+	if err != nil {
+		return nil
+	}
+	var house struct {
+		Type string `xml:"type,attr"`
+	}
+	if xml.Unmarshal(houseXML, &house) != nil || house.Type == "" {
+		return nil
+	}
+	info := &placeableInfo{Type: house.Type, CustomTypes: []customType{}}
+	if desc, err := fileInZip(mod, "modDesc.xml"); err == nil {
+		var d struct {
+			Types []struct {
+				Name            string `xml:"name,attr"`
+				Parent          string `xml:"parent,attr"`
+				ClassName       string `xml:"className,attr"`
+				Filename        string `xml:"filename,attr"`
+				Specializations []struct {
+					Name string `xml:"name,attr"`
+				} `xml:"specialization"`
+			} `xml:"placeableTypes>type"`
+		}
+		if xml.Unmarshal(desc, &d) == nil {
+			for _, t := range d.Types {
+				c := customType{Name: t.Name, Parent: t.Parent, ClassName: t.ClassName, Filename: t.Filename, Specializations: []string{}}
+				for _, sp := range t.Specializations {
+					c.Specializations = append(c.Specializations, sp.Name)
+				}
+				info.CustomTypes = append(info.CustomTypes, c)
+			}
+		}
+	}
+	return info
 }
 
 func newBuilding(p store.ProjectSummary, kind string) building {
@@ -159,6 +216,11 @@ func (s *Server) getBuilding(w http.ResponseWriter, r *http.Request, u store.Use
 	_ = json.Unmarshal(p.Data, &d)
 	b := newBuilding(p.ProjectSummary, d.Kind)
 	b.Settings = p.Data
+	if p.ModelVersion > 0 {
+		if m, err := s.st.GetModel(r.Context(), u.ID, p.ID); err == nil {
+			b.Placeable = placeableOf(m.Mod)
+		}
+	}
 	writeJSON(w, http.StatusOK, b)
 }
 

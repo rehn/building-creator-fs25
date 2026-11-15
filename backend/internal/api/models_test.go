@@ -189,3 +189,76 @@ func TestModelUploadIsChecked(t *testing.T) {
 	expectError(t, c.send(req), 403, "bad_origin")
 	expectError(t, putModel(newClient(t, srv), p.ID, p.Version, goodModel(t, "x")), 401, "unauthorized")
 }
+
+// zipOf is a zip with the given files (name -> text).
+func zipOf(t *testing.T, files map[string]string) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for n, s := range files {
+		w, _ := zw.Create(n)
+		w.Write([]byte(s))
+	}
+	zw.Close()
+	return buf.Bytes()
+}
+
+// A building whose placeable type the mod defines itself (the dealership) says so, so that a map builder, which copies house.xml into
+// its own mod, can define the type there too: it is not known to the game unless the mod that defines it is loaded.
+func TestBuildingTellsItsPlaceableType(t *testing.T) {
+	srv := newTestServer(t)
+	c := signupAdmin(t, srv)
+	tok := decode[tokenReply](t, c.do("POST", "/api/tokens", map[string]any{"name": "x"})).Token
+	type reply struct {
+		Placeable *struct {
+			Type        string
+			CustomTypes []struct {
+				Name            string
+				Parent          string
+				Specializations []string
+			}
+		}
+	}
+	put := func(name string, files map[string]string) string {
+		p := decode[struct {
+			ID      string
+			Version int64
+		}](t, c.do("POST", "/api/projects", map[string]any{"name": name, "data": map[string]any{"kind": "dealership"}}))
+		expect(t, putModel(c, p.ID, p.Version, map[string][]byte{"obj": []byte("v 1 2 3\n"), "mtl": []byte("newmtl a\n"), "mod": zipOf(t, files)}), 204)
+		return p.ID
+	}
+
+	dealer := put("Maskinaffar", map[string]string{
+		"house.i3d": "<i3D/>",
+		"house.xml": `<?xml version="1.0" encoding="utf-8" standalone="no" ?><placeable type="FS25_Maskinaffar.dealership"><storeData/></placeable>`,
+		"modDesc.xml": `<modDesc descVersion="108"><placeableTypes>
+  <type name="dealership" parent="simplePlaceable" className="Placeable" filename="$dataS/scripts/placeables/Placeable.lua">
+    <specialization name="vehicleBuyingStation"/><specialization name="clearAreas"/>
+  </type></placeableTypes><storeItems><storeItem xmlFilename="house.xml"/></storeItems></modDesc>`,
+	})
+	got := decode[reply](t, bearer(t, srv, tok, "/api/v1/buildings/"+dealer))
+	if got.Placeable == nil || got.Placeable.Type != "FS25_Maskinaffar.dealership" || len(got.Placeable.CustomTypes) != 1 {
+		t.Fatalf("dealership: %+v", got.Placeable)
+	}
+	ct := got.Placeable.CustomTypes[0]
+	if ct.Name != "dealership" || ct.Parent != "simplePlaceable" || strings.Join(ct.Specializations, ",") != "vehicleBuyingStation,clearAreas" {
+		t.Fatalf("custom type: %+v", ct)
+	}
+
+	// a building of the game's own type needs nothing defined
+	shed := put("Garage", map[string]string{
+		"house.i3d":   "<i3D/>",
+		"house.xml":   `<placeable type="gardenShed"><storeData/></placeable>`,
+		"modDesc.xml": `<modDesc descVersion="108"><storeItems/></modDesc>`,
+	})
+	got = decode[reply](t, bearer(t, srv, tok, "/api/v1/buildings/"+shed))
+	if got.Placeable == nil || got.Placeable.Type != "gardenShed" || len(got.Placeable.CustomTypes) != 0 {
+		t.Fatalf("shed: %+v", got.Placeable)
+	}
+
+	// without a model (or one without house.xml) there is nothing to say
+	bare := decode[struct{ ID string }](t, c.do("POST", "/api/projects", map[string]any{"name": "Tom", "data": map[string]any{}}))
+	if got = decode[reply](t, bearer(t, srv, tok, "/api/v1/buildings/"+bare.ID)); got.Placeable != nil {
+		t.Fatalf("no model: %+v", got.Placeable)
+	}
+}
