@@ -34,10 +34,10 @@ test("header, then a file of shapes read back as written", () => {
   assert.equal(a.attributes.length, 0);
 });
 
-test("options: tangents for what is drawn, the mesh usage (256 -> 0x10000) for what the game keeps in memory", () => {
+test("options: tangents for what is drawn, the mesh usage (256 -> 0x1000000, the CPU Mesh flag the game checks on navigation shapes) for what the game keeps in memory", () => {
   const [drawn, kept] = readShapes(writeShapes([quad(1, "a", {tangents: true}), quad(2, "b", {usage: 256})]));
-  assert.ok(drawn.opts & OPT.tangents); assert.equal(drawn.opts >>> 8, 0); assert.equal(drawn.tangents.length, 16);
-  assert.ok(!(kept.opts & OPT.tangents)); assert.equal(kept.opts >>> 8, 256); assert.equal(kept.tangents, null);
+  assert.ok(drawn.opts & OPT.tangents); assert.equal(drawn.opts >>> 16, 0); assert.equal(drawn.tangents.length, 16);
+  assert.ok(!(kept.opts & OPT.tangents)); assert.equal(kept.opts >>> 16, 256); assert.equal(kept.opts, 0x1000003, "as the game own navigation meshes"); assert.equal(kept.tangents, null);
 });
 
 test("the bounding sphere holds every vertex", () => {
