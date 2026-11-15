@@ -904,5 +904,18 @@
   "Mud": "Lera",
   "Gravel": "Grus",
   "Sand": "Sand",
-  "Forest floor": "Skogsmark"
+  "Forest floor": "Skogsmark",
+  "Can be bought and sold in the shop (for trying it out)": "Kan köpas och säljas i butiken (för att prova)",
+  "Default dealer": "Standardbutik",
+  "Default dealers": "Standardbutiker",
+  "Default dealer: the map's shop nodes (vehicleShopTrigger, storeSpawnPlace1Start/End) with their onCreate callbacks as user attributes.": "Standardbutik: kartans butiksnoder (vehicleShopTrigger, storeSpawnPlace1Start/End) med sina onCreate-anrop som användarattribut.",
+  "Delivery place": "Leveransplats",
+  "Shop trigger": "Butiksutlösare",
+  "Map shop": "Kartans butik (inställningar)",
+  "Kartans butik": "Kartans butik",
+  "Lilla butiken": "Lilla butiken",
+  "The map's own vehicle shop: the player walks into the shop trigger (under Game objects) to open the shop menu, and the vehicles bought from the menu appear on the delivery place outside. A map has one. Turn the shop box off when the map places the building for you.": "Kartans egen fordonsbutik: spelaren går in i butiksutlösaren (under Spelobjekt) för att öppna butiksmenyn, och fordonen som köps i menyn dyker upp på leveransplatsen utanför. En karta har en. Stäng av rutan när kartan placerar byggnaden åt dig.",
+  "Where the vehicles bought from the shop menu appear: they line up along the long side of the box. Keep it on open ground outside the building, with room for the biggest machine.": "Där fordonen som köps i butiksmenyn dyker upp: de ställer upp sig längs rutans långsida. Håll den på öppen mark utanför byggnaden, med plats för den största maskinen.",
+  "Walk into the box to open the shop menu. The shopping icon floats over it, and the player stands in front of it when the menu is closed. It goes inside the building, by the counter.": "Gå in i rutan för att öppna butiksmenyn. Shoppingikonen svävar över den, och spelaren står framför den när menyn stängs. Den hör hemma inne i byggnaden, vid disken.",
+  "Delivery place: height above the ground (vehicles drop onto the ground from there)": "Leveransplats: höjd över marken (fordonen faller ner på marken därifrån)"
 }

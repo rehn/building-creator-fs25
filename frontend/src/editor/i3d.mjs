@@ -108,12 +108,27 @@ export function writeScene(root, depth = 2) {
   let nid = 1;
   const walk = (n, d) => {
     const ind = "  ".repeat(d);
-    const attrs = Object.entries(n.attrs).filter(([, v]) => v !== undefined).map(([k, v]) => ` ${k}="${attrText(v)}"`).join("");
+    const attrs = Object.entries(n.attrs).filter(([k, v]) => v !== undefined && k !== "userAttributes").map(([k, v]) => ` ${k}="${attrText(v)}"`).join("");
     const head = `${ind}<${n.tag} name="${n.name}"${attrs} nodeId="${nid++}"`;
     if (!n.children.length) return head + "/>";
     return `${head}>\n${n.children.map(c => walk(c, d + 1)).join("\n")}\n${ind}</${n.tag}>`;
   };
   return walk(root, depth);
+}
+
+/**
+ * The <UserAttributes> block (with its line break and indent), "" if no node has any. A node gets them with the attribute userAttributes:
+ * [[name, type, value] ...], e.g. ["onCreate", "scriptCallback", "ShopTrigger.onCreate"]; they are written by the node's id, numbered as writeScene does.
+ */
+export function writeUserAttributes(root) {
+  let nid = 1; const out = [];
+  const walk = n => {
+    const id = nid++, list = n.attrs.userAttributes;
+    if (list && list.length) out.push(`    <UserAttribute nodeId="${id}">\n${list.map(([name, type, value]) => `      <Attribute name="${name}" type="${type}" value="${attrText(value)}"/>`).join("\n")}\n    </UserAttribute>`);
+    n.children.forEach(walk);
+  };
+  walk(root);
+  return out.length ? `\n  <UserAttributes>\n${out.join("\n")}\n  </UserAttributes>` : "";
 }
 
 /** The i3dMapping path of the first node called name ("0>2|1"), or null. The root is component 0. */
@@ -191,7 +206,7 @@ ${mats.join("\n")}
   <Dynamics/>
   <Scene>
 ${writeScene(root)}
-  </Scene>
+  </Scene>${writeUserAttributes(root)}
 </i3D>
 `;
   }
