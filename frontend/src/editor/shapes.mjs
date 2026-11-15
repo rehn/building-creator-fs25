@@ -67,8 +67,8 @@ export class Cipher {
 //   name length, name, padding to 4 | id | bounding sphere centre (3 floats), radius | index count, subset count, vertex count, options | 0
 //   | per subset: first vertex, vertex count, first index, index count, uv density (a float, one per uv set) | 0
 //   | indices (16 bit, or 32 bit past 65536 vertices), padding to 4 | positions | normals | tangents (x, y, z, w) | uvs | colours ... | attribute count
-// options: 1 normals, 2 first uv set, 0x80 tangents, and the mesh usage of the XML (meshUsage 256: a mesh the game keeps in memory, for the physics
-// and the navigation) shifted up 8 bits. A mesh the physics uses can come with an attribute holding its cooked data: we leave it out, the game cooks it itself.
+// options: 1 normals, 2 first uv set, 0x80 tangents, and the mesh usage of the XML (meshUsage 256 = CPU Mesh: a mesh the game keeps in memory, for the physics
+// and the navigation; the game checks it on a navigation shape) shifted up 16 bits (256 -> 0x1000000; the game own navigation and blocker shapes have 0x1000003). A mesh the physics uses can come with an attribute holding its cooked data: we leave it out, the game cooks it itself.
 export const OPT = {normals: 1, uv1: 2, tangents: 0x80};
 export const VERSION = 10;
 const align4 = n => (4 - n % 4) % 4;
@@ -122,7 +122,7 @@ export function shapeData(s) {
     ua += Math.abs((s.uv[b * 2] - s.uv[a * 2]) * (s.uv[c * 2 + 1] - s.uv[a * 2 + 1]) - (s.uv[c * 2] - s.uv[a * 2]) * (s.uv[b * 2 + 1] - s.uv[a * 2 + 1])) / 2;
   }
   const density = wa > 1e-12 ? Math.min(1, Math.sqrt(ua / wa)) : 1;
-  const name = new TextEncoder().encode(s.name || "shape"), opts = (OPT.normals | OPT.uv1 | (tangents ? OPT.tangents : 0) | ((s.usage || 0) << 8)) >>> 0;
+  const name = new TextEncoder().encode(s.name || "shape"), opts = (OPT.normals | OPT.uv1 | (tangents ? OPT.tangents : 0) | ((s.usage || 0) << 16)) >>> 0;
   let size = 4 + name.length; size += align4(size);
   size += 4 + 12 + 4 + 16 + 4 + 20 + 4 + nc * (wide ? 4 : 2); size += align4(size);
   size += nv * (12 + 12 + (tangents ? 16 : 0) + 8) + 4;

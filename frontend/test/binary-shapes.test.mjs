@@ -56,14 +56,24 @@ test("collision and triggers are kept in memory (mesh usage 256), what is drawn 
   const nodes = [...xml.matchAll(/<Shape name="([^"]+)"[^>]*shapeId="(\d+)"[^>]*?(nonRenderable="true")?[^>]*\/?>/g)];
   let kept = 0, drawn = 0;
   for (const s of shapes) {
-    const usage = s.opts >>> 8;
+    const usage = s.opts >>> 16;
     if (usage === 256) { kept++; assert.ok(!(s.opts & OPT.tangents), s.name); } else { drawn++; assert.ok(s.opts & OPT.tangents, s.name); assert.equal(usage, 0, s.name); }
   }
   assert.ok(kept >= 1, "the collision mesh");
   assert.ok(drawn >= 3, "walls, roof ...");
   const collision = shapes.find(s => s.name === "collision");
-  assert.ok(collision && collision.opts >>> 8 === 256);
+  assert.ok(collision && collision.opts >>> 16 === 256);
   assert.ok(nodes.length > 0);
+});
+
+test("a cow barn: the navigation mesh has the CPU Mesh flag the game demands (0x1000000), as do the walking plane and the blockers", () => {
+  const shapes = readShapes(i3dFiles(make("ladugard", {binaryShapes: true}))["house.i3d.shapes"]);
+  for (const name of ["navigationMeshShape", "walkingPlane"]) {
+    const s = shapes.find(x => x.name === name);
+    assert.ok(s, name);
+    assert.ok(s.opts & 0x1000000, );
+  }
+  assert.ok(shapes.some(s => /^navmeshBlocker/.test(s.name) && (s.opts & 0x1000000)), "a blocker with the flag");
 });
 
 test("the shapes file and the i3d together are well under the XML they replace (about 60 percent)", () => {
