@@ -81,6 +81,17 @@ test("the delivery place is a line: a start node with the end node as its child,
   assert.ok(Math.abs(a[0] + d[0] / 2 - spawn.x) < 0.01 && Math.abs(a[2] + d[2] / 2 - spawn.z) < 0.01, "centred on the box");
 });
 
+test("the delivery place is a bit above the ground (0.5 m to start with), so a vehicle does not end up in the ground; the height is a setting", () => {
+  const start = p => /name="storeSpawnPlace1Start" translation="([^"]+)"/.exec(buildI3d(p))[1].split(" ").map(Number);
+  assert.equal(dealer().deliveryHeight, 0.5);
+  assert.equal(start(dealer())[1], 0.5);
+  assert.equal(start(dealer({deliveryHeight: 1.2}))[1], 1.2);
+  assert.equal(start(dealer({deliveryHeight: 0}))[1], 0);
+  assert.equal(dealer({deliveryHeight: 99}).deliveryHeight, 2, "at most 2 m");
+  const end = /name="storeSpawnPlace1End" translation="([^"]+)"/.exec(buildI3d(dealer({deliveryHeight: 1.2})))[1].split(" ").map(Number);
+  assert.equal(end[1], 0, "the end node is level with the start node");
+});
+
 test("the script callbacks are user attributes, as in the map's i3d", () => {
   const i3d = buildI3d(dealer());
   assert.deepEqual(attrsOf(i3d, nodeId(i3d, "vehicleShopTrigger")), [["onCreate", "scriptCallback", "ShopTrigger.onCreate"]]);

@@ -23,7 +23,9 @@ function scene(c) {
   // the player stands on the front side of the counter, inside the hall
   const spot = [cx, F, Math.min(cz + counter.d / 2 + 0.5, p.depth / 2 - 0.4)];
   const alongX = spawn.w >= spawn.d, len = alongX ? spawn.w : spawn.d;
-  const a = alongX ? [spawn.x - len / 2, 0, spawn.z] : [spawn.x, 0, spawn.z - len / 2], d = alongX ? [len, 0, 0] : [0, 0, len];
+  // (the line is a bit above the ground: the ground out there is not levelled like the building's, and a vehicle that lands in it gets stuck)
+  const H = +p.deliveryHeight || 0;
+  const a = alongX ? [spawn.x - len / 2, H, spawn.z] : [spawn.x, H, spawn.z - len / 2], d = alongX ? [len, 0, 0] : [0, 0, len];
   const trigger = c.box("vehicleShopTrigger", b, {...c.trigger("0x20000000", "0x100000"), userAttributes: [["onCreate", "scriptCallback", "ShopTrigger.onCreate"]]}, [
     refNode("markerIconShopping", {translation: [ix - cx, F - cy, iz - cz], referenceId: doc.file(MARKER)}),
     tg("vehicleShopPlayerSpawn", [spot[0] - cx, spot[1] - cy, spot[2] - cz]),
@@ -45,9 +47,10 @@ export default {
   plural: "Default dealers",
   category: "shops",
   walkIn: true,
-  defaults: {ceiling: false, insideSame: true, winStyle: "single", doorStyle: "sliding", shopBuyable: true},
+  defaults: {ceiling: false, insideSame: true, winStyle: "single", doorStyle: "sliding", shopBuyable: true, deliveryHeight: 0.5},
   sections: [
     {title: "Map shop", tab: "game", hint: "The map's own vehicle shop: the player walks into the shop trigger (under Game objects) to open the shop menu, and the vehicles bought from the menu appear on the delivery place outside. A map has one. Turn the shop box off when the map places the building for you.", fields: [
+      {k: "deliveryHeight", label: "Delivery place: height above the ground (vehicles drop onto the ground from there)", min: 0, max: 2, step: 0.05, unit: " m"},
       {k: "shopBuyable", label: "Can be bought and sold in the shop (for trying it out)", type: "check"}]},
   ],
   hides: ["Interior", "Kupor (dormers)"],
