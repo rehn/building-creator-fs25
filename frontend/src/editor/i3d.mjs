@@ -2,6 +2,8 @@
 // objects first, so i3dMapping paths ("0>2|1") can be looked up by node name instead of counted.
 // Pure functions, no DOM.
 
+import { writeShapes } from "./shapes.mjs";
+
 /** A number as the i3d writes it: at most 4 decimals, no "-0". */
 export const num = v => { const r = Math.round(v * 10000) / 10000; return (Object.is(r, -0) ? 0 : r).toString(); };
 export const v3 = a => a.map(num).join(" ");
@@ -147,7 +149,7 @@ export function mappingsFor(root, xml) {
 /* ---------- Document ---------- */
 /** Collects files, materials and shapes, giving each an id in the order it is added. */
 export class I3dDoc {
-  constructor() { this.files = []; this.materials = []; this.shapes = []; }
+  constructor() { this.files = []; this.materials = []; this.shapes = []; this.raw = []; }
   /** A texture or other file, by path; the same path gets the same id. */
   file(path) {
     const k = this.files.indexOf(path);
@@ -163,9 +165,14 @@ export class I3dDoc {
   shape(name, g, {uv, cpu = false} = {}) {
     const id = this.shapes.length + 1;
     this.shapes.push(shapeXml(name, id, g, uv, {cpu}));
+    // (the same mesh for the binary file: a mesh the game keeps in memory has mesh usage 256 and no tangents, one that is drawn has tangents)
+    this.raw.push({id, name, positions: g.p, normals: g.n, uv: uv || g.uv, indices: g.i, usage: cpu ? CPU_MESH : 0, tangents: !cpu});
     return id;
   }
-  write(root, {name = "house", program = "House to i3d"} = {}) {
+  /** The meshes as a binary .i3d.shapes file (what write's shapesFile points at). */
+  shapesData() { return writeShapes(this.raw); }
+  /** shapesFile: the name of the .i3d.shapes file the meshes are in (the i3d then has none of its own); else they are XML in the i3d. */
+  write(root, {name = "house", program = "House to i3d", shapesFile = ""} = {}) {
     const files = this.files.map((f, k) => `    <File fileId="${k + 1}" filename="${f}"/>`);
     const mats = this.materials.map((m, k) => {
       const head = `    <Material name="${m.name}" materialId="${k + 1}"${Object.entries(m.attrs).filter(([, v]) => v !== undefined).map(([a, v]) => ` ${a}="${attrText(v)}"`).join("")}`;
@@ -180,9 +187,7 @@ export class I3dDoc {
   <Materials>
 ${mats.join("\n")}
   </Materials>
-  <Shapes>
-${this.shapes.join("\n")}
-  </Shapes>
+  ${shapesFile ? `<Shapes externalShapesFile="${shapesFile}">\n  </Shapes>` : `<Shapes>\n${this.shapes.join("\n")}\n  </Shapes>`}
   <Dynamics/>
   <Scene>
 ${writeScene(root)}

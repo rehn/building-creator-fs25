@@ -81,9 +81,9 @@ test("surface uvs are in texture repeats, and wood grain runs along a beam", () 
 
 test("export: textured inside parts get their own diffuse and the surface's normal map", () => {
   const p = preset("ladugard"), xml = buildI3d(p, {withTex: true});
-  assert.match(xml, /filename="textures\/fit_concrete_[0-9a-f]{6}\.png"/);
-  assert.match(xml, /filename="textures\/fit_concrete_normal\.png"/);
-  assert.match(xml, /filename="textures\/fit_timber_[0-9a-f]{6}\.png"/);
+  assert.match(xml, /filename="textures\/fit_concrete_[0-9a-f]{6}.dds"/);
+  assert.match(xml, /filename="textures\/fit_concrete_normal.dds"/);
+  assert.match(xml, /filename="textures\/fit_timber_[0-9a-f]{6}.dds"/);
   const files = fittingTextures(p);
   assert.ok(files.length > 5);
   for (const f of files) {
@@ -98,6 +98,6 @@ test("export: textured inside parts get their own diffuse and the surface's norm
 
 test("export: the plinth is concrete and the door painted planks", () => {
   const xml = buildI3d(sanitize({}), {withTex: true});
-  assert.match(xml, /filename="textures\/foundation_diffuse\.png"/);
-  assert.match(xml, /filename="textures\/door_diffuse\.png"/);
+  assert.match(xml, /filename="textures\/foundation_diffuse.dds"/);
+  assert.match(xml, /filename="textures\/door_diffuse.dds"/);
 });

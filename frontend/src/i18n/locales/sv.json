@@ -32,6 +32,7 @@
   "Attic": "Vind",
   "Detail: close up": "Detaljnivå: nära",
   "Detail: far away (from {m} m)": "Detaljnivå: långt bort (från {m} m)",
+  "Keep the meshes in a binary shapes file, like Giants Editor (loads faster, and the game has no warning about text meshes)": "Spara meshar i en binär shapes-fil, som Giants Editor (laddar snabbare, och spelet varnar inte för textmeshar)",
   "Author (empty: your name)": "Upphovsperson (tomt: ditt namn)",
   "Simple model from this distance (0: always the detailed one)": "Enkel modell från (0 = alltid den detaljerade)",
   "Automatic": "Automatiskt",

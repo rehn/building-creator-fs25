@@ -29,7 +29,7 @@ export const DEFAULTS = {
   gutters:true, downpipes:2, gutterColor:"#3B3F42",
   wallColor:"#8E2A1E", trimColor:"#F2EFE8", roofColor:"#2B2D2F", doorColor:"#3E5A4A", innerDoorColor:"#E9E3D3", foundationColor:"#6E6E6A",
   interior:true, loftBacking:true, insidePaper:"none", curtainStyle:"sides", curtainColor:"#EFE9DC", ventilators:0, age:0,
-  modPrice:75000, modUpkeep:75, modAuthor:"", modDescription:"", lodDistance:80
+  modPrice:75000, modUpkeep:75, modAuthor:"", modDescription:"", lodDistance:80, binaryShapes:true
 };
 /** Curtain layouts: [id, name]. Windows can pick one or follow the house's choice ("default"). */
 export const CURTAIN_OPTIONS = [["sides","Side panels and valance"],["panels","Side panels"],["valance","Valance only"],["cafe","Caf\u00E9 curtain and valance"],["none","No curtains"]];
@@ -133,6 +133,7 @@ const SHARED_SECTIONS = [
     {k:"modPrice", label:"Price", min:0, max:2000000, step:500, money:true},
     {k:"modUpkeep", label:"Daily upkeep", min:0, max:5000, step:5, money:true},
     {k:"lodDistance", label:"Simple model from this distance (0: always the detailed one)", min:0, max:300, step:10, unit:" m"},
+    {k:"binaryShapes", label:"Keep the meshes in a binary shapes file, like Giants Editor (loads faster, and the game has no warning about text meshes)", type:"check"},
     {k:"modAuthor", label:"Author (empty: your name)", type:"text", max:60},
     {k:"modDescription", label:"Description in the mod list (empty: made for you)", type:"text", max:1000, multiline:true}]}
 ];
@@ -2853,8 +2854,10 @@ const hexOf = rgb01 => "#" + rgb01.map(v => Math.round(v * 255).toString(16).pad
 /** Texture files of an inside part with a surface: its own diffuse (the surface in its colour) and the surface's normal map. */
 export function fitTexture(surf, rgb01) {
   const color = hexOf(rgb01);
-  return {surf, color, diffuse: `textures/fit_${surf}_${color.slice(1)}.png`, normal: `textures/fit_${surf}_normal.png`};
+  return {surf, color, diffuse: `textures/fit_${surf}_${color.slice(1)}.dds`, normal: `textures/fit_${surf}_normal.dds`};
 }
+/** Texture files of a material (walls, roof ...) in the export: DDS with mips, as the game wants (the game warns about PNG). */
+export const matTexture = m => ({diffuse: `textures/${m}_diffuse.dds`, normal: `textures/${m}_normal.dds`});
 /** Every texture the textured export of the fittings needs, once each: [{surf, color, diffuse, normal}]. */
 export function fittingTextures(p, G = buildGeometry(normalize(p)).G) {
   const out = new Map();
@@ -2864,10 +2867,10 @@ export function fittingTextures(p, G = buildGeometry(normalize(p)).G) {
 function materialFor(doc, p, m, name, g, withTex) {
   if (g.color && withTex && g.surf) { const t = fitTexture(g.surf, g.color); return doc.material(`${name}_mat`, {}, [["Texture", t.diffuse], ["Normalmap", t.normal]]); }
   if (g.color) return doc.material(`${name}_mat`, {diffuseColor: `${v3(g.color)} 1`});
-  if (withTex && surfaceSpec(p, m)) return doc.material(`${m}_mat`, {}, [["Texture", `textures/${m}_diffuse.png`], ["Normalmap", `textures/${m}_normal.png`]]);
+  if (withTex && surfaceSpec(p, m)) return doc.material(`${m}_mat`, {}, [["Texture", matTexture(m).diffuse], ["Normalmap", matTexture(m).normal]]);
   // See-through glass and the room atlas: base-game style alphaBlending on a texture.
   const glassy = m === "glass" && seeThroughGlass(p);
-  if (withTex && (glassy || m === "interior")) return doc.material(`${m}_mat`, {alphaBlending: glassy || undefined}, [["Texture", `textures/${m}_diffuse.png`]]);
+  if (withTex && (glassy || m === "interior")) return doc.material(`${m}_mat`, {alphaBlending: glassy || undefined}, [["Texture", matTexture(m).diffuse]]);
   if (glassy) return doc.material(`${m}_mat`, {diffuseColor: rgb(colorFor(p, m)).replace(/ 1$/, " " + GLASS_ALPHA), alphaBlending: true});
   return doc.material(`${m}_mat`, {diffuseColor: rgb(colorFor(p, m))});
 }
@@ -3040,6 +3043,16 @@ ${maps.join("\n")}
 export function buildI3d(p, opts) {
   const {doc, root} = exportParts(p, opts);
   return doc.write(root);
+}
+
+/**
+ * The i3d as files by name: {"house.i3d": text}, or with the setting binaryShapes also "house.i3d.shapes" (Uint8Array) holding the meshes the way
+ * Giants Editor saves them, which the game loads without its "non-binary indexed triangle sets" warning. opts as buildI3d's.
+ */
+export function i3dFiles(p, opts) {
+  const {p: q, doc, root} = exportParts(p, opts), name = MOD_FILES.i3d;
+  if (!q.binaryShapes) return {[name]: doc.write(root)};
+  return {[name]: doc.write(root, {shapesFile: name + ".shapes"}), [name + ".shapes"]: doc.shapesData()};
 }
 
 /**

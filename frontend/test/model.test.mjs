@@ -159,7 +159,7 @@ test("geometry: no trim or wall face lies in the plane of the glass (no flicker)
 test("surfaces: trim is painted wood, textured in the export", () => {
   const p = sanitize({});
   assert.equal(surfaceSpec(p, "trim").kind, "paintedwood");
-  assert.match(buildI3d(p, { withTex: true }), /filename="textures\/trim_diffuse.png"/);
+  assert.match(buildI3d(p, { withTex: true }), /filename="textures\/trim_diffuse.dds"/);
 });
 
 // The texture's grain runs along v. On every long, thin trim triangle (a board's face), going
@@ -869,8 +869,8 @@ test("interior: a window or kupa can choose its room", () => {
 test("i3d: see-through glass and textured rooms when the interior is on", () => {
   const xml = buildI3d(sanitize({}), { withTex: true });
   assert.match(xml, /<Material name="glass_mat"[^>]*alphaBlending="true"/);
-  assert.match(xml, /filename="textures\/glass_diffuse.png"/);
-  assert.match(xml, /filename="textures\/interior_diffuse.png"/);
+  assert.match(xml, /filename="textures\/glass_diffuse.dds"/);
+  assert.match(xml, /filename="textures\/interior_diffuse.dds"/);
   assert.match(xml, /<Shape name="glass"[^>]*castsShadows="false"/);
   const plain = buildI3d(sanitize({}), { withTex: false });
   assert.match(plain, /<Material name="glass_mat"[^>]*diffuseColor="[\d.]+ [\d.]+ [\d.]+ 0\.\d+"[^>]*alphaBlending="true"/);
@@ -878,8 +878,8 @@ test("i3d: see-through glass and textured rooms when the interior is on", () => 
 
 test("i3d: textures are referenced when exporting with textures", () => {
   const xml = buildI3d(sanitize({ wallCladding: "lockpanel" }), { withTex: true });
-  assert.match(xml, /filename="textures\/walls_diffuse.png"/);
-  assert.match(xml, /filename="textures\/walls_normal.png"/);
+  assert.match(xml, /filename="textures\/walls_diffuse.dds"/);
+  assert.match(xml, /filename="textures\/walls_normal.dds"/);
 });
 
 test("serialize: internal fields are not saved and the result loads back the same", () => {
