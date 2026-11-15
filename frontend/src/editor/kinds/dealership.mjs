@@ -34,10 +34,10 @@ export function vehiclesFor(p) {
 const COL = {floor: "#B9B7B0", wood: "#9C7448", dark: "#3C3F42", steel: "#6C7378", red: "#B8382C", paper: "#E9E4D8", green: "#2F8F6F"};
 
 /** The floor: smooth concrete, as a showroom has. */
-function furnish(c) { c.floor(COL.floor, "concrete"); }
+export function furnish(c) { c.floor(COL.floor, "concrete"); }
 
-/** Counter just inside the front wall in the middle, and the spawn area on open ground in front of it. */
-function defaultObjects(p) {
+/** Counter just inside the front wall in the middle, and the spawn area on open ground in front of it. (The default dealer has the same.) */
+export function defaultObjects(p) {
   const W = +p.width, D = +p.depth, F = +p.foundation, H = Math.min(3, Math.max(2.2, +p.floorHeight));
   return [
     {type: "counter", x: 0, z: D / 2 - 2, w: 2, d: 1.4, h: F + H, ix: 0, iz: 0},
@@ -82,7 +82,7 @@ ${items}
 }
 
 /* ---------- Pieces ---------- */
-const CATALOG = {
+export const CATALOG = {
   innerwall: INNER_WALL,
   salesdesk: {name: "Sales desk", mount: "floor", collision: true,
     params: [{k: "length", label: "Length", min: 1.2, max: 5, step: 0.1, unit: " m"}], defaults: {length: 2.4},
@@ -125,7 +125,7 @@ const CATALOG = {
 for (const [k, g] of Object.entries({innerwall: "Walls and doors", salesdesk: "Showroom", podium: "Showroom", brochures: "Showroom"})) CATALOG[k].group = g;
 
 /** The showroom is left empty to start with: the player adds a desk, podiums and brochure stands. */
-function autoFurnish() { return {style: "shed", items: []}; }
+export function autoFurnish() { return {style: "shed", items: []}; }
 
 const sellField = g => ({k: g.key, label: g.name, type: "check"});
 const paint = {wallCladding: "lockpanel", wallColor: "#C9C4B6", trimColor: "#3B3F42"};

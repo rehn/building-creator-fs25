@@ -47,3 +47,17 @@ test("I3dDoc: shapes and materials get ids in the order they are added", () => {
   assert.match(xml, /<IndexedTriangleSet name="trigger" shapeId="2" meshUsage="256">/);
   assert.match(xml, /<TransformGroup name="root" translation="0 0 0" nodeId="1"\/>/);
 });
+
+test("user attributes: written after the scene, by the node's id (what the game's script callbacks onCreate read)", () => {
+  const doc = new I3dDoc();
+  const root = tg("root", [0, 0, 0], [
+    tg("plain", [0, 0, 0]),
+    tg("trigger", [1, 0, 0], [tg("child", [0, 0, 0])], { userAttributes: [["onCreate", "scriptCallback", "ShopTrigger.onCreate"]] }),
+    tg("place", [0, 0, 5], [], { userAttributes: [["onCreate", "scriptCallback", "BaseMission.onCreateStoreSpawnPlace"], ["yOffset", "float", 0.1]] }),
+  ]);
+  const xml = doc.write(root);
+  assert.doesNotMatch(xml, /userAttributes=/, "not an attribute of the node itself");
+  assert.match(xml, /<TransformGroup name="trigger" translation="1 0 0" nodeId="3">/);
+  assert.match(xml, /<\/Scene>\s*<UserAttributes>\s*<UserAttribute nodeId="3">\s*<Attribute name="onCreate" type="scriptCallback" value="ShopTrigger.onCreate"\/>\s*<\/UserAttribute>\s*<UserAttribute nodeId="5">\s*<Attribute name="onCreate" type="scriptCallback" value="BaseMission.onCreateStoreSpawnPlace"\/>\s*<Attribute name="yOffset" type="float" value="0.1"\/>\s*<\/UserAttribute>\s*<\/UserAttributes>/);
+  assert.doesNotMatch(new I3dDoc().write(tg("r", [0, 0, 0])), /UserAttributes/, "none when no node has any");
+});

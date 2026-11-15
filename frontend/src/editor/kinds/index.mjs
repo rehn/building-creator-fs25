@@ -24,8 +24,9 @@ import cow from "./cow.mjs";
 import sheep from "./sheep.mjs";
 import shed from "./shed.mjs";
 import dealership from "./dealership.mjs";
+import defaultdealer from "./defaultdealer.mjs";
 
-export const KINDS = [house, chicken, cow, sheep, shed, dealership];
+export const KINDS = [house, chicken, cow, sheep, shed, dealership, defaultdealer];
 export const KIND = Object.fromEntries(KINDS.map(k => [k.id, k]));
 /** The kind of a project's settings; saves without one are farmhouses. */
 export const kindOf = p => KIND[p && p.kind] || house;
