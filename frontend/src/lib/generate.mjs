@@ -6,10 +6,11 @@
 //
 // Each building is made one after the other: the work (surfaces, DDS) is CPU and runs on Node's one thread anyway.
 import { osmToHouse } from "../editor/osm.mjs";
+import { sceneryAnswer } from "./scenery.mjs";
 
 export const MAX_BUILDINGS = 20;
 const MODES = ["placeable", "scenery"];
-const NOT_BUILT = ["scenery"];
+const TEXTURE_SIZES = [256, 512, 1024];
 
 const bad = (code, message) => ({ error: { code, message } });
 
@@ -21,7 +22,8 @@ export function parseGenerate(body) {
   if (body.buildings.length > MAX_BUILDINGS) return bad("too_many", `At most ${MAX_BUILDINGS} buildings per request: send the rest in another.`);
   const mode = body.mode === undefined ? "placeable" : body.mode;
   if (!MODES.includes(mode)) return bad("invalid_request", `mode is "placeable" or "scenery".`);
-  if (NOT_BUILT.includes(mode)) return bad("not_available", `mode "${mode}" is not available yet.`);
+  const textureSize = body.textureSize === undefined ? undefined : body.textureSize;
+  if (textureSize !== undefined && (mode !== "scenery" || !TEXTURE_SIZES.includes(textureSize))) return bad("invalid_request", "textureSize is 256, 512 or 1024, and only for mode scenery.");
   const seen = new Set();
   const buildings = body.buildings.map(x => {
     const o = x && typeof x === "object" ? x : {};
@@ -31,7 +33,7 @@ export function parseGenerate(body) {
     seen.add(id);
     return { id, footprint: o.footprint, tags: o.tags };
   });
-  return { folder, buildings, mode };
+  return { folder, buildings, mode, textureSize };
 }
 
 function codeOf(message) {
@@ -56,7 +58,7 @@ export async function generate(parsed, { api, authorization, fetchImpl = fetch, 
   const info = await me.json();
   if (info && info.write === false) return { status: 403, error: { code: "forbidden", message: "This token may not create buildings. Make one with May create buildings." } };
 
-  const out = [];
+  const scenery = parsed.mode === "scenery", blobs = new Map(), out = [];
   for (const b of parsed.buildings) {
     if (b.bad) { out.push({ ok: false, id: b.id, code: "invalid_building", error: b.bad }); continue; }
     const r = osmToHouse({ footprint: b.footprint, tags: b.tags, id: b.id });
@@ -75,6 +77,12 @@ export async function generate(parsed, { api, authorization, fetchImpl = fetch, 
       out.push({ ...entry, kept: true, edited: true, notes: [...r.notes, "Changed in the app since it was generated, so it was left as it is."] });
       continue;
     }
+    if (scenery) {
+      // the files go back in the answer (nothing is stored: the app's building has settings only, hasModel stays false)
+      try { out.push({ ...entry, files: sceneryAnswer((await make(r.settings, name, { textureSize: parsed.textureSize })).files, blobs) }); }
+      catch (e) { out.push({ ok: false, id: b.id, buildingId: building.id, code: "files_failed", error: `The files could not be made: ${e && e.message ? e.message : e}` }); }
+      continue;
+    }
     try {
       const f = await make(r.settings, name);
       const form = new FormData();
@@ -90,5 +98,5 @@ export async function generate(parsed, { api, authorization, fetchImpl = fetch, 
     }
     out.push({ ...entry, gameMod: `/api/v1/buildings/${building.id}/game-mod.zip`, i3d: `/api/v1/buildings/${building.id}/model.i3d` });
   }
-  return { folder: parsed.folder, buildings: out };
+  return scenery ? { folder: parsed.folder, buildings: out, blobs: Object.fromEntries(blobs) } : { folder: parsed.folder, buildings: out };
 }

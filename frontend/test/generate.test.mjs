@@ -22,7 +22,7 @@ test("parseGenerate: what is wrong as a whole", () => {
   assert.equal(parseGenerate({ folder: "A", buildings: "no" }).error.code, "invalid_request");
   const many = Array.from({ length: MAX_BUILDINGS + 1 }, (_, i) => b("w" + i));
   assert.equal(parseGenerate({ folder: "A", buildings: many }).error.code, "too_many");
-  assert.equal(parseGenerate({ folder: "A", buildings: [b("a")], mode: "scenery" }).error.code, "not_available");
+  assert.equal(parseGenerate({ folder: "A", buildings: [b("a")], mode: "scenery" }).mode, "scenery");
   assert.equal(parseGenerate({ folder: "A", buildings: [b("a")], mode: "nonsense" }).error.code, "invalid_request");
 });
 
@@ -103,3 +103,63 @@ test("generate: a token that cannot be used stops the request with the API's own
   assert.equal(r.status, 403);
   assert.equal(r.error.code, "forbidden");
 });
+
+// ---- scenery mode: hashed texture names and an answer with the files inline ----
+import { hashTextures, sceneryAnswer } from "../src/lib/scenery.mjs";
+import { makeSceneryFiles } from "../src/editor/headless.mjs";
+
+const enc = s => Uint8Array.from(s, c => c.charCodeAt(0) & 255), dec = u => Buffer.from(u).toString("latin1");
+const tiny = () => new Map([
+  ["house.i3d", enc('<File fileId="1" filename="textures/walls_diffuse.dds"/><File fileId="2" filename="textures/walls_normal.dds"/>')],
+  ["house.i3d.shapes", new Uint8Array([9, 9])],
+  ["textures/walls_diffuse.dds", new Uint8Array([1, 2, 3])],
+  ["textures/walls_normal.dds", new Uint8Array([4, 5])],
+]);
+
+test("hashTextures: a texture's name carries a hash of its bytes, and the i3d says so", async () => {
+  const a = hashTextures(tiny()), b = hashTextures(tiny());
+  const names = [...a.keys()].filter(n => n.startsWith("textures/"));
+  assert.equal(names.length, 2);
+  for (const n of names) assert.match(n, /^textures\/walls_(diffuse|normal)_[0-9a-f]{8}\.dds$/);
+  assert.deepEqual([...a.keys()].sort(), [...b.keys()].sort(), "same bytes, same names");
+  const text = dec(a.get("house.i3d"));
+  for (const n of names) assert.ok(text.includes(`"${n}"`), n + " is in the i3d");
+  assert.ok(!text.includes("walls_diffuse.dds"));
+  const other = tiny(); other.set("textures/walls_diffuse.dds", new Uint8Array([7]));
+  assert.notDeepEqual([...hashTextures(other).keys()].sort(), [...a.keys()].sort(), "other bytes, another name");
+});
+
+test("sceneryAnswer: a list {path, sha256, size} per building and each different file once in blobs", () => {
+  const f1 = hashTextures(tiny()), f2 = hashTextures(tiny());
+  f2.set("house.i3d.shapes", new Uint8Array([8, 8, 8]));
+  const blobs = new Map(), l1 = sceneryAnswer(f1, blobs), l2 = sceneryAnswer(f2, blobs);
+  assert.equal(l1.length, 4);
+  for (const e of l1) { assert.match(e.sha256, /^[0-9a-f]{64}$/); assert.equal(typeof e.size, "number"); assert.ok(blobs.has(e.sha256)); }
+  assert.equal(l1.find(e => e.path === "house.i3d").sha256, l2.find(e => e.path === "house.i3d").sha256);
+  assert.equal(blobs.size, 5, "3 shared files + 2 different shapes");
+  assert.equal(blobs.get(l2.find(e => e.path === "house.i3d.shapes").sha256), Buffer.from([8, 8, 8]).toString("base64"));
+});
+
+test("generate in scenery mode: files inline, nothing is uploaded, and the building is in the app", async () => {
+  const { fetchImpl, log } = fakeApi();
+  const make = async () => ({ files: hashTextures(tiny()) });
+  const parsed = parseGenerate({ folder: "A", mode: "scenery", buildings: [b("way/1"), b("way/2")] });
+  assert.equal(parsed.error, undefined);
+  const out = await generate(parsed, { api: "http://api", authorization: "Bearer bc_x", fetchImpl, make });
+  assert.equal(log.puts.length, 0);
+  assert.equal(out.buildings[0].files.length, 4);
+  assert.equal(out.buildings[0].gameMod, undefined);
+  assert.ok(out.blobs && Object.keys(out.blobs).length === 4, "identical buildings share their files");
+  assert.deepEqual(out.buildings[0].files, out.buildings[1].files);
+});
+
+test("a real scenery building: every texture the i3d names is in the files, with hashed names", () => {
+  const r = osmToHouseForTest();
+  const files = hashTextures(makeSceneryFiles(r.settings, r.name).files);
+  const text = dec(files.get("house.i3d"));
+  const named = [...text.matchAll(/filename="(textures\/[^"]+)"/g)].map(m => m[1]);
+  assert.ok(named.length > 3);
+  for (const n of named) { assert.ok(files.has(n), n); assert.match(n, /_[0-9a-f]{8}\.dds$/); }
+});
+import { osmToHouse } from "../src/editor/osm.mjs";
+const osmToHouseForTest = () => osmToHouse({ footprint: rect(0, 0, 10, 7), tags: { building: "house" }, id: "w" });

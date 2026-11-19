@@ -25,8 +25,12 @@ export async function POST(req: NextRequest): Promise<Response> {
   const parsed = parseGenerate(body);
   if ("error" in parsed && parsed.error) return fail(parsed.error.code === "too_many" ? 413 : 400, parsed.error.code, parsed.error.message);
   try {
-    const { makeFiles } = await import("@/editor/headless.mjs");
-    const out = await generate(parsed, { api: API_URL, authorization, make: (settings: unknown, name: string) => makeFiles(settings, name) });
+    const { makeFiles, makeSceneryFiles } = await import("@/editor/headless.mjs");
+    const { hashTextures } = await import("@/lib/scenery.mjs");
+    const make = parsed.mode === "scenery"
+      ? async (settings: unknown, name: string, o?: { textureSize?: number }) => ({ files: hashTextures(makeSceneryFiles(settings, name, o).files) })
+      : (settings: unknown, name: string) => makeFiles(settings, name);
+    const out = await generate(parsed, { api: API_URL, authorization, make });
     if ("error" in out && out.error) return fail(out.status, out.error.code, out.error.message);
     return Response.json(out, { headers: CORS });
   } catch {

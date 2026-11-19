@@ -9,7 +9,7 @@ This page says what exists today, and (clearly marked) what is planned for makin
 | [What a token may do](#get-apiv1me) (`GET /api/v1/me`) | Works today |
 | [Folders](#folders) (`?folder=`, `GET /api/v1/folders`) | Works today |
 | [Creating buildings and sending their files](#writing-buildings-v1-write-tokens) (`POST /api/v1/buildings`, `PUT .../model`, tokens that may write) | Works today (not yet tried against a real map program) |
-| [Generating buildings from OSM footprints](#generating-buildings-from-osm-planned) (`POST /api/v1/generate`) | **Available** for `"mode": "placeable"` (the default). `"scenery"` answers `400 not_available` for now; see `docs/PLAN_OSM.md` |
+| [Generating buildings from OSM footprints](#generating-buildings-from-osm-planned) (`POST /api/v1/generate`) | **Available**, in both modes (`"placeable"` by default, `"scenery"`); see `docs/PLAN_OSM.md` |
 
 ## Basics
 
@@ -174,7 +174,7 @@ position and rotation of each placed building are the map program's to set.
 
 ## Generating buildings from OSM
 
-> **Available** in placeable mode (scenery mode is not built yet). Buildings are made one after the other in one request (no job queue yet). The contract below is what it does (`docs/PLAN_OSM.md`, step 4). Its parts exist: the conversion from a footprint
+> **Available** in both modes. Buildings are made one after the other in one request (no job queue yet). The contract below is what it does (`docs/PLAN_OSM.md`, step 4). Its parts exist: the conversion from a footprint
 > (`frontend/src/editor/osm.mjs`), the files made without a browser (`headless.mjs`), and folders, write tokens and
 > [`POST /api/v1/buildings` and `PUT .../model`](#writing-buildings-v1-write-tokens), which it will use. Tell us if something here does not fit your program: it is cheaper to change now.
 
@@ -204,7 +204,7 @@ Needs a token that may create buildings (see above).
 | `buildings[].id` | Your own id for the building, such as the OSM id. Generating the same `id` in the same `folder` again **updates** that building instead of making a second one (see [Regenerating](#regenerating)). Required |
 | `buildings[].footprint` | The outline: `[[x, y], ...]` in **metres in the map's own plane**, x east and y north. The first point need not be repeated at the end; either winding. At least 3 points, an area of at least 6 m2 |
 | `buildings[].tags` | The OSM tags of the way (any that you have). See [What the tags give](#what-the-tags-give) |
-| `mode` (on the request) | `"placeable"` (default): the game mod, for a building that is bought and sold. `"scenery"`: the [scenery files](#scenery-mode-planned-for-generate-the-files-exist-in-code). Optionally `"textureSize"` (256, 512 or 1024) for scenery |
+| `mode` (on the request) | `"placeable"` (default): the game mod, for a building that is bought and sold. `"scenery"`: the [scenery files](#scenery-mode). Optionally `"textureSize"` (256, 512 or 1024) for scenery |
 
 At most **20 buildings per request**; send the next batch in another request. Making a building takes a few seconds (the first one of a kind of surface
 longer, because the textures are made; buildings with the same materials share them), so a request can take a minute: set a generous timeout.
@@ -242,7 +242,7 @@ Answer, `200`, in the order you sent them (a building that could not be made has
 
 A request that is wrong as a whole (not JSON, no `folder`, more than 20 buildings, a bad token) gets a 4xx error as in [Basics](#basics).
 
-### Scenery mode (planned for generate; the files exist in code)
+### Scenery mode
 
 A building a map uses as plain scenery (a `ReferenceNode` to `house.i3d` in the map's own i3d, not a placeable and not in the shop) does not want the game mod. With `"mode": "scenery"`
 the files are:
@@ -254,7 +254,15 @@ the files are:
 - The glass is opaque (there is nothing behind it).
 - Textures are 512 px by default (the outside's surfaces only: about 12 files, 2 MB for a house; `"textureSize": 256` or `1024` also work). Everything the i3d refers to is a relative `textures/...` path.
 
-The files exist in the code (`makeSceneryFiles` in `frontend/src/editor/headless.mjs`, `i3dFiles(p, {scenery: true})`); the generate route will return them for `"mode": "scenery"`.
+**In the generate answer** (`"mode": "scenery"`): the building is made in the app (settings only, `hasModel` stays `false`) and the files come back in the answer, not as downloads:
+
+- each building has `files: [{ "path": "house.i3d", "sha256": "...", "size": 123456 }, ...]`: `house.i3d`, `house.i3d.shapes` and `textures/<name>_<8 hex>.dds`.
+  **Texture names carry a hash of their bytes** (and the i3d says so), so a map can merge the textures of many buildings into one folder without a clash: the same name is the same file.
+- the top level has `blobs: { "<sha256>": "<base64>" }`: every different file once, however many buildings use it (most houses share most textures). Look each file up by its `sha256`.
+- `house.i3d` and `house.i3d.shapes` are the same name in every building: keep them apart per building (a folder per `buildingId`, say).
+- `"textureSize"`: 256, 512 (default) or 1024.
+
+The answer is large (a few MB per building before sharing), so ask for a few buildings at a time.
 
 ### Placement
 
