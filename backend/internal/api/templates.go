@@ -103,6 +103,7 @@ func (s *Server) templatePhoto(w http.ResponseWriter, r *http.Request, u store.U
 
 // createTemplate starts a template: a multipart form with kind, name, blurb and photos.
 func (s *Server) createTemplate(w http.ResponseWriter, r *http.Request, u store.User) {
+	allowSlowUpload(w)
 	if mt, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); mt != "multipart/form-data" {
 		writeError(w, http.StatusUnsupportedMediaType, "unsupported_media_type", "Send the photos as a form.")
 		return

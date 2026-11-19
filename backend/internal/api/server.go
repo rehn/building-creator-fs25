@@ -250,6 +250,22 @@ func internalError(w http.ResponseWriter, err error) {
 	writeError(w, http.StatusInternalServerError, "internal", "Something went wrong. Try again.")
 }
 
+// uploadTimeout is how long an upload route may take to read its body and answer. The server's ReadTimeout (30 s) covers the whole
+// request including the body, which is too short for a model or an item over a slow connection.
+const uploadTimeout = 10 * time.Minute
+
+// allowSlowUpload gives this request its own, longer read and write deadline (call it first in a handler that takes big uploads).
+func allowSlowUpload(w http.ResponseWriter) {
+	rc := http.NewResponseController(w)
+	d := time.Now().Add(uploadTimeout)
+	if err := rc.SetReadDeadline(d); err != nil {
+		log.Printf("upload read deadline: %v", err)
+	}
+	if err := rc.SetWriteDeadline(d); err != nil {
+		log.Printf("upload write deadline: %v", err)
+	}
+}
+
 // decodeJSON reads a JSON body into v, or writes an error and returns false.
 func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	mt, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
