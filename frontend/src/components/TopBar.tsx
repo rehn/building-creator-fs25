@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { api, type User } from "@/lib/api";
 import { Brand } from "./Brand";
 import { LanguageSelect } from "./LanguageSelect";
+import { Version } from "./Version";
 
 export function TopBar({ user }: { user: User | null }) {
   const router = useRouter();
@@ -21,6 +22,7 @@ export function TopBar({ user }: { user: User | null }) {
       {user?.isAdmin && <Link className="btn" href="/admin">Admin</Link>}
       <LanguageSelect />
       {user && <button type="button" onClick={logout}>Log out</button>}
+      <Version />
     </header>
   );
 }

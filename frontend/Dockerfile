@@ -11,7 +11,7 @@ FROM node:22-alpine
 ARG VERSION=dev
 LABEL org.opencontainers.image.title="House to i3d web" org.opencontainers.image.version="${VERSION}"
 WORKDIR /app
-ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0 API_URL=http://api:8080
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0 API_URL=http://api:8080 APP_VERSION=${VERSION}
 COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
 USER node

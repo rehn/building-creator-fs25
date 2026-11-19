@@ -26,6 +26,17 @@ func TestDefaults(t *testing.T) {
 	}
 }
 
+func TestVersion(t *testing.T) {
+	c, _ := Load(env(map[string]string{"PUBLIC_URL": "http://localhost:3000"}))
+	if c.API.Version != "dev" {
+		t.Fatalf("version without APP_VERSION = %q, want dev", c.API.Version)
+	}
+	c, _ = Load(env(map[string]string{"PUBLIC_URL": "http://localhost:3000", "APP_VERSION": " 0.6.2 "}))
+	if c.API.Version != "0.6.2" {
+		t.Fatalf("version = %q, want 0.6.2", c.API.Version)
+	}
+}
+
 func TestFullConfig(t *testing.T) {
 	c, err := Load(env(map[string]string{
 		"PUBLIC_URL": "https://hus.example.se", "ADMIN_EMAIL": " Me@Example.se ",

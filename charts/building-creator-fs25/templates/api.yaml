@@ -107,17 +107,23 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- if $sqlite }}
           volumeMounts:
+            {{- if $sqlite }}
             - name: data
               mountPath: /data
-          {{- end }}
-      {{- if $sqlite }}
+            {{- end }}
+            # The root filesystem is read-only. A big upload (a building's model, an item) is spooled to /tmp while it is read.
+            - name: tmp
+              mountPath: /tmp
       volumes:
+        {{- if $sqlite }}
         - name: data
           persistentVolumeClaim:
             claimName: {{ default (printf "%s-data" (include "hx.fullname" .)) .Values.database.sqlite.persistence.existingClaim }}
-      {{- end }}
+        {{- end }}
+        - name: tmp
+          emptyDir:
+            sizeLimit: 1Gi
       {{- with .Values.api.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
