@@ -21,7 +21,10 @@ i editorn efteråt. Överenskommet med användaren. Varje steg ska vara färdigt
 
 ## Det som provats
 
-- `sanitize` + `i3dFiles` + `placeableXml` körs i ren Node utan DOM och ger i3d, `.shapes` och XML på ungefär 1 s per hus.
+- `sanitize` + `i3dFiles` + `placeableXml` körs i ren Node utan DOM och ger i3d, `.shapes` och XML på ungefär 0,2-0,3 s per hus.
+- Det tunga är texturerna: ett hus har ungefär 39 DDS-filer (11,5 MB). Första huset tar ungefär 16 s (ytorna ritas och kodas), men ytorna delas mellan hus:
+  med cache (ytan + färgen som nyckel) kodas bara det som är nytt, och samma hus igen kodar ingenting. Räkna med några sekunder per hus i en karta
+  där många hus har samma material, och att generate-rutten blockerar Node medan den arbetar (körs bäst i en egen worker eller en egen process, steg 4).
 - Texturerna är det enda som binder till webbläsaren: `compose()` i `editor.mjs` lägger pixlar i en canvas. De kan skrivas om till rena RGBA-array för `dds.mjs`.
 - Det som inte går att göra på servern: rummen bakom fönstren (`interior.mjs`, canvas) och butiksbilden (WebGL). Genererade hus får `interior: false` och en enkel platsbild.
 
@@ -48,4 +51,8 @@ i editorn efteråt. Överenskommet med användaren. Varje steg ska vara färdigt
 
 ## Status
 
-- Steg 1: påbörjat.
+- Steg 1: klart (`osm.mjs`, PR #25).
+- Steg 2: klart i koden, ej provat i webbläsaren eller i spelet. `textures.mjs` (ytorna som rena pixlar, delas av editorn och servern), `headless.mjs`
+  (`makeModFiles`, `makeFiles`), tester. Editorn använder nu `textures.mjs` (canvas görs av pixlarna): att editorn ser likadan ut ska kontrolleras.
+  Utan butiksbild och ikon, och rummen bakom fönstren är en enkel färgyta. Minne: ytorna hålls (högst 12 väggytor och de inre ytorna, ungefär 190 MB
+  när alla används) och DDS-filerna (högst 400), vilket kan behöva ställas in för en liten pod.
