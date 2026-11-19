@@ -48,6 +48,10 @@ Each building is one row in the database: its name, a thumbnail, and every setti
 
 The editor itself runs in the browser (three.js for the preview). `frontend/src/editor/model.mjs` holds the logic every building shares (settings, geometry, i3d export, the game mod files) with no DOM, so it can be tested in Node. Each kind of building is a small module in `frontend/src/editor/kinds/`; `layout.mjs` has the walls, extensions, sections and the inside, `openings.mjs` the windows and doors, `editor.mjs` the controls and the preview. Texts are in `frontend/src/i18n/locales/` (English is the key, Swedish is `sv.json`).
 
+## API for other programs
+
+Other programs (a map builder, for example) can read the buildings and their files with an API token made under **API** in the app. See [docs/API.md](docs/API.md): what works today, and the planned way to generate buildings from OpenStreetMap footprints.
+
 ## Run it
 
 You need Docker. Copy the settings file and fill it in:
