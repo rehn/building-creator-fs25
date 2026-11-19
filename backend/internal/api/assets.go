@@ -48,6 +48,7 @@ func (s *Server) listAssets(w http.ResponseWriter, r *http.Request, u store.User
 // createAsset imports an item: a multipart form with name, meta (JSON object) and files
 // (exactly one .i3d, plus its .shapes, the .obj for the preview, textures ...).
 func (s *Server) createAsset(w http.ResponseWriter, r *http.Request, u store.User) {
+	allowSlowUpload(w)
 	if mt, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); mt != "multipart/form-data" {
 		writeError(w, http.StatusUnsupportedMediaType, "unsupported_media_type", "Send the files as a form.")
 		return

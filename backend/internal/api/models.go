@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"path"
 	"strconv"
@@ -30,6 +31,7 @@ var modelFiles = []string{"model.obj", "model.mtl", "mod.zip", "model.i3d", "mod
 var requiredInMod = []string{"modDesc.xml", "house.xml", "house.i3d"}
 
 func (s *Server) putModel(w http.ResponseWriter, r *http.Request, u store.User) {
+	allowSlowUpload(w)
 	version, err := strconv.ParseInt(r.URL.Query().Get("version"), 10, 64)
 	if err != nil || version < 1 {
 		writeError(w, http.StatusBadRequest, "invalid_version", "Say which saved version the files are made from (?version=).")
@@ -41,6 +43,7 @@ func (s *Server) putModel(w http.ResponseWriter, r *http.Request, u store.User) 
 		if errors.As(err, &tooBig) {
 			writeError(w, http.StatusRequestEntityTooLarge, "too_large", "That's too much data.")
 		} else {
+			log.Printf("model upload: reading the form failed (content length %d): %v", r.ContentLength, err)
 			writeError(w, http.StatusBadRequest, "invalid_model", "Send the files as a form: obj, mtl and mod.")
 		}
 		return
