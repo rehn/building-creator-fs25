@@ -110,6 +110,7 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /api/v1/buildings", s.requireToken(s.listBuildings))
 	m.HandleFunc("POST /api/v1/buildings", s.requireWriteToken(s.generateBuilding))
 	m.HandleFunc("GET /api/v1/folders", s.requireToken(s.listFolders))
+	m.HandleFunc("GET /api/v1/me", s.requireToken(s.me))
 	m.HandleFunc("PUT /api/v1/buildings/{id}/model", s.requireWriteToken(s.putModel))
 	m.HandleFunc("GET /api/v1/buildings/{id}", s.requireToken(s.getBuilding))
 	m.HandleFunc("GET /api/v1/buildings/{id}/icon", s.requireToken(s.buildingIcon))

@@ -9,7 +9,7 @@
 // Differences from the editor's own files: no shop picture or icon (they need WebGL), and the rooms behind the windows are a plain colour
 // atlas (the painted rooms need a canvas) and the glass a computed gradient. A person who opens the building in the editor and saves it gets
 // the editor's own files instead.
-import { sanitize, buildGeometry, buildObj, i3dFiles, placeableXml, placeableSnippet, modDescXml, matTexture, seeThroughGlass, slugify, MOD_FILES, GLASS_ALPHA } from "./model.mjs";
+import { sanitize, buildGeometry, buildObj, i3dFiles, sceneryKeeps, placeableXml, placeableSnippet, modDescXml, matTexture, seeThroughGlass, slugify, MOD_FILES, GLASS_ALPHA } from "./model.mjs";
 import { textureFiles } from "./textures.mjs";
 import { encodeDds } from "./dds.mjs";
 
@@ -75,4 +75,37 @@ export async function makeFiles(settings, name, opts = {}) {
   const f = makeModFiles(settings, name, opts);
   const zip = files => { const z = new JSZip(); for (const [n, d] of files) z.file(n, d); return z.generateAsync({ type: "uint8array", compression: "DEFLATE" }); };
   return { obj: f.obj, mtl: f.mtl, mod: await zip(f.mod), export: await zip(f.export) };
+}
+
+/** The size of scenery's textures in pixels: a map has hundreds of buildings, and from where the player stands 512 is plenty (256 is smaller still). */
+export const SCENERY_TEXTURE_SIZE = 512;
+
+/** An RGBA picture w x w shrunk to to x to (both powers of two): each new pixel is the mean of the block it covers. */
+export function shrink(px, w, to) {
+  if (to >= w) return px;
+  const k = w / to, out = new Uint8ClampedArray(to * to * 4), n = k * k;
+  for (let y = 0; y < to; y++) for (let x = 0; x < to; x++) {
+    let r = 0, g = 0, b = 0, a = 0;
+    for (let dy = 0; dy < k; dy++) for (let dx = 0; dx < k; dx++) { const j = ((y * k + dy) * w + x * k + dx) * 4; r += px[j]; g += px[j + 1]; b += px[j + 2]; a += px[j + 3]; }
+    const o = (y * to + x) * 4;
+    out[o] = r / n; out[o + 1] = g / n; out[o + 2] = b / n; out[o + 3] = a / n;
+  }
+  return out;
+}
+
+/**
+ * A building as scenery (PLAN_OSM.md): the files for a ReferenceNode in a map's own i3d: house.i3d, house.i3d.shapes and the textures of the outside,
+ * nothing else (no modDesc, no house.xml, no pictures). The i3d is the outside shell with a solid collision and opaque glass; it has none of the
+ * placeable's nodes (areas, triggers, the kind's own), no inside and no doors that open. Same textures as the full building where it has them.
+ */
+export function makeSceneryFiles(settings, name, { encode = encodeDds, textureSize = SCENERY_TEXTURE_SIZE } = {}) {
+  const p = sanitize(settings), { G } = buildGeometry(p);
+  const shell = Object.fromEntries(Object.entries(G).filter(([m]) => sceneryKeeps(m)));
+  const files = new Map();
+  for (const [n, data] of Object.entries(i3dFiles(p, { withTex: true, scenery: true }))) files.set(n, typeof data === "string" ? latin1(data) : data);
+  for (const f of textureFiles(p, shell, { fittings: false })) {
+    const to = Math.min(textureSize, f.width);
+    files.set(f.path, dds(`${f.key}|${to}`, to, to, () => shrink(f.pixels(), f.width, to), encode));
+  }
+  return { p, name, files };
 }

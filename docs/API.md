@@ -6,6 +6,7 @@ This page says what exists today, and (clearly marked) what is planned for makin
 | Part | Status |
 |---|---|
 | [Reading buildings and their files](#reading-buildings-v1) (`GET /api/v1/...`) | Works today |
+| [What a token may do](#get-apiv1me) (`GET /api/v1/me`) | Works today |
 | [Folders](#folders) (`?folder=`, `GET /api/v1/folders`) | Works today |
 | [Creating buildings and sending their files](#writing-buildings-v1-write-tokens) (`POST /api/v1/buildings`, `PUT .../model`, tokens that may write) | Works today (not yet tried against a real map program) |
 | [Generating buildings from OSM footprints](#generating-buildings-from-osm-planned) (`POST /api/v1/generate`) | **Planned, not available yet.** It will be built on the two above; see `docs/PLAN_OSM.md` |
@@ -46,6 +47,16 @@ another site cannot use a user's browser to make requests here.
 **Units.** Metres. The building's own axes: x along the front wall, y up, front wall towards +z (see [Placement](#placement)).
 
 ## Reading buildings (v1)
+
+### `GET /api/v1/me`
+
+What the token you sent may do, for a settings page with a "Test" button. Nothing about the person.
+
+```json
+{ "tokenName": "Kartan", "write": true, "appVersion": "0.6.7" }
+```
+
+`write` is `true` for a token made with *May create buildings*. `appVersion` is the release the API runs. A missing or deleted token gets `401 unauthorized`.
 
 ### `GET /api/v1/buildings`
 
@@ -193,6 +204,7 @@ Needs a token that may create buildings (see above).
 | `buildings[].id` | Your own id for the building, such as the OSM id. Generating the same `id` in the same `folder` again **updates** that building instead of making a second one (see [Regenerating](#regenerating)). Required |
 | `buildings[].footprint` | The outline: `[[x, y], ...]` in **metres in the map's own plane**, x east and y north. The first point need not be repeated at the end; either winding. At least 3 points, an area of at least 6 m2 |
 | `buildings[].tags` | The OSM tags of the way (any that you have). See [What the tags give](#what-the-tags-give) |
+| `mode` (on the request) | `"placeable"` (default): the game mod, for a building that is bought and sold. `"scenery"`: the [scenery files](#scenery-mode-planned-for-generate-the-files-exist-in-code). Optionally `"textureSize"` (256, 512 or 1024) for scenery |
 
 At most **20 buildings per request**; send the next batch in another request. Making a building takes a few seconds (the first one of a kind of surface
 longer, because the textures are made; buildings with the same materials share them), so a request can take a minute: set a generous timeout.
@@ -228,6 +240,20 @@ Answer, `200`, in the order you sent them (a building that could not be made has
 | `ok: false` | `error` says why; the building was not made |
 
 A request that is wrong as a whole (not JSON, no `folder`, more than 20 buildings, a bad token) gets a 4xx error as in [Basics](#basics).
+
+### Scenery mode (planned for generate; the files exist in code)
+
+A building a map uses as plain scenery (a `ReferenceNode` to `house.i3d` in the map's own i3d, not a placeable and not in the shop) does not want the game mod. With `"mode": "scenery"`
+the files are:
+
+- `house.i3d` and `house.i3d.shapes` (copy both, side by side, the same relative names) and `textures/*.dds`. **No** `modDesc.xml`, `house.xml` or pictures.
+- The i3d is the outside shell: walls, trim, roof, glass, foundation, chimney, gutters and ironwork, with the doors drawn shut. The root node is `house` at `0 0 0` (the middle of the main part, the ground at y = 0, front wall towards +z).
+- **A solid collision**: a box for the main part and one for each wing, as high as the walls (the roof has none). No doorways to walk into.
+- **None of what the placeable XML uses**: no `clearAreas`, `levelAreas`, `testAreas`, `tipOcclusionUpdateAreas`, `indoorAreas`, no door triggers or animated doors, no kind-specific nodes (workshop, shop, navigation, pasture), no inside (furniture, curtains, rooms) and no user attributes.
+- The glass is opaque (there is nothing behind it).
+- Textures are 512 px by default (the outside's surfaces only: about 12 files, 2 MB for a house; `"textureSize": 256` or `1024` also work). Everything the i3d refers to is a relative `textures/...` path.
+
+The files exist in the code (`makeSceneryFiles` in `frontend/src/editor/headless.mjs`, `i3dFiles(p, {scenery: true})`); the generate route will return them for `"mode": "scenery"`.
 
 ### Placement
 
