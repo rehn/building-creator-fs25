@@ -5,11 +5,16 @@ on:
     branches: [main]
   push:
     branches: [main]
-  release:
-    types: [published]
+    # Pushing a tag vX.Y.Z (or vX.Y.Z-rc.1) releases: images, chart and a GitHub release.
+    tags: ["v[0-9]+.[0-9]+.[0-9]+", "v[0-9]+.[0-9]+.[0-9]+-*"]
 
 permissions:
   contents: read
+
+# A new push to the same pull request stops the older run. Branch and tag runs always finish (they publish).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   backend:
@@ -124,11 +129,11 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,scope=${{ matrix.name }},mode=max
 
-  # Release v1.2.3 -> chart 1.2.3 (app version 1.2.3) at oci://registry-1.docker.io/<DOCKERHUB_USERNAME>/building-creator-fs25
+  # Tag v1.2.3 -> chart 1.2.3 (app version 1.2.3) at oci://registry-1.docker.io/<DOCKERHUB_USERNAME>/building-creator-fs25
   helm:
     name: Publish Helm chart
     needs: [docker]
-    if: github.event_name == 'release'
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -146,3 +151,21 @@ jobs:
         run: |
           echo "$DOCKERHUB_TOKEN" | helm registry login registry-1.docker.io --username "$DOCKERHUB_USERNAME" --password-stdin
           helm push dist/building-creator-fs25-*.tgz "oci://registry-1.docker.io/$DOCKERHUB_USERNAME"
+
+  # Tag v1.2.3 -> GitHub release with generated notes (skipped if one exists, e.g. made in the UI).
+  release:
+    name: GitHub release
+    needs: [helm]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # A tag with a suffix (v1.2.3-rc.1) is a pre-release: it does not become "latest".
+          case "$GITHUB_REF_NAME" in *-*) flags="--prerelease" ;; *) flags="" ;; esac
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes $flags
