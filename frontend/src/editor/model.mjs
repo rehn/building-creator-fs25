@@ -2847,6 +2847,23 @@ const NO_SHADOW = ["glass", "interior", "curtain"];
 const LOD_LEFT_OUT = /^(wallsIn|doorIn|gutter|iron|interior|curtain|fittings)/;
 /** True when the far-away model (LOD1) keeps material m (the editor's "far" view hides the others). */
 export const lodKeeps = m => !LOD_LEFT_OUT.test(m);
+/** Scenery mode (a building as plain scenery in a map's own i3d): the outside only. Gutters and ironwork stay (they show), the inside goes. */
+const SCENERY_LEFT_OUT = /^(wallsIn|doorIn|interior|curtain|fittings)/;
+export const sceneryKeeps = m => !SCENERY_LEFT_OUT.test(m);
+/**
+ * The solid collision of scenery: a box for the main part and one for each wing that is built, as high as their walls (the roof has none).
+ * [{center, size}] in the building's own coordinates, the ground at y = 0. A scenery building is not walked into, so no doorways.
+ */
+export function sceneryBoxes(p) {
+  const q = normalize(p), F = q.foundation, top = F + totalHeight(q);
+  const boxes = [{center: [0, top / 2, 0], size: [q.width, top, q.depth]}];
+  for (const w of wingsOf(q)) {
+    if (w.off) continue;
+    const t = F + w.H, r = w.rect;
+    boxes.push({center: [(r.x0 + r.x1) / 2, t / 2, (r.z0 + r.z1) / 2], size: [r.x1 - r.x0, t, r.z1 - r.z0]});
+  }
+  return boxes;
+}
 export function rgb(hex) { const n = parseInt(hex.slice(1), 16); return [(n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255].map(v => num(v)).join(" ") + " 1"; }
 
 /** The material for one visual part (m: its material kind, g: its mesh). */
@@ -2864,12 +2881,12 @@ export function fittingTextures(p, G = buildGeometry(normalize(p)).G) {
   for (const g of splitByColor(G.fittings)) if (g.surf) { const t = fitTexture(g.surf, g.color); out.set(t.diffuse, t); }
   return [...out.values()];
 }
-function materialFor(doc, p, m, name, g, withTex) {
+function materialFor(doc, p, m, name, g, withTex, scenery = false) {
   if (g.color && withTex && g.surf) { const t = fitTexture(g.surf, g.color); return doc.material(`${name}_mat`, {}, [["Texture", t.diffuse], ["Normalmap", t.normal]]); }
   if (g.color) return doc.material(`${name}_mat`, {diffuseColor: `${v3(g.color)} 1`});
   if (withTex && surfaceSpec(p, m)) return doc.material(`${m}_mat`, {}, [["Texture", matTexture(m).diffuse], ["Normalmap", matTexture(m).normal]]);
   // See-through glass and the room atlas: base-game style alphaBlending on a texture.
-  const glassy = m === "glass" && seeThroughGlass(p);
+  const glassy = m === "glass" && seeThroughGlass(p) && !scenery;   // (scenery has nothing behind its windows: opaque glass)
   if (withTex && (glassy || m === "interior")) return doc.material(`${m}_mat`, {alphaBlending: glassy || undefined}, [["Texture", matTexture(m).diffuse]]);
   if (glassy) return doc.material(`${m}_mat`, {diffuseColor: rgb(colorFor(p, m)).replace(/ 1$/, " " + GLASS_ALPHA), alphaBlending: true});
   return doc.material(`${m}_mat`, {diffuseColor: rgb(colorFor(p, m))});
@@ -2888,38 +2905,46 @@ function doorTrigger(geo, wall, o) {
  * Scene: house > clear/level/test/tipOcclusion areas, visuals, collisions (like the base game's
  * garden sheds), then a walk-in building's doors, the kind's own nodes and the indoor area.
  */
-function exportParts(p, {withTex = false} = {}) {
+function exportParts(p, {withTex = false, scenery = false} = {}) {
   p = normalize(p);
   const kind = kindOf(p), geo = buildGeometry(p), {G} = geo, doc = new I3dDoc();
   // A walk-in building's door leaves move, so what they carry (door, trim, glass, ironwork) comes
   // out of the building's own parts and goes on the leaves.
-  const doors = kind.walkIn ? geo.doors : [];
+  const doors = kind.walkIn && !scenery ? geo.doors : [];   // (scenery: doors stay shut and are part of the walls)
   const moving = {};
   for (const d of doors) for (const leaf of d.leaves) for (const [m, r] of Object.entries(leaf.parts)) (moving[m] = moving[m] || []).push(r);
   // One part per material, except curtains and fittings: one per color (i3d materials have one color).
   const parts = [];
   for (const m of matList(p)) {
+    if (scenery && !sceneryKeeps(m)) continue;
     const g = moving[m] ? exceptRanges(G[m], moving[m]) : G[m];
     if (!g.i.length) continue;
     if (m === "curtain" || m === "fittings") splitByColor(g).forEach((q, j) => parts.push({name: j ? `${m}${j + 1}` : m, m, g: q}));
     else parts.push({name: m, m, g});
   }
   const mats = {};
-  const matOf = (m, name, g) => g.color ? materialFor(doc, p, m, name, g, withTex) : (mats[m] = mats[m] || materialFor(doc, p, m, name, g, withTex));
+  const matOf = (m, name, g) => g.color ? materialFor(doc, p, m, name, g, withTex, scenery) : (mats[m] = mats[m] || materialFor(doc, p, m, name, g, withTex, scenery));
   const visuals = [], far = [];
   for (const {name, m, g} of parts) {
     const uv = scaledUV(p, m, g);
-    const attrs = {shapeId: doc.shape(name, g, {uv}), castsShadows: !(NO_SHADOW.includes(m) && (m !== "glass" || seeThroughGlass(p))), receiveShadows: true, materialIds: matOf(m, name, g)};
+    const attrs = {shapeId: doc.shape(name, g, {uv}), castsShadows: !(NO_SHADOW.includes(m) && (m !== "glass" || (seeThroughGlass(p) && !scenery))), receiveShadows: true, materialIds: matOf(m, name, g)};
     visuals.push(shape(name, attrs));
     // the simple model far away: the outside shell, the same meshes (no inside, gutters or ironwork: too small to see)
     if (lodKeeps(m)) far.push(shape(name, attrs));
   }
   // visuals_lod: LOD0 = everything, LOD1 = the shell (the game shows the next one from each distance of lodDistance)
-  const lod = p.lodDistance > 0 && far.length < visuals.length;
+  const lod = !scenery && p.lodDistance > 0 && far.length < visuals.length;
   const visualNodes = lod ? [tg("visuals_lod", [0, 0, 0], [tg("LOD0", [0, 0, 0], visuals), tg("LOD1", [0, 0, 0], far)], {lodDistance: `0 ${num(p.lodDistance)}`})] : visuals;
   const cm = doc.material("collision_mat", {diffuseColor: "1 0 1 1"});
-  const collision = shape("collision", {shapeId: doc.shape("collision", geo.collision, {cpu: true}), static: true, collisionFilterGroup: "0x3e",
+  const collision = scenery ? null : shape("collision", {shapeId: doc.shape("collision", geo.collision, {cpu: true}), static: true, collisionFilterGroup: "0x3e",
     collisionFilterMask: "0xfffffbff", nonRenderable: true, castsShadows: false, receiveShadows: false, materialIds: cm});
+  if (scenery) {
+    // the outside shell and a solid collision: nothing that only means something with the placeable XML (areas, triggers, the kind's own nodes)
+    const solids = sceneryBoxes(p).map((b, i) => { const nm = i ? `collision${i + 1}` : "collision";
+      return shape(nm, {translation: b.center, shapeId: doc.shape(nm, boxMesh(b.size), {cpu: true}), static: true, collisionFilterGroup: "0x3e", collisionFilterMask: "0xfffffbff",
+        nonRenderable: true, castsShadows: false, receiveShadows: false, materialIds: cm}); });
+    return {p, kind, doc, root: tg("house", [0, 0, 0], [tg("visuals", [0, 0, 0], visualNodes), tg("collisions", [0, 0, 0], solids)]), blocks: ""};
+  }
 
   // What kinds get to build their nodes with.
   const box = (name, b, attrs, children = []) => shape(name, {translation: b.center, shapeId: doc.shape(name, boxMesh(b.size), {cpu: true}), ...attrs,

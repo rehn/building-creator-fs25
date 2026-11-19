@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 )
 
@@ -50,6 +51,26 @@ func (s *Store) TokenAuth(ctx context.Context, hash string) (User, bool, error) 
 	now := s.ms()
 	_, err = s.exec(ctx, `UPDATE api_tokens SET last_used_at = ? WHERE token_hash = ? AND (last_used_at IS NULL OR last_used_at < ?)`, now, hash, now-60_000)
 	return u, write, err
+}
+
+// TokenInfo returns the token with this hash (its name, prefix and whether it may write), or ErrNotFound.
+func (s *Store) TokenInfo(ctx context.Context, hash string) (Token, error) {
+	var t Token
+	var created int64
+	var used sql.NullInt64
+	err := s.queryRow(ctx, `SELECT id, name, prefix, created_at, last_used_at, can_write FROM api_tokens WHERE token_hash = ?`, hash).Scan(&t.ID, &t.Name, &t.Prefix, &created, &used, &t.Write)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Token{}, ErrNotFound
+	}
+	if err != nil {
+		return Token{}, err
+	}
+	t.CreatedAt = time.UnixMilli(created)
+	if used.Valid {
+		u := time.UnixMilli(used.Int64)
+		t.LastUsedAt = &u
+	}
+	return t, nil
 }
 
 // ListTokens returns a user's tokens, the newest first.

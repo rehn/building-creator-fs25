@@ -82,11 +82,19 @@ func (s *Server) deleteToken(w http.ResponseWriter, r *http.Request, u store.Use
 
 /* ---------- /api/v1: read-only, with a token ---------- */
 
-// tokenAuth finds the user a request's token belongs to, and whether the token may write. It answers 401 itself when there is none.
-func (s *Server) tokenAuth(w http.ResponseWriter, r *http.Request) (u store.User, write, ok bool) {
+// bearerToken is the API token a request sends in its Authorization header, "" if it has none that looks like one.
+func bearerToken(r *http.Request) string {
 	token, found := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 	token = strings.TrimSpace(token)
 	if found && strings.HasPrefix(token, tokenPrefix) {
+		return token
+	}
+	return ""
+}
+
+// tokenAuth finds the user a request's token belongs to, and whether the token may write. It answers 401 itself when there is none.
+func (s *Server) tokenAuth(w http.ResponseWriter, r *http.Request) (u store.User, write, ok bool) {
+	if token := bearerToken(r); token != "" {
 		u, write, err := s.st.TokenAuth(r.Context(), auth.HashToken(token))
 		if err == nil {
 			return u, write, true
@@ -350,4 +358,14 @@ func (s *Server) generateBuilding(w http.ResponseWriter, r *http.Request, u stor
 		code = http.StatusCreated
 	}
 	writeJSON(w, code, map[string]any{"status": status, "building": newBuilding(p.ProjectSummary, d.Kind)})
+}
+
+// me tells a program what the token it sent may do: for a settings page with a "Test" button, say. Nothing about the person.
+func (s *Server) me(w http.ResponseWriter, r *http.Request, u store.User) {
+	t, err := s.st.TokenInfo(r.Context(), auth.HashToken(bearerToken(r)))
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tokenName": t.Name, "write": t.Write, "appVersion": s.cfg.Version})
 }

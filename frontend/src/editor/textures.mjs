@@ -160,7 +160,7 @@ export function baseFor(spec) {
  * pixels when asked (a caller that has the file already, by its key, never asks) and key says what they are made of (equal keys, equal pixels). G is the building's geometry (buildGeometry(p).G):
  * a material nothing is drawn in has no file. Not here: the room atlas and the glass (canvas), see the editor and headless.mjs.
  */
-export function textureFiles(p, G) {
+export function textureFiles(p, G, {fittings = true} = {}) {
   const out = [], seen = new Set();
   const add = f => { if (!seen.has(f.path)) { seen.add(f.path); out.push(f); } };   // (a surface's normal map comes up once for each colour of it)
   for (const m of texturedNow(p)) {
@@ -172,7 +172,7 @@ export function textureFiles(p, G) {
     add({path: matTexture(m).normal, width: N, height: N, pixels: () => base.normal, key: "n|" + JSON.stringify(spec)});
   }
   // the inside: each colour of a surface its own diffuse, one normal map per surface
-  for (const t of fittingTextures(p, G)) {
+  if (fittings) for (const t of fittingTextures(p, G)) {
     const base = fitBase(t.surf, p.age), N = base.N;
     add({path: t.diffuse, width: N, height: N, pixels: () => compose(base.S, t.color, base.Mk, N), key: `fd|${t.surf}|${p.age}|${t.color}`});
     add({path: t.normal, width: N, height: N, pixels: () => base.normal, key: `fn|${t.surf}|${p.age}`});
