@@ -11,8 +11,12 @@ import (
 	"building-creator-fs25/backend/internal/store"
 )
 
+// maxFolderLen is the longest folder (map) name.
+const maxFolderLen = 80
+
 type projectInput struct {
 	Name      *string         `json:"name"`
+	Folder    *string         `json:"folder"` // "" takes the building out of its folder
 	Data      json.RawMessage `json:"data"`
 	Thumbnail *string         `json:"thumbnail"`
 	Version   int64           `json:"version"`
@@ -57,6 +61,17 @@ func checkInput(w http.ResponseWriter, in *projectInput) bool {
 			return false
 		}
 		in.Name = &name
+	}
+	if in.Folder != nil && strings.TrimSpace(*in.Folder) != "" {
+		folder, ok := cleanText(*in.Folder, maxFolderLen)
+		if !ok {
+			writeError(w, http.StatusBadRequest, "invalid_folder", "Use a folder name of 1 to 80 characters.")
+			return false
+		}
+		in.Folder = &folder
+	} else if in.Folder != nil {
+		empty := ""
+		in.Folder = &empty
 	}
 	if present(in.Data) && !validData(in.Data) {
 		writeError(w, http.StatusBadRequest, "invalid_data", "The house settings must be a JSON object under 1 MB.")
@@ -130,7 +145,7 @@ func (s *Server) updateProject(w http.ResponseWriter, r *http.Request, u store.U
 	if !decodeJSON(w, r, &in) || !checkInput(w, &in) {
 		return
 	}
-	upd := store.ProjectUpdate{Name: in.Name, Thumbnail: in.Thumbnail}
+	upd := store.ProjectUpdate{Name: in.Name, Thumbnail: in.Thumbnail, Folder: in.Folder}
 	if present(in.Data) {
 		upd.Data = in.Data
 	}
