@@ -224,6 +224,12 @@ export function osmToHouse({ footprint, tags = {}, id } = {}, opts = {}) {
   if (s.uncovered > SAY_UNCOVERED) notes.push(`${Math.round(s.uncovered * 100)}% of the footprint is not covered: ${maxWings ? "parts too narrow or too small to be wings are left out" : "this kind of building is made as one rectangle"}.`);
 
   const [dx, dy] = turn(ca, cb, theta);
+  // the whole building as rectangles in the map's plane, all turned by `angle` (width along the building's x): the main part, then each wing
+  const rectOf = (a0, a1, b0, b1, part) => { const [ex, ey] = turn((a0 + a1) / 2, (b0 + b1) / 2, theta); return { part, x: clean(g.c[0] + ex), y: clean(g.c[1] + ey), width: clean(round(a1 - a0, 0.01)), depth: clean(round(b1 - b0, 0.01)) }; };
+  const parts = [rectOf(main.a0, main.a1, main.b0, main.b1, "main"), ...s.wings.map(w => ({
+    right: () => rectOf(main.a1, main.a1 + w.depth, w.l, w.r, "wing"), left: () => rectOf(main.a0 - w.depth, main.a0, w.l, w.r, "wing"),
+    top: () => rectOf(w.l, w.r, main.b1, main.b1 + w.depth, "wing"), bottom: () => rectOf(w.l, w.r, main.b0 - w.depth, main.b0, "wing"),
+  }[w.side]()))];
   const name = String(t.name || "").trim() || (t["addr:street"] && t["addr:housenumber"] ? `${t["addr:street"]} ${t["addr:housenumber"]}` : id ? `OSM ${id}` : "OSM building");
-  return { ok: true, kind, name, settings, placement: { x: clean(g.c[0] + dx), y: clean(g.c[1] + dy), angle: clean(theta), width: clean(W), depth: clean(D) }, notes };
+  return { ok: true, kind, name, settings, placement: { x: clean(g.c[0] + dx), y: clean(g.c[1] + dy), angle: clean(theta), width: clean(W), depth: clean(D) }, footprint: { angle: clean(theta), parts }, notes };
 }

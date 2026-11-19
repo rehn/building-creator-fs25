@@ -71,7 +71,7 @@ export async function generate(parsed, { api, authorization, fetchImpl = fetch, 
     if (res.status === 401 || res.status === 403) return apiError(res);
     if (!res.ok) { const e = await apiError(res); out.push({ ok: false, id: b.id, code: e.error.code, error: e.error.message }); continue; }
     const { status, building } = await res.json();
-    const entry = { ok: true, id: b.id, buildingId: building.id, name: building.name, kind: building.kind, version: building.version, placement: r.placement, notes: r.notes };
+    const entry = { ok: true, id: b.id, buildingId: building.id, name: building.name, kind: building.kind, version: building.version, placement: r.placement, footprint: r.footprint, notes: r.notes };
     if (status === "kept") {
       // a person changed it in the app: left alone, and the placement is from the footprint, not from what the person has made of it
       out.push({ ...entry, kept: true, edited: true, notes: [...r.notes, "Changed in the app since it was generated, so it was left as it is."] });

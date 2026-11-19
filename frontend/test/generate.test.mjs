@@ -68,6 +68,8 @@ test("generate: makes each building, sends the files, answers in order and keeps
   assert.equal(first.version, 1);
   assert.equal(first.kind, "house");
   assert.ok(first.placement && first.placement.width >= 11);
+  assert.equal(first.footprint.parts[0].part, "main");
+  assert.equal(first.footprint.angle, first.placement.angle);
   assert.equal(first.gameMod, "/api/v1/buildings/id1/game-mod.zip");
   assert.equal(first.i3d, "/api/v1/buildings/id1/model.i3d");
   assert.equal(log.posts[0].folder, "Hallsberg");

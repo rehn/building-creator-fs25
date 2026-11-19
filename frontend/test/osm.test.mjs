@@ -151,3 +151,25 @@ test("what the app makes of the answer builds: sizes, wings and the kind pass sa
     assert.equal(p.wings.length, (r.settings.wings || []).length);
   }
 });
+
+test("the answer's footprint: every part as a rectangle in the map's plane, turned by one angle", () => {
+  for (const [name, pts] of [["L", L], ["U turned 30", move(turn(U, 30), 120, -80)], ["T mirrored", turn(T.map(([x, y]) => [-x, y]), 200)]]) {
+    const r = osmToHouse({ footprint: pts, tags: {} });
+    assert.ok(r.ok, name);
+    const { angle, parts } = r.footprint, a = angle * Math.PI / 180;
+    assert.equal(angle, r.placement.angle);
+    assert.equal(parts[0].part, "main");
+    assert.deepEqual([parts[0].x, parts[0].y, parts[0].width, parts[0].depth], [r.placement.x, r.placement.y, r.placement.width, r.placement.depth]);
+    assert.equal(parts.length, 1 + r.settings.wings.length, name);
+    const polys = parts.map(q => [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => {
+      const lx = sx * q.width / 2, ly = sy * q.depth / 2;
+      return [q.x + lx * Math.cos(a) - ly * Math.sin(a), q.y + lx * Math.sin(a) + ly * Math.cos(a)];
+    }));
+    let fp = 0, hit = 0, bl = 0, outside = 0;
+    for (let x = -30; x < 160; x += 0.25) for (let y = -120; y < 40; y += 0.25) {
+      const f = inside([x, y], pts), b = polys.some(q => inside([x, y], q));
+      if (f) fp++; if (b) bl++; if (f && b) hit++; if (b && !f) outside++;
+    }
+    assert.ok(hit / fp > 0.95 && outside / bl < 0.05, `${name}: ${hit / fp} ${outside / bl}`);
+  }
+});
