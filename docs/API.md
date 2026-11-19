@@ -143,7 +143,8 @@ Needs a token with write permission (a new permission on tokens: it may create b
 | `buildings[].footprint` | The outline: `[[x, y], ...]` in **metres in the map's own plane**, x east and y north. The first point need not be repeated at the end; either winding. At least 3 points, an area of at least 6 m2 |
 | `buildings[].tags` | The OSM tags of the way (any that you have). See [What the tags give](#what-the-tags-give) |
 
-At most **20 buildings per request** (making one takes about a second); send the next batch in another request.
+At most **20 buildings per request**; send the next batch in another request. Making a building takes a few seconds (the first one of a kind of surface
+longer, because the textures are made; buildings with the same materials share them), so a request can take a minute: set a generous timeout.
 
 Answer, `200`, in the order you sent them (a building that could not be made has `ok: false` and the others still are):
 
