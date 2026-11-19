@@ -252,7 +252,8 @@ What the tests cover:
 |---|---|---|
 | Pull request to `main` | Go tests (store on SQLite and Postgres), frontend tests, Next.js build, Helm chart tests | Images built, not pushed |
 | Push to `main` | Same | `building-creator-fs25-api:edge`, `building-creator-fs25-web:edge` |
-| Release `v1.2.3` published | Same | `1.2.3`, `1.2`, `1` and `latest` for both images, and the Helm chart `1.2.3` at `oci://registry-1.docker.io/rehn/building-creator-fs25` |
+| Tag `v1.2.3` pushed | Same | `1.2.3`, `1.2`, `1` and `latest` for both images, the Helm chart `1.2.3` at `oci://registry-1.docker.io/rehn/building-creator-fs25`, then a GitHub release with generated notes |
+| Tag `v1.2.3-rc.1` pushed | Same | Images and chart `1.2.3-rc.1` (no `latest`), and a GitHub pre-release |
 
 Images are only built after all tests pass, for `linux/amd64` and `linux/arm64`. The chart is pushed after the images, so a published chart version always has its images.
 
@@ -261,7 +262,7 @@ One-time setup in the GitHub repo, under Settings → Secrets and variables → 
 - Variable `DOCKERHUB_USERNAME`: your Docker Hub username.
 - Secret `DOCKERHUB_TOKEN`: a Docker Hub access token with Read & Write access (it pushes the images and the chart).
 
-To release, publish a GitHub release with a tag like `v1.0.0`, for example with `gh release create v1.0.0 --generate-notes`.
+To release, push a tag like `v1.0.0` (`git tag v1.0.0 && git push origin v1.0.0`). CI builds and pushes the images and the chart, then creates the GitHub release with generated notes. A release made in the GitHub UI works too, since it creates the tag.
 
 ## Configuration
 
