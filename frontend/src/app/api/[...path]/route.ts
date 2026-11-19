@@ -14,10 +14,12 @@ async function proxy(req: NextRequest): Promise<Response> {
     const res = await fetch(target, {
       method: req.method,
       headers: requestHeaders(req.headers),
-      body: hasBody ? await req.arrayBuffer() : undefined,
+      // Streamed, not buffered: a saved building's model upload is tens of MB, and a buffered body can be cut off (multipart then fails).
+      body: hasBody ? req.body : undefined,
+      ...(hasBody ? { duplex: "half" } : {}),
       redirect: "manual",
       cache: "no-store",
-    });
+    } as RequestInit);
     return new Response(res.status === 204 || res.status === 304 ? null : res.body, {
       status: res.status,
       headers: responseHeaders(res.headers),
