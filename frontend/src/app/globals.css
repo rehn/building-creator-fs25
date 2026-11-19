@@ -53,6 +53,7 @@ label.stack input { margin-top: 5px; }
 .brand h1 { font-size: 24px; }
 .brand small { display: block; color: var(--muted); font-size: 13px; }
 .who { color: var(--muted); font-size: 14px; }
+.ver { color: var(--muted); font-size: 12px; }
 
 /* ---------- Login and sign-up ---------- */
 .auth { min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px; }

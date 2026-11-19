@@ -26,6 +26,8 @@ has "$api" "replicas: 1" "one API pod"
 has "$api" "type: Recreate" "old pod stops before the new one opens the file"
 has "$api" "mountPath: /data" "data volume mounted at /data"
 has "$api" "claimName: hus-building-creator-fs25-data" "data volume is the chart's PVC"
+has "$api" "mountPath: /tmp" "writable /tmp (big uploads are spooled there; the root filesystem is read-only)"
+has "$api" "emptyDir:" "/tmp is an emptyDir"
 has "$api" 'value: "https://hus.example.se"' "PUBLIC_URL"
 has "$api" 'value: "me@example.se"' "ADMIN_EMAIL"
 has "$api" "fsGroup: 65532" "PVC writable by the nonroot user"
@@ -95,6 +97,7 @@ hasnt "$(doc Secret hus-building-creator-fs25)" "ANTHROPIC_API_KEY" "no key copi
 
 echo "Postgres in the release"
 out=$(render --set publicUrl=https://hus.example.se --set database.type=postgres --set api.replicas=2); renders "bundled postgres"
+has "$(doc Deployment hus-building-creator-fs25-api)" "mountPath: /tmp" "writable /tmp with Postgres too"
 sts=$(doc StatefulSet hus-building-creator-fs25-postgres)
 has "$sts" "volumeClaimTemplates:" "Postgres data on a PVC"
 has "$sts" "storage: 5Gi" "Postgres PVC size"

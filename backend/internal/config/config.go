@@ -37,6 +37,7 @@ func (c Config) Database() string {
 //	LISTEN_ADDR           default :8080
 //	DATABASE_PATH         SQLite file, default /data/building-creator-fs25.db
 //	DATABASE_URL          postgres://user:pass@host:5432/db, use Postgres instead of SQLite
+//	APP_VERSION           the release shown by /api/health (the image sets it), default dev
 //	TRUST_PROXY           "true" when the API is only reachable through the web app
 //	ANTHROPIC_API_KEY     lets the admin's template wizard ask Claude to read photos of a building
 func Load(getenv func(string) string) (Config, error) {
@@ -55,6 +56,7 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 	c.API = api.Config{
 		PublicURL:          raw,
+		Version:            or(getenv("APP_VERSION"), "dev"),
 		SecureCookies:      u.Scheme == "https",
 		GoogleClientID:     strings.TrimSpace(getenv("GOOGLE_CLIENT_ID")),
 		GoogleClientSecret: strings.TrimSpace(getenv("GOOGLE_CLIENT_SECRET")),

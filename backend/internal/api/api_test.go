@@ -142,6 +142,15 @@ func TestHealth(t *testing.T) {
 	expect(t, c.do("GET", "/api/health", nil), 200)
 }
 
+// The release version the API runs is in the health answer (set by the image's APP_VERSION).
+func TestHealthShowsVersion(t *testing.T) {
+	c := newClient(t, newTestServer(t, func(c *Config) { c.Version = "1.2.3" }))
+	h := decode[struct{ Status, Version string }](t, c.do("GET", "/api/health", nil))
+	if h.Status != "ok" || h.Version != "1.2.3" {
+		t.Fatalf("health = %+v, want ok and version 1.2.3", h)
+	}
+}
+
 func TestAdminCanSignUpWithoutInvite(t *testing.T) {
 	srv := newTestServer(t)
 	c := signupAdmin(t, srv)

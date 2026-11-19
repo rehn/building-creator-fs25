@@ -21,6 +21,7 @@ import (
 
 type Config struct {
 	PublicURL          string // e.g. https://hus.example.se, no trailing slash
+	Version            string // the release this runs (APP_VERSION, set by the image: 1.2.3, edge or dev), shown by /api/health
 	AdminEmail         string // can sign up without an invite and becomes admin
 	GoogleClientID     string
 	GoogleClientSecret string
@@ -80,7 +81,7 @@ func New(st *store.Store, cfg Config) *Server {
 func (s *Server) routes() {
 	m := s.mux
 	m.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "version": s.cfg.Version})
 	})
 	m.HandleFunc("GET /api/auth/config", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]bool{"google": s.cfg.GoogleEnabled()})
