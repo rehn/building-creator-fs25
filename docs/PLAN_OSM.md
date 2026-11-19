@@ -36,13 +36,16 @@ i editorn efteråt. Överenskommet med användaren. Varje steg ska vara färdigt
 2. **Filer utan webbläsare.** Texturerna i `editor.mjs` skrivs om till rena pixlar (en funktion i en ren modul som både editorn och servern använder). `makeFiles(settings, name)` ger mod-zip och modellfiler (obj, mtl) och en platsbild. Jämförs mot editorns filer i ett test.
 3. **Backend.** Kolumn `folder` på `projects` (SQLite och Postgres, migrering vid start), listan filtrerar på den och "Mina byggnader" grupperar på den. Token-läge `write`
    (skapa byggnader och skicka modeller, inte radera). Skrivrutter under `/api/v1` (skapa byggnad med mapp, skicka modell).
+   **Klart (backend):** `folder`, `source_id` och `generated_version` på `projects`, `can_write` på `api_tokens`; `POST /api/v1/buildings` (skapa eller göra om, 201/200 med `status` created, updated eller kept),
+   `PUT /api/v1/buildings/{id}/model`, `GET /api/v1/folders`, `?folder=`; kryssrutan "May create buildings" på API-sidan; tester på SQLite (Postgres körs i CI). Kvar av steg 3 som planen räknade: att "Mina byggnader"
+   grupperar på mapp och kan flytta byggnader, vilket hör till steg 5 (appens gränssnitt). "Ändrat i editorn" = versionen är högre än den version generate-rutten senast skrev (`generated_version`).
 4. **Generate-rutten** i web-containern (`/api/v1/generate`): kontrollerar token mot Go-API:t, kör steg 1 och 2 och sparar via Go-API:t.
    Samma `id` i samma mapp uppdaterar och skapar inga dubbletter, men rör inte ett hus som ändrats i editorn. Högst ett fast antal hus per anrop (ungefär 20).
 5. **Editorn** visar mapparna ("Mina byggnader") och kan flytta en byggnad till en annan mapp.
 
 ## Öppna frågor
 
-- Hur ska regenereringen känna igen "ändrat i editorn"? Förslag: en markering som sätts när en användare sparar en byggnad, inte generate-rutten.
+- ~~Hur känner regenereringen igen "ändrat i editorn"?~~ Avgjort: versionen är högre än `generated_version` (se steg 3).
 - Vilken `angle`-konvention vill kartprogrammet ha? Förslag: grader moturs från öst, för byggnadens x-axel (bredden), med y norr.
 - Ska en mapp kunna laddas ner som en enda mod (flera byggnader)? Det finns redan (`modDescXmlMulti`), men inte per mapp.
 

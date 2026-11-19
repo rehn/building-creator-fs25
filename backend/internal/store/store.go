@@ -269,6 +269,13 @@ func Open(dsn string) (*Store, error) {
 	return openSQLite(dsn)
 }
 
+// projectIndexes are made after the columns they use are added: the buildings of a folder, and one building for each source id in a folder
+// (what makes generating the same id twice, even at the same moment, one building).
+var projectIndexes = [2]string{
+	`CREATE INDEX IF NOT EXISTS projects_folder ON projects(user_id, folder)`,
+	`CREATE UNIQUE INDEX IF NOT EXISTS projects_source ON projects(user_id, folder, source_id) WHERE source_id <> ''`,
+}
+
 func openPostgres(url string) (*Store, error) {
 	db, err := sql.Open("pgx", url)
 	if err != nil {
@@ -288,8 +295,21 @@ func openPostgres(url string) (*Store, error) {
 		if _, err := tx.exec(context.Background(), `ALTER TABLE assets ADD COLUMN IF NOT EXISTS shared BOOLEAN NOT NULL DEFAULT FALSE`); err != nil {
 			return err
 		}
-		_, err := tx.exec(context.Background(), `ALTER TABLE project_models ADD COLUMN IF NOT EXISTS export_zip BYTEA NOT NULL DEFAULT ''::bytea`)
-		return err
+		if _, err := tx.exec(context.Background(), `ALTER TABLE project_models ADD COLUMN IF NOT EXISTS export_zip BYTEA NOT NULL DEFAULT ''::bytea`); err != nil {
+			return err
+		}
+		for _, q := range []string{
+			`ALTER TABLE projects ADD COLUMN IF NOT EXISTS folder TEXT NOT NULL DEFAULT ''`,
+			`ALTER TABLE projects ADD COLUMN IF NOT EXISTS source_id TEXT NOT NULL DEFAULT ''`,
+			`ALTER TABLE projects ADD COLUMN IF NOT EXISTS generated_version BIGINT NOT NULL DEFAULT 0`,
+			`ALTER TABLE api_tokens ADD COLUMN IF NOT EXISTS can_write BOOLEAN NOT NULL DEFAULT FALSE`,
+			projectIndexes[0], projectIndexes[1],
+		} {
+			if _, err := tx.exec(context.Background(), q); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		db.Close()
@@ -337,6 +357,19 @@ func openSQLite(path string) (*Store, error) {
 	if err := addColumnSQLite(db, "project_models", "export_zip", "BLOB NOT NULL DEFAULT x''"); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("updating schema: %w", err)
+	}
+	for _, c := range [][3]string{{"projects", "folder", "TEXT NOT NULL DEFAULT ''"}, {"projects", "source_id", "TEXT NOT NULL DEFAULT ''"},
+		{"projects", "generated_version", "INTEGER NOT NULL DEFAULT 0"}, {"api_tokens", "can_write", "INTEGER NOT NULL DEFAULT 0"}} {
+		if err := addColumnSQLite(db, c[0], c[1], c[2]); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("updating schema: %w", err)
+		}
+	}
+	for _, q := range projectIndexes {
+		if _, err := db.Exec(q); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("updating schema: %w", err)
+		}
 	}
 	return &Store{db: db, dialect: sqlite, Now: time.Now}, nil
 }
@@ -685,6 +718,21 @@ type ProjectSummary struct {
 	Kind string `json:"kind,omitempty"`
 	// ModelVersion is the version the stored model files (see Model) were made from; 0: the building has none yet.
 	ModelVersion int64 `json:"modelVersion"`
+	// Folder groups buildings, in the app and for the API (the name of a map); "" is no folder.
+	Folder string `json:"folder"`
+	// SourceID is the id a program gave a building it generated (an OSM id), unique within a folder; "" for a building made in the editor.
+	SourceID string `json:"sourceId,omitempty"`
+	// Generated: made by a program through the API. Edited: a person has changed it since (the version is past the generated one),
+	// so generating it again leaves it alone.
+	Generated bool `json:"generated,omitempty"`
+	Edited    bool `json:"edited,omitempty"`
+
+	genVersion int64 // the version the last generation made (0: not generated)
+}
+
+// setGenerated notes the version a program last generated it at, and with it whether a person has changed it since.
+func (p *ProjectSummary) setGenerated(gen int64) {
+	p.genVersion, p.Generated, p.Edited = gen, gen > 0, gen > 0 && p.Version > gen
 }
 
 type Project struct {
@@ -697,6 +745,7 @@ type ProjectUpdate struct {
 	Name      *string
 	Data      json.RawMessage
 	Thumbnail *string
+	Folder    *string // "" takes it out of its folder
 }
 
 func newID() string {
@@ -711,7 +760,8 @@ func scanProject(row scanner) (Project, error) {
 	var p Project
 	var data string
 	var created, updated int64
-	err := row.Scan(&p.ID, &p.Name, &p.Thumbnail, &p.Version, &created, &updated, &data, &p.ModelVersion)
+	var gen int64
+	err := row.Scan(&p.ID, &p.Name, &p.Thumbnail, &p.Version, &created, &updated, &data, &p.ModelVersion, &p.Folder, &p.SourceID, &gen)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Project{}, ErrNotFound
 	}
@@ -719,23 +769,24 @@ func scanProject(row scanner) (Project, error) {
 		return Project{}, err
 	}
 	p.CreatedAt, p.UpdatedAt = time.UnixMilli(created), time.UnixMilli(updated)
+	p.setGenerated(gen)
 	p.Data = json.RawMessage(data)
 	return p, nil
 }
 
-const projectCols = "id, name, thumbnail, version, created_at, updated_at, data, " + modelVersionSQL
+const projectCols = "id, name, thumbnail, version, created_at, updated_at, data, " + modelVersionSQL + ", folder, source_id, generated_version"
 
 // the version of the building's stored model, 0 without one
 const modelVersionSQL = "COALESCE((SELECT m.version FROM project_models m WHERE m.project_id = projects.id), 0)"
 
 func (s *Store) CreateProject(ctx context.Context, userID int64, name string, data json.RawMessage) (Project, error) {
-	return s.insertProject(ctx, userID, name, data, "")
+	return s.insertProject(ctx, userID, name, data, "", "")
 }
 
-func (s *Store) insertProject(ctx context.Context, userID int64, name string, data json.RawMessage, thumbnail string) (Project, error) {
+func (s *Store) insertProject(ctx context.Context, userID int64, name string, data json.RawMessage, thumbnail, folder string) (Project, error) {
 	id, now := newID(), s.ms()
-	_, err := s.exec(ctx, `INSERT INTO projects (id, user_id, name, data, thumbnail, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
-		id, userID, name, string(data), thumbnail, now, now)
+	_, err := s.exec(ctx, `INSERT INTO projects (id, user_id, name, data, thumbnail, folder, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+		id, userID, name, string(data), thumbnail, folder, now, now)
 	if err != nil {
 		return Project{}, err
 	}
@@ -744,12 +795,21 @@ func (s *Store) insertProject(ctx context.Context, userID int64, name string, da
 
 // ListProjects returns a user's projects, the last edited first.
 func (s *Store) ListProjects(ctx context.Context, userID int64) ([]ProjectSummary, error) {
+	return s.listProjects(ctx, ``, userID)
+}
+
+// ListProjectsIn returns a user's projects in one folder ("" is the ones in no folder), the last edited first.
+func (s *Store) ListProjectsIn(ctx context.Context, userID int64, folder string) ([]ProjectSummary, error) {
+	return s.listProjects(ctx, ` AND folder = ?`, userID, folder)
+}
+
+func (s *Store) listProjects(ctx context.Context, where string, args ...any) ([]ProjectSummary, error) {
 	// data is always a JSON object (the API checks it), stored as text in both databases.
 	kind := `CASE WHEN json_type(data, '$.kind') = 'text' THEN json_extract(data, '$.kind') ELSE '' END`
 	if s.dialect == postgres {
 		kind = `CASE WHEN jsonb_typeof(data::jsonb -> 'kind') = 'string' THEN data::jsonb ->> 'kind' ELSE '' END`
 	}
-	rows, err := s.query(ctx, `SELECT id, name, thumbnail, version, created_at, updated_at, `+kind+`, `+modelVersionSQL+` FROM projects WHERE user_id = ? ORDER BY updated_at DESC, id`, userID)
+	rows, err := s.query(ctx, `SELECT id, name, thumbnail, version, created_at, updated_at, `+kind+`, `+modelVersionSQL+`, folder, source_id, generated_version FROM projects WHERE user_id = ?`+where+` ORDER BY updated_at DESC, id`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -757,12 +817,37 @@ func (s *Store) ListProjects(ctx context.Context, userID int64) ([]ProjectSummar
 	list := []ProjectSummary{}
 	for rows.Next() {
 		var p ProjectSummary
-		var created, updated int64
-		if err := rows.Scan(&p.ID, &p.Name, &p.Thumbnail, &p.Version, &created, &updated, &p.Kind, &p.ModelVersion); err != nil {
+		var created, updated, gen int64
+		if err := rows.Scan(&p.ID, &p.Name, &p.Thumbnail, &p.Version, &created, &updated, &p.Kind, &p.ModelVersion, &p.Folder, &p.SourceID, &gen); err != nil {
 			return nil, err
 		}
 		p.CreatedAt, p.UpdatedAt = time.UnixMilli(created), time.UnixMilli(updated)
+		p.setGenerated(gen)
 		list = append(list, p)
+	}
+	return list, rows.Err()
+}
+
+// A Folder is a name buildings are grouped under (a map) and how many are in it.
+type Folder struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}
+
+// ListFolders returns the folders a user has buildings in, by name. A folder exists while a building is in it.
+func (s *Store) ListFolders(ctx context.Context, userID int64) ([]Folder, error) {
+	rows, err := s.query(ctx, `SELECT folder, COUNT(*) FROM projects WHERE user_id = ? AND folder <> '' GROUP BY folder ORDER BY folder`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	list := []Folder{}
+	for rows.Next() {
+		var f Folder
+		if err := rows.Scan(&f.Name, &f.Count); err != nil {
+			return nil, err
+		}
+		list = append(list, f)
 	}
 	return list, rows.Err()
 }
@@ -800,11 +885,15 @@ func (s *Store) UpdateProject(ctx context.Context, userID int64, id string, u Pr
 	if u.Thumbnail != nil {
 		cur.Thumbnail = *u.Thumbnail
 	}
+	if u.Folder != nil {
+		cur.Folder = *u.Folder
+	}
 	cur.Version++
+	cur.setGenerated(cur.genVersion) // (a person's save is past the generated version: edited)
 	now := s.ms()
 	cur.UpdatedAt = time.UnixMilli(now)
-	if _, err := tx.exec(ctx, `UPDATE projects SET name = ?, data = ?, thumbnail = ?, version = ?, updated_at = ? WHERE id = ?`,
-		cur.Name, string(cur.Data), cur.Thumbnail, cur.Version, now, id); err != nil {
+	if _, err := tx.exec(ctx, `UPDATE projects SET name = ?, data = ?, thumbnail = ?, folder = ?, version = ?, updated_at = ? WHERE id = ?`,
+		cur.Name, string(cur.Data), cur.Thumbnail, cur.Folder, cur.Version, now, id); err != nil {
 		return Project{}, err
 	}
 	return cur, tx.Commit()
@@ -827,5 +916,5 @@ func (s *Store) DuplicateProject(ctx context.Context, userID int64, id, name str
 	if err != nil {
 		return Project{}, err
 	}
-	return s.insertProject(ctx, userID, name, src.Data, src.Thumbnail)
+	return s.insertProject(ctx, userID, name, src.Data, src.Thumbnail, src.Folder) // (a copy stays in the folder; it has no source id, so it is a building of its own)
 }

@@ -38,7 +38,8 @@ func (s *Server) listTokens(w http.ResponseWriter, r *http.Request, u store.User
 
 func (s *Server) createToken(w http.ResponseWriter, r *http.Request, u store.User) {
 	var in struct {
-		Name string `json:"name"`
+		Name  string `json:"name"`
+		Write bool   `json:"write"` // may also create buildings and send their models
 	}
 	if !decodeJSON(w, r, &in) {
 		return
@@ -58,7 +59,7 @@ func (s *Server) createToken(w http.ResponseWriter, r *http.Request, u store.Use
 		return
 	}
 	token := tokenPrefix + auth.NewToken()
-	t, err := s.st.CreateToken(r.Context(), u.ID, name, auth.HashToken(token), token[:len(tokenPrefix)+4])
+	t, err := s.st.CreateTokenScoped(r.Context(), u.ID, name, auth.HashToken(token), token[:len(tokenPrefix)+4], in.Write)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -81,22 +82,45 @@ func (s *Server) deleteToken(w http.ResponseWriter, r *http.Request, u store.Use
 
 /* ---------- /api/v1: read-only, with a token ---------- */
 
+// tokenAuth finds the user a request's token belongs to, and whether the token may write. It answers 401 itself when there is none.
+func (s *Server) tokenAuth(w http.ResponseWriter, r *http.Request) (u store.User, write, ok bool) {
+	token, found := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	token = strings.TrimSpace(token)
+	if found && strings.HasPrefix(token, tokenPrefix) {
+		u, write, err := s.st.TokenAuth(r.Context(), auth.HashToken(token))
+		if err == nil {
+			return u, write, true
+		}
+		if !errors.Is(err, store.ErrNotFound) {
+			log.Printf("token lookup: %v", err)
+		}
+	}
+	w.Header().Set("WWW-Authenticate", `Bearer realm="building-creator"`)
+	writeError(w, http.StatusUnauthorized, "unauthorized", `Send a valid API token as "Authorization: Bearer <token>".`)
+	return store.User{}, false, false
+}
+
+// requireToken lets in any token: it reads.
 func (s *Server) requireToken(next userHandler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-		token = strings.TrimSpace(token)
-		if ok && strings.HasPrefix(token, tokenPrefix) {
-			u, err := s.st.TokenUser(r.Context(), auth.HashToken(token))
-			if err == nil {
-				next(w, r, u)
-				return
-			}
-			if !errors.Is(err, store.ErrNotFound) {
-				log.Printf("token lookup: %v", err)
-			}
+		if u, _, ok := s.tokenAuth(w, r); ok {
+			next(w, r, u)
 		}
-		w.Header().Set("WWW-Authenticate", `Bearer realm="building-creator"`)
-		writeError(w, http.StatusUnauthorized, "unauthorized", `Send a valid API token as "Authorization: Bearer <token>".`)
+	}
+}
+
+// requireWriteToken lets in a token made to write (it may create buildings and send their models, never delete or change what a person made).
+func (s *Server) requireWriteToken(next userHandler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		u, write, ok := s.tokenAuth(w, r)
+		if !ok {
+			return
+		}
+		if !write {
+			writeError(w, http.StatusForbidden, "forbidden", "This token can only read. Make a token that may write under API in the app.")
+			return
+		}
+		next(w, r, u)
 	}
 }
 
@@ -117,6 +141,12 @@ type building struct {
 	HasModel  bool            `json:"hasModel"`
 	UpdatedAt time.Time       `json:"updatedAt"`
 	Settings  json.RawMessage `json:"settings,omitempty"`
+	// Folder is the map the building belongs to ("" for none). SourceID, Generated and Edited are for what a program generated: its own id for
+	// the building, and whether a person has changed it since (a building edited in the app is left alone when it is generated again).
+	Folder    string `json:"folder"`
+	SourceID  string `json:"sourceId,omitempty"`
+	Generated bool   `json:"generated,omitempty"`
+	Edited    bool   `json:"edited,omitempty"`
 	// Placeable: what the game needs to load the building's house.xml (only when one is fetched, and it has a model).
 	Placeable *placeableInfo `json:"placeable,omitempty"`
 }
@@ -184,7 +214,7 @@ func newBuilding(p store.ProjectSummary, kind string) building {
 		version = p.ModelVersion
 	}
 	base := "/api/v1/buildings/" + id
-	b := building{ID: id, Name: p.Name, Kind: kind, Version: version, HasModel: p.ModelVersion > 0, UpdatedAt: p.UpdatedAt, I3d: base + "/model.i3d", Obj: base + "/model.obj", Mtl: base + "/model.mtl", Mod: base + "/mod.zip"}
+	b := building{Folder: p.Folder, SourceID: p.SourceID, Generated: p.Generated, Edited: p.Edited, ID: id, Name: p.Name, Kind: kind, Version: version, HasModel: p.ModelVersion > 0, UpdatedAt: p.UpdatedAt, I3d: base + "/model.i3d", Obj: base + "/model.obj", Mtl: base + "/model.mtl", Mod: base + "/mod.zip"}
 	if p.Thumbnail != "" {
 		b.Icon = base + "/icon"
 	}
@@ -192,7 +222,11 @@ func newBuilding(p store.ProjectSummary, kind string) building {
 }
 
 func (s *Server) listBuildings(w http.ResponseWriter, r *http.Request, u store.User) {
+	// ?folder=Name lists one folder's buildings; ?folder= the ones in no folder; without it all of them.
 	list, err := s.st.ListProjects(r.Context(), u.ID)
+	if r.URL.Query().Has("folder") {
+		list, err = s.st.ListProjectsIn(r.Context(), u.ID, strings.TrimSpace(r.URL.Query().Get("folder")))
+	}
 	if err != nil {
 		internalError(w, err)
 		return
@@ -252,9 +286,68 @@ func cors(w http.ResponseWriter, r *http.Request) (done bool) {
 	if r.Method != http.MethodOptions {
 		return false
 	}
-	h.Set("Access-Control-Allow-Methods", "GET, OPTIONS")
-	h.Set("Access-Control-Allow-Headers", "Authorization")
+	h.Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
+	h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, If-None-Match")
 	h.Set("Access-Control-Max-Age", "86400")
 	w.WriteHeader(http.StatusNoContent)
 	return true
+}
+
+// listFolders tells which folders (maps) the buildings are in and how many each holds.
+func (s *Server) listFolders(w http.ResponseWriter, r *http.Request, u store.User) {
+	list, err := s.st.ListFolders(r.Context(), u.ID)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"folders": list})
+}
+
+// generateBuilding makes a building for a program (a map builder that has OSM footprints, say) or, when it made one with this source id in
+// this folder before, makes it again. The settings are what the editor saves; the editor makes the building of them when someone opens it,
+// and a program that wants the files sends them with PUT .../model (the version in the answer). A building a person has changed since is left
+// as it is: status "kept". 201 when made, 200 otherwise.
+func (s *Server) generateBuilding(w http.ResponseWriter, r *http.Request, u store.User) {
+	var in struct {
+		Folder   string          `json:"folder"`
+		SourceID string          `json:"sourceId"`
+		Name     string          `json:"name"`
+		Settings json.RawMessage `json:"settings"`
+	}
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	folder, ok := cleanText(in.Folder, maxFolderLen)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid_folder", "Say the folder (the map) the building goes in: 1 to 80 characters.")
+		return
+	}
+	source, ok := cleanText(in.SourceID, 200)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid_source_id", "Give the building an id of your own (such as the OSM id): 1 to 200 characters.")
+		return
+	}
+	name, ok := cleanText(in.Name, 100)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid_name", "Use a name of 1 to 100 characters.")
+		return
+	}
+	if !present(in.Settings) || !validData(in.Settings) {
+		writeError(w, http.StatusBadRequest, "invalid_data", "The house settings must be a JSON object under 1 MB.")
+		return
+	}
+	p, status, err := s.st.UpsertGenerated(r.Context(), u.ID, folder, source, name, in.Settings)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	var d struct {
+		Kind string `json:"kind"`
+	}
+	_ = json.Unmarshal(p.Data, &d)
+	code := http.StatusOK
+	if status == store.Created {
+		code = http.StatusCreated
+	}
+	writeJSON(w, code, map[string]any{"status": status, "building": newBuilding(p.ProjectSummary, d.Kind)})
 }

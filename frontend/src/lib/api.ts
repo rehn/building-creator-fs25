@@ -61,6 +61,8 @@ export interface ApiToken {
   token?: string;
   createdAt: string;
   lastUsedAt: string | null;
+  /** May also create buildings and send their models (a token reads only otherwise). */
+  write?: boolean;
 }
 
 /** A starting design the admin made for everyone, usually from photos (Claude suggests, the admin adjusts). */
@@ -157,7 +159,7 @@ export const api = {
   },
 
   tokens: () => request<ApiToken[]>("GET", "/tokens"),
-  createToken: (name: string) => request<ApiToken>("POST", "/tokens", { name }),
+  createToken: (name: string, write = false) => request<ApiToken>("POST", "/tokens", { name, write }),
   deleteToken: (id: string) => request<void>("DELETE", "/tokens/" + encodeURIComponent(id)),
 
   parts: () => request<SavedPart[]>("GET", "/parts"),

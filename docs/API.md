@@ -6,7 +6,9 @@ This page says what exists today, and (clearly marked) what is planned for makin
 | Part | Status |
 |---|---|
 | [Reading buildings and their files](#reading-buildings-v1) (`GET /api/v1/...`) | Works today |
-| [Generating buildings from OSM footprints](#generating-buildings-from-osm-planned) (`POST /api/v1/generate`) | **Planned, not available yet.** The contract below is what we intend to build; see `docs/PLAN_OSM.md` |
+| [Folders](#folders) (`?folder=`, `GET /api/v1/folders`) | Works today |
+| [Creating buildings and sending their files](#writing-buildings-v1-write-tokens) (`POST /api/v1/buildings`, `PUT .../model`, tokens that may write) | Works today (not yet tried against a real map program) |
+| [Generating buildings from OSM footprints](#generating-buildings-from-osm-planned) (`POST /api/v1/generate`) | **Planned, not available yet.** It will be built on the two above; see `docs/PLAN_OSM.md` |
 
 ## Basics
 
@@ -20,7 +22,9 @@ It starts with `bc_`. A user can have up to 20. Send it on every request:
 Authorization: Bearer bc_...
 ```
 
-A token belongs to the user who made it and sees only that user's buildings. A token opens only `GET /api/v1/*` today. Delete it in the app to lock it out.
+A token belongs to the user who made it and sees only that user's buildings. A token **reads** by default. Tick **May create buildings** when making it
+to get a token that can also [create buildings and send their files](#writing-buildings-v1-write-tokens); it can still never delete a building or change one a person made.
+A token opens only `/api/v1/*`, not the app's own routes. Delete it in the app to lock it out.
 
 **Errors** are JSON with a machine-readable code and a message for people:
 
@@ -31,10 +35,13 @@ A token belongs to the user who made it and sees only that user's buildings. A t
 | Status | When |
 |---|---|
 | 401 `unauthorized` | No token, or not a valid one |
+| 403 `forbidden` | The token only reads and the request writes |
+| 400 `invalid_...` | A field is wrong: `invalid_folder`, `invalid_source_id`, `invalid_name`, `invalid_data`, `invalid_version`, `invalid_model` (the message says what) |
 | 404 | The building does not exist (or is not yours), or it has no model files yet (see `hasModel`) |
 | 304 | The file is unchanged since the `ETag` you sent in `If-None-Match` |
 
-**CORS.** `Access-Control-Allow-Origin: *` on `/api/v1/*`, so a browser program can call it too.
+**CORS.** `Access-Control-Allow-Origin: *` on `/api/v1/*` (GET, POST, PUT), so a browser program can call it too. A token goes in a header and never in a cookie, so
+another site cannot use a user's browser to make requests here.
 
 **Units.** Metres. The building's own axes: x along the front wall, y up, front wall towards +z (see [Placement](#placement)).
 
@@ -58,7 +65,10 @@ All of the user's buildings.
       "mod": "/api/v1/buildings/0e7c3f5a.../mod.zip",
       "version": 7,
       "hasModel": true,
-      "updatedAt": "2026-11-19T19:05:52Z"
+      "updatedAt": "2026-11-19T19:05:52Z",
+      "folder": "Hallsberg",
+      "sourceId": "way/123456",
+      "generated": true
     }
   ]
 }
@@ -74,6 +84,8 @@ All of the user's buildings.
 | `version` | Goes up every time the building is saved with its files. The files are those of this version. Keep what you made from a file for as long as the version is the same |
 | `hasModel` | `false` when the building has not been saved since its files were kept. Its files give 404 until it is saved (opened and saved in the editor, or generated) |
 | `updatedAt` | When it was last changed |
+| `folder` | The map the building belongs to, `""` for none (see [Folders](#folders)) |
+| `sourceId`, `generated`, `edited` | For buildings a program made: its own id for it, `generated: true`, and `edited: true` once a person has changed it in the app (then it is left alone when generated again). Left out when not set |
 
 ### `GET /api/v1/buildings/{id}`
 
@@ -104,6 +116,44 @@ curl -H "Authorization: Bearer bc_..." https://fs25-buildings.example.se/api/v1/
 curl -H "Authorization: Bearer bc_..." -o house.zip https://fs25-buildings.example.se/api/v1/buildings/0e7c3f5a.../game-mod.zip
 ```
 
+### Folders
+
+A building can be in a **folder**, which is the name of a map. The app groups on it, and the API filters on it:
+
+- `GET /api/v1/buildings?folder=Hallsberg`: only the buildings in that folder. `?folder=` (empty): the ones in no folder. Without `folder`: all of them.
+- `GET /api/v1/folders`: `{ "folders": [ { "name": "Askersund", "count": 1 }, { "name": "Hallsberg", "count": 2 } ] }`, by name. A folder exists while a building is in it.
+
+A person moves a building between folders in the app (`folder` in `PATCH /api/projects/{id}`; `""` takes it out). Folder names are 1 to 80 characters without control characters.
+
+### Writing buildings (v1, write tokens)
+
+Needs a token made with **May create buildings**; a reading token gets `403 forbidden`.
+
+**`POST /api/v1/buildings`** makes a building, or makes it again.
+
+```json
+{ "folder": "Hallsberg", "sourceId": "way/123456", "name": "Storgatan 4", "settings": { "kind": "house", "width": 10, "depth": 7 } }
+```
+
+| Field | Meaning |
+|---|---|
+| `folder` | The map's name, 1 to 80 characters. Required |
+| `sourceId` | Your own id for the building (an OSM id, say), 1 to 200 characters. Required. The same id in the same folder is the same building, so sending it again updates it and never makes a second one, also when two requests come at once |
+| `name` | The building's name in the app, 1 to 100 characters. Required |
+| `settings` | What the editor saves (a JSON object under 1 MB; `kind` says `house`, `shed` ...). The editor fills in what is missing when it opens it. Required |
+
+Answer: `201` when made, `200` otherwise: `{ "status": "created" | "updated" | "kept", "building": { ... } }`, `building` as in [Reading buildings](#reading-buildings-v1).
+
+- `created`: a new building, at `version` 1.
+- `updated`: it was made before and nobody has changed it, so its name and settings are replaced and its `version` goes up. **Its files are gone** (they were made from the old settings): send new ones.
+- `kept`: **a person has changed it in the app since it was generated**, so nothing was changed. The answer has the building as it is (`edited: true`). Delete the building in the app to make it new again.
+
+**`PUT /api/v1/buildings/{id}/model?version=N`** sends the files of a building made here, a `multipart/form-data` with `obj`, `mtl` and `mod` (and optionally `export`),
+all files. `N` is the `version` the building has (the answer above): if it has changed since, the answer is `409 version_conflict` (a newer version is on its way).
+`mod` must be a zip with `modDesc.xml`, `house.xml` and `house.i3d` at its root. Up to 64 MB. `hasModel` is `true` afterwards and the files are served as for any building.
+
+A token cannot delete buildings or change any that a person made: there are no routes for it.
+
 ### Using a building in a map
 
 `game-mod.zip` is a complete game mod: for a single building the program can add it to the map as it is. To put it in a map's own mod instead,
@@ -113,15 +163,16 @@ position and rotation of each placed building are the map program's to set.
 
 ## Generating buildings from OSM (planned)
 
-> **Not available yet.** This is the contract we intend to build (`docs/PLAN_OSM.md`, steps 2 to 5). The conversion itself (step 1) exists as
-> `frontend/src/editor/osm.mjs`. Tell us if something here does not fit your program: it is cheaper to change now.
+> **Not available yet.** This is the contract we intend to build (`docs/PLAN_OSM.md`, steps 4 and 5). Its parts exist: the conversion from a footprint
+> (`frontend/src/editor/osm.mjs`), the files made without a browser (`headless.mjs`), and folders, write tokens and
+> [`POST /api/v1/buildings` and `PUT .../model`](#writing-buildings-v1-write-tokens), which it will use. Tell us if something here does not fit your program: it is cheaper to change now.
 
 A map program that has OpenStreetMap data sends the footprints and the tags; the app makes a building of each, files included, and answers
 with where each one stands. Nothing needs to be opened in the editor.
 
 ### `POST /api/v1/generate`
 
-Needs a token with write permission (a new permission on tokens: it may create buildings, never delete or change other ones).
+Needs a token that may create buildings (see above).
 
 ```json
 {
@@ -222,6 +273,7 @@ A wing on a wing, windows, doors and rooms are not made from OSM data: the build
 
 Sending the same `id` in the same `folder` again replaces what was generated, with one exception: a building that a person has **changed in the editor since it
 was generated** is left as it is, and its entry in the answer says so (`"kept": true`, with the current `placement`). Delete the building in the app to make it new again.
+(This is how `POST /api/v1/buildings` already works: `sourceId` there is the `id` here.)
 
 ### OpenStreetMap data
 

@@ -108,6 +108,9 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /api/tokens", s.requireUser(s.createToken))
 	m.HandleFunc("DELETE /api/tokens/{id}", s.requireUser(s.deleteToken))
 	m.HandleFunc("GET /api/v1/buildings", s.requireToken(s.listBuildings))
+	m.HandleFunc("POST /api/v1/buildings", s.requireWriteToken(s.generateBuilding))
+	m.HandleFunc("GET /api/v1/folders", s.requireToken(s.listFolders))
+	m.HandleFunc("PUT /api/v1/buildings/{id}/model", s.requireWriteToken(s.putModel))
 	m.HandleFunc("GET /api/v1/buildings/{id}", s.requireToken(s.getBuilding))
 	m.HandleFunc("GET /api/v1/buildings/{id}/icon", s.requireToken(s.buildingIcon))
 	for _, file := range modelFiles {
@@ -150,7 +153,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(r.URL.Path, "/api/v1/") && cors(w, r) {
 		return
 	}
-	if !s.sameOrigin(r) {
+	// /api/v1 takes a token in a header and never a cookie, so another site making a request in the user's browser gets nothing (no CSRF).
+	if !strings.HasPrefix(r.URL.Path, "/api/v1/") && !s.sameOrigin(r) {
 		writeError(w, http.StatusForbidden, "bad_origin", "Requests must come from the app itself.")
 		return
 	}

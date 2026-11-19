@@ -12,6 +12,7 @@ export default function ApiAccessPage() {
   const { user, error: userError } = useUser();
   const [tokens, setTokens] = useState<ApiToken[] | null>(null);
   const [name, setName] = useState("");
+  const [write, setWrite] = useState(false);
   const [fresh, setFresh] = useState<ApiToken | null>(null); // just made: the only time the token itself is shown
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
@@ -29,8 +30,8 @@ export default function ApiAccessPage() {
     setBusy(false);
   }
   const create = () => run(async () => {
-    const tok = await api.createToken(name.trim());
-    setFresh(tok); setCopied(false); setName("");
+    const tok = await api.createToken(name.trim(), write);
+    setFresh(tok); setCopied(false); setName(""); setWrite(false);
     setTokens(list => [{ ...tok, token: undefined }, ...(list ?? [])]);
   });
   const remove = (tok: ApiToken) => {
@@ -54,11 +55,13 @@ export default function ApiAccessPage() {
           <h2>API access</h2>
         </div>
         <p className="hint">Let your own programs read your buildings: the list with name, type and picture, and each building as an .i3d or .obj file.
-          A program sends one of these tokens with every request. A token can only read, and only your buildings.</p>
+          A program sends one of these tokens with every request. A token reads your buildings and nobody else's;
+          one that may create buildings can also make new ones (for a program that generates buildings for a map), but never delete or change what you made.</p>
         {(error || userError) && <p className="error" role="alert">{error || userError}</p>}
 
         <form className="row" onSubmit={e => { e.preventDefault(); if (name.trim()) create(); }}>
           <label>Name of the program <input type="text" value={name} maxLength={80} placeholder={t("My viewer")} onChange={e => setName(e.target.value)} /></label>
+          <label className="check"><input type="checkbox" checked={write} onChange={e => setWrite(e.target.checked)} /> May create buildings</label>
           <button type="submit" className="primary" disabled={busy || !user || !name.trim()}>Make a token</button>
         </form>
 
@@ -80,7 +83,7 @@ export default function ApiAccessPage() {
               <li key={tok.id}>
                 <div>
                   <b translate="no">{tok.name}</b>
-                  <small><code translate="no">{tok.prefix}…</code> · {t("Made {when}", { when: made })} · {tok.lastUsedAt ? t("Last used {when}", { when: used }) : t("Never used")}</small>
+                  <small><code translate="no">{tok.prefix}…</code>{tok.write ? " · " + t("May create buildings") : ""} · {t("Made {when}", { when: made })} · {tok.lastUsedAt ? t("Last used {when}", { when: used }) : t("Never used")}</small>
                 </div>
                 <div className="actions"><button type="button" className="danger" onClick={() => remove(tok)} disabled={busy}>Delete</button></div>
               </li>
