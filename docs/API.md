@@ -238,7 +238,7 @@ Answer, `200`, in the order you sent them (a building that could not be made has
 | `placement` | Where to put the building, see [Placement](#placement) |
 | `footprint` | The whole building (main part **and wings**) as rectangles: `{ "angle": 0, "parts": [{ "part": "main", "x": 1210.5, "y": 880.7, "width": 12, "depth": 7 }, { "part": "wing", ... }] }`. Each rectangle's middle `x, y` is in the map's plane (metres, x east, y north); every rectangle is turned by the same `angle` (degrees counter-clockwise from east) with `width` along the building's x axis. The first is the main part, equal to `placement`. Use it to clear trees, level the ground or check overlaps |
 | `notes` | What was guessed, fitted or left out. Show them to the user or log them |
-| `ok: false` | `error` says why and `code` is one of `too_small`, `invalid_footprint`, `degenerate`, `invalid_building`, `files_failed` (or the API's own code); the building was not made |
+| `ok: false` | `error` says why and `code` is one of `invalid_footprint` (fewer than three points or no numbers), `too_small` (under 6 m2, or a main part under 2.5 m on a side), `too_large` (main part over 60 x 50 m; the long side counts as the width), `degenerate` (no shape found), `invalid_building` (missing or repeated id), `files_failed` (or the API's own code); the building was not made |
 | `kept: true` | A person changed it in the app, so it was left alone and no files were made. `placement` is then computed from the footprint you sent, not from the building as it is now |
 
 A request that is wrong as a whole (not JSON, no `folder`, more than 20 buildings, a bad token) gets a 4xx error as in [Basics](#basics).

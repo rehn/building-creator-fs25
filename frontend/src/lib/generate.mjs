@@ -62,7 +62,7 @@ export async function generate(parsed, { api, authorization, fetchImpl = fetch, 
   for (const b of parsed.buildings) {
     if (b.bad) { out.push({ ok: false, id: b.id, code: "invalid_building", error: b.bad }); continue; }
     const r = osmToHouse({ footprint: b.footprint, tags: b.tags, id: b.id });
-    if (!r.ok) { out.push({ ok: false, id: b.id, code: codeOf(r.error), error: r.error }); continue; }
+    if (!r.ok) { out.push({ ok: false, id: b.id, code: r.code || codeOf(r.error), error: r.error }); continue; }
     const name = r.name.slice(0, 100);
     const res = await fetchImpl(base + "/api/v1/buildings", {
       method: "POST", headers: new Headers({ ...headers, "content-type": "application/json" }),

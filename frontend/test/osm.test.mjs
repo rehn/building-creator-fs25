@@ -173,3 +173,23 @@ test("the answer's footprint: every part as a rectangle in the map's plane, turn
     assert.ok(hit / fp > 0.95 && outside / bl < 0.05, `${name}: ${hit / fp} ${outside / bl}`);
   }
 });
+
+test("osmToHouse: every failure has a code next to the message", () => {
+  const code = (footprint, tags = {}) => { const r = osmToHouse({ footprint, tags }); assert.equal(r.ok, false); assert.ok(r.error); return r.code; };
+  assert.equal(code(null), "invalid_footprint");
+  assert.equal(code([[0, 0], [1, 0]]), "invalid_footprint");
+  assert.equal(code([[0, 0], [1.5, 0], [1.5, 1.5], [0, 1.5]]), "too_small");
+  assert.equal(code([[0, 0], [20, 0], [20, 2], [0, 2]]), "too_small");
+});
+
+test("osmToHouse: a main part over 60 x 50 m is refused as too_large, not clamped", () => {
+  const r = osmToHouse({ footprint: [[0, 0], [75, 0], [75, 20], [0, 20]], tags: { building: "yes" } });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, "too_large");
+  assert.match(r.error, /75\.0 x 20\.0 m/);
+  assert.match(r.error, /60 x 50/);
+  // the long side is the front, so 20 x 55 m is a 55 m wide building: fine
+  assert.equal(osmToHouse({ footprint: [[0, 0], [20, 0], [20, 55], [0, 55]], tags: {} }).ok, true);
+  assert.equal(osmToHouse({ footprint: [[0, 0], [58, 0], [58, 52], [0, 52]], tags: {} }).code, "too_large");
+  assert.equal(osmToHouse({ footprint: [[0, 0], [60, 0], [60, 50], [0, 50]], tags: {} }).ok, true);
+});
