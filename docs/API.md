@@ -9,7 +9,7 @@ This page says what exists today, and (clearly marked) what is planned for makin
 | [What a token may do](#get-apiv1me) (`GET /api/v1/me`) | Works today |
 | [Folders](#folders) (`?folder=`, `GET /api/v1/folders`) | Works today |
 | [Creating buildings and sending their files](#writing-buildings-v1-write-tokens) (`POST /api/v1/buildings`, `PUT .../model`, tokens that may write) | Works today (not yet tried against a real map program) |
-| [Generating buildings from OSM footprints](#generating-buildings-from-osm-planned) (`POST /api/v1/generate`) | **Planned, not available yet.** It will be built on the two above; see `docs/PLAN_OSM.md` |
+| [Generating buildings from OSM footprints](#generating-buildings-from-osm-planned) (`POST /api/v1/generate`) | **Available** for `"mode": "placeable"` (the default). `"scenery"` answers `400 not_available` for now; see `docs/PLAN_OSM.md` |
 
 ## Basics
 
@@ -172,9 +172,9 @@ copy the files (`house.i3d`, `house.i3d.shapes`, `textures/`, ...) and the place
 read `placeable` above for the type. The placeable XML is made for placement by the map (the building stands where the map puts it); the
 position and rotation of each placed building are the map program's to set.
 
-## Generating buildings from OSM (planned)
+## Generating buildings from OSM
 
-> **Not available yet.** This is the contract we intend to build (`docs/PLAN_OSM.md`, steps 4 and 5). Its parts exist: the conversion from a footprint
+> **Available** in placeable mode (scenery mode is not built yet). Buildings are made one after the other in one request (no job queue yet). The contract below is what it does (`docs/PLAN_OSM.md`, step 4). Its parts exist: the conversion from a footprint
 > (`frontend/src/editor/osm.mjs`), the files made without a browser (`headless.mjs`), and folders, write tokens and
 > [`POST /api/v1/buildings` and `PUT .../model`](#writing-buildings-v1-write-tokens), which it will use. Tell us if something here does not fit your program: it is cheaper to change now.
 
@@ -237,7 +237,8 @@ Answer, `200`, in the order you sent them (a building that could not be made has
 | `buildingId` | The app's id: use it with the `GET /api/v1/buildings/{id}/...` paths above |
 | `placement` | Where to put the building, see [Placement](#placement) |
 | `notes` | What was guessed, fitted or left out. Show them to the user or log them |
-| `ok: false` | `error` says why; the building was not made |
+| `ok: false` | `error` says why and `code` is one of `too_small`, `invalid_footprint`, `degenerate`, `invalid_building`, `files_failed` (or the API's own code); the building was not made |
+| `kept: true` | A person changed it in the app, so it was left alone and no files were made. `placement` is then computed from the footprint you sent, not from the building as it is now |
 
 A request that is wrong as a whole (not JSON, no `folder`, more than 20 buildings, a bad token) gets a 4xx error as in [Basics](#basics).
 
