@@ -1,6 +1,6 @@
 // A building from an OpenStreetMap footprint (PLAN_OSM.md, step 1). Pure: no DOM, no model.mjs, so the web server can use it too.
 //
-// osmToHouse({footprint, tags, id}, opts) -> {ok: true, kind, name, settings, placement, notes} | {ok: false, error}
+// osmToHouse({footprint, tags, id}, opts) -> {ok: true, kind, name, settings, placement, notes} | {ok: false, code, error}
 //   footprint  the outline [[x, y], ...] in metres in the map's own plane (x east, y north)
 //   tags       the OSM tags of the way (building, building:levels, roof:shape ...)
 //   settings   what sanitize() takes: size, floors, roof, colours and (houses) the wings, as the building's own settings
@@ -14,6 +14,7 @@
 
 const CELL = 0.25;         // grid cell, m
 const SNAP = 0.3;          // an edge this close to a corner of the footprint is moved to it
+const MAX_WIDTH = 60, MAX_DEPTH = 50;   // the largest main part (the settings' own maximum)
 const MIN_SIDE = 2.5;      // the smallest main part (the settings' own minimum)
 const MIN_WING_W = 2, MIN_WING_D = 1.5, MIN_WING_AREA = 8;
 const SAY_UNCOVERED = 0.05; // the notes mention what is left of the footprint above this share
@@ -160,12 +161,12 @@ function shape(pts, theta, maxWings) {
 }
 
 // ---- the answer ----
-function fail(error) { return { ok: false, error }; }
+function fail(code, error) { return { ok: false, code, error }; }
 
 export function osmToHouse({ footprint, tags = {}, id } = {}, opts = {}) {
   const pts = ring(footprint), t = tags && typeof tags === "object" ? tags : {}, notes = [];
-  if (!pts) return fail("The footprint needs at least three points with numbers for x and y.");
-  if (area(pts) < 6) return fail("The footprint is too small to be a building (under 6 m2).");
+  if (!pts) return fail("invalid_footprint", "The footprint needs at least three points with numbers for x and y.");
+  if (area(pts) < 6) return fail("too_small", "The footprint is too small to be a building (under 6 m2).");
   const kind = kindOf(t.building), maxWings = kind === "house" ? Math.max(0, opts.maxWings ?? 4) : 0;
 
   let theta = mainDirection(pts), s = shape(pts, theta, maxWings);
@@ -174,9 +175,10 @@ export function osmToHouse({ footprint, tags = {}, id } = {}, opts = {}) {
     theta = round(theta + 90 > 180 ? theta - 90 : theta + 90, 0.01);
     s = shape(pts, theta, maxWings);
   }
-  if (!s) return fail("No building shape could be found in the footprint.");
+  if (!s) return fail("degenerate", "No building shape could be found in the footprint.");
   const { g, main } = s, W = round(main.a1 - main.a0, 0.1), D = round(main.b1 - main.b0, 0.1);
-  if (W < MIN_SIDE || D < MIN_SIDE) return fail(`The building is too small (${W.toFixed(1)} x ${D.toFixed(1)} m).`);
+  if (W < MIN_SIDE || D < MIN_SIDE) return fail("too_small", `The building is too small (${W.toFixed(1)} x ${D.toFixed(1)} m).`);
+  if (W > MAX_WIDTH || D > MAX_DEPTH) return fail("too_large", `The building is too large (${W.toFixed(1)} x ${D.toFixed(1)} m): the app's main part is at most ${MAX_WIDTH} x ${MAX_DEPTH} m.`);
   const ca = (main.a0 + main.a1) / 2, cb = (main.b0 + main.b1) / 2;
 
   // ---- settings from the tags ----
@@ -224,6 +226,12 @@ export function osmToHouse({ footprint, tags = {}, id } = {}, opts = {}) {
   if (s.uncovered > SAY_UNCOVERED) notes.push(`${Math.round(s.uncovered * 100)}% of the footprint is not covered: ${maxWings ? "parts too narrow or too small to be wings are left out" : "this kind of building is made as one rectangle"}.`);
 
   const [dx, dy] = turn(ca, cb, theta);
+  // the whole building as rectangles in the map's plane, all turned by `angle` (width along the building's x): the main part, then each wing
+  const rectOf = (a0, a1, b0, b1, part) => { const [ex, ey] = turn((a0 + a1) / 2, (b0 + b1) / 2, theta); return { part, x: clean(g.c[0] + ex), y: clean(g.c[1] + ey), width: clean(round(a1 - a0, 0.01)), depth: clean(round(b1 - b0, 0.01)) }; };
+  const parts = [rectOf(main.a0, main.a1, main.b0, main.b1, "main"), ...s.wings.map(w => ({
+    right: () => rectOf(main.a1, main.a1 + w.depth, w.l, w.r, "wing"), left: () => rectOf(main.a0 - w.depth, main.a0, w.l, w.r, "wing"),
+    top: () => rectOf(w.l, w.r, main.b1, main.b1 + w.depth, "wing"), bottom: () => rectOf(w.l, w.r, main.b0 - w.depth, main.b0, "wing"),
+  }[w.side]()))];
   const name = String(t.name || "").trim() || (t["addr:street"] && t["addr:housenumber"] ? `${t["addr:street"]} ${t["addr:housenumber"]}` : id ? `OSM ${id}` : "OSM building");
-  return { ok: true, kind, name, settings, placement: { x: clean(g.c[0] + dx), y: clean(g.c[1] + dy), angle: clean(theta), width: clean(W), depth: clean(D) }, notes };
+  return { ok: true, kind, name, settings, placement: { x: clean(g.c[0] + dx), y: clean(g.c[1] + dy), angle: clean(theta), width: clean(W), depth: clean(D) }, footprint: { angle: clean(theta), parts }, notes };
 }
