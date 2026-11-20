@@ -4,7 +4,7 @@
 /** Headers to send to the Go API for /api/v1. */
 export function v1Headers(incoming) {
   const out = new Headers();
-  for (const k of ["authorization", "accept", "if-none-match", "user-agent", "x-forwarded-for"]) {
+  for (const k of ["authorization", "accept", "if-none-match", "content-type", "content-length", "user-agent", "x-forwarded-for"]) {
     const v = incoming.get(k);
     if (v !== null) out.set(k, v);
   }

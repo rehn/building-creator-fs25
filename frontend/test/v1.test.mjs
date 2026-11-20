@@ -10,3 +10,10 @@ test("v1Headers: the token goes on, nothing else of the browser's", () => {
   assert.equal(h.get("cookie"), null);
   assert.equal(h.get("origin"), null);
 });
+
+test("v1Headers: a body keeps its type and length (writes: POST, PUT with a multipart model)", () => {
+  const h = v1Headers(new Headers({authorization: "Bearer bc_x", "content-type": "multipart/form-data; boundary=x", "content-length": "1234", cookie: "a=b"}));
+  assert.equal(h.get("content-type"), "multipart/form-data; boundary=x");
+  assert.equal(h.get("content-length"), "1234");
+  assert.equal(h.get("cookie"), null);
+});

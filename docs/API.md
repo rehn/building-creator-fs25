@@ -302,6 +302,32 @@ In the building's own coordinates the front wall is at `+z` (z points towards th
 Turning that into the game's coordinates is the map program's job: a map whose world x is east and world z is south uses `worldX = x`, `worldZ = -y`,
 and rotates the building about the vertical axis by `angle`. The sign of the rotation in the game's i3d convention is **not yet checked in the game**; try one L-shaped building and flip it if it comes out mirrored.
 
+### Reference building
+
+`GET /api/v1/reference-building` (any token; `?textureSize=256|512|1024`, 512 by default) answers with two copies of one L-shaped house as [scenery files](#scenery-mode), to check that your
+map program places and turns buildings the right way **before** it places hundreds. Seen from the front (outside, from the south) the house is:
+
+- the main part 12 x 8 m, with a 5 x 6 m wing at the **back** (north), flush with the **east** end: a mirrored building has its wing at the west end;
+- the **front wall red** (`#c0392b`), everything else white walls and a grey roof.
+
+```json
+{ "description": "...", "buildings": [
+    { "id": "reference/L-0",  "name": "Reference L 0",  "request": { "id": "...", "footprint": [[100,200], ...], "tags": {...} },
+      "placement": { "x": 106, "y": 204, "angle": 0, "width": 12, "depth": 8 },
+      "footprint": { "angle": 0, "parts": [ { "part": "main", ... }, { "part": "wing", "x": 109.5, "y": 211, "width": 5, "depth": 6 } ] },
+      "frontWall": { "from": [100, 200], "to": [112, 200], "faces": "south" },
+      "files": [ { "path": "house.i3d", "sha256": "...", "size": 123 }, ... ] },
+    { "id": "reference/L-30", ... "placement": { ..., "angle": 30 ... }, "frontWall": { ..., "faces": "south turned 30 degrees counter-clockwise" } } ],
+  "blobs": { "<sha256>": "<base64>" } }
+```
+
+- `request` is what you would send to `POST /api/v1/generate` for it (its `placement` and `footprint` in the answer are the ones given here: send it and compare).
+  `frontWall` is the red wall's two corners in the map's plane (metres, x east, y north), `from` its left end seen from outside.
+- Put both in a test map at `placement`. Passing means: the red wall faces south on the first and is turned 30 degrees counter-clockwise (as seen from above, north up) on the second,
+  and the wing is at the back and to the east in both. If the second one comes out turned 30 degrees the other way, flip the sign of the rotation in your i3d convention.
+- Same file format and `blobs` as the scenery answer. The first call makes the files (about 10 s), later calls with the same `textureSize` are answered from memory.
+- Not tried in the game: that is what it is for.
+
 ### What the tags give
 
 Everything is optional. Missing tags get a sensible value, and what was guessed is in `notes`.

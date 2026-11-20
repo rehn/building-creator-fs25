@@ -25,3 +25,29 @@ export const jobs = (g.__generateJobs ??= createJobs({
   maxQueued: Number(process.env.GENERATE_MAX_JOBS) || 4,
   ttlMs: (Number(process.env.GENERATE_JOB_TTL_MINUTES) || 10) * 60_000,
 }));
+
+// The reference building's answer (scenery files for both buildings), kept per texture size: making it takes seconds the first time.
+const refCache = ((globalThis as unknown as { __referenceAnswers?: Map<number, unknown> }).__referenceAnswers ??= new Map<number, unknown>());
+export async function referenceAnswer(textureSize: number) {
+  if (refCache.has(textureSize)) return refCache.get(textureSize);
+  const { makeSceneryFiles } = await import("@/editor/headless.mjs");
+  const { hashTextures, sceneryAnswer } = await import("@/lib/scenery.mjs");
+  const { referenceBuildings } = await import("@/lib/reference.mjs");
+  const blobs = new Map<string, string>();
+  const buildings = referenceBuildings().map(b => ({
+    id: b.id,
+    name: b.name,
+    request: { id: b.id, footprint: b.footprint, tags: b.tags },
+    placement: b.placement,
+    footprint: b.outline,
+    frontWall: b.frontWall,
+    files: sceneryAnswer(hashTextures(makeSceneryFiles(b.settings, b.name, { textureSize }).files), blobs),
+  }));
+  const answer = {
+    description: "An L-shaped house: main part 12 x 8 m, a 5 x 6 m wing at the back (north) towards the east end. The FRONT wall is red, the rest is white. Put both buildings on a map at their placement: the red wall must face south on the first and south turned 30 degrees counter-clockwise on the second, the wing must be at the back and to the east, and nothing may be mirrored.",
+    buildings,
+    blobs: Object.fromEntries(blobs),
+  };
+  refCache.set(textureSize, answer);
+  return answer;
+}
