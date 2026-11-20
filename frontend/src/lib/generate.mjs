@@ -33,7 +33,8 @@ export function parseGenerate(body) {
     seen.add(id);
     return { id, footprint: o.footprint, tags: o.tags };
   });
-  return { folder, buildings, mode, textureSize };
+  if (body.async !== undefined && typeof body.async !== "boolean") return bad("invalid_request", "async is true or false.");
+  return { folder, buildings, mode, textureSize, async: body.async === true };
 }
 
 function codeOf(message) {
@@ -48,7 +49,7 @@ const apiError = async res => {
   return { status: res.status, error: { code: e?.error || "api_error", message: e?.message || `The API answered ${res.status}.` } };
 };
 
-export async function generate(parsed, { api, authorization, fetchImpl = fetch, make }) {
+export async function generate(parsed, { api, authorization, fetchImpl = fetch, make, onProgress }) {
   const base = api.replace(/\/+$/, "");
   const headers = { authorization, accept: "application/json" };
 
@@ -60,6 +61,8 @@ export async function generate(parsed, { api, authorization, fetchImpl = fetch, 
 
   const scenery = parsed.mode === "scenery", blobs = new Map(), out = [];
   for (const b of parsed.buildings) {
+    if (onProgress) onProgress(out.length);   // how many are done (a background job shows it)
+    await new Promise(r => setImmediate(r));   // let the server answer polls between two buildings
     if (b.bad) { out.push({ ok: false, id: b.id, code: "invalid_building", error: b.bad }); continue; }
     const r = osmToHouse({ footprint: b.footprint, tags: b.tags, id: b.id });
     if (!r.ok) { out.push({ ok: false, id: b.id, code: r.code || codeOf(r.error), error: r.error }); continue; }
