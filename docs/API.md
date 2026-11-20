@@ -139,7 +139,7 @@ Every building in it moves, and nothing else changes (not the version, so a buil
 regenerate with the new `folder`). `404 not_found` if `from` has no buildings; `409 folder_exists` if `to` already has some (folders are not merged, since two maps may use the same
 `id`); `400 invalid_folder` for an empty name, a name over 80 characters or `from` equal to `to`.
 
-A person moves a building between folders in the app (`folder` in `PATCH /api/projects/{id}`; `""` takes it out). Folder names are 1 to 80 characters without control characters.
+A person moves a building between folders in the app (the list under **My buildings** is grouped by folder, with a folder menu on each building; behind it `folder` in `PATCH /api/projects/{id}`, `""` takes it out). Moving is not editing: the version stays, so a generated building is still regenerated (under its new folder name, so send that as `folder`) and its files stay. A move into a folder that already has a building with the same `sourceId` is refused (`409 folder_clash`). Folder names are 1 to 80 characters without control characters.
 
 ### Writing buildings (v1, write tokens)
 
