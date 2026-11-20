@@ -15,6 +15,8 @@ export interface ProjectSummary {
   thumbnail: string;
   /** Kind of building, only in the list ("" or missing: a farmhouse). */
   kind?: string;
+  /** The folder (a map's name) the building is in; "" or missing: none. */
+  folder?: string;
   version: number;
   /** The version the server's model files were made from; 0 or missing: it has none yet. */
   modelVersion?: number;
@@ -132,7 +134,7 @@ export const api = {
   projects: () => request<ProjectSummary[]>("GET", "/projects"),
   project: (id: string) => request<Project>("GET", "/projects/" + encodeURIComponent(id)),
   createProject: (name?: string, data?: Record<string, unknown>) => request<Project>("POST", "/projects", { name, data }),
-  updateProject: (id: string, patch: { name?: string; data?: Record<string, unknown>; thumbnail?: string; version?: number }) =>
+  updateProject: (id: string, patch: { name?: string; data?: Record<string, unknown>; thumbnail?: string; folder?: string; version?: number }) =>
     request<Project>("PATCH", "/projects/" + encodeURIComponent(id), patch),
   deleteProject: (id: string) => request<void>("DELETE", "/projects/" + encodeURIComponent(id)),
   /** The model files (obj, mtl, game mod zip) made from saved version `version`, for other programs to read. */

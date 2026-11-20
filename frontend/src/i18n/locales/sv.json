@@ -918,5 +918,10 @@
   "Where the vehicles bought from the shop menu appear: they line up along the long side of the box. Keep it on open ground outside the building, with room for the biggest machine.": "Där fordonen som köps i butiksmenyn dyker upp: de ställer upp sig längs rutans långsida. Håll den på öppen mark utanför byggnaden, med plats för den största maskinen.",
   "Walk into the box to open the shop menu. The shopping icon floats over it, and the player stands in front of it when the menu is closed. It goes inside the building, by the counter.": "Gå in i rutan för att öppna butiksmenyn. Shoppingikonen svävar över den, och spelaren står framför den när menyn stängs. Den hör hemma inne i byggnaden, vid disken.",
   "Delivery place: height above the ground (vehicles drop onto the ground from there)": "Leveransplats: höjd över marken (fordonen faller ner på marken därifrån)",
-  "May create buildings": "Får skapa byggnader"
+  "May create buildings": "Får skapa byggnader",
+  "Folder name": "Mappnamn",
+  "Move {name} to a folder": "Flytta {name} till en mapp",
+  "No folder": "Ingen mapp",
+  "New folder…": "Ny mapp…",
+  "Not in a folder": "Inte i någon mapp"
 }

@@ -205,3 +205,35 @@ func TestRenameFolder(t *testing.T) {
 		t.Fatalf("the new name is taken: %v", err)
 	}
 }
+
+func TestMovingIsNotEditing(t *testing.T) {
+	s := openTest(t)
+	u := mustUser(t, s, "anna@example.se")
+	d := json.RawMessage(`{"kind":"house"}`)
+	a, _, _ := s.UpsertGenerated(ctx, u.ID, "Hallsberg", "way/1", "A", d)
+	s.UpsertGenerated(ctx, u.ID, "Askersund", "way/1", "B", d)
+
+	// moving a building only to another folder is not a change of the building: same version, still not edited, its model stays
+	if err := s.PutModel(ctx, u.ID, a.ID, a.Version, Model{Obj: []byte("o"), Mtl: []byte("m"), Mod: []byte("z")}); err != nil {
+		t.Fatal(err)
+	}
+	f := "Örebro"
+	p, err := s.UpdateProject(ctx, u.ID, a.ID, ProjectUpdate{Folder: &f}, a.Version)
+	if err != nil || p.Folder != "Örebro" || p.Version != a.Version || p.Edited || !p.Generated {
+		t.Fatalf("moved: %+v %v", p, err)
+	}
+	if got, _ := s.GetProject(ctx, u.ID, a.ID); got.ModelVersion != a.Version {
+		t.Fatalf("its model is still its own: %+v", got)
+	}
+	// a rename together with a move is a change
+	n, g := "Nytt namn", "Hallsberg"
+	if p, _ = s.UpdateProject(ctx, u.ID, a.ID, ProjectUpdate{Name: &n, Folder: &g}, 0); p.Version != a.Version+1 || !p.Edited {
+		t.Fatalf("renamed: %+v", p)
+	}
+
+	// into a folder that has a building with the same source id: refused, not an internal error
+	askersund := "Askersund"
+	if _, err := s.UpdateProject(ctx, u.ID, a.ID, ProjectUpdate{Folder: &askersund}, 0); !errors.Is(err, ErrFolderClash) {
+		t.Fatalf("clash: %v", err)
+	}
+}

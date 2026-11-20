@@ -21,6 +21,8 @@ var (
 	ErrNotFound   = errors.New("not found")
 	ErrEmailTaken = errors.New("email already registered")
 	ErrConflict   = errors.New("conflict")
+	// ErrFolderClash: a building cannot move to a folder that has one with the same source id (the generate API's own id for it).
+	ErrFolderClash = errors.New("a building with the same source id is in that folder")
 )
 
 type dialect int
@@ -915,11 +917,23 @@ func (s *Store) UpdateProject(ctx context.Context, userID int64, id string, u Pr
 	if u.Thumbnail != nil {
 		cur.Thumbnail = *u.Thumbnail
 	}
+	moveOnly := u.Folder != nil && u.Name == nil && len(u.Data) == 0 && u.Thumbnail == nil
 	if u.Folder != nil {
+		if cur.SourceID != "" && *u.Folder != cur.Folder {
+			var clash int
+			if err := tx.queryRow(ctx, `SELECT COUNT(*) FROM projects WHERE user_id = ? AND folder = ? AND source_id = ? AND id <> ?`, userID, *u.Folder, cur.SourceID, id).Scan(&clash); err != nil {
+				return Project{}, err
+			}
+			if clash > 0 {
+				return cur, ErrFolderClash
+			}
+		}
 		cur.Folder = *u.Folder
 	}
-	cur.Version++
-	cur.setGenerated(cur.genVersion) // (a person's save is past the generated version: edited)
+	if !moveOnly {
+		cur.Version++
+		cur.setGenerated(cur.genVersion) // (a person's save is past the generated version: edited)
+	}
 	now := s.ms()
 	cur.UpdatedAt = time.UnixMilli(now)
 	if _, err := tx.exec(ctx, `UPDATE projects SET name = ?, data = ?, thumbnail = ?, folder = ?, version = ?, updated_at = ? WHERE id = ?`,

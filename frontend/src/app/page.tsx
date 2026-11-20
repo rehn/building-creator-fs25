@@ -147,6 +147,22 @@ export default function HousesPage() {
       setHouses(list => (list ?? []).map(x => (x.id === p.id ? p : x)));
     });
   };
+  // Folders (a map's name): the buildings are grouped under them when there are any; a building moves with the select on its card.
+  const folderOf = (h: ProjectSummary) => h.folder ?? "";
+  const folders = [...new Set((houses ?? []).map(folderOf).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const NEW_FOLDER = "\u0000new";
+  const move = (h: ProjectSummary, to: string) => {
+    let folder = to;
+    if (to === NEW_FOLDER) {
+      folder = window.prompt(t("Folder name"), "")?.trim() ?? "";
+      if (!folder) return;
+    }
+    if (folder === folderOf(h)) return;
+    run(async () => {
+      const p = await api.updateProject(h.id, { folder });
+      setHouses(list => (list ?? []).map(x => (x.id === p.id ? { ...x, folder: p.folder, updatedAt: p.updatedAt, version: p.version } : x)));
+    });
+  };
   const allPicked = !!houses && houses.length > 0 && houses.every(h => picked.includes(h.id));
   const pickAll = () => setPicked(allPicked ? [] : (houses ?? []).map(h => h.id));
   const toggle = (id: string) => setPicked(list => (list.includes(id) ? list.filter(x => x !== id) : [...list, id]));
@@ -202,28 +218,7 @@ export default function HousesPage() {
     });
   };
 
-  return (
-    <>
-      <TopBar user={user} />
-      <main className="page">
-        <div className="page-head">
-          <h2>My buildings</h2>
-          <div className="head-actions">
-            {houses && houses.length > 1 && <button type="button" onClick={pickAll} disabled={busy}>{allPicked ? "Select none" : "Select all"}</button>}
-            <button className="primary" type="button" onClick={() => setChoosing(true)} disabled={!user || busy} aria-expanded={choosing}>New</button>
-          </div>
-        </div>
-        {(error || userError) && <p className="error" role="alert">{error || userError}</p>}
-        {choosing && chooser}
-        {!houses && !error && !userError && <p className="loading">Loading your buildings…</p>}
-        {houses && houses.length === 0 && !choosing && (
-          <div className="empty">
-            <h3>Nothing built yet</h3>
-            <p className="hint">Start from a farmhouse, a hen house or a cow barn, set its size, roof, windows and colors, and export it for Giants Editor or as a game mod.</p>
-            <button className="primary" type="button" onClick={() => setChoosing(true)} disabled={busy}>Build your first building</button>
-          </div>
-        )}
-        {houses && houses.length > 0 && byKind(houses, kindOfHouse).map(g => (
+  const kindGroups = (list: ProjectSummary[]) => byKind(list, kindOfHouse).map(g => (
           <section className="kind-group" key={g.kind.id} aria-label={g.kind.plural}>
             <h3>{g.kind.plural} <small>{g.items.length}</small>
               {g.items.length > 1 && (
@@ -251,12 +246,47 @@ export default function HousesPage() {
                       <button type="button" onClick={() => duplicate(h)} disabled={busy}>Duplicate</button>
                       <button type="button" className="danger" onClick={() => remove(h)} disabled={busy}>Delete</button>
                     </div>
+                    <select className="move" value={folderOf(h)} onChange={e => move(h, e.target.value)} disabled={busy} aria-label={t("Move {name} to a folder", { name: h.name })}>
+                      <option value="">{t("No folder")}</option>
+                      {folders.map(f => <option key={f} value={f} translate="no">{f}</option>)}
+                      <option value={NEW_FOLDER}>{t("New folder\u2026")}</option>
+                    </select>
                   </div>
                 </article>
               ))}
             </div>
           </section>
-        ))}
+        ));
+
+  return (
+    <>
+      <TopBar user={user} />
+      <main className="page">
+        <div className="page-head">
+          <h2>My buildings</h2>
+          <div className="head-actions">
+            {houses && houses.length > 1 && <button type="button" onClick={pickAll} disabled={busy}>{allPicked ? "Select none" : "Select all"}</button>}
+            <button className="primary" type="button" onClick={() => setChoosing(true)} disabled={!user || busy} aria-expanded={choosing}>New</button>
+          </div>
+        </div>
+        {(error || userError) && <p className="error" role="alert">{error || userError}</p>}
+        {choosing && chooser}
+        {!houses && !error && !userError && <p className="loading">Loading your buildings…</p>}
+        {houses && houses.length === 0 && !choosing && (
+          <div className="empty">
+            <h3>Nothing built yet</h3>
+            <p className="hint">Start from a farmhouse, a hen house or a cow barn, set its size, roof, windows and colors, and export it for Giants Editor or as a game mod.</p>
+            <button className="primary" type="button" onClick={() => setChoosing(true)} disabled={busy}>Build your first building</button>
+          </div>
+        )}
+        {houses && houses.length > 0 && (folders.length === 0
+          ? kindGroups(houses)
+          : [...folders, ""].map(f => ({ f, list: houses.filter(h => folderOf(h) === f) })).filter(x => x.list.length > 0).map(x => (
+            <section className="folder-group" key={x.f || "none"} aria-label={x.f || t("Not in a folder")}>
+              <h2 className="folder-head"><span translate={x.f ? "no" : undefined}>{x.f || t("Not in a folder")}</span> <small>{x.list.length}</small></h2>
+              {kindGroups(x.list)}
+            </section>
+          )))}
         {picked.length > 0 && (
           <div className="packbar" role="region" aria-label="Pack a game mod">
             <span><b>{picked.length}</b> selected</span>

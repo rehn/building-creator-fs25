@@ -154,6 +154,10 @@ func (s *Server) updateProject(w http.ResponseWriter, r *http.Request, u store.U
 		writeJSON(w, http.StatusConflict, apiError{Error: "version_conflict", Message: "This house was changed somewhere else, for example in another tab.", Version: p.Version})
 		return
 	}
+	if errors.Is(err, store.ErrFolderClash) {
+		writeError(w, http.StatusConflict, "folder_clash", "That folder has a building with the same id from the map program already.")
+		return
+	}
 	if err != nil {
 		projectError(w, err)
 		return

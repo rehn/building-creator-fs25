@@ -322,3 +322,21 @@ func TestRenameFolderInTheAPI(t *testing.T) {
 		t.Fatalf("folders: %+v", folders)
 	}
 }
+
+func TestMovingAGeneratedBuildingInTheApp(t *testing.T) {
+	srv := newTestServer(t)
+	c := signupAdmin(t, srv)
+	write := makeToken(t, c, "Kartan", true)
+	made := decode[struct{ Building genBuilding }](t, tokenCall(t, srv, write, "POST", "/api/v1/buildings", map[string]any{"folder": "Hallsberg", "sourceId": "way/1", "name": "A", "settings": map[string]any{"kind": "house"}}))
+	expect(t, tokenCall(t, srv, write, "POST", "/api/v1/buildings", map[string]any{"folder": "Askersund", "sourceId": "way/1", "name": "B", "settings": map[string]any{"kind": "house"}}), 201)
+	id := made.Building.ID
+	moved := decode[struct {
+		Folder  string
+		Version int64
+		Edited  bool
+	}](t, c.do("PATCH", "/api/projects/"+id, map[string]any{"folder": "Örebro"}))
+	if moved.Folder != "Örebro" || moved.Edited {
+		t.Fatalf("moved: %+v", moved)
+	}
+	expectError(t, c.do("PATCH", "/api/projects/"+id, map[string]any{"folder": "Askersund"}), 409, "folder_clash")
+}

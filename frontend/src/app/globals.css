@@ -89,6 +89,10 @@ label.stack input { margin-top: 5px; }
 .preset b { font-size: 16px; }
 .preset span { color: var(--muted); font-size: 14px; line-height: 1.4; }
 .kind-group { margin-bottom: 28px; }
+.folder-group { margin-bottom: 36px; }
+.folder-head { font-size: 22px; margin: 0 0 14px; padding-bottom: 6px; border-bottom: 1px solid var(--border, #ddd); }
+.folder-head small { color: var(--muted); font-size: 14px; font-weight: normal; margin-left: 6px; }
+.house select.move { margin-top: 6px; padding: 4px 6px; font-size: 14px; max-width: 100%; }
 .kind-group > h3, .kind-group > h4 { margin-bottom: 10px; }
 .kind-group > h3 { font-size: 20px; }
 .kind-group > h4 { font-size: 15px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
