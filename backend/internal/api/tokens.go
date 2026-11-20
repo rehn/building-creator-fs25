@@ -311,6 +311,35 @@ func (s *Server) listFolders(w http.ResponseWriter, r *http.Request, u store.Use
 	writeJSON(w, http.StatusOK, map[string]any{"folders": list})
 }
 
+// renameFolder renames a map's folder (POST /api/v1/folders/rename {from, to}) for a program that names its folders after something that changes.
+// Not into a folder that has buildings (409 folder_exists); 404 when from has none. The buildings are not changed, so edited ones stay as they are.
+func (s *Server) renameFolder(w http.ResponseWriter, r *http.Request, u store.User) {
+	var in struct {
+		From string `json:"from"`
+		To   string `json:"to"`
+	}
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	from, ok1 := cleanText(in.From, maxFolderLen)
+	to, ok2 := cleanText(in.To, maxFolderLen)
+	if !ok1 || !ok2 || from == to {
+		writeError(w, http.StatusBadRequest, "invalid_folder", "Say from and to: two different folder names of 1 to 80 characters.")
+		return
+	}
+	n, err := s.st.RenameFolder(r.Context(), u.ID, from, to)
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		writeError(w, http.StatusNotFound, "not_found", "There is no folder with that name.")
+	case errors.Is(err, store.ErrConflict):
+		writeError(w, http.StatusConflict, "folder_exists", "There are buildings in that folder already. Pick a name that is not used.")
+	case err != nil:
+		internalError(w, err)
+	default:
+		writeJSON(w, http.StatusOK, store.Folder{Name: to, Count: n})
+	}
+}
+
 // generateBuilding makes a building for a program (a map builder that has OSM footprints, say) or, when it made one with this source id in
 // this folder before, makes it again. The settings are what the editor saves; the editor makes the building of them when someone opens it,
 // and a program that wants the files sends them with PUT .../model (the version in the answer). A building a person has changed since is left
