@@ -69,12 +69,17 @@ export function makeModFiles(settings, name, { author = "", encode = encodeDds }
   return { p, obj, mtl, mod, export: exported };
 }
 
-/** The same as editor.modelFiles: {obj, mtl, mod, export}, the zips as Uint8Arrays (jszip is loaded here, so the rest runs without it). */
-export async function makeFiles(settings, name, opts = {}) {
+/** The two zips of makeModFiles' files as Uint8Arrays: {mod, export} (jszip is loaded here, so the rest runs without it). */
+export async function zipModFiles(f) {
   const { default: JSZip } = await import("jszip");
-  const f = makeModFiles(settings, name, opts);
   const zip = files => { const z = new JSZip(); for (const [n, d] of files) z.file(n, d); return z.generateAsync({ type: "uint8array", compression: "DEFLATE" }); };
-  return { obj: f.obj, mtl: f.mtl, mod: await zip(f.mod), export: await zip(f.export) };
+  return { mod: await zip(f.mod), export: await zip(f.export) };
+}
+
+/** The same as editor.modelFiles: {obj, mtl, mod, export}, the zips as Uint8Arrays. */
+export async function makeFiles(settings, name, opts = {}) {
+  const f = makeModFiles(settings, name, opts);
+  return { obj: f.obj, mtl: f.mtl, ...(await zipModFiles(f)) };
 }
 
 /** The size of scenery's textures in pixels: a map has hundreds of buildings, and from where the player stands 512 is plenty (256 is smaller still). */
