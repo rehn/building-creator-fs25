@@ -292,3 +292,33 @@ func TestTokensCannotDelete(t *testing.T) {
 		t.Fatalf("it is still there: %+v", list)
 	}
 }
+
+func TestRenameFolderInTheAPI(t *testing.T) {
+	srv := newTestServer(t)
+	c := signupAdmin(t, srv)
+	read, write := makeToken(t, c, "Läsare", false), makeToken(t, c, "Kartan", true)
+	for _, x := range [][2]string{{"Hallsberg", "way/1"}, {"Hallsberg", "way/2"}, {"Askersund", "way/1"}} {
+		expect(t, tokenCall(t, srv, write, "POST", "/api/v1/buildings", map[string]any{"folder": x[0], "sourceId": x[1], "name": x[1], "settings": map[string]any{"kind": "house"}}), 201)
+	}
+	rename := func(token string, from, to string) *httptest.ResponseRecorder {
+		return tokenCall(t, srv, token, "POST", "/api/v1/folders/rename", map[string]any{"from": from, "to": to})
+	}
+	expect(t, rename(read, "Hallsberg", "X"), 403)
+	expectError(t, rename(write, "Hallsberg", ""), 400, "invalid_folder")
+	expectError(t, rename(write, "", "X"), 400, "invalid_folder")
+	expectError(t, rename(write, "Hallsberg", "Hallsberg"), 400, "invalid_folder")
+	expectError(t, rename(write, "Nowhere", "X"), 404, "not_found")
+	expectError(t, rename(write, "Hallsberg", "Askersund"), 409, "folder_exists")
+
+	got := decode[struct {
+		Name  string
+		Count int
+	}](t, rename(write, "Hallsberg", "Hallsberg 2026"))
+	if got.Name != "Hallsberg 2026" || got.Count != 2 {
+		t.Fatalf("answer: %+v", got)
+	}
+	folders := decode[struct{ Folders []struct{ Name string } }](t, tokenCall(t, srv, read, "GET", "/api/v1/folders", nil)).Folders
+	if len(folders) != 2 || folders[0].Name != "Askersund" || folders[1].Name != "Hallsberg 2026" {
+		t.Fatalf("folders: %+v", folders)
+	}
+}

@@ -168,3 +168,40 @@ func TestWriteTokens(t *testing.T) {
 		t.Fatalf("listed: %+v", list)
 	}
 }
+
+func TestRenameFolder(t *testing.T) {
+	s := openTest(t)
+	u := mustUser(t, s, "anna@example.se")
+	other := mustUser(t, s, "bo@example.se")
+	d := json.RawMessage(`{"kind":"house"}`)
+	a, _, _ := s.UpsertGenerated(ctx, u.ID, "Hallsberg", "way/1", "A", d)
+	s.UpsertGenerated(ctx, u.ID, "Hallsberg", "way/2", "B", d)
+	s.UpsertGenerated(ctx, u.ID, "Askersund", "way/1", "C", d)
+	s.UpsertGenerated(ctx, other.ID, "Hallsberg", "way/1", "D", d)
+
+	n, err := s.RenameFolder(ctx, u.ID, "Hallsberg", "Hallsberg 2026")
+	if err != nil || n != 2 {
+		t.Fatalf("rename: %d %v", n, err)
+	}
+	if list, _ := s.ListFolders(ctx, u.ID); len(list) != 2 || list[0].Name != "Askersund" || list[1].Name != "Hallsberg 2026" || list[1].Count != 2 {
+		t.Fatalf("folders: %+v", list)
+	}
+	if list, _ := s.ListFolders(ctx, other.ID); len(list) != 1 || list[0].Name != "Hallsberg" {
+		t.Fatalf("somebody else's folder is not touched: %+v", list)
+	}
+	// a rename is not an edit: the building stays generated, and generating it again in the new folder updates it
+	p, _ := s.GetProject(ctx, u.ID, a.ID)
+	if p.Folder != "Hallsberg 2026" || p.Version != a.Version || p.Edited || !p.Generated {
+		t.Fatalf("after: %+v", p)
+	}
+	if q, status, _ := s.UpsertGenerated(ctx, u.ID, "Hallsberg 2026", "way/1", "A", d); status != Updated || q.ID != a.ID {
+		t.Fatalf("regenerate: %v %+v", status, q)
+	}
+
+	if _, err := s.RenameFolder(ctx, u.ID, "Nowhere", "X"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("no such folder: %v", err)
+	}
+	if _, err := s.RenameFolder(ctx, u.ID, "Askersund", "Hallsberg 2026"); !errors.Is(err, ErrConflict) {
+		t.Fatalf("the new name is taken: %v", err)
+	}
+}

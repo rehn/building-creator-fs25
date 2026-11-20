@@ -852,6 +852,36 @@ func (s *Store) ListFolders(ctx context.Context, userID int64) ([]Folder, error)
 	return list, rows.Err()
 }
 
+// RenameFolder gives every building of the user's in folder from the name to and says how many. ErrNotFound when from holds nothing, ErrConflict when
+// to already holds something (two maps are not merged: their source ids could clash). Only the folder changes: not the version, so a generated
+// building is still not an edited one and generating it again in the new folder updates it.
+func (s *Store) RenameFolder(ctx context.Context, userID int64, from, to string) (int, error) {
+	var n int
+	err := s.inTx(ctx, func(tx *txx) error {
+		var inTo int
+		if err := tx.queryRow(ctx, `SELECT COUNT(*) FROM projects WHERE user_id = ? AND folder = ?`, userID, to).Scan(&inTo); err != nil {
+			return err
+		}
+		if inTo > 0 {
+			return ErrConflict
+		}
+		res, err := tx.exec(ctx, `UPDATE projects SET folder = ? WHERE user_id = ? AND folder = ?`, to, userID, from)
+		if err != nil {
+			return err
+		}
+		c, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if c == 0 {
+			return ErrNotFound
+		}
+		n = int(c)
+		return nil
+	})
+	return n, err
+}
+
 // GetProject returns a project if it belongs to userID, else ErrNotFound.
 func (s *Store) GetProject(ctx context.Context, userID int64, id string) (Project, error) {
 	return scanProject(s.queryRow(ctx, `SELECT `+projectCols+` FROM projects WHERE id = ? AND user_id = ?`, id, userID))

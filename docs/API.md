@@ -134,6 +134,11 @@ A building can be in a **folder**, which is the name of a map. The app groups on
 - `GET /api/v1/buildings?folder=Hallsberg`: only the buildings in that folder. `?folder=` (empty): the ones in no folder. Without `folder`: all of them.
 - `GET /api/v1/folders`: `{ "folders": [ { "name": "Askersund", "count": 1 }, { "name": "Hallsberg", "count": 2 } ] }`, by name. A folder exists while a building is in it.
 
+**`POST /api/v1/folders/rename`** (a token that may write) renames a folder: `{ "from": "Hallsberg", "to": "Hallsberg 2026" }` gives `{ "name": "Hallsberg 2026", "count": 2 }`.
+Every building in it moves, and nothing else changes (not the version, so a building a person has not touched is still regenerated, and one they have is still left alone;
+regenerate with the new `folder`). `404 not_found` if `from` has no buildings; `409 folder_exists` if `to` already has some (folders are not merged, since two maps may use the same
+`id`); `400 invalid_folder` for an empty name, a name over 80 characters or `from` equal to `to`.
+
 A person moves a building between folders in the app (`folder` in `PATCH /api/projects/{id}`; `""` takes it out). Folder names are 1 to 80 characters without control characters.
 
 ### Writing buildings (v1, write tokens)
