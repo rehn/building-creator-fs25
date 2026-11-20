@@ -243,6 +243,26 @@ Answer, `200`, in the order you sent them (a building that could not be made has
 
 A request that is wrong as a whole (not JSON, no `folder`, more than 20 buildings, a bad token) gets a 4xx error as in [Basics](#basics).
 
+#### Background jobs (`"async": true`)
+
+For a big batch, or a client that cannot wait a minute for an answer, add `"async": true` to the request. The server checks the request and answers `202` at once:
+
+```json
+{ "jobId": "9f1c...", "status": "queued", "total": 20, "done": 0, "statusUrl": "/api/v1/generate/9f1c..." }
+```
+
+Then poll `GET /api/v1/generate/{jobId}` (the same token; every few seconds is fine):
+
+| `status` | Meaning |
+|---|---|
+| `queued`, `running` | `done` of `total` buildings are finished |
+| `done` | `result` is the answer a plain request would have given (`folder`, `buildings`, and `blobs` for scenery) |
+| `failed` | `error: {code, message}` and `httpStatus`, e.g. a token that may not create buildings (`forbidden`) |
+
+- A request that is wrong as a whole still gets its 4xx at once, not a job. The token is checked when the job starts, so a bad one shows as `failed`.
+- One job runs at a time; up to 4 wait or run per server (`GENERATE_MAX_JOBS`), then `429 busy`: try again later.
+- A job and its answer are kept in the server's memory for 10 minutes after it finishes (`GENERATE_JOB_TTL_MINUTES`) and are lost if the server restarts: fetch `result` once and keep it. A job that is gone, or belongs to another token, gives `404 not_found`; send the batch again (the buildings are only updated, see [Regenerating](#regenerating)).
+
 ### Scenery mode
 
 A building a map uses as plain scenery (a `ReferenceNode` to `house.i3d` in the map's own i3d, not a placeable and not in the shop) does not want the game mod. With `"mode": "scenery"`

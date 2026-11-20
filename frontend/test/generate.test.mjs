@@ -165,3 +165,16 @@ test("a real scenery building: every texture the i3d names is in the files, with
 });
 import { osmToHouse } from "../src/editor/osm.mjs";
 const osmToHouseForTest = () => osmToHouse({ footprint: rect(0, 0, 10, 7), tags: { building: "house" }, id: "w" });
+
+test("parseGenerate: async is a flag, off by default", () => {
+  assert.equal(parseGenerate({ folder: "A", buildings: [b("a")] }).async, false);
+  assert.equal(parseGenerate({ folder: "A", buildings: [b("a")], async: true }).async, true);
+  assert.equal(parseGenerate({ folder: "A", buildings: [b("a")], async: "yes" }).error.code, "invalid_request");
+});
+
+test("generate: tells how many buildings are done before each one", async () => {
+  const { fetchImpl } = fakeApi();
+  const seen = [];
+  await generate(parseGenerate({ folder: "A", buildings: [b("a"), b("c")] }), { api: "http://x", authorization: "Bearer bc_t", fetchImpl, make: fakeMake, onProgress: n => seen.push(n) });
+  assert.deepEqual(seen, [0, 1]);
+});
