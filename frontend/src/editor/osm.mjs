@@ -12,6 +12,8 @@
 // rectangle in it and each wing the largest rectangle in the strip outside one of its sides (the arms of an L, T or U). What is left over is
 // said in the notes.
 
+import { variety, seedOf } from "./osmVariety.mjs";
+
 const CELL = 0.25;         // grid cell, m
 const SNAP = 0.3;          // an edge this close to a corner of the footprint is moved to it
 const MAX_WIDTH = 60, MAX_DEPTH = 50;   // the largest main part (the settings' own maximum)
@@ -222,6 +224,12 @@ export function osmToHouse({ footprint, tags = {}, id } = {}, opts = {}) {
       if (width * w.depth < 15 && levels > 1) wing.floors = 1;
       return wing;
     });
+  }
+  // ---- variety: door, windows and colours the tags leave open (opts.variety: false for the app's plain defaults) ----
+  if (opts.variety !== false) {
+    const v = variety({ seed: id ? "osm:" + id : seedOf(footprint), kind, width: W, depth: D, floors: levels, roofType: settings.roofType || "gable", wingWalls: (settings.wings || []).map(w => w.wall), have: settings });
+    Object.assign(settings, v.settings);
+    notes.push(...v.notes);
   }
   if (s.uncovered > SAY_UNCOVERED) notes.push(`${Math.round(s.uncovered * 100)}% of the footprint is not covered: ${maxWings ? "parts too narrow or too small to be wings are left out" : "this kind of building is made as one rectangle"}.`);
 

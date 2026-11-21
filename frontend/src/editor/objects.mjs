@@ -32,6 +32,8 @@ export const OBJECT_TYPES = {
     hint: "Where a bought vehicle appears: vehicles line up along the long side of the box. Keep it on open ground outside the building, with room for the biggest machine you sell."},
   workshop: {name: "Vehicle workshop", glyph: "wrench", icon: true, indoors: true, size: [6, 4, 3.5],
     hint: "Vehicles driven into this box can be repaired, painted and fitted out; the wrench icon marks where the player stands to use the workshop. Put it where a vehicle fits inside the building."},
+  intake: {name: "Grain intake", glyph: "food", icon: true, indoors: true, size: [5, 4, 1.5],
+    hint: "Where vehicles tip their grain: the station buys what lands in this box, and the unload icon floats over it. It may stand inside the hall or on open ground beside it; the AI helper stops at its front edge."},
   info: {name: "Info area", glyph: null, icon: false, size: [10, 10, 3],
     hint: "Standing in it shows the building's info box. It usually goes round the whole building."},
   pasture: {name: "Pasture (fence)", glyph: null, icon: false,
