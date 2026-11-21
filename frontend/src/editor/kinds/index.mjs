@@ -25,8 +25,9 @@ import sheep from "./sheep.mjs";
 import shed from "./shed.mjs";
 import dealership from "./dealership.mjs";
 import defaultdealer from "./defaultdealer.mjs";
+import grainsilo from "./grainsilo.mjs";
 
-export const KINDS = [house, chicken, cow, sheep, shed, dealership, defaultdealer];
+export const KINDS = [house, chicken, cow, sheep, shed, dealership, defaultdealer, grainsilo];
 export const KIND = Object.fromEntries(KINDS.map(k => [k.id, k]));
 /** The kind of a project's settings; saves without one are farmhouses. */
 export const kindOf = p => KIND[p && p.kind] || house;
@@ -47,4 +48,5 @@ export const CATEGORIES = [
   {id: "sheds", name: "Sheds and storage", blurb: "Machine sheds and storage halls."},
   {id: "shops", name: "Shops", blurb: "Places where the player buys vehicles."},
   {id: "workshops", name: "Workshops", blurb: "Places to repair and paint vehicles."},
+  {id: "stations", name: "Stations and depots", blurb: "Places that buy what the player brings, like a grain silo. Placed by a map, not bought."},
 ];
