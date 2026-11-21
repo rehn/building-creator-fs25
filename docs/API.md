@@ -355,7 +355,7 @@ The building is a rectangle (the **main part**) and up to 4 **wings**, which are
 4. What is left of the outline (round parts, thin bumps, parts too small to be a wing) is dropped. If it is more than 5% of the outline, `notes` says how much.
 
 `shed` buildings are made as one rectangle (no wings). The shapes are an approximation: the user opens the ones that matter in the editor and improves them.
-A wing on a wing, windows, doors and rooms are not made from OSM data: the building gets the app's standard door and windows.
+A wing on a wing, windows, doors and rooms are not made from OSM data. What the tags leave open (colours of walls, trim, roof, door and foundation, wall and roof material, roof pitch, chimney, window style, size and number per wall, door style, size, wall and place, porch) is picked from the building's `id`, so the same building looks the same each time it is generated and different buildings differ; the tags always win (`building:colour`, `roof:colour`, `roof:material`, `building:material`, `roof:angle`). `notes` says so.
 
 ### Regenerating
 

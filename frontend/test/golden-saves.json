@@ -733,6 +733,78 @@
   "i3dBytes": true,
   "xml": true
  },
+ "preset kornsilo": {
+  "parts": [],
+  "windows": 0,
+  "doors": 0,
+  "hidden": 0,
+  "ops": {
+   "front": 0,
+   "back": 0,
+   "right": 0,
+   "left": 0
+  },
+  "triangles": {
+   "walls": 100,
+   "trim": 440,
+   "roof": 116,
+   "foundation": 12,
+   "gutter": 3560,
+   "fittings": 2804
+  },
+  "box": [
+   [
+    -7.51,
+    7.52
+   ],
+   [
+    0,
+    15.55
+   ],
+   [
+    -13.19,
+    5.62
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ },
+ "preset spannmalsdepa": {
+  "parts": [],
+  "windows": 0,
+  "doors": 0,
+  "hidden": 0,
+  "ops": {
+   "front": 0,
+   "back": 0,
+   "right": 0,
+   "left": 0
+  },
+  "triangles": {
+   "walls": 100,
+   "trim": 476,
+   "roof": 116,
+   "foundation": 12,
+   "gutter": 3608,
+   "fittings": 4772
+  },
+  "box": [
+   [
+    -17.65,
+    17.7
+   ],
+   [
+    0,
+    19.55
+   ],
+   [
+    -16.64,
+    7.62
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ },
  "house, default": {
   "parts": [],
   "windows": 22,

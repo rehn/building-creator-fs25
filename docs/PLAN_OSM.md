@@ -16,7 +16,7 @@ i editorn efteråt. Överenskommet med användaren. Varje steg ska vara färdigt
 - Fotavtrycket i meter i kartprogrammets lokala system (x öst, y norr), inte lat/lon: kartprogrammet har redan sin projektion.
 - Bara huvudbyggnad + flyglar direkt på huvudbyggnadens väggar (L, T, U). Flyglar på flyglar kommer inte ur OSM-formen i första versionen.
 - Sorterna: `house` och `shed` (garage, förråd, lada, maskinhall). Andra sorter (ladugård, hönshus ...) kräver mer än en form och kommer inte ur OSM.
-- Inga fönster, dörrar eller rum. Husen får appens standarddörr och standardfönster; det går att lägga till i editorn.
+- Inga rum. Fönster och dörr väljs av `osmVariety.mjs` ur byggnadens id (färger, fönsterantal, -stil och -storlek, dörrens färg, stil, vägg och plats, farstu) där taggarna är tysta, så att husen skiljer sig åt men ser likadana ut varje gång; taggarna vinner. Det går att ändra i editorn.
 - Taggar som saknas får rimliga standardvärden. Det som gissats står i `notes` i svaret.
 
 ## Det som provats
