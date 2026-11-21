@@ -75,6 +75,10 @@ spec:
             {{- if $ssoOn }}
             - name: SSO_URL
               value: {{ $sso.url | quote }}
+            {{- with $sso.publicUrl }}
+            - name: SSO_PUBLIC_URL
+              value: {{ . | quote }}
+            {{- end }}
             - name: SSO_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
