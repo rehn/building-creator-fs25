@@ -225,6 +225,7 @@
   "Door": "Door",
   "Door that opens": "Door that opens",
   "Door that stays shut": "Door that stays shut",
+  "Door, windows and colours are picked from the building's id where the tags are silent: change them in the editor.": "Door, windows and colours are picked from the building's id where the tags are silent: change them in the editor.",
   "Doors": "Doors",
   "Doors can only go on the ground floor.": "Doors can only go on the ground floor.",
   "Doors go on the ground floor": "Doors go on the ground floor",
