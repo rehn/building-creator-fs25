@@ -441,6 +441,17 @@ select.lang:hover { border-color: var(--muted); }
 /* the page you are on, in the bar at the top */
 .topbar .btn.current { border-color: var(--accent); }
 
+/* The switch between the map app and this one (the same in both apps: .appswitch in fs25map-creator's app.css). */
+.topbar .brand:has(~ .appswitch) { margin-right: 6px; }
+.topbar .appswitch { margin-right: auto; }
+.appswitch { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.appswitch a { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 6px; color: var(--muted);
+               font-size: 14px; font-weight: 500; text-decoration: none; white-space: nowrap; }
+.appswitch a svg { width: 18px; height: 18px; flex: none; }
+.appswitch a:hover { color: var(--ink); }
+.appswitch a[aria-current] { background: var(--panel); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
+@media (max-width: 560px) { .appswitch a span { display: none; } }
+
 /* API access */
 .token-new { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 12px 0; display: flex; flex-direction: column; gap: 8px; }
 .token-new input { width: 100%; font-family: ui-monospace, monospace; }

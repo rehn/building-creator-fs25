@@ -125,7 +125,7 @@ async function send<T>(method: string, path: string, body?: BodyInit, headers?: 
 export const templatePhotoUrl = (id: string, n: number) => `/api/templates/${encodeURIComponent(id)}/photos/${n}`;
 
 export const api = {
-  authConfig: () => request<{ google: boolean; sso?: boolean }>("GET", "/auth/config"),
+  authConfig: () => request<{ google: boolean; sso?: boolean; ssoUrl?: string }>("GET", "/auth/config"),
   me: () => request<User>("GET", "/auth/me"),
   login: (email: string, password: string) => request<User>("POST", "/auth/login", { email, password }),
   signup: (input: { email: string; password: string; name: string; invite: string }) => request<User>("POST", "/auth/signup", input),

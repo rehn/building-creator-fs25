@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { api, type User } from "@/lib/api";
+import { AppSwitch } from "./AppSwitch";
 import { Brand } from "./Brand";
 import { LanguageSelect } from "./LanguageSelect";
 import { Version } from "./Version";
@@ -15,6 +16,7 @@ export function TopBar({ user }: { user: User | null }) {
   return (
     <header className="topbar">
       <Brand />
+      {user && <AppSwitch />}
       {user && <span className="who" translate="no">{user.name}</span>}
       {user && <Link className={"btn" + (path === "/" ? " current" : "")} href="/" aria-current={path === "/" ? "page" : undefined}>My buildings</Link>}
       {user && <Link className={"btn" + (path.startsWith("/items") ? " current" : "")} href="/items" aria-current={path.startsWith("/items") ? "page" : undefined}>My items</Link>}
