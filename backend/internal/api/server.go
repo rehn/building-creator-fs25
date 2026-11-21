@@ -26,11 +26,13 @@ type Config struct {
 	GoogleClientID     string
 	GoogleClientSecret string
 	// SSOURL (the map app's address) with SSOSecret (shared with it) turns on "Sign in with the map app", where the accounts live.
-	SSOURL, SSOSecret string
-	SecureCookies     bool // true when PublicURL is https
-	TrustProxy        bool // use X-Forwarded-For for rate limiting
-	SessionTTL        time.Duration
-	Vision            vision.Suggester // suggests template settings from photos; nil without ANTHROPIC_API_KEY
+	// SSOPublicURL is the same app's address as the browser reaches it, when SSOURL (the server's way to it, maybe a cluster-internal
+	// service address) is not; empty: SSOURL.
+	SSOURL, SSOPublicURL, SSOSecret string
+	SecureCookies                   bool // true when PublicURL is https
+	TrustProxy                      bool // use X-Forwarded-For for rate limiting
+	SessionTTL                      time.Duration
+	Vision                          vision.Suggester // suggests template settings from photos; nil without ANTHROPIC_API_KEY
 
 	googleEndpoints *googleEndpoints // tests point this at a fake Google
 }

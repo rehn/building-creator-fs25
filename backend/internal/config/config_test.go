@@ -53,6 +53,13 @@ func TestFullConfig(t *testing.T) {
 	if !c.API.SSOEnabled() || c.API.SSOURL != "https://karta.example.se" || c.API.SSOSecret != "s3" {
 		t.Fatalf("unexpected SSO %q %q", c.API.SSOURL, c.API.SSOSecret)
 	}
+	if c.API.SSOPublicURL != "https://karta.example.se" {
+		t.Fatalf("public SSO address %q", c.API.SSOPublicURL)
+	}
+	c2, _ := Load(env(map[string]string{"PUBLIC_URL": "https://hus.example.se", "SSO_URL": "http://karta.ns.svc:80/", "SSO_PUBLIC_URL": "https://karta.example.se/", "SSO_CLIENT_SECRET": "s"}))
+	if c2.API.SSOURL != "http://karta.ns.svc:80" || c2.API.SSOPublicURL != "https://karta.example.se" {
+		t.Fatalf("internal and public %q %q", c2.API.SSOURL, c2.API.SSOPublicURL)
+	}
 	if c.Addr != ":9000" || c.DatabasePath != "/tmp/x.db" {
 		t.Fatalf("unexpected addr or path %+v", c)
 	}

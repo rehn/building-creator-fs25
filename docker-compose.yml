@@ -10,6 +10,7 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       # Optional: the accounts live in fs25map-creator (its address, and the secret it has as SSO_BUILDING_SECRET).
       SSO_URL: ${SSO_URL:-}
+      SSO_PUBLIC_URL: ${SSO_PUBLIC_URL:-}
       SSO_CLIENT_SECRET: ${SSO_CLIENT_SECRET:-}
       # Optional: the admin's template wizard asks Claude to read photos of a building.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
