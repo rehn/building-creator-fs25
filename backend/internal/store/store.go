@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS users (
 	name          TEXT    NOT NULL DEFAULT '',
 	password_hash TEXT,
 	google_sub    TEXT    UNIQUE,
+	sso_sub       TEXT,
 	is_admin      INTEGER NOT NULL DEFAULT 0,
 	created_at    INTEGER NOT NULL
 );
@@ -155,6 +156,7 @@ CREATE TABLE IF NOT EXISTS users (
 	name          TEXT    NOT NULL DEFAULT '',
 	password_hash TEXT,
 	google_sub    TEXT    UNIQUE,
+	sso_sub       TEXT,
 	is_admin      BOOLEAN NOT NULL DEFAULT FALSE,
 	created_at    BIGINT  NOT NULL
 );
@@ -305,6 +307,8 @@ func openPostgres(url string) (*Store, error) {
 			`ALTER TABLE projects ADD COLUMN IF NOT EXISTS source_id TEXT NOT NULL DEFAULT ''`,
 			`ALTER TABLE projects ADD COLUMN IF NOT EXISTS generated_version BIGINT NOT NULL DEFAULT 0`,
 			`ALTER TABLE api_tokens ADD COLUMN IF NOT EXISTS can_write BOOLEAN NOT NULL DEFAULT FALSE`,
+			`ALTER TABLE users ADD COLUMN IF NOT EXISTS sso_sub TEXT`,
+			`CREATE UNIQUE INDEX IF NOT EXISTS users_sso_sub ON users (sso_sub)`,
 			projectIndexes[0], projectIndexes[1],
 		} {
 			if _, err := tx.exec(context.Background(), q); err != nil {
@@ -361,13 +365,14 @@ func openSQLite(path string) (*Store, error) {
 		return nil, fmt.Errorf("updating schema: %w", err)
 	}
 	for _, c := range [][3]string{{"projects", "folder", "TEXT NOT NULL DEFAULT ''"}, {"projects", "source_id", "TEXT NOT NULL DEFAULT ''"},
-		{"projects", "generated_version", "INTEGER NOT NULL DEFAULT 0"}, {"api_tokens", "can_write", "INTEGER NOT NULL DEFAULT 0"}} {
+		{"projects", "generated_version", "INTEGER NOT NULL DEFAULT 0"}, {"api_tokens", "can_write", "INTEGER NOT NULL DEFAULT 0"}, {"users", "sso_sub", "TEXT"}} {
 		if err := addColumnSQLite(db, c[0], c[1], c[2]); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("updating schema: %w", err)
 		}
 	}
-	for _, q := range projectIndexes {
+	// SQLite cannot add a UNIQUE column, so the index does it (several NULLs are fine).
+	for _, q := range append([]string{`CREATE UNIQUE INDEX IF NOT EXISTS users_sso_sub ON users (sso_sub)`}, projectIndexes[:]...) {
 		if _, err := db.Exec(q); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("updating schema: %w", err)
@@ -482,6 +487,7 @@ type User struct {
 	IsAdmin     bool      `json:"isAdmin"`
 	HasPassword bool      `json:"hasPassword"`
 	HasGoogle   bool      `json:"hasGoogle"`
+	HasSSO      bool      `json:"hasSSO"`
 	CreatedAt   time.Time `json:"createdAt"`
 }
 
@@ -490,18 +496,19 @@ type NewUser struct {
 	Name         string
 	PasswordHash string
 	GoogleSub    string
+	SSOSub       string // the id the map app gives the user
 	IsAdmin      bool
 }
 
-const userCols = "id, email, name, password_hash, google_sub, is_admin, created_at"
+const userCols = "id, email, name, password_hash, google_sub, sso_sub, is_admin, created_at"
 
 type scanner interface{ Scan(dest ...any) error }
 
 func scanUser(row scanner) (User, string, error) {
 	var u User
-	var hash, sub sql.NullString
+	var hash, sub, sso sql.NullString
 	var created int64
-	err := row.Scan(&u.ID, &u.Email, &u.Name, &hash, &sub, &u.IsAdmin, &created)
+	err := row.Scan(&u.ID, &u.Email, &u.Name, &hash, &sub, &sso, &u.IsAdmin, &created)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, "", ErrNotFound
 	}
@@ -510,6 +517,7 @@ func scanUser(row scanner) (User, string, error) {
 	}
 	u.HasPassword = hash.Valid && hash.String != ""
 	u.HasGoogle = sub.Valid && sub.String != ""
+	u.HasSSO = sso.Valid && sso.String != ""
 	u.CreatedAt = time.UnixMilli(created)
 	return u, hash.String, nil
 }
@@ -533,8 +541,8 @@ func (s *Store) CreateUser(ctx context.Context, nu NewUser, inviteID int64) (Use
 		}
 	}
 	var id int64
-	err = tx.queryRow(ctx, `INSERT INTO users (email, name, password_hash, google_sub, is_admin, created_at) VALUES (?, ?, ?, ?, ?, ?) RETURNING id`,
-		nu.Email, nu.Name, nullStr(nu.PasswordHash), nullStr(nu.GoogleSub), nu.IsAdmin, now).Scan(&id)
+	err = tx.queryRow(ctx, `INSERT INTO users (email, name, password_hash, google_sub, sso_sub, is_admin, created_at) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+		nu.Email, nu.Name, nullStr(nu.PasswordHash), nullStr(nu.GoogleSub), nullStr(nu.SSOSub), nu.IsAdmin, now).Scan(&id)
 	if what, ok := uniqueViolation(err); ok {
 		if strings.Contains(what, "email") {
 			return User{}, ErrEmailTaken
@@ -580,6 +588,27 @@ func (s *Store) LinkGoogle(ctx context.Context, userID int64, sub string) error 
 	return nil
 }
 
+// UserBySSOSub finds the user the map app knows by that id.
+func (s *Store) UserBySSOSub(ctx context.Context, sub string) (User, error) {
+	u, _, err := scanUser(s.queryRow(ctx, `SELECT `+userCols+` FROM users WHERE sso_sub = ?`, sub))
+	return u, err
+}
+
+// LinkSSO ties a user to the map app's id for them.
+func (s *Store) LinkSSO(ctx context.Context, userID int64, sub string) error {
+	res, err := s.exec(ctx, `UPDATE users SET sso_sub = ? WHERE id = ?`, sub, userID)
+	if isUnique(err) {
+		return ErrConflict
+	}
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n != 1 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *Store) CountUsers(ctx context.Context) (int, error) {
 	var n int
 	err := s.queryRow(ctx, `SELECT COUNT(*) FROM users`).Scan(&n)
@@ -596,7 +625,7 @@ func (s *Store) CreateSession(ctx context.Context, userID int64, tokenHash strin
 
 // SessionUser returns the user of a session that hasn't expired.
 func (s *Store) SessionUser(ctx context.Context, tokenHash string) (User, error) {
-	u, _, err := scanUser(s.queryRow(ctx, `SELECT u.id, u.email, u.name, u.password_hash, u.google_sub, u.is_admin, u.created_at
+	u, _, err := scanUser(s.queryRow(ctx, `SELECT u.id, u.email, u.name, u.password_hash, u.google_sub, u.sso_sub, u.is_admin, u.created_at
 		FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?`, tokenHash, s.ms()))
 	return u, err
 }

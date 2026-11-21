@@ -7,6 +7,7 @@ export interface User {
   isAdmin: boolean;
   hasPassword: boolean;
   hasGoogle: boolean;
+  hasSSO?: boolean;
 }
 
 export interface ProjectSummary {
@@ -124,7 +125,7 @@ async function send<T>(method: string, path: string, body?: BodyInit, headers?: 
 export const templatePhotoUrl = (id: string, n: number) => `/api/templates/${encodeURIComponent(id)}/photos/${n}`;
 
 export const api = {
-  authConfig: () => request<{ google: boolean }>("GET", "/auth/config"),
+  authConfig: () => request<{ google: boolean; sso?: boolean }>("GET", "/auth/config"),
   me: () => request<User>("GET", "/auth/me"),
   login: (email: string, password: string) => request<User>("POST", "/auth/login", { email, password }),
   signup: (input: { email: string; password: string; name: string; invite: string }) => request<User>("POST", "/auth/signup", input),
@@ -195,7 +196,13 @@ export function googleStartUrl(invite?: string) {
   return "/api/auth/google/start" + (invite ? "?invite=" + encodeURIComponent(invite) : "");
 }
 
+/** Where sign-in with the map app (where the accounts live) starts; a full page navigation, not fetch. */
+export function ssoStartUrl() {
+  return "/api/auth/sso/start";
+}
+
 export const LOGIN_ERRORS: Record<string, string> = {
   not_invited: "That Google account doesn't have an invite. Ask the admin for one.",
   google_failed: "Google sign-in didn't work. Try again, or use your email and password.",
+  sso_failed: "Signing in with the map app didn't work. Try again, or use your email and password.",
 };

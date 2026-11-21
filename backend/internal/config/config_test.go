@@ -21,8 +21,8 @@ func TestDefaults(t *testing.T) {
 	if c.API.PublicURL != "http://localhost:3000" || c.API.SecureCookies || c.Addr != ":8080" || c.DatabasePath != "/data/building-creator-fs25.db" {
 		t.Fatalf("unexpected defaults %+v", c)
 	}
-	if c.API.GoogleEnabled() {
-		t.Fatal("Google enabled without credentials")
+	if c.API.GoogleEnabled() || c.API.SSOEnabled() {
+		t.Fatal("sign-in by Google or the map app enabled without credentials")
 	}
 }
 
@@ -41,6 +41,7 @@ func TestFullConfig(t *testing.T) {
 	c, err := Load(env(map[string]string{
 		"PUBLIC_URL": "https://hus.example.se", "ADMIN_EMAIL": " Me@Example.se ",
 		"GOOGLE_CLIENT_ID": "id", "GOOGLE_CLIENT_SECRET": "secret",
+		"SSO_URL": "https://karta.example.se/", "SSO_CLIENT_SECRET": " s3 ",
 		"LISTEN_ADDR": ":9000", "DATABASE_PATH": "/tmp/x.db", "TRUST_PROXY": "true",
 	}))
 	if err != nil {
@@ -48,6 +49,9 @@ func TestFullConfig(t *testing.T) {
 	}
 	if !c.API.SecureCookies || c.API.AdminEmail != "me@example.se" || !c.API.GoogleEnabled() || !c.API.TrustProxy {
 		t.Fatalf("unexpected config %+v", c.API)
+	}
+	if !c.API.SSOEnabled() || c.API.SSOURL != "https://karta.example.se" || c.API.SSOSecret != "s3" {
+		t.Fatalf("unexpected SSO %q %q", c.API.SSOURL, c.API.SSOSecret)
 	}
 	if c.Addr != ":9000" || c.DatabasePath != "/tmp/x.db" {
 		t.Fatalf("unexpected addr or path %+v", c)

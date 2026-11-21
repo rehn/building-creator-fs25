@@ -25,10 +25,12 @@ type Config struct {
 	AdminEmail         string // can sign up without an invite and becomes admin
 	GoogleClientID     string
 	GoogleClientSecret string
-	SecureCookies      bool // true when PublicURL is https
-	TrustProxy         bool // use X-Forwarded-For for rate limiting
-	SessionTTL         time.Duration
-	Vision             vision.Suggester // suggests template settings from photos; nil without ANTHROPIC_API_KEY
+	// SSOURL (the map app's address) with SSOSecret (shared with it) turns on "Sign in with the map app", where the accounts live.
+	SSOURL, SSOSecret string
+	SecureCookies     bool // true when PublicURL is https
+	TrustProxy        bool // use X-Forwarded-For for rate limiting
+	SessionTTL        time.Duration
+	Vision            vision.Suggester // suggests template settings from photos; nil without ANTHROPIC_API_KEY
 
 	googleEndpoints *googleEndpoints // tests point this at a fake Google
 }
@@ -84,7 +86,7 @@ func (s *Server) routes() {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "version": s.cfg.Version})
 	})
 	m.HandleFunc("GET /api/auth/config", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]bool{"google": s.cfg.GoogleEnabled()})
+		writeJSON(w, http.StatusOK, map[string]bool{"google": s.cfg.GoogleEnabled(), "sso": s.cfg.SSOEnabled()})
 	})
 	m.HandleFunc("POST /api/auth/signup", s.signup)
 	m.HandleFunc("POST /api/auth/login", s.login)
@@ -94,6 +96,8 @@ func (s *Server) routes() {
 	}))
 	m.HandleFunc("GET /api/auth/google/start", s.googleStart)
 	m.HandleFunc("GET /api/auth/google/callback", s.googleCallback)
+	m.HandleFunc("GET /api/auth/sso/start", s.ssoStart)
+	m.HandleFunc("GET /api/auth/sso/callback", s.ssoCallback)
 	m.HandleFunc("GET /api/invites/{token}", s.inviteInfo)
 
 	m.HandleFunc("GET /api/projects", s.requireUser(s.listProjects))

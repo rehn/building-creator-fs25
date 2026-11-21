@@ -165,6 +165,15 @@ func TestUsers(t *testing.T) {
 	if err != nil || g.ID != u.ID || !g.HasGoogle {
 		t.Fatalf("google link failed: %+v %v", g, err)
 	}
+	if err := s.LinkSSO(ctx, u.ID, "u-9"); err != nil {
+		t.Fatal(err)
+	}
+	if x, err := s.UserBySSOSub(ctx, "u-9"); err != nil || x.ID != u.ID || !x.HasSSO || !x.HasGoogle {
+		t.Fatalf("sso link failed: %+v %v", x, err)
+	}
+	if _, err := s.UserBySSOSub(ctx, "nobody"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("want ErrNotFound, got %v", err)
+	}
 	byID, err := s.UserByID(ctx, u.ID)
 	if err != nil || byID.Email != u.Email {
 		t.Fatalf("lookup by id: %+v %v", byID, err)
