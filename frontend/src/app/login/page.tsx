@@ -2,7 +2,7 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { api, googleStartUrl, LOGIN_ERRORS } from "@/lib/api";
+import { api, googleStartUrl, ssoStartUrl, LOGIN_ERRORS } from "@/lib/api";
 import { Brand } from "@/components/Brand";
 
 function LoginForm() {
@@ -13,10 +13,11 @@ function LoginForm() {
   const [error, setError] = useState(LOGIN_ERRORS[params.get("error") ?? ""] ?? "");
   const [busy, setBusy] = useState(false);
   const [google, setGoogle] = useState(false);
+  const [sso, setSso] = useState(false);
 
   useEffect(() => {
     api.me().then(() => router.replace("/")).catch(() => {});
-    api.authConfig().then(c => setGoogle(c.google)).catch(() => {});
+    api.authConfig().then(c => { setGoogle(c.google); setSso(!!c.sso); }).catch(() => {});
   }, [router]);
 
   async function submit(e: React.FormEvent) {
@@ -37,12 +38,9 @@ function LoginForm() {
       <Brand href="/login" />
       <h2>Log in</h2>
       <p className="hint">Your houses are saved to your account.</p>
-      {google && (
-        <>
-          <a className="btn google" href={googleStartUrl()}>Continue with Google</a>
-          <p className="or">or with email</p>
-        </>
-      )}
+      {sso && <a className="btn google" href={ssoStartUrl()}>Continue with the map app</a>}
+      {google && <a className="btn google" href={googleStartUrl()}>Continue with Google</a>}
+      {(google || sso) && <p className="or">or with email</p>}
       <form onSubmit={submit}>
         <label className="stack">Email
           <input type="email" autoComplete="email" required value={email} onChange={e => setEmail(e.target.value)} />

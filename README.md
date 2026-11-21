@@ -74,6 +74,15 @@ To run the images from Docker Hub instead of building, set `DOCKERHUB_USERNAME` 
 
 As the admin, open **Admin**, enter a friend's email and send them the link. It works once, for that address, for 14 days. They can sign up with a password, or with Google if it's set up and the Google account has the same email.
 
+### One login for both apps (optional)
+
+The accounts can live in [fs25map-creator](https://github.com/rehn/fs25map-creator): this app then has a **Continue with the map app** button, and anyone who has an account there can log in here, no second password and no invite (invites are made there). The two apps share a secret:
+
+1. In the map app, set `SSO_BUILDING_URL` (this app's address, `PUBLIC_URL` here) and `SSO_BUILDING_SECRET` (a long random string).
+2. Here, set `SSO_URL` (the map app's address) and `SSO_CLIENT_SECRET` (the same string).
+
+How it works: the button sends the browser to the map app, which (after logging in there, if needed) sends it back with a one-use code; this app's server trades the code and the secret for the person's id, email and name, and starts a session of its own. An account here with the same email is linked, else one is made; `ADMIN_EMAIL` is still what makes the admin. Passwords and Google sign-in keep working next to it. Logging out here does not log out of the map app.
+
 ### Sign in with Google (optional)
 
 1. In the [Google Cloud console](https://console.cloud.google.com/apis/credentials), create an **OAuth client ID** of type **Web application**.
@@ -177,7 +186,7 @@ helm install building-creator-fs25 oci://registry-1.docker.io/rehn/building-crea
 
 The API creates its tables on start. The volumes are kept when you `helm uninstall`: the SQLite PVC and the Postgres PVC with the Secret holding its password (`helm.sh/resource-policy: keep`). A reinstall with the same release name picks them up again. Delete them with `kubectl delete pvc ...` when you really want everything gone.
 
-Google sign-in: `--set google.clientId=... --set google.clientSecret=...`, or `google.existingSecret` naming a Secret with `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+Sign-in with the map app: `--set sso.url=https://karta.example.se --set sso.clientSecret=...` (or `sso.existingSecret` with the key `SSO_CLIENT_SECRET`). Google sign-in: `--set google.clientId=... --set google.clientSecret=...`, or `google.existingSecret` naming a Secret with `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
 
 Templates from photos: `--set claude.apiKey=...`, or `claude.existingSecret` naming a Secret with `ANTHROPIC_API_KEY`.
 
@@ -275,6 +284,7 @@ To release, push a tag like `v1.0.0` (`git tag v1.0.0 && git push origin v1.0.0`
 | `PUBLIC_URL` | api | required | The address people open, without a trailing slash |
 | `ADMIN_EMAIL` | api | | Can sign up without an invite and becomes admin |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | api | | Turn on Sign in with Google |
+| `SSO_URL`, `SSO_CLIENT_SECRET` | api | | Turn on Continue with the map app (the map app's address and the secret it shares) |
 | `ANTHROPIC_API_KEY` | api | | Lets the admin's template wizard ask Claude to read photos of a building |
 | `DATABASE_PATH` | api | `/data/building-creator-fs25.db` | SQLite file |
 | `DATABASE_URL` | api | | `postgres://user:password@host:5432/db`: use Postgres instead of SQLite |

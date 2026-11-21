@@ -2,6 +2,8 @@
 {{- $sqlite := eq .Values.database.type "sqlite" -}}
 {{- $g := .Values.google -}}
 {{- $google := or $g.existingSecret (and $g.clientId $g.clientSecret) -}}
+{{- $sso := .Values.sso -}}
+{{- $ssoOn := and $sso.url (or $sso.existingSecret $sso.clientSecret) -}}
 {{- $c := .Values.claude -}}
 apiVersion: apps/v1
 kind: Deployment
@@ -69,6 +71,15 @@ spec:
                 secretKeyRef:
                   name: {{ default (include "hx.fullname" .) $g.existingSecret }}
                   key: GOOGLE_CLIENT_SECRET
+            {{- end }}
+            {{- if $ssoOn }}
+            - name: SSO_URL
+              value: {{ $sso.url | quote }}
+            - name: SSO_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (include "hx.fullname" .) $sso.existingSecret }}
+                  key: SSO_CLIENT_SECRET
             {{- end }}
             {{- if or $c.existingSecret $c.apiKey }}
             - name: ANTHROPIC_API_KEY

@@ -14,6 +14,14 @@ google:
   clientSecret: ""
   existingSecret: ""
 
+# Optional "Continue with the map app": the accounts live in fs25map-creator, which this app trusts. url is its address
+# (https://karta.example.se), clientSecret the same secret as there (SSO_BUILDING_SECRET), or point existingSecret at a Secret
+# with the key SSO_CLIENT_SECRET.
+sso:
+  url: ""
+  clientSecret: ""
+  existingSecret: ""
+
 # Optional: lets the admin make templates from photos, which Claude reads (Anthropic API).
 # Either set apiKey, or point existingSecret at a Secret with the key ANTHROPIC_API_KEY.
 claude:

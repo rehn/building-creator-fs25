@@ -42,7 +42,7 @@ func (s *Store) TokenUser(ctx context.Context, hash string) (User, error) {
 // TokenAuth is TokenUser, and says whether the token may write.
 func (s *Store) TokenAuth(ctx context.Context, hash string) (User, bool, error) {
 	var write bool
-	row := s.queryRow(ctx, `SELECT u.id, u.email, u.name, u.password_hash, u.google_sub, u.is_admin, u.created_at, t.can_write
+	row := s.queryRow(ctx, `SELECT u.id, u.email, u.name, u.password_hash, u.google_sub, u.sso_sub, u.is_admin, u.created_at, t.can_write
 		FROM api_tokens t JOIN users u ON u.id = t.user_id WHERE t.token_hash = ?`, hash)
 	u, _, err := scanUser(scanWith{row, &write})
 	if err != nil {

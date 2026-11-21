@@ -34,6 +34,8 @@ func (c Config) Database() string {
 //	ADMIN_EMAIL           this address can sign up without an invite and becomes admin
 //	GOOGLE_CLIENT_ID      with GOOGLE_CLIENT_SECRET, turns on "Sign in with Google"
 //	GOOGLE_CLIENT_SECRET
+//	SSO_URL               the map app's address (fs25map-creator), with SSO_CLIENT_SECRET (the same in both) turns on "Sign in with the map app"
+//	SSO_CLIENT_SECRET
 //	LISTEN_ADDR           default :8080
 //	DATABASE_PATH         SQLite file, default /data/building-creator-fs25.db
 //	DATABASE_URL          postgres://user:pass@host:5432/db, use Postgres instead of SQLite
@@ -60,6 +62,8 @@ func Load(getenv func(string) string) (Config, error) {
 		SecureCookies:      u.Scheme == "https",
 		GoogleClientID:     strings.TrimSpace(getenv("GOOGLE_CLIENT_ID")),
 		GoogleClientSecret: strings.TrimSpace(getenv("GOOGLE_CLIENT_SECRET")),
+		SSOURL:             strings.TrimRight(strings.TrimSpace(getenv("SSO_URL")), "/"),
+		SSOSecret:          strings.TrimSpace(getenv("SSO_CLIENT_SECRET")),
 		TrustProxy:         strings.EqualFold(strings.TrimSpace(getenv("TRUST_PROXY")), "true"),
 		SessionTTL:         30 * 24 * time.Hour,
 	}
