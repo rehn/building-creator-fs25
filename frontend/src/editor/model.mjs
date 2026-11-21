@@ -141,8 +141,11 @@ const SHARED_SECTIONS = [
  * All editor sections: each kind's own first, then the shared ones. kinds: the building kinds
  * that show the section (left out when every kind does).
  */
+// A section object several kinds share (the grain silo has the shed's "Open sides") is one entry that lists them all.
+const kindSections = new Map();
+for (const k of KINDS) for (const g of k.sections) kindSections.set(g, [...(kindSections.get(g) || []), k.id]);
 export const SCHEMA = [
-  ...KINDS.flatMap(k => k.sections.map(g => ({...g, kinds: [k.id]}))),
+  ...[...kindSections].map(([g, kinds]) => ({...g, kinds})),
   ...SHARED_SECTIONS.map(g => {
     const kinds = KINDS.filter(k => !k.hides.includes(g.title)).map(k => k.id);
     return kinds.length === KINDS.length ? g : {...g, kinds};
