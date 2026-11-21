@@ -17,8 +17,11 @@ google:
 # Optional "Continue with the map app": the accounts live in fs25map-creator, which this app trusts. url is its address
 # (https://karta.example.se), clientSecret the same secret as there (SSO_BUILDING_SECRET), or point existingSecret at a Secret
 # with the key SSO_CLIENT_SECRET.
+# url is how this app's API reaches it (a cluster service address like http://fs25map.fs25.svc is fine); publicUrl is the address
+# people's browsers use (empty: the same as url, which then must be reachable from the browser too).
 sso:
   url: ""
+  publicUrl: ""
   clientSecret: ""
   existingSecret: ""
 

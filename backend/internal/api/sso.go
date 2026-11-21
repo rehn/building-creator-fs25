@@ -26,7 +26,16 @@ const (
 	ssoPath      = "/api/auth/sso"
 )
 
-func (c Config) SSOEnabled() bool       { return c.SSOURL != "" && c.SSOSecret != "" }
+func (c Config) SSOEnabled() bool { return c.SSOURL != "" && c.SSOSecret != "" }
+
+// ssoBrowserURL is where the browser goes to log in over there.
+func (c Config) ssoBrowserURL() string {
+	if c.SSOPublicURL != "" {
+		return c.SSOPublicURL
+	}
+	return c.SSOURL
+}
+
 func (c Config) SSORedirectURL() string { return c.PublicURL + ssoPath + "/callback" }
 
 func (s *Server) ssoStart(w http.ResponseWriter, r *http.Request) {
@@ -37,7 +46,7 @@ func (s *Server) ssoStart(w http.ResponseWriter, r *http.Request) {
 	state := auth.NewToken()
 	http.SetCookie(w, &http.Cookie{Name: ssoStateName, Value: state, Path: ssoPath, MaxAge: 600, HttpOnly: true, Secure: s.cfg.SecureCookies, SameSite: http.SameSiteLaxMode})
 	q := url.Values{"client_id": {ssoClientID}, "redirect_uri": {s.cfg.SSORedirectURL()}, "state": {state}}
-	http.Redirect(w, r, s.cfg.SSOURL+"/sso/authorize?"+q.Encode(), http.StatusFound)
+	http.Redirect(w, r, s.cfg.ssoBrowserURL()+"/sso/authorize?"+q.Encode(), http.StatusFound)
 }
 
 func (s *Server) ssoCallback(w http.ResponseWriter, r *http.Request) {

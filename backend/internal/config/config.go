@@ -35,6 +35,7 @@ func (c Config) Database() string {
 //	GOOGLE_CLIENT_ID      with GOOGLE_CLIENT_SECRET, turns on "Sign in with Google"
 //	GOOGLE_CLIENT_SECRET
 //	SSO_URL               the map app's address (fs25map-creator), with SSO_CLIENT_SECRET (the same in both) turns on "Sign in with the map app"
+//	SSO_PUBLIC_URL        the map app's address as the browser reaches it, if SSO_URL (an internal service address, say) is not; default SSO_URL
 //	SSO_CLIENT_SECRET
 //	LISTEN_ADDR           default :8080
 //	DATABASE_PATH         SQLite file, default /data/building-creator-fs25.db
@@ -63,9 +64,13 @@ func Load(getenv func(string) string) (Config, error) {
 		GoogleClientID:     strings.TrimSpace(getenv("GOOGLE_CLIENT_ID")),
 		GoogleClientSecret: strings.TrimSpace(getenv("GOOGLE_CLIENT_SECRET")),
 		SSOURL:             strings.TrimRight(strings.TrimSpace(getenv("SSO_URL")), "/"),
+		SSOPublicURL:       strings.TrimRight(strings.TrimSpace(getenv("SSO_PUBLIC_URL")), "/"),
 		SSOSecret:          strings.TrimSpace(getenv("SSO_CLIENT_SECRET")),
 		TrustProxy:         strings.EqualFold(strings.TrimSpace(getenv("TRUST_PROXY")), "true"),
 		SessionTTL:         30 * 24 * time.Hour,
+	}
+	if c.API.SSOPublicURL == "" {
+		c.API.SSOPublicURL = c.API.SSOURL
 	}
 	if key := strings.TrimSpace(getenv("ANTHROPIC_API_KEY")); key != "" {
 		c.API.Vision = vision.New(key)

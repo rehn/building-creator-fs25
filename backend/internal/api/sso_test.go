@@ -140,3 +140,21 @@ func TestSSOEnabledInConfig(t *testing.T) {
 		t.Fatal("SSO not reported")
 	}
 }
+
+// The server may reach the map app by an internal address (a cluster service) the browser cannot: the browser goes to the public one.
+func TestSSOBrowserGoesToThePublicAddress(t *testing.T) {
+	m := fakeMapApp(t, map[string]any{"sub": "u-1", "email": "admin@example.se", "emailVerified": true})
+	srv := newTestServer(t, withSSO(m), func(c *Config) { c.SSOPublicURL = "https://karta.example.se" })
+	c := newClient(t, srv)
+	rec := c.do("GET", "/api/auth/sso/start", nil)
+	expect(t, rec, 302)
+	if loc := rec.Header().Get("Location"); !strings.HasPrefix(loc, "https://karta.example.se/sso/authorize?") {
+		t.Fatalf("redirect %q", loc)
+	}
+	// the code is still traded at the internal address
+	loc, _ := url.Parse(rec.Header().Get("Location"))
+	rec = c.do("GET", "/api/auth/sso/callback?code=good-code&state="+url.QueryEscape(loc.Query().Get("state")), nil)
+	if rec.Header().Get("Location") != "/" {
+		t.Fatalf("ended up at %q", rec.Header().Get("Location"))
+	}
+}
