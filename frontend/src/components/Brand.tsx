@@ -15,7 +15,7 @@ export function Brand({ href = "/" }: { href?: string }) {
   return (
     <Link href={href} className="brand">
       <Logo />
-      <div><h1>House to i3d</h1><small>Build your house for Farming Simulator</small></div>
+      <div><h1>FS25-buildings</h1><small>Build your house for Farming Simulator</small></div>
     </Link>
   );
 }

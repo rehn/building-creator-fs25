@@ -7,7 +7,7 @@ const body = Barlow({ subsets: ["latin"], weight: ["400", "500", "600"], variabl
 const display = Barlow_Condensed({ subsets: ["latin"], weight: ["600", "700"], variable: "--font-display" });
 
 export const metadata: Metadata = {
-  title: "House to i3d",
+  title: "FS25-buildings",
   description: "Build houses for Farming Simulator 25 and export them as i3d.",
 };
 
