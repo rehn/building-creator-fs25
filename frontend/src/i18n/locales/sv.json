@@ -950,5 +950,8 @@
   "The game's tipping hopper at the intake": "Spelets egen tömningstratt vid intaget",
   "Places that buy what the player brings, like a grain silo. Placed by a map, not bought.": "Platser som köper det spelaren kommer med, som en spannmålssilo. Placeras av en karta, kan inte köpas.",
   "Round tanks beside the hall, in a row along the side you choose. They are solid: vehicles and players cannot walk through them.": "Runda tankar bredvid hallen, i en rad längs den sida du väljer. De är solida: fordon och spelare kan inte gå igenom dem.",
-  "The grain the station buys: the player tips it at the intake (under Game objects) and is paid the game's price for it. With none ticked it buys wheat. It cannot be bought or sold: a map places it.": "Den spannmål stationen köper: spelaren tömmer den vid intaget (under Spelobjekt) och får spelets pris för den. Utan någon ikryssad köper den vete. Den kan inte köpas eller säljas: en karta placerar den."
+  "The grain the station buys: the player tips it at the intake (under Game objects) and is paid the game's price for it. With none ticked it buys wheat. It cannot be bought or sold: a map places it.": "Den spannmål stationen köper: spelaren tömmer den vid intaget (under Spelobjekt) och får spelets pris för den. Utan någon ikryssad köper den vete. Den kan inte köpas eller säljas: en karta placerar den.",
+  "Maps": "Kartor",
+  "Open the map app": "Öppna kartappen",
+  "Apps": "Appar"
 }

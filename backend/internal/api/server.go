@@ -88,7 +88,11 @@ func (s *Server) routes() {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "version": s.cfg.Version})
 	})
 	m.HandleFunc("GET /api/auth/config", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]bool{"google": s.cfg.GoogleEnabled(), "sso": s.cfg.SSOEnabled()})
+		out := map[string]any{"google": s.cfg.GoogleEnabled(), "sso": s.cfg.SSOEnabled()}
+		if s.cfg.SSOEnabled() {
+			out["ssoUrl"] = s.cfg.ssoBrowserURL() // the header's switch to the map app
+		}
+		writeJSON(w, http.StatusOK, out)
 	})
 	m.HandleFunc("POST /api/auth/signup", s.signup)
 	m.HandleFunc("POST /api/auth/login", s.login)

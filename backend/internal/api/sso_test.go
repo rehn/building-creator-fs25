@@ -127,8 +127,8 @@ func TestSSOBadCodeFails(t *testing.T) {
 func TestSSODisabled(t *testing.T) {
 	srv := newTestServer(t)
 	c := newClient(t, srv)
-	if decode[map[string]bool](t, c.do("GET", "/api/auth/config", nil))["sso"] {
-		t.Fatal("SSO reported as enabled")
+	if cfg := decode[map[string]any](t, c.do("GET", "/api/auth/config", nil)); cfg["sso"] != false || cfg["ssoUrl"] != nil {
+		t.Fatalf("SSO reported as enabled: %v", cfg)
 	}
 	expect(t, c.do("GET", "/api/auth/sso/start", nil), 404)
 }
@@ -136,8 +136,21 @@ func TestSSODisabled(t *testing.T) {
 func TestSSOEnabledInConfig(t *testing.T) {
 	m := fakeMapApp(t, map[string]any{})
 	c := newClient(t, newTestServer(t, withSSO(m)))
-	if !decode[map[string]bool](t, c.do("GET", "/api/auth/config", nil))["sso"] {
+	if !decode[map[string]any](t, c.do("GET", "/api/auth/config", nil))["sso"].(bool) {
 		t.Fatal("SSO not reported")
+	}
+}
+
+// The header's switch to the map app needs the map app's address as the browser reaches it.
+func TestSSOConfigGivesTheMapAppsAddress(t *testing.T) {
+	m := fakeMapApp(t, map[string]any{})
+	c := newClient(t, newTestServer(t, withSSO(m)))
+	if got := decode[map[string]any](t, c.do("GET", "/api/auth/config", nil))["ssoUrl"]; got != m.URL {
+		t.Fatalf("ssoUrl %v, want %s", got, m.URL)
+	}
+	c = newClient(t, newTestServer(t, withSSO(m), func(c *Config) { c.SSOPublicURL = "https://karta.example.se" }))
+	if got := decode[map[string]any](t, c.do("GET", "/api/auth/config", nil))["ssoUrl"]; got != "https://karta.example.se" {
+		t.Fatalf("ssoUrl %v, want the public address", got)
 	}
 }
 

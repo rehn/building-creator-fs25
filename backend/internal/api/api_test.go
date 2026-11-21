@@ -511,7 +511,7 @@ func TestGoogleDisabled(t *testing.T) {
 	c := newClient(t, srv)
 	rec := c.do("GET", "/api/auth/config", nil)
 	expect(t, rec, 200)
-	if decode[map[string]bool](t, rec)["google"] {
+	if decode[map[string]any](t, rec)["google"] != false {
 		t.Fatal("Google reported as enabled")
 	}
 	expect(t, c.do("GET", "/api/auth/google/start", nil), 404)
