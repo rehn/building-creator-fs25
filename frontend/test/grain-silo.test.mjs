@@ -90,3 +90,20 @@ test("the settings survive sanitize, and every silo side builds", () => {
   }
   assert.equal(silo({siloCount: 9}).siloCount, 4, "at most four");
 });
+
+test("a silo looks like a real one: ribbed tank, a conical roof, a ladder up the outer side and a filling pipe", async () => {
+  const { siloSpots } = await import("../src/editor/kinds/grainsilo.mjs");
+  const p = silo({siloCount: 1, siloSide: "back"}), [s] = siloSpots(p), top = 0.35 + s.h;
+  const none = buildGeometry(silo({siloCount: 0})).G.fittings, one = buildGeometry(p).G.fittings;
+  assert.ok((one.i.length - none.i.length) / 3 > 800, "ribs, posts, ladder and pipe are many faces");
+  let peak = -Infinity, ladder = false, platform = false;
+  for (let k = 0; k < one.p.length; k += 3) {
+    const [x, y, z] = [one.p[k], one.p[k + 1], one.p[k + 2]];
+    peak = Math.max(peak, y);
+    if (z < s.z - s.r - 0.3 && y > top) ladder = true;   // the ladder and the pipe reach past the tank's top, on the side away from the hall
+    if (z < s.z - s.r - 0.9 && y > 3 && y < top - 1) platform = true;   // a landing sticks out a metre
+  }
+  assert.ok(peak > top + s.r * 0.25, "the roof is a cone that rises");
+  assert.ok(ladder, "a ladder up the outer side");
+  assert.ok(platform, "with a landing on the way");
+});

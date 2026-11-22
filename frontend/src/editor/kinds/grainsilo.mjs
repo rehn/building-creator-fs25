@@ -38,18 +38,56 @@ export function siloSpots(p) {
   });
 }
 
-const COL = {steel: "#B3B9BC", dark: "#8D9498", concrete: "#9A968C"};
+const COL = {steel: "#B3B9BC", rib: "#6A7378", frame: "#6F7A80", band: "#363B40", pipe: "#8A9296", concrete: "#9A968C"};
+const OUT = {back: [0, -1], front: [0, 1], left: [-1, 0], right: [1, 0]};
 
-/** The silos, outside the walls: a galvanised tank on a concrete ring with a stepped cone roof, and a solid collision box. */
+/**
+ * The silos, outside the walls, like a Swedish farm silo of galvanised sheet: a tank on a concrete ring with horizontal ribs, vertical posts, a dark
+ * name band, a low cone roof, a ladder with landings up the side away from the hall and a filling pipe bent over the roof edge. A solid collision box.
+ */
 function outside(c) {
+  const out = OUT[c.p.siloSide] || OUT.back, tn = [-out[1], out[0]];
   for (const s of siloSpots(c.p)) {
-    const at = y => [s.x, y, s.z], seg = Math.max(16, Math.round(s.r * 5));
+    const at = y => [s.x, y, s.z], seg = Math.max(16, Math.round(s.r * 5)), top = 0.35 + s.h, rise = s.r * 0.3, y0 = 0.5;
+    // a point `rad` out from the silo's middle (away from the hall) and `t` along the side, at height y (the sides are axis-aligned)
+    const pos = (rad, t, y) => [s.x + out[0] * rad + tn[0] * t, y, s.z + out[1] * rad + tn[1] * t];
     c.paint(COL.concrete, "concrete"); c.cyl(at(0), s.r + 0.15, 0.35, seg);
-    c.paint(COL.steel, "galv"); c.cyl(at(0.35), s.r, s.h, seg);
-    c.paint(COL.dark, "galv");
-    for (const [k, f] of [[0, 0.92], [1, 0.7], [2, 0.42], [3, 0.16]]) c.cyl(at(0.35 + s.h + k * 0.3), s.r * f, 0.3, seg);
+    // (the tank starts a hair under the ring's top, the roof a hair under the tank's top: no two faces in one plane)
+    c.paint(COL.steel, "galv"); c.cyl(at(0.33), s.r, s.h + 0.02, seg);
+    c.paint(COL.rib, "galv");
+    for (let y = 0.35 + 0.6; y < top - 0.2; y += 0.6) c.cyl(at(y), s.r + 0.03, 0.07, seg);
+    c.paint(COL.band, "galv"); c.cyl(at(top * 0.58), s.r + 0.06, 1.3, seg);
+    c.paint(COL.frame, "galv");
+    const n = Math.max(6, Math.round(s.r * 2.2)), ao = Math.atan2(out[1], out[0]);
+    for (let k = 0; k < n; k++) {
+      const a = ao + (k + 0.5) / n * 2 * Math.PI, r = s.r + 0.08;
+      c.rod([s.x + r * Math.cos(a), 0.35, s.z + r * Math.sin(a)], [s.x + r * Math.cos(a), top, s.z + r * Math.sin(a)], 0.05, 4);
+    }
+    c.paint(COL.steel, "galv"); c.cone(at(top - 0.03), s.r + 0.1, s.r * 0.12, rise + 0.03, seg);
+    c.paint(COL.rib, "galv"); c.cyl(at(top + rise - 0.05), 0.4, 0.4, 8);
+    // the ladder: two rails with rungs, held off the tank by brackets, from near the ground to a little over the roof edge
+    c.paint(COL.frame, "galv");
+    const lr = s.r + 0.5, yTop = top + 0.9;
+    for (const t of [-0.22, 0.22]) {
+      c.rod(pos(lr, t, y0), pos(lr, t, yTop), 0.025, 4);
+      for (let y = 2; y < top; y += 3) c.rod(pos(s.r + 0.05, t, y), pos(lr, t, y), 0.02, 4);
+    }
+    for (let y = y0 + 0.3; y < yTop; y += 0.35) c.rod(pos(lr, -0.22, y), pos(lr, 0.22, y), 0.015, 4);
+    // landings every 4.5 m: a plate, two side rails and the outer rail broken where the ladder passes
+    for (let y = 4.5; y < top - 1; y += 4.5) {
+      const A = pos(s.r - 0.1, -0.7, y), B = pos(s.r + 1, 0.7, y + 0.05);
+      c.abox("fittings", [Math.min(A[0], B[0]), y, Math.min(A[2], B[2])], [Math.max(A[0], B[0]), y + 0.05, Math.max(A[2], B[2])]);
+      for (const t of [-0.7, 0.7]) {
+        c.rod(pos(s.r, t, y + 1), pos(s.r + 1, t, y + 1), 0.025, 4);
+        c.rod(pos(s.r + 1, t, y), pos(s.r + 1, t, y + 1), 0.025, 4);
+      }
+      for (const [t0, t1] of [[-0.7, -0.3], [0.3, 0.7]]) c.rod(pos(s.r + 1, t0, y + 1), pos(s.r + 1, t1, y + 1), 0.025, 4);
+    }
+    // the filling pipe up beside the ladder, over the roof edge and in towards the middle, ending in a downward elbow
+    c.paint(COL.pipe, "galv");
+    c.tube([pos(s.r + 0.3, 0.8, 0.4), pos(s.r + 0.3, 0.8, top + 0.9), pos(s.r, 0.8, top + 1.1), pos(s.r * 0.5, 0.8, top + 1.1), pos(s.r * 0.5, 0.8, top + 0.8)], 0.11, 10);
     const q = s.r * 0.8;
-    c.abox("collision", [s.x - q, 0, s.z - q], [s.x + q, 0.35 + s.h + 1.2, s.z + q]);
+    c.abox("collision", [s.x - q, 0, s.z - q], [s.x + q, top + rise, s.z + q]);
   }
 }
 
