@@ -36,6 +36,7 @@ function edited(iso: string) {
  */
 const THUMB_KEY = "hx-preset-thumbs", THUMB_VERSION = "2";
 const hashOf = (settings: unknown) => { const t = THUMB_VERSION + JSON.stringify(settings); let h = 5381; for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) | 0; return String(h); };
+const FOLDED_KEY = "hx-folded-groups";
 const loadThumbs = (): Record<string, { h: string; url: string }> => { try { return JSON.parse(localStorage.getItem(THUMB_KEY) || "{}"); } catch { return {}; } };
 const saveThumbs = (c: Record<string, { h: string; url: string }>) => { try { localStorage.setItem(THUMB_KEY, JSON.stringify(c)); } catch { /* full or blocked: the pictures are made again next time */ } };
 
@@ -53,6 +54,19 @@ export default function HousesPage() {
   const [making, setMaking] = useState(false);
   // buildings ticked to be packed together into one game mod, its title, and how far the packing is
   const [picked, setPicked] = useState<string[]>([]);
+  // Folders and kinds that are folded up, remembered in this browser ("f:<folder>", "k:<folder>:<kind>").
+  const [folded, setFolded] = useState<string[]>([]);
+  useEffect(() => { try { setFolded(JSON.parse(localStorage.getItem(FOLDED_KEY) || "[]")); } catch { /* blocked: everything starts open */ } }, []);
+  const fold = (key: string) => setFolded(list => {
+    const next = list.includes(key) ? list.filter(k => k !== key) : [...list, key];
+    try { localStorage.setItem(FOLDED_KEY, JSON.stringify(next)); } catch { /* the fold just isn't remembered */ }
+    return next;
+  });
+  const foldButton = (key: string) => (
+    <button type="button" className="fold" onClick={() => fold(key)} aria-expanded={!folded.includes(key)} title={t(folded.includes(key) ? "Expand" : "Collapse")} aria-label={t(folded.includes(key) ? "Expand" : "Collapse")}>
+      <span aria-hidden="true">{folded.includes(key) ? "\u25B6" : "\u25BC"}</span>
+    </button>
+  );
   const [modTitle, setModTitle] = useState("My buildings");
   const [packing, setPacking] = useState<{ done: number; total: number; name: string } | null>(null);
 
@@ -218,16 +232,16 @@ export default function HousesPage() {
     });
   };
 
-  const kindGroups = (list: ProjectSummary[]) => byKind(list, kindOfHouse).map(g => (
+  const kindGroups = (list: ProjectSummary[], scope = "") => byKind(list, kindOfHouse).map(g => (
           <section className="kind-group" key={g.kind.id} aria-label={g.kind.plural}>
-            <h3>{g.kind.plural} <small>{g.items.length}</small>
+            <h3>{foldButton(`k:${scope}:${g.kind.id}`)}{g.kind.plural} <small>{g.items.length}</small>
               {g.items.length > 1 && (
                 <button type="button" className="linklike" onClick={() => setPicked(list => g.items.every(h => list.includes(h.id)) ? list.filter(id => !g.items.some(h => h.id === id)) : [...new Set([...list, ...g.items.map(h => h.id)])])} disabled={busy}>
                   {g.items.every(h => picked.includes(h.id)) ? "Select none" : "Select all"}
                 </button>
               )}
             </h3>
-            <div className="grid">
+            {!folded.includes(`k:${scope}:${g.kind.id}`) && <div className="grid">
               {g.items.map(h => (
                 <article className="house" key={h.id}>
                   <label className="pick" title="Tick to pack with others into one game mod">
@@ -254,7 +268,7 @@ export default function HousesPage() {
                   </div>
                 </article>
               ))}
-            </div>
+            </div>}
           </section>
         ));
 
@@ -283,8 +297,8 @@ export default function HousesPage() {
           ? kindGroups(houses)
           : [...folders, ""].map(f => ({ f, list: houses.filter(h => folderOf(h) === f) })).filter(x => x.list.length > 0).map(x => (
             <section className="folder-group" key={x.f || "none"} aria-label={x.f || t("Not in a folder")}>
-              <h2 className="folder-head"><span translate={x.f ? "no" : undefined}>{x.f || t("Not in a folder")}</span> <small>{x.list.length}</small></h2>
-              {kindGroups(x.list)}
+              <h2 className="folder-head">{foldButton(`f:${x.f}`)}<span translate={x.f ? "no" : undefined}>{x.f || t("Not in a folder")}</span> <small>{x.list.length}</small></h2>
+              {!folded.includes(`f:${x.f}`) && kindGroups(x.list, x.f)}
             </section>
           )))}
         {picked.length > 0 && (
