@@ -178,6 +178,12 @@ export const api = {
   textures: () => request<Texture[]>("GET", "/textures"),
   /** Saves a texture: form fields name, size, meters, thumb and the files diffuse, normal, specular (DDS). */
   createTexture: (form: FormData) => send<Texture>("POST", "/textures", form),
+  /** One DDS file of a texture: diffuse, normal or specular. */
+  textureFile: async (id: string, kind: "diffuse" | "normal" | "specular") => {
+    const res = await fetch(`/api/textures/${encodeURIComponent(id)}/${kind}`, { credentials: "same-origin", cache: "no-store" });
+    if (!res.ok) throw new ApiError(res.status, "file", `Couldn't load the ${kind} map (${res.status}).`);
+    return res.arrayBuffer();
+  },
   updateTexture: (id: string, patch: { name?: string; meters?: number }) => request<Texture>("PATCH", "/textures/" + encodeURIComponent(id), patch),
   deleteTexture: (id: string) => request<void>("DELETE", "/textures/" + encodeURIComponent(id)),
 

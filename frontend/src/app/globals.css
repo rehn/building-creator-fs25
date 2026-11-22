@@ -481,9 +481,13 @@ select.lang:hover { border-color: var(--muted); }
 /* The modeller: materials and faces */
 .builder-materials, .builder-faces { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; border: 0; padding: 0; }
 .builder-panel h3 { font-size: 14px; margin: 10px 0 2px; }
-.builder-material { display: flex; gap: 6px; align-items: center; }
-.builder-material input[type=text] { flex: 1; min-width: 0; }
+.builder-material { display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 .builder-material input[type=color] { width: 32px; height: 28px; padding: 0; flex: none; }
+.builder-material .field { display: flex; flex-direction: column; gap: 3px; margin: 2px 0; font-size: 13.5px; }
+.builder-material select { width: 100%; }
 .builder-faces legend { font-weight: 600; font-size: 14px; }
 .seg.wrap { flex-wrap: wrap; gap: 4px; }
 .seg.wrap button { border-radius: 6px; margin: 0; }
+.builder-material-head { display: flex; gap: 6px; align-items: center; flex-wrap: nowrap; }
+.builder-material-head input[type=text] { flex: 1; min-width: 0; }
+.builder-material-head button { flex: none; width: auto; padding: 4px 10px; }

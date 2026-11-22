@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { addMaterial, addPart, duplicatePart, groundPart, partFaces, removeMaterial, removePart, sanitize, setFaceMaterial, updateMaterial, updatePart, MAX_MATERIALS, type BuilderProject, type Part } from "./model.mjs";
 import { createBuilderView, type BuilderView } from "./view.mjs";
 import { draftValue, shownValue } from "./number.mjs";
+import { api, type Texture } from "@/lib/api";
+import { decodeDds } from "@/editor/dds.mjs";
 
 export type BuilderModel = BuilderProject;
 export interface BuilderHandle { snapshot: () => string | null }
@@ -40,6 +42,9 @@ export default function Builder({ initial, onChange, onReady }: { initial: Recor
   const canvas = useRef<HTMLCanvasElement>(null);
   const view = useRef<BuilderView | null>(null);
   const [face, setFace] = useState<string | null>(null);
+  const [library, setLibrary] = useState<Texture[]>([]);   // the user's saved textures (My textures)
+  const [loaded, setLoaded] = useState(0);                // how many texture pictures the view has got (a change redraws)
+  const asked = useRef(new Set<string>());
   const pick = useRef<(id: number | null, face: string | null) => void>(() => {});
   pick.current = (id, f) => { setChosen(id); setFace(id === null ? null : f); };
 
@@ -53,7 +58,17 @@ export default function Builder({ initial, onChange, onReady }: { initial: Recor
     // (mounted once; later changes are drawn by the effect below)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  useEffect(() => { view.current?.show(model, chosen, face); }, [model, chosen, face]);
+  useEffect(() => { view.current?.show(model, chosen, face); }, [model, chosen, face, loaded]);
+  useEffect(() => { api.textures().then(setLibrary).catch(() => setLibrary([])); }, []);
+  // the pictures of the textures the materials use, fetched once each and handed to the view
+  useEffect(() => {
+    for (const m of model.materials) {
+      const id = m.texture?.id;
+      if (!id || asked.current.has(id)) continue;
+      asked.current.add(id);
+      api.textureFile(id, "diffuse").then(buf => { const d = decodeDds(new Uint8Array(buf)); view.current?.setTexture(id, { width: d.width, height: d.height, rgba: d.data }); setLoaded(n => n + 1); }).catch(() => asked.current.delete(id));
+    }
+  }, [model.materials]);
 
   const change = (next: BuilderModel) => { setModel(next); onChange(next); };
   const part = model.parts.find(p => p.id === chosen) ?? null;
@@ -82,9 +97,22 @@ export default function Builder({ initial, onChange, onReady }: { initial: Recor
           <ul className="builder-list">
             {model.materials.map(m => (
               <li key={m.id} className="builder-material">
-                <input type="color" aria-label="Colour" value={m.color} onChange={e => change(updateMaterial(model, m.id, { color: e.target.value }))} />
-                <input type="text" translate="no" aria-label="Name" maxLength={60} value={m.name} onChange={e => change(updateMaterial(model, m.id, { name: e.target.value }))} />
-                <button type="button" className="danger" aria-label="Delete this material" onClick={() => change(removeMaterial(model, m.id))}>×</button>
+                <div className="builder-material-head">
+                  <input type="color" aria-label="Colour" value={m.color} onChange={e => change(updateMaterial(model, m.id, { color: e.target.value }))} />
+                  <input type="text" translate="no" aria-label="Name" maxLength={60} value={m.name} onChange={e => change(updateMaterial(model, m.id, { name: e.target.value }))} />
+                  <button type="button" className="danger" aria-label="Delete this material" onClick={() => change(removeMaterial(model, m.id))}>×</button>
+                </div>
+                <label className="field">Texture
+                  <select value={m.texture?.id ?? ""} onChange={e => {
+                    const t = library.find(x => x.id === e.target.value);
+                    change(updateMaterial(model, m.id, { texture: t ? { id: t.id, meters: t.meters } : null }));
+                  }}>
+                    <option value="">Colour only</option>
+                    {m.texture && !library.some(x => x.id === m.texture!.id) && <option value={m.texture.id}>{"A texture that is gone"}</option>}
+                    {library.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                </label>
+                {m.texture && <NumberField key={`${m.id}-meters`} label="Size of one repeat, in metres" step={0.05} value={m.texture.meters} onCommit={v => change(updateMaterial(model, m.id, { texture: { id: m.texture!.id, meters: v } }))} />}
               </li>
             ))}
           </ul>

@@ -1026,5 +1026,10 @@
   "Delete this material": "Ta bort det här materialet",
   "Faces": "Ytor",
   "Material of this face": "Material på den här ytan",
-  "Materials": "Material"
+  "Materials": "Material",
+  "Colour only": "Bara färg",
+  "Couldn't load the {kind} map ({status}).": "Kunde inte hämta {kind}-kartan ({status}).",
+  "Couldn’t make the file.": "Kunde inte göra filen.",
+  "Size of one repeat, in metres": "Storlek på en upprepning, i meter",
+  "A texture that is gone": "En textur som är borttagen"
 }

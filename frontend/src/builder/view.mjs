@@ -1,7 +1,7 @@
 // The modeller's 3D view (docs/PLAN_BUILDER.md): the parts on a ground grid, drag to turn, wheel to zoom, click a part to choose it.
 // three.js only; it knows nothing about the house editor. The model comes from model.mjs (partMesh gives each part's mesh).
 import * as THREE from "three";
-import { partMesh, faceOfTriangle, faceColor } from "./model.mjs";
+import { partMesh, partUv, faceOfTriangle, faceColor, faceMaterial } from "./model.mjs";
 
 /** Mounts a view on canvas. show(model, selectedId, selectedFace) draws the parts; onPick(id | null, faceId | null) is told which part and face was clicked; dispose() frees it. */
 export function createBuilderView(canvas, {onPick = () => {}} = {}) {
@@ -25,6 +25,7 @@ export function createBuilderView(canvas, {onPick = () => {}} = {}) {
   const group = new THREE.Group(); scene.add(group);
   const look = {theta: 0.7, phi: 1.05, dist: 9, target: new THREE.Vector3(0, 1, 0)};
   let meshes = [];
+  const textures = new Map();   // texture id -> THREE.Texture (setTexture)
 
   function place() {
     const s = Math.sin(look.phi), p = new THREE.Vector3(Math.sin(look.theta) * s, Math.cos(look.phi), Math.cos(look.theta) * s).multiplyScalar(look.dist);
@@ -38,20 +39,25 @@ export function createBuilderView(canvas, {onPick = () => {}} = {}) {
 
   /** Draws the project (each face in its own colour); the chosen part gets an outline, the chosen face an orange tint. Keeps the camera where it is. */
   function show(model, selectedId, selectedFace = null) {
-    for (const m of meshes) { m.geometry.dispose(); m.material.dispose(); }
+    for (const m of meshes) { m.geometry.dispose(); [].concat(m.material).forEach(x => x.dispose()); }
     group.clear(); meshes = [];
     for (const part of model.parts) {
       const g = partMesh(part), geo = new THREE.BufferGeometry();
       geo.setAttribute("position", new THREE.Float32BufferAttribute(g.p, 3));
       geo.setAttribute("normal", new THREE.Float32BufferAttribute(g.n, 3));
-      geo.setAttribute("uv", new THREE.Float32BufferAttribute(g.uv, 2));
+      geo.setAttribute("uv", new THREE.Float32BufferAttribute(partUv(model, part), 2));   // (in repeats for a face in a textured material)
       geo.setIndex(g.i);
       geo.translate(0, -part.h / 2, 0);   // (a part turns about its middle, which is where the mesh is placed)
-      // a colour per vertex from the face it is on (no vertex is shared between faces)
-      const face = faceOfTriangle(part), colors = new Float32Array(g.p.length);
-      face.forEach((f, t) => { const c = new THREE.Color(faceColor(model, part, f)); for (let k = 0; k < 3; k++) colors.set([c.r, c.g, c.b], g.i[t * 3 + k] * 3); });
-      geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-      const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({vertexColors: true, roughness: 0.7, metalness: 0.1}));
+      // one material per face (the faces are runs of triangles in the mesh): its texture if it is loaded, else its colour
+      const face = faceOfTriangle(part), mats = [];
+      for (let t = 0, start = 0; t <= face.length; t++) {
+        if (t < face.length && face[t] === face[start]) continue;
+        const row = faceMaterial(model, part, face[start]), map = row && row.texture ? textures.get(row.texture.id) : null;
+        geo.addGroup(start * 3, (t - start) * 3, mats.length);
+        mats.push(new THREE.MeshStandardMaterial(map ? {map, roughness: 0.7, metalness: 0.1} : {color: faceColor(model, part, face[start]), roughness: 0.7, metalness: 0.1}));
+        start = t;
+      }
+      const mesh = new THREE.Mesh(geo, mats);
       mesh.userData.faces = face;
       mesh.position.set(part.x, part.y + part.h / 2, part.z);
       const rad = d => d * Math.PI / 180;
@@ -73,6 +79,17 @@ export function createBuilderView(canvas, {onPick = () => {}} = {}) {
     }
     render();
   }
+
+  /** A texture to draw faces with: the picture as RGBA (top row first, as a DDS decodes), repeating. Call show() again afterwards. */
+  function setTexture(id, {width, height, rgba}) {
+    const flipped = new Uint8Array(width * height * 4);
+    for (let y = 0; y < height; y++) flipped.set(rgba.subarray(y * width * 4, (y + 1) * width * 4), (height - 1 - y) * width * 4);   // (v goes up, a picture's first row is its top)
+    const tex = new THREE.DataTexture(flipped, width, height, THREE.RGBAFormat);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.minFilter = THREE.LinearMipmapLinearFilter; tex.magFilter = THREE.LinearFilter; tex.generateMipmaps = true;
+    tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy()); tex.needsUpdate = true;
+    textures.get(id)?.dispose(); textures.set(id, tex);
+  }
+  const hasTexture = id => textures.has(id);
 
   /** Looks at everything: the camera is put back so the whole project is in view. */
   function frame(model) {
@@ -112,7 +129,7 @@ export function createBuilderView(canvas, {onPick = () => {}} = {}) {
 
   return {
     // A small picture for the project list (the server refuses a data URL over 300 KB, which a full-size canvas on a big or retina window is).
-    show, frame, snapshot: () => {
+    show, frame, setTexture, hasTexture, snapshot: () => {
       try {
         render();
         const W = 480, H = 300, c = document.createElement("canvas"); c.width = W; c.height = H;
@@ -124,7 +141,8 @@ export function createBuilderView(canvas, {onPick = () => {}} = {}) {
     dispose() {
       canvas.removeEventListener("pointerdown", down); canvas.removeEventListener("pointermove", move); canvas.removeEventListener("pointerup", up);
       canvas.removeEventListener("wheel", wheel); if (ro) ro.disconnect();
-      for (const m of meshes) { m.geometry.dispose(); m.material.dispose(); }
+      for (const m of meshes) { m.geometry.dispose(); [].concat(m.material).forEach(x => x.dispose()); }
+      for (const t of textures.values()) t.dispose();
       renderer.dispose();
     },
   };
