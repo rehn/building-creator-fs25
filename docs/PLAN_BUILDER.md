@@ -5,7 +5,7 @@ Utkast att besluta om, inget är byggt. Bakgrund: bensinmacken (PLAN_STATIONS.md
 ## Mål
 
 - **Den här appen** (house to i3d) håller sig till hus, ladugårdar och skjul och OSM-flödet. Inga nya specialbyggnader byggs i den. Silon och bensinmacken får ligga kvar som de är.
-- **Modelleraren** är ett verktyg där man bygger detaljerade specialbyggnader och rekvisita (pump, skylt, tank, fabrik) utan Blender, och får en färdig FS25-mod.
+- **Modelleraren** är ett verktyg där man bygger detaljerade specialbyggnader och rekvisita (pump, skylt, tank, fabrik) utan Blender, och får en färdig FS25-mod. Den är **en annan vy i samma app** (beslut Lars, 2026-11-22), inte en separat app.
 
 ## Vad som gör Blender rörigt för FS25
 
@@ -41,14 +41,21 @@ Ett eget spår som modelleraren behöver, men som går att bygga och använda f�
 
 Visa att idén håller med **en** sak: en bensinpump byggd av byggstenar med fototexturer och dekaler, exporterad och prövad i spelet. Det tvingar fram de svåra frågorna (UV, material, export) tidigt.
 
-Görs som en separat editor i samma repo, så att den kan använda exportkoden direkt (i3d-skrivaren, shapes.mjs, dds.mjs, textures.mjs, XML-bygget, importen av egna objekt, tokens/SSO). Den lyfts ut till en egen app först när den har stabiliserats; då behövs en gemensam kodmodul så att inget kopieras.
+Görs som en **annan vy i samma app**: samma konto (SSO med kartappen), samma projektlista, samma export, samma driftsättning och CI. Det som delas är exportkoden direkt (i3d-skrivaren, shapes.mjs, dds.mjs, textures.mjs, XML-bygget, importen av egna objekt, tokens); inget kopieras och ingen gemensam kodmodul behövs.
+
+Gränser, så att de två inte flyter ihop:
+- **Egen modul och egen sida** (t.ex. `src/builder/` och en sida för den). Modelleraren byggs inte in i `editor.mjs`, som är byggd kring en byggnad med inställningar, och importerar den inte. Den får importera exportkoden.
+- **Egen datamodell:** ett träd av delar med eget schema, egen sanering och egna tester (som golden saves), inte inställningar som en byggnad. Projektlistan får en egen typ och kategori för den, så mappar och hopfällbara grupper fungerar som de är.
+- **Navigering:** ett val i headern (t.ex. Buildings | Props), som växlaren mot kartappen.
+- **Laddas bara på sin egen sida**, så att de vanliga sidorna inte blir tyngre.
+- Om den senare behöver egen drift är den redan skild från resten och går att lyfta ut.
 
 Ordning: (1) texturfunktionen som ren funktion med tester på syntetiska bilder, (2) sidan "Mina texturer", (3) byggstenar och material per del för pumpen, (4) dekaler, (5) funktionsmarkering och export, (6) pröva i spelet.
 
 ## Risker
 
 - Ett stort åtagande, mätt i veckor till månader.
-- Två appar (eller en delad modul) att underhålla: CI, driftsättning och kartappen som redan finns.
+- Appen växer: modelleraren ska hållas i en egen modul, annars blir kopplingen till `editor.mjs` ett problem. Delad drift betyder också att ett fel i den ena kan påverka den andra.
 - Bensinmackens trigger, silon och kartflödet är fortfarande inte prövade i spelet. Det bör göras innan mer byggs på samma grund.
 
 ## Öppet
