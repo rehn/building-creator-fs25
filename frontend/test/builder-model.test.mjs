@@ -53,7 +53,8 @@ test("export: an i3d with a node per part at its place, one material per colour,
   const m = sanitize({parts: [part({name: "Body", x: 1, y: 0.2, z: -2, rotY: 90}), part({x: 3, color: "#336699"}), part({shape: "cylinder", r: 0.3, color: "#CC3300"})]});
   const {i3d} = exportI3d(m, {name: "pump"});
   assert.match(i3d, /<i3D name="pump"/);
-  assert.match(i3d, /<Shape name="Body" translation="1 0.2 -2" rotation="0 90 0"/);
+  assert.match(i3d, /<Shape name="Body" translation="1 0.2 -2" shapeId=/, "the turn is in the mesh (placedMesh), the node only has its place");
+  assert.doesNotMatch(i3d, /rotation=/);
   assert.equal((i3d.match(/<Material /g) || []).length, 2, "two colours, two materials");
   assert.equal((i3d.match(/<IndexedTriangleSet /g) || []).length, 3);
   assert.match(i3d, /<Shape name="part2"[^>]*materialIds="1"/, "the same colour shares its material");
@@ -102,4 +103,53 @@ test("operations: no more than MAX_PARTS, and the input is never changed", async
   assert.equal(addPart(full).parts.length, MAX_PARTS);
   const before = JSON.stringify(full);
   addPart(full); assert.equal(JSON.stringify(full), before);
+});
+
+const range = (g, k) => { let lo = Infinity, hi = -Infinity; for (let i = k; i < g.p.length; i += 3) { lo = Math.min(lo, g.p[i]); hi = Math.max(hi, g.p[i]); } return [lo, hi]; };
+const near = (a, b, m) => assert.ok(Math.abs(a - b) < 1e-6, `${m}: ${a} is not ${b}`);
+
+test("turning: a part has a turn about x, y and z, each in (-180, 180]", () => {
+  const p = sanitize({parts: [part({rotX: 270, rotZ: -190, rotY: 360})]}).parts[0];
+  assert.equal(p.rotX, -90);
+  assert.equal(p.rotZ, 170);
+  assert.equal(p.rotY, 0);
+  assert.deepEqual([sanitize({parts: [part()]}).parts[0].rotX, sanitize({parts: [part()]}).parts[0].rotZ], [0, 0], "no turn to start with");
+});
+
+test("turning: the part turns about its own middle, so a cylinder turned 90 about z lies along x", async () => {
+  const { placedMesh } = await import("../src/builder/model.mjs");
+  const c = sanitize({parts: [part({shape: "cylinder", r: 0.5, h: 2, seg: 12, rotZ: 90})]}).parts[0];
+  const g = placedMesh(c);
+  const [x0, x1] = range(g, 0), [y0, y1] = range(g, 1), [z0, z1] = range(g, 2);
+  near(x0, -1, "x lo"); near(x1, 1, "x hi"); near(y0, 0.5, "y lo"); near(y1, 1.5, "y hi"); near(z0, -0.5, "z lo"); near(z1, 0.5, "z hi");
+  // the flat end that faced up now faces -x; normals stay unit length
+  const top = [...Array(g.n.length / 3).keys()].find(v => Math.abs(g.n[v * 3 + 1] - 0) < 1e-9 && Math.abs(g.n[v * 3] + 1) < 1e-9);
+  assert.ok(top !== undefined, "an end faces -x");
+  for (let v = 0; v < g.n.length / 3; v++) near(Math.hypot(g.n[v * 3], g.n[v * 3 + 1], g.n[v * 3 + 2]), 1, "unit normal");
+});
+
+test("turning: no turn changes nothing; the order is x, then z, then y (heading last)", async () => {
+  const { placedMesh, partMesh } = await import("../src/builder/model.mjs");
+  const plain = sanitize({parts: [part({w: 2, h: 3, d: 1})]}).parts[0];
+  assert.deepEqual(placedMesh(plain).p, partMesh(plain).p);
+  // 2 x 4 x 1 box: 90 about x first gives x 2, y 1, z 4; then 90 about y (heading) gives x 4, y 1, z 2. (The other order would give 1, 2, 4.)
+  const t = sanitize({parts: [part({w: 2, h: 4, d: 1, rotX: 90, rotY: 90})]}).parts[0], g = placedMesh(t);
+  const ext = k => { const [a, b] = range(g, k); return +(b - a).toFixed(6); };
+  assert.deepEqual([ext(0), ext(1), ext(2)], [4, 1, 2]);
+});
+
+test("turning: 'ground' puts a part's lowest point on y = 0", async () => {
+  const { groundPart } = await import("../src/builder/model.mjs");
+  const m = sanitize({parts: [part({shape: "cylinder", r: 0.5, h: 2, rotZ: 90, y: 5})]});
+  assert.equal(groundPart(m, 1).parts[0].y, -0.5);
+  assert.equal(groundPart(m, 99).parts[0].y, 5, "an unknown id changes nothing");
+  const flat = sanitize({parts: [part({y: 3})]});
+  assert.equal(groundPart(flat, 1).parts[0].y, 0, "an upright part stands on its base");
+});
+
+test("sides: a cylinder can have 6 to 64 sides, and more sides are more triangles", async () => {
+  const sides = n => partMesh(sanitize({parts: [part({shape: "cylinder", seg: n})]}).parts[0]).i.length / 3;
+  assert.equal(sanitize({parts: [part({seg: 3})]}).parts[0].seg, 6);
+  assert.equal(sanitize({parts: [part({seg: 500})]}).parts[0].seg, 64);
+  assert.ok(sides(40) > sides(8));
 });

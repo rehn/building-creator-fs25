@@ -974,7 +974,12 @@
   "New prop": "Ny rekvisita",
   "Parts": "Delar",
   "Props": "Rekvisita",
-  "Turn (degrees)": "Vridning (grader)",
   "This project doesn’t exist, or it isn’t yours.": "Projektet finns inte, eller så är det inte ditt.",
-  "This project was changed in another tab or browser.": "Projektet ändrades i en annan flik eller webbläsare."
+  "This project was changed in another tab or browser.": "Projektet ändrades i en annan flik eller webbläsare.",
+  "Move the part up or down so its lowest point is on the ground": "Flytta delen upp eller ned så att dess lägsta punkt ligger på marken",
+  "Put on the ground": "Lägg på marken",
+  "Sides (more is rounder)": "Sidor (fler blir rundare)",
+  "Tilt forward, around x (degrees)": "Luta framåt, runt x (grader)",
+  "Tilt sideways, around z (degrees)": "Luta åt sidan, runt z (grader)",
+  "Turn, around y (degrees)": "Vrid, runt y (grader)"
 }

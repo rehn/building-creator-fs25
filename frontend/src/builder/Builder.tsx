@@ -1,13 +1,13 @@
 "use client";
 // The modeller's editor: a list of parts with the chosen one's settings on the left, the 3D view on the right (docs/PLAN_BUILDER.md).
 import { useEffect, useRef, useState } from "react";
-import { addPart, duplicatePart, removePart, sanitize, updatePart, type BuilderProject, type Part } from "./model.mjs";
+import { addPart, duplicatePart, groundPart, removePart, sanitize, updatePart, type BuilderProject, type Part } from "./model.mjs";
 import { createBuilderView, type BuilderView } from "./view.mjs";
 
 export type BuilderModel = BuilderProject;
 export interface BuilderHandle { snapshot: () => string | null }
 
-const NUM: Record<"x" | "y" | "z" | "rotY" | "w" | "d" | "h" | "r", [string, number]> = { x: ["x", 0.05], y: ["y", 0.05], z: ["z", 0.05], rotY: ["Turn (degrees)", 5], w: ["Width", 0.05], d: ["Depth", 0.05], h: ["Height", 0.05], r: ["Radius", 0.05] };
+const NUM: Record<"x" | "y" | "z" | "rotX" | "rotY" | "rotZ" | "w" | "d" | "h" | "r" | "seg", [string, number]> = { x: ["x", 0.05], y: ["y", 0.05], z: ["z", 0.05], rotX: ["Tilt forward, around x (degrees)", 5], rotY: ["Turn, around y (degrees)", 5], rotZ: ["Tilt sideways, around z (degrees)", 5], seg: ["Sides (more is rounder)", 1], w: ["Width", 0.05], d: ["Depth", 0.05], h: ["Height", 0.05], r: ["Radius", 0.05] };
 
 export default function Builder({ initial, onChange, onReady }: { initial: Record<string, unknown>; onChange: (m: BuilderModel) => void; onReady?: (h: BuilderHandle) => void }) {
   const [model, setModel] = useState<BuilderModel>(() => sanitize(initial));
@@ -52,6 +52,7 @@ export default function Builder({ initial, onChange, onReady }: { initial: Recor
           <button type="button" onClick={() => add("box")}>+ Box</button>
           <button type="button" onClick={() => add("cylinder")}>+ Cylinder</button>
         </div>
+        <p className="hint axes"><b style={{ color: "#d33" }}>x</b> red, <b style={{ color: "#2a2" }}>y</b> green (up), <b style={{ color: "#33d" }}>z</b> blue.</p>
         {model.parts.length === 0 && <p className="hint">Add a box or a cylinder to start. Drag in the view to turn, scroll to zoom, click a part to choose it.</p>}
         <ul className="builder-list">
           {model.parts.map(p => (
@@ -66,8 +67,11 @@ export default function Builder({ initial, onChange, onReady }: { initial: Recor
           <section className="builder-part" aria-label="Chosen part">
             <label className="field">Name <input type="text" translate="no" maxLength={60} value={part.name} onChange={e => set({ name: e.target.value })} /></label>
             <label className="field">Colour <input type="color" value={part.color} onChange={e => set({ color: e.target.value })} /></label>
-            {(["x", "y", "z", "rotY"] as const).map(field)}
-            {(part.shape === "cylinder" ? (["r", "h"] as const) : (["w", "h", "d"] as const)).map(field)}
+            {(["x", "y", "z", "rotX", "rotY", "rotZ"] as const).map(field)}
+            {(part.shape === "cylinder" ? (["r", "h", "seg"] as const) : (["w", "h", "d"] as const)).map(field)}
+            <div className="builder-add">
+              <button type="button" onClick={() => change(groundPart(model, part.id))} title="Move the part up or down so its lowest point is on the ground">Put on the ground</button>
+            </div>
             <div className="builder-add">
               <button type="button" onClick={() => { const n = duplicatePart(model, part.id); change(n); setChosen(n.parts[n.parts.length - 1].id); }}>Duplicate</button>
               <button type="button" className="danger" onClick={() => { change(removePart(model, part.id)); setChosen(null); }}>Delete</button>

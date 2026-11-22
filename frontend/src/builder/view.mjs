@@ -13,6 +13,14 @@ export function createBuilderView(canvas, {onPick = () => {}} = {}) {
   const sun = new THREE.DirectionalLight(0xffffff, 0.7);
   sun.position.set(6, 10, 8); scene.add(sun);
   scene.add(new THREE.GridHelper(40, 40, 0x8a9484, 0xc4cabd));
+  // the axes: x red, y green (up), z blue, with a letter at each tip
+  scene.add(new THREE.AxesHelper(2));
+  for (const [text, color, pos] of [["X", "#d33", [2.35, 0, 0]], ["Y", "#2a2", [0, 2.35, 0]], ["Z", "#33d", [0, 0, 2.35]]]) {
+    const c = document.createElement("canvas"); c.width = c.height = 64;
+    const x = c.getContext("2d"); x.fillStyle = color; x.font = "bold 52px sans-serif"; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText(text, 32, 34);
+    const label = new THREE.Sprite(new THREE.SpriteMaterial({map: new THREE.CanvasTexture(c), depthTest: false, transparent: true}));
+    label.position.set(...pos); label.scale.set(0.5, 0.5, 1); scene.add(label);
+  }
   const camera = new THREE.PerspectiveCamera(40, 1, 0.05, 500);
   const group = new THREE.Group(); scene.add(group);
   const look = {theta: 0.7, phi: 1.05, dist: 9, target: new THREE.Vector3(0, 1, 0)};
@@ -38,8 +46,11 @@ export function createBuilderView(canvas, {onPick = () => {}} = {}) {
       geo.setAttribute("normal", new THREE.Float32BufferAttribute(g.n, 3));
       geo.setAttribute("uv", new THREE.Float32BufferAttribute(g.uv, 2));
       geo.setIndex(g.i);
+      geo.translate(0, -part.h / 2, 0);   // (a part turns about its middle, which is where the mesh is placed)
       const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({color: part.color, roughness: 0.7, metalness: 0.1}));
-      mesh.position.set(part.x, part.y, part.z); mesh.rotation.y = part.rotY * Math.PI / 180;
+      mesh.position.set(part.x, part.y + part.h / 2, part.z);
+      const rad = d => d * Math.PI / 180;
+      mesh.rotation.set(rad(part.rotX), rad(part.rotY), rad(part.rotZ), "YXZ");   // = Ry * Rx * Rz, as turnMatrix in model.mjs
       mesh.userData.id = part.id;
       if (part.id === selectedId) {
         const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 30), new THREE.LineBasicMaterial({color: 0xe87722}));

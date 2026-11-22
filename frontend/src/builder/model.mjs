@@ -1,5 +1,5 @@
-// The modeller (docs/PLAN_BUILDER.md), step 1: a project is a list of parts built from primitives (box, cylinder), each standing on its
-// base at x, y, z, turned about the vertical axis, with a colour. This file is the model: sanitize, a mesh per part and the i3d export.
+// The modeller (docs/PLAN_BUILDER.md), step 1: a project is a list of parts built from primitives (box, cylinder), each with its base at
+// x, y, z, turned about its own middle (rotX, rotZ, then rotY last: R = Ry * Rx * Rz), with a colour. This file is the model: sanitize, a mesh per part and the i3d export.
 // Pure, no DOM. It imports the i3d writer only, never the house editor (editor.mjs, model.mjs): the two views share the export code, not each other.
 import { I3dDoc, tg, shape, boxMesh, v3 } from "../editor/i3d.mjs";
 
@@ -15,12 +15,13 @@ const color = c => (typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c) ? c.toLow
 
 /** A part as the model keeps it: known shape, every number in range. id: its place in the list. */
 function cleanPart(raw, id) {
-  const turn = ((num(raw.rotY, 0) % 360) + 540) % 360 - 180;   // (-180, 180]
+  const turn = v => round(((num(v, 0) % 360) + 540) % 360 - 180);   // (-180, 180]
   return {
     id, name: text(raw.name, `part${id}`), shape: SHAPES.includes(raw.shape) ? raw.shape : "box",
-    x: round(clamp(num(raw.x, 0), -200, 200)), y: round(clamp(num(raw.y, 0), -10, 100)), z: round(clamp(num(raw.z, 0), -200, 200)), rotY: round(turn),
+    x: round(clamp(num(raw.x, 0), -200, 200)), y: round(clamp(num(raw.y, 0), -10, 100)), z: round(clamp(num(raw.z, 0), -200, 200)),
+    rotX: turn(raw.rotX), rotY: turn(raw.rotY), rotZ: turn(raw.rotZ),
     w: round(clamp(num(raw.w, 1), 0.01, 50)), h: round(clamp(num(raw.h, 1), 0.01, 50)), d: round(clamp(num(raw.d, 1), 0.01, 50)),
-    r: round(clamp(num(raw.r, 0.5), 0.01, 25)), seg: Math.round(clamp(num(raw.seg, 16), 6, 48)),
+    r: round(clamp(num(raw.r, 0.5), 0.01, 25)), seg: Math.round(clamp(num(raw.seg, 16), 6, 64)),
     color: color(raw.color),
   };
 }
@@ -61,7 +62,27 @@ export function partMesh(part) {
   return g;
 }
 
-/** The i3d: a group named name with a shape per part (translation, rotation) and one material per colour. {i3d, doc}: doc has the meshes for the .shapes file. */
+/** The turn of a part as a 3x3 matrix (rows), R = Ry * Rx * Rz, right-handed like three.js: a point is turned about z first, then x, then y. */
+export function turnMatrix(part) {
+  const [a, b, c] = [part.rotX, part.rotY, part.rotZ].map(d => d * Math.PI / 180), [ca, sa, cb, sb, cc, sc] = [Math.cos(a), Math.sin(a), Math.cos(b), Math.sin(b), Math.cos(c), Math.sin(c)];
+  const mul = (A, B) => A.map(r => [0, 1, 2].map(j => r[0] * B[0][j] + r[1] * B[1][j] + r[2] * B[2][j]));
+  return mul(mul([[cb, 0, sb], [0, 1, 0], [-sb, 0, cb]], [[1, 0, 0], [0, ca, -sa], [0, sa, ca]]), [[cc, -sc, 0], [sc, cc, 0], [0, 0, 1]]);
+}
+
+/** A part's mesh as it is placed: turned about its middle (0, h/2, 0), positions and normals; the node's translation then puts it at x, y, z. */
+export function placedMesh(part) {
+  const g = partMesh(part);
+  if (!part.rotX && !part.rotY && !part.rotZ) return g;
+  const R = turnMatrix(part), cy = part.h / 2, at = v => [0, 1, 2].map(i => R[i][0] * v[0] + R[i][1] * v[1] + R[i][2] * v[2]);
+  const p = [], n = [];
+  for (let k = 0; k < g.p.length; k += 3) {
+    const q = at([g.p[k], g.p[k + 1] - cy, g.p[k + 2]]); p.push(q[0], q[1] + cy, q[2]);
+    n.push(...at([g.n[k], g.n[k + 1], g.n[k + 2]]));
+  }
+  return {...g, p, n};
+}
+
+/** The i3d: a group named name with a shape per part (at its place; the turn is in the mesh) and one material per colour. {i3d, doc}: doc has the meshes for the .shapes file. */
 export function exportI3d(model, {name = "prop"} = {}) {
   const m = sanitize(model), doc = new I3dDoc(), mats = new Map();
   const matOf = hex => {
@@ -69,7 +90,7 @@ export function exportI3d(model, {name = "prop"} = {}) {
     return mats.get(hex);
   };
   const nodes = m.parts.map(p => shape(p.name, {
-    translation: [p.x, p.y, p.z], rotation: p.rotY ? [0, p.rotY, 0] : undefined, shapeId: doc.shape(p.name, partMesh(p)),
+    translation: [p.x, p.y, p.z], shapeId: doc.shape(p.name, placedMesh(p)),
     castsShadows: true, receiveShadows: true, materialIds: matOf(p.color)}));
   return {i3d: doc.write(tg(name, [0, 0, 0], nodes), {name}), doc};
 }
@@ -88,4 +109,12 @@ export const updatePart = (model, id, patch) => { const m = sanitize(model); ret
 export function duplicatePart(model, id) {
   const m = sanitize(model), p = m.parts.find(q => q.id === id);
   return p ? addPart(m, {...p, name: `${p.name} copy`, x: p.x + 0.5}) : m;
+}
+/** The part with its lowest point on y = 0 (a part that lies down is not left under the ground or in the air). */
+export function groundPart(model, id) {
+  const m = sanitize(model), p = m.parts.find(q => q.id === id);
+  if (!p) return m;
+  const g = placedMesh(p);
+  let lo = Infinity; for (let k = 1; k < g.p.length; k += 3) lo = Math.min(lo, g.p[k]);
+  return updatePart(m, id, {y: 0 - lo});   // (0 - lo, so a part already on the ground gets 0 and not -0)
 }
