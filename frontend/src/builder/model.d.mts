@@ -1,6 +1,6 @@
 export interface Part {
   id: number; name: string; shape: "box" | "cylinder";
-  x: number; y: number; z: number; rotY: number;
+  x: number; y: number; z: number; rotX: number; rotY: number; rotZ: number;
   w: number; h: number; d: number; r: number; seg: number; color: string;
 }
 export interface BuilderProject { format: string; version: number; kind: "prop"; parts: Part[] }
@@ -15,3 +15,6 @@ export function addPart(model: unknown, extra?: Partial<Part>): BuilderProject;
 export function removePart(model: unknown, id: number): BuilderProject;
 export function updatePart(model: unknown, id: number, patch: Partial<Part>): BuilderProject;
 export function duplicatePart(model: unknown, id: number): BuilderProject;
+export function turnMatrix(part: Part): number[][];
+export function placedMesh(part: Part): { p: number[]; n: number[]; uv: number[]; i: number[] };
+export function groundPart(model: unknown, id: number): BuilderProject;
