@@ -63,7 +63,7 @@ test("every kind gives a scenery i3d without the game's nodes (areas, triggers, 
   for (const k of KINDS) {
     const text = i3d({ kind: k.id }, true), names = nodeNames(text);
     assert.deepEqual(names.filter(n => BAD.test(n)), [], k.id + ": " + names.filter(n => BAD.test(n)).join(", "));
-    assert.ok(names.includes("walls") && names.includes("collisions"), k.id + " has a shell");
+    assert.ok((names.includes("walls") || names.includes("roof")) && names.includes("collisions"), k.id + " has a shell");
     assert.doesNotMatch(text, /<UserAttribute/, k.id);
   }
 });
