@@ -1011,5 +1011,20 @@
   "The frame shows the part of the photo that is used.": "Ramen visar den del av fotot som används.",
   "The photo, with a frame round the part that is used": "Fotot, med en ram runt den del som används",
   "Even out the light": "Jämna ut ljuset",
-  "If the photo is lighter on one side, you see a step where it repeats. This takes that shading out, sideways only, so horizontal bands stay.": "Är fotot ljusare på ena sidan syns ett steg där det upprepas. Det här tar bort skuggningen i sidled, så vågräta band ligger kvar."
+  "If the photo is lighter on one side, you see a step where it repeats. This takes that shading out, sideways only, so horizontal bands stay.": "Är fotot ljusare på ena sidan syns ett steg där det upprepas. Det här tar bort skuggningen i sidled, så vågräta band ligger kvar.",
+  "A material is a colour you can put on any face. Add one, then choose a face and pick it.": "Ett material är en färg som du kan lägga på vilken yta som helst. Lägg till ett, välj sedan en yta och välj det.",
+  "Back (-z)": "Baksida (-z)",
+  "Front (+z)": "Framsida (+z)",
+  "Left (-x)": "Vänster (-x)",
+  "Right (+x)": "Höger (+x)",
+  "Top (+y)": "Ovansida (+y)",
+  "Bottom (-y)": "Undersida (-y)",
+  "Bottom": "Botten",
+  "Top": "Topp",
+  "Side": "Sida",
+  "Click a face in the view, or pick it here, to give it a material.": "Klicka på en yta i vyn, eller välj den här, för att ge den ett material.",
+  "Delete this material": "Ta bort det här materialet",
+  "Faces": "Ytor",
+  "Material of this face": "Material på den här ytan",
+  "Materials": "Material"
 }

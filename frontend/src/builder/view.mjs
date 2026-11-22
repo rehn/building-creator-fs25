@@ -1,9 +1,9 @@
 // The modeller's 3D view (docs/PLAN_BUILDER.md): the parts on a ground grid, drag to turn, wheel to zoom, click a part to choose it.
 // three.js only; it knows nothing about the house editor. The model comes from model.mjs (partMesh gives each part's mesh).
 import * as THREE from "three";
-import { partMesh } from "./model.mjs";
+import { partMesh, faceOfTriangle, faceColor } from "./model.mjs";
 
-/** Mounts a view on canvas. show(model, selectedId) draws the parts; onPick(id | null) is told which one was clicked; dispose() frees it. */
+/** Mounts a view on canvas. show(model, selectedId, selectedFace) draws the parts; onPick(id | null, faceId | null) is told which part and face was clicked; dispose() frees it. */
 export function createBuilderView(canvas, {onPick = () => {}} = {}) {
   const renderer = new THREE.WebGLRenderer({canvas, antialias: true, preserveDrawingBuffer: true});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -36,8 +36,8 @@ export function createBuilderView(canvas, {onPick = () => {}} = {}) {
     place(); renderer.render(scene, camera);
   }
 
-  /** Draws the project; the chosen part gets an outline. Keeps the camera where it is. */
-  function show(model, selectedId) {
+  /** Draws the project (each face in its own colour); the chosen part gets an outline, the chosen face an orange tint. Keeps the camera where it is. */
+  function show(model, selectedId, selectedFace = null) {
     for (const m of meshes) { m.geometry.dispose(); m.material.dispose(); }
     group.clear(); meshes = [];
     for (const part of model.parts) {
@@ -47,7 +47,12 @@ export function createBuilderView(canvas, {onPick = () => {}} = {}) {
       geo.setAttribute("uv", new THREE.Float32BufferAttribute(g.uv, 2));
       geo.setIndex(g.i);
       geo.translate(0, -part.h / 2, 0);   // (a part turns about its middle, which is where the mesh is placed)
-      const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({color: part.color, roughness: 0.7, metalness: 0.1}));
+      // a colour per vertex from the face it is on (no vertex is shared between faces)
+      const face = faceOfTriangle(part), colors = new Float32Array(g.p.length);
+      face.forEach((f, t) => { const c = new THREE.Color(faceColor(model, part, f)); for (let k = 0; k < 3; k++) colors.set([c.r, c.g, c.b], g.i[t * 3 + k] * 3); });
+      geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+      const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({vertexColors: true, roughness: 0.7, metalness: 0.1}));
+      mesh.userData.faces = face;
       mesh.position.set(part.x, part.y + part.h / 2, part.z);
       const rad = d => d * Math.PI / 180;
       mesh.rotation.set(rad(part.rotX), rad(part.rotY), rad(part.rotZ), "YXZ");   // = Ry * Rx * Rz, as turnMatrix in model.mjs
@@ -55,6 +60,14 @@ export function createBuilderView(canvas, {onPick = () => {}} = {}) {
       if (part.id === selectedId) {
         const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 30), new THREE.LineBasicMaterial({color: 0xe87722}));
         mesh.add(edges);
+      }
+      if (part.id === selectedId && selectedFace) {
+        const idx = []; face.forEach((f, t) => { if (f === selectedFace) idx.push(g.i[t * 3], g.i[t * 3 + 1], g.i[t * 3 + 2]); });
+        const tint = new THREE.BufferGeometry();
+        tint.setAttribute("position", geo.getAttribute("position")); tint.setIndex(idx);
+        const over = new THREE.Mesh(tint, new THREE.MeshBasicMaterial({color: 0xe87722, transparent: true, opacity: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2}));
+        over.raycast = () => {};   // (a click goes to the face under it, not to the tint)
+        mesh.add(over);
       }
       group.add(mesh); meshes.push(mesh);
     }
@@ -88,7 +101,7 @@ export function createBuilderView(canvas, {onPick = () => {}} = {}) {
     const r = canvas.getBoundingClientRect(), ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
     const ray = new THREE.Raycaster(); ray.setFromCamera(ndc, camera);
     const hit = ray.intersectObjects(meshes, false)[0];
-    onPick(hit ? hit.object.userData.id : null);
+    onPick(hit ? hit.object.userData.id : null, hit ? hit.object.userData.faces[hit.faceIndex] ?? null : null);
   };
   const wheel = e => { e.preventDefault(); look.dist = Math.min(200, Math.max(0.5, look.dist * Math.exp(e.deltaY * 0.001))); render(); };
   canvas.addEventListener("pointerdown", down); canvas.addEventListener("pointermove", move); canvas.addEventListener("pointerup", up);

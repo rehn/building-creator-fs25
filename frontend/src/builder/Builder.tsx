@@ -1,7 +1,7 @@
 "use client";
 // The modeller's editor: a list of parts with the chosen one's settings on the left, the 3D view on the right (docs/PLAN_BUILDER.md).
 import { useEffect, useRef, useState } from "react";
-import { addPart, duplicatePart, groundPart, removePart, sanitize, updatePart, type BuilderProject, type Part } from "./model.mjs";
+import { addMaterial, addPart, duplicatePart, groundPart, partFaces, removeMaterial, removePart, sanitize, setFaceMaterial, updateMaterial, updatePart, MAX_MATERIALS, type BuilderProject, type Part } from "./model.mjs";
 import { createBuilderView, type BuilderView } from "./view.mjs";
 import { draftValue, shownValue } from "./number.mjs";
 
@@ -39,26 +39,27 @@ export default function Builder({ initial, onChange, onReady }: { initial: Recor
   const [chosen, setChosen] = useState<number | null>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const view = useRef<BuilderView | null>(null);
-  const pick = useRef<(id: number | null) => void>(() => {});
-  pick.current = setChosen;
+  const [face, setFace] = useState<string | null>(null);
+  const pick = useRef<(id: number | null, face: string | null) => void>(() => {});
+  pick.current = (id, f) => { setChosen(id); setFace(id === null ? null : f); };
 
   useEffect(() => {
     if (!canvas.current) return;
-    const v = createBuilderView(canvas.current, { onPick: id => pick.current(id) });
+    const v = createBuilderView(canvas.current, { onPick: (id, f) => pick.current(id, f) });
     view.current = v;
-    v.show(model, chosen); v.frame(model);
+    v.show(model, chosen, face); v.frame(model);
     onReady?.({ snapshot: v.snapshot });
     return () => { v.dispose(); view.current = null; };
     // (mounted once; later changes are drawn by the effect below)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  useEffect(() => { view.current?.show(model, chosen); }, [model, chosen]);
+  useEffect(() => { view.current?.show(model, chosen, face); }, [model, chosen, face]);
 
   const change = (next: BuilderModel) => { setModel(next); onChange(next); };
   const part = model.parts.find(p => p.id === chosen) ?? null;
   const add = (shape: Part["shape"]) => {
     const next = addPart(model, { shape, x: model.parts.length * 0.6 });
-    change(next); setChosen(next.parts[next.parts.length - 1]?.id ?? null);
+    change(next); setChosen(next.parts[next.parts.length - 1]?.id ?? null); setFace(null);
   };
   const set = (patch: Partial<Part>) => part && change(updatePart(model, part.id, patch));
   const field = (k: keyof typeof NUM) => {
@@ -75,10 +76,25 @@ export default function Builder({ initial, onChange, onReady }: { initial: Recor
         </div>
         <p className="hint axes"><b style={{ color: "#d33" }}>x</b> red, <b style={{ color: "#2a2" }}>y</b> green (up), <b style={{ color: "#33d" }}>z</b> blue.</p>
         {model.parts.length === 0 && <p className="hint">Add a box or a cylinder to start. Drag in the view to turn, scroll to zoom, click a part to choose it.</p>}
+        <section className="builder-materials" aria-label="Materials">
+          <h3>Materials</h3>
+          {model.materials.length === 0 && <p className="hint">A material is a colour you can put on any face. Add one, then choose a face and pick it.</p>}
+          <ul className="builder-list">
+            {model.materials.map(m => (
+              <li key={m.id} className="builder-material">
+                <input type="color" aria-label="Colour" value={m.color} onChange={e => change(updateMaterial(model, m.id, { color: e.target.value }))} />
+                <input type="text" translate="no" aria-label="Name" maxLength={60} value={m.name} onChange={e => change(updateMaterial(model, m.id, { name: e.target.value }))} />
+                <button type="button" className="danger" aria-label="Delete this material" onClick={() => change(removeMaterial(model, m.id))}>×</button>
+              </li>
+            ))}
+          </ul>
+          <button type="button" disabled={model.materials.length >= MAX_MATERIALS} onClick={() => change(addMaterial(model, { name: `Material ${model.materials.length + 1}` }))}>+ Material</button>
+        </section>
+        <h3>Parts</h3>
         <ul className="builder-list">
           {model.parts.map(p => (
             <li key={p.id}>
-              <button type="button" className={p.id === chosen ? "on" : ""} aria-pressed={p.id === chosen} onClick={() => setChosen(p.id)}>
+              <button type="button" className={p.id === chosen ? "on" : ""} aria-pressed={p.id === chosen} onClick={() => { setChosen(p.id); setFace(null); }}>
                 <span className="swatch" style={{ background: p.color }} aria-hidden="true" /> <span translate="no">{p.name}</span>
               </button>
             </li>
@@ -88,14 +104,31 @@ export default function Builder({ initial, onChange, onReady }: { initial: Recor
           <section className="builder-part" aria-label="Chosen part">
             <label className="field">Name <input type="text" translate="no" maxLength={60} value={part.name} onChange={e => set({ name: e.target.value })} /></label>
             <label className="field">Colour <input type="color" value={part.color} onChange={e => set({ color: e.target.value })} /></label>
+            <fieldset className="builder-faces">
+              <legend>Faces</legend>
+              <p className="hint">Click a face in the view, or pick it here, to give it a material.</p>
+              <div className="seg wrap">
+                {partFaces(part).map(f => (
+                  <button type="button" key={f.id} aria-pressed={face === f.id} onClick={() => setFace(face === f.id ? null : f.id)}>{f.label}</button>
+                ))}
+              </div>
+              {face && (
+                <label className="field">Material of this face
+                  <select value={part.faces[face] ?? ""} onChange={e => change(setFaceMaterial(model, part.id, face, e.target.value === "" ? null : Number(e.target.value)))}>
+                    <option value="">The part’s colour</option>
+                    {model.materials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                </label>
+              )}
+            </fieldset>
             {(["x", "y", "z", "rotX", "rotY", "rotZ"] as const).map(field)}
             {(part.shape === "cylinder" ? (["r", "h", "seg"] as const) : (["w", "h", "d"] as const)).map(field)}
             <div className="builder-add">
               <button type="button" onClick={() => change(groundPart(model, part.id))} title="Move the part up or down so its lowest point is on the ground">Put on the ground</button>
             </div>
             <div className="builder-add">
-              <button type="button" onClick={() => { const n = duplicatePart(model, part.id); change(n); setChosen(n.parts[n.parts.length - 1].id); }}>Duplicate</button>
-              <button type="button" className="danger" onClick={() => { change(removePart(model, part.id)); setChosen(null); }}>Delete</button>
+              <button type="button" onClick={() => { const n = duplicatePart(model, part.id); change(n); setChosen(n.parts[n.parts.length - 1].id); setFace(null); }}>Duplicate</button>
+              <button type="button" className="danger" onClick={() => { change(removePart(model, part.id)); setChosen(null); setFace(null); }}>Delete</button>
             </div>
           </section>
         )}

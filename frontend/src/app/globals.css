@@ -477,3 +477,13 @@ select.lang:hover { border-color: var(--muted); }
 .tex-thumb { width: 64px; height: 64px; border-radius: 6px; object-fit: cover; flex: none; background: var(--stage); }
 .tex-source { width: 100%; max-width: 360px; border-radius: 8px; display: block; background: var(--stage); margin-bottom: 4px; }
 .item-fields label small { color: var(--muted); }
+
+/* The modeller: materials and faces */
+.builder-materials, .builder-faces { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; border: 0; padding: 0; }
+.builder-panel h3 { font-size: 14px; margin: 10px 0 2px; }
+.builder-material { display: flex; gap: 6px; align-items: center; }
+.builder-material input[type=text] { flex: 1; min-width: 0; }
+.builder-material input[type=color] { width: 32px; height: 28px; padding: 0; flex: none; }
+.builder-faces legend { font-weight: 600; font-size: 14px; }
+.seg.wrap { flex-wrap: wrap; gap: 4px; }
+.seg.wrap button { border-radius: 6px; margin: 0; }
