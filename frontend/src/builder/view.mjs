@@ -98,7 +98,16 @@ export function createBuilderView(canvas, {onPick = () => {}} = {}) {
   render();
 
   return {
-    show, frame, snapshot: () => { try { render(); return canvas.toDataURL("image/jpeg", 0.8); } catch { return null; } },
+    // A small picture for the project list (the server refuses a data URL over 300 KB, which a full-size canvas on a big or retina window is).
+    show, frame, snapshot: () => {
+      try {
+        render();
+        const W = 480, H = 300, c = document.createElement("canvas"); c.width = W; c.height = H;
+        const k = Math.max(W / canvas.width, H / canvas.height), sw = W / k, sh = H / k;
+        c.getContext("2d").drawImage(canvas, (canvas.width - sw) / 2, (canvas.height - sh) / 2, sw, sh, 0, 0, W, H);
+        return c.toDataURL("image/jpeg", 0.8);
+      } catch { return null; }
+    },
     dispose() {
       canvas.removeEventListener("pointerdown", down); canvas.removeEventListener("pointermove", move); canvas.removeEventListener("pointerup", up);
       canvas.removeEventListener("wheel", wheel); if (ro) ro.disconnect();
