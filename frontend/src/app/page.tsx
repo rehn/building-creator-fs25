@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { api, type ProjectSummary, type Template } from "@/lib/api";
 import { useUser } from "@/lib/useUser";
 import { TopBar } from "@/components/TopBar";
+import { sanitize as newProp } from "@/builder/model.mjs";
 import { PRESETS, CATEGORIES, KINDS, groupByKind, modName, slugify, authorName, modDescXmlMulti } from "@/editor/model.mjs";
 
 // A built-in design or a template the admin published (with its preview).
@@ -124,6 +125,11 @@ export default function HousesPage() {
     const p = await api.createProject(preset.id === "farmhouse" ? "New house" : preset.name, preset.settings);
     router.push(`/projects/${p.id}`);
   });
+  // A new prop: an empty project of the modeller (docs/PLAN_BUILDER.md), opened on its own page.
+  const createProp = () => run(async () => {
+    const p = await api.createProject("New prop", newProp({}) as unknown as Record<string, unknown>);
+    router.push(`/builder/${p.id}`);
+  });
   const chooser = (
     <section className="presets" aria-label="New">
       <div className="presets-head">
@@ -232,28 +238,34 @@ export default function HousesPage() {
     });
   };
 
-  const kindGroups = (list: ProjectSummary[], scope = "") => byKind(list, kindOfHouse).map(g => (
-          <section className="kind-group" key={g.kind.id} aria-label={g.kind.plural}>
-            <h3>{foldButton(`k:${scope}:${g.kind.id}`)}{g.kind.plural} <small>{g.items.length}</small>
+  // A prop is a project of the modeller (docs/PLAN_BUILDER.md): its own group, opened on its own page.
+  const isProp = (h: ProjectSummary) => kindOfHouse(h) === "prop";
+  const openHref = (h: ProjectSummary) => (isProp(h) ? `/builder/${h.id}` : `/projects/${h.id}`);
+  const kindGroups = (list: ProjectSummary[], scope = "") => [
+    ...byKind(list.filter(h => !isProp(h)), kindOfHouse).map(g => ({ id: g.kind.id, title: g.kind.plural, items: g.items })),
+    ...(list.some(isProp) ? [{ id: "prop", title: "Props", items: list.filter(isProp) }] : []),
+  ].map(g => (
+          <section className="kind-group" key={g.id} aria-label={g.title}>
+            <h3>{foldButton(`k:${scope}:${g.id}`)}{g.title} <small>{g.items.length}</small>
               {g.items.length > 1 && (
                 <button type="button" className="linklike" onClick={() => setPicked(list => g.items.every(h => list.includes(h.id)) ? list.filter(id => !g.items.some(h => h.id === id)) : [...new Set([...list, ...g.items.map(h => h.id)])])} disabled={busy}>
                   {g.items.every(h => picked.includes(h.id)) ? "Select none" : "Select all"}
                 </button>
               )}
             </h3>
-            {!folded.includes(`k:${scope}:${g.kind.id}`) && <div className="grid">
+            {!folded.includes(`k:${scope}:${g.id}`) && <div className="grid">
               {g.items.map(h => (
                 <article className="house" key={h.id}>
                   <label className="pick" title="Tick to pack with others into one game mod">
                     <input type="checkbox" checked={picked.includes(h.id)} onChange={() => toggle(h.id)} disabled={busy} aria-label={t("Pack {name} into a game mod", { name: h.name })} />
                   </label>
-                  <Link className="thumb" href={`/projects/${h.id}`} aria-label={t("Open {name}", { name: h.name })}>
+                  <Link className="thumb" href={openHref(h)} aria-label={t("Open {name}", { name: h.name })}>
                     {h.thumbnail
                       ? <img src={h.thumbnail} alt="" />
                       : <span className="none">No preview yet</span>}
                   </Link>
                   <div className="info">
-                    <Link className="name" translate="no" href={`/projects/${h.id}`}>{h.name}</Link>
+                    <Link className="name" translate="no" href={openHref(h)}>{h.name}</Link>
                     <small>{edited(h.updatedAt)}</small>
                     <div className="actions">
                       <button type="button" onClick={() => rename(h)} disabled={busy}>Rename</button>
@@ -280,6 +292,7 @@ export default function HousesPage() {
           <h2>My buildings</h2>
           <div className="head-actions">
             {houses && houses.length > 1 && <button type="button" onClick={pickAll} disabled={busy}>{allPicked ? "Select none" : "Select all"}</button>}
+            <button type="button" onClick={createProp} disabled={!user || busy} title="A free-form building made of boxes and cylinders">New prop</button>
             <button className="primary" type="button" onClick={() => setChoosing(true)} disabled={!user || busy} aria-expanded={choosing}>New</button>
           </div>
         </div>

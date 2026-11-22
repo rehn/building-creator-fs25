@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { api, ApiError, templatePhotoUrl, type Project, type Template } from "@/lib/api";
 import { useUser } from "@/lib/useUser";
 import type { EditorHandle, Settings } from "@/editor/editor.mjs";
@@ -25,6 +25,7 @@ const SAVE_DELAY = 1200;
 
 export default function ProjectPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const { user, error: userError } = useUser();
   const [project, setProject] = useState<Project | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -49,12 +50,14 @@ export default function ProjectPage() {
   useEffect(() => {
     if (!user) return;
     api.project(id).then(p => {
+      // a prop (the modeller's project) is not a house: it has its own page
+      if (p.data && p.data.kind === "prop") { router.replace(`/builder/${id}`); return; }
       setProject(p);
       setName(p.name);
       savedName.current = p.name;
       version.current = p.version;
     }).catch(e => setLoadError(e instanceof ApiError && e.status === 404 ? "This house doesn\u2019t exist, or it isn\u2019t yours." : e.message));
-  }, [user, id]);
+  }, [user, id, router]);
 
   useEffect(() => {
     const tid = new URLSearchParams(window.location.search).get("template");
