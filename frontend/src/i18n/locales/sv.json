@@ -953,5 +953,14 @@
   "The grain the station buys: the player tips it at the intake (under Game objects) and is paid the game's price for it. With none ticked it buys wheat. It cannot be bought or sold: a map places it.": "Den spannmål stationen köper: spelaren tömmer den vid intaget (under Spelobjekt) och får spelets pris för den. Utan någon ikryssad köper den vete. Den kan inte köpas eller säljas: en karta placerar den.",
   "Maps": "Kartor",
   "Open the map app": "Öppna kartappen",
-  "Apps": "Appar"
+  "Apps": "Appar",
+  "Fuel station": "Bensinmack",
+  "Fuel stations": "Bensinmackar",
+  "Pumps": "Pumpar",
+  "Number of pumps": "Antal pumpar",
+  "Fuel": "Bränsle",
+  "Fuel area": "Tankningsyta",
+  "Speed": "Hastighet",
+  "A row of pumps on an island under the canopy, along its width. They are solid: vehicles and players cannot walk through them. Where the player fills up is the fuel area (under Game objects).": "En rad pumpar på en ö under skärmtaket, längs dess bredd. De är solida: fordon och spelare kan inte gå genom dem. Där spelaren tankar är tankningsytan (under Spelobjekt).",
+  "The player drives into the fuel area and fills diesel from an endless tank. It cannot be bought or sold: a map places it.": "Spelaren kör in i tankningsytan och tankar diesel ur en outtömlig tank. Den kan inte köpas eller säljas: en karta placerar den."
 }

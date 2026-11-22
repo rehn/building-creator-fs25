@@ -2452,7 +2452,7 @@ function makePlacesMarker() {
   const group = new THREE.Group(), boxGeo = new THREE.BoxGeometry(1, 1, 1), edgeGeo = new THREE.EdgesGeometry(boxGeo);
   const boxes = {}, icons = {}, textures = {};
   // one canvas texture per glyph, drawn in white on a coloured circle
-  const GLYPHS = {sleep: ["#2f6fd0", drawBed], food: ["#d07a1f", drawFeed], bales: ["#c0901a", drawBale], hen: ["#3f9a43", drawHen], cow: ["#3f9a43", drawCow], sheep: ["#3f9a43", drawSheep], pallet: ["#c9a514", drawPallet], wrench: ["#5a6a78", drawWrench], cart: ["#2f8f6f", drawCart]};
+  const GLYPHS = {sleep: ["#2f6fd0", drawBed], food: ["#d07a1f", drawFeed], bales: ["#c0901a", drawBale], hen: ["#3f9a43", drawHen], cow: ["#3f9a43", drawCow], sheep: ["#3f9a43", drawSheep], pallet: ["#c9a514", drawPallet], wrench: ["#5a6a78", drawWrench], cart: ["#2f8f6f", drawCart], fuel: ["#c0392b", drawFuel]};
   const texture = glyph => {
     if (!textures[glyph]) {
       const c = document.createElement("canvas"); c.width = c.height = 128;
@@ -2553,6 +2553,13 @@ function drawCart(x, bg) {
   // A shopping trolley: a basket on two wheels with a handle.
   x.beginPath(); x.moveTo(26, 36); x.lineTo(40, 36); x.lineTo(50, 82); x.lineTo(98, 82); x.lineTo(108, 48); x.lineTo(44, 48); x.lineWidth = 9; x.strokeStyle = x.fillStyle; x.lineJoin = "round"; x.stroke();
   x.beginPath(); x.arc(58, 98, 8, 0, Math.PI * 2); x.arc(90, 98, 8, 0, Math.PI * 2); x.fill();
+}
+function drawFuel(x, bg) {
+  // A pump: a tall body with a window, and a hose with a nozzle at its side.
+  x.beginPath(); x.rect(34, 26, 46, 76); x.fill();
+  x.fillStyle = bg; x.fillRect(42, 36, 30, 20); x.fillStyle = "#fff";
+  x.beginPath(); x.moveTo(80, 50); x.lineTo(96, 50); x.lineTo(96, 84); x.lineWidth = 7; x.strokeStyle = "#fff"; x.stroke();
+  x.fillRect(90, 80, 14, 10);
 }
 function drawWrench(x, bg) {
   // A spanner: a long handle with an open jaw at the top.

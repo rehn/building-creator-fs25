@@ -805,6 +805,40 @@
   "i3dBytes": true,
   "xml": true
  },
+ "preset bensinmack": {
+  "parts": [],
+  "windows": 0,
+  "doors": 0,
+  "hidden": 0,
+  "ops": {
+   "front": 0,
+   "back": 0,
+   "right": 0,
+   "left": 0
+  },
+  "triangles": {
+   "trim": 348,
+   "roof": 10,
+   "foundation": 12,
+   "fittings": 822
+  },
+  "box": [
+   [
+    -6.43,
+    6.43
+   ],
+   [
+    0,
+    5.26
+   ],
+   [
+    -3.9,
+    3.9
+   ]
+  ],
+  "i3dBytes": true,
+  "xml": true
+ },
  "house, default": {
   "parts": [],
   "windows": 22,

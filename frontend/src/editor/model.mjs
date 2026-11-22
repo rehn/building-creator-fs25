@@ -2701,7 +2701,7 @@ function build() {
     refs.push({asset: a, item: {x, z, rot}, ...placement(a.meta, {x, z, rot}, 0)});
     return true;
   };
-  if (kind.outside) kind.outside({p, geo: {opsByWall, dims: {W, D}}, abox, cyl, paint, asset});
+  if (kind.outside) kind.outside({p, geo: {opsByWall, dims: {W, D}}, abox, cyl, cone, rod, tube, paint, asset});
   // The placed pieces last (tests find a piece's vertices after the empty barn's).
   if (hollow) buildInside(kind, F, H);
   dims = {W, D, top, ridgeY, F};

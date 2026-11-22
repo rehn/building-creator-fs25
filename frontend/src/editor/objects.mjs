@@ -34,6 +34,8 @@ export const OBJECT_TYPES = {
     hint: "Vehicles driven into this box can be repaired, painted and fitted out; the wrench icon marks where the player stands to use the workshop. Put it where a vehicle fits inside the building."},
   intake: {name: "Grain intake", glyph: "food", icon: true, indoors: true, size: [5, 4, 1.5],
     hint: "Where vehicles tip their grain: the station buys what lands in this box, and the unload icon floats over it. It may stand inside the hall or on open ground beside it; the AI helper stops at its front edge."},
+  pump: {name: "Fuel area", glyph: "fuel", icon: true, indoors: true, size: [8, 5, 4],
+    hint: "Where the player fills up: vehicles standing in this box can fuel from the pumps, and the fuel icon floats over it. It covers the island and the lanes beside it, under the canopy; keep it high enough for the tallest machine."},
   info: {name: "Info area", glyph: null, icon: false, size: [10, 10, 3],
     hint: "Standing in it shows the building's info box. It usually goes round the whole building."},
   pasture: {name: "Pasture (fence)", glyph: null, icon: false,
