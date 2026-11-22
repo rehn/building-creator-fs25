@@ -37,6 +37,31 @@ Ett eget spår som modelleraren behöver, men som går att bygga och använda f�
 - **Privata per användare**, aldrig delade av admin. Appen påminner vid uppladdning och vid export av en mod att man själv ansvarar för att man får dela texturen.
 - **Licens:** texturelabs.org (läst via en hjälpagent, ingen juridisk bedömning) tillåter fri användning men förbjuder vidaredistribution, även gratis och sannolikt även bearbetat. En delad mod som innehåller texturen är därför troligen inte tillåten. Inga sådana texturer läggs i repot. För texturer man vill dela: egna foton eller källor med friare licens (ambientCG och Poly Haven är så vitt vi vet CC0, ej kontrollerat).
 
+## UV och atlas (beslut Lars, 2026-11-22)
+
+Förebild: Blenders UV-fönster med en textur som en remsa av staplade rutor (röda brädor, grått, takplåt, tegel ...), där varje ytas UV-ö ligger över den ruta den ska ha. Lars vill kunna markera en yta och säga vad den ska vara, och se var på texturen den hamnar.
+
+**Atlasen är en lista med rader.** Alla rader är lika breda som hela texturen, och varje rad är ett material: en färg eller en foto-textur (se ovan), med en egen höjd. Spelet och Blender upprepar texturen när UV:erna går utanför 0-1, men det som upprepas är hela bilden. Därför:
+- En UV-ö kan sträckas **åt sidan (U) hur långt som helst** och mönstret upprepas rent, eftersom raden är lika bred som texturen. Lodräta brädor och korrugerad plåt upprepas längs väggen på det sättet.
+- Liggande panel: vrid ön 90 grader (i steg om 90), så går upprepningen uppåt.
+- **Uppåt och nedåt (V) går ön inte utanför sin rad,** annars visas nästa rad. Raden måste vara så hög som ytan behöver, eller så sträcks den lodrätt. Tegel och takpannor, som måste upprepas åt båda hållen, kräver därför en rad som täcker ytans höjd (kostar texturminne).
+- **Raderna måste vara sömlösa i sidled** (vänster-höger), och mellan raderna behövs en marginal uppåt och nedåt så att mips inte blandar in grannens färg.
+- UV:er måste ligga inom [-32, 32] (samma gräns som husappens `emitFace`).
+
+**Så fungerar det:**
+1. Markera en **yta** (inte hela delen) i 3D-vyn: en låda har sex, en cylinder sida och två ändar. Välj en rad i atlasen.
+2. UV-fönstret visar atlasen och den markerade ytans ö. Den kan flyttas, skalas och vridas i 90-gradersteg. "Passa till verklig storlek" ger en bra utgångspunkt automatiskt (UV i meter delat med radens verkliga storlek); det behövs även utan fönstret.
+3. Varje yta kommer ihåg rad, skala, förskjutning och vridning. Modellens `color` per del ersätts av en rad per yta (en rad kan vara en ren färg).
+4. **Export:** en enda atlas (DDS med mips, normal- och specularkarta per rad) och UV:erna för varje yta. Det är så de inbyggda modellerna gör, och det ger få material.
+
+**Ordning:** först ytval och materialrader med automatisk UV efter verklig storlek (utan UV-fönster; ger redan fototexturer på ytor), sedan UV-fönstret som finjustering, sedan fönstrets knappar för vridning och "passa". Fototexturen från "Texturer från foton" blir en rad; en rad kan vara hög nog för att täcka en hel vägg i en riktning.
+
+## Öppet om atlasen
+
+- Hur hög en rad bör få vara innan texturminnet blir ett problem (och en övre gräns för atlasens storlek, t.ex. 2048 x 4096).
+- Om raderna ska packas automatiskt (så att atlasen blir så liten som möjligt) eller ligga i den ordning användaren ger.
+- Normal- och specularkarta måste följa med varje rad och kantas på samma sätt som diffusen.
+
 ## Första steget
 
 Visa att idén håller med **en** sak: en bensinpump byggd av byggstenar med fototexturer och dekaler, exporterad och prövad i spelet. Det tvingar fram de svåra frågorna (UV, material, export) tidigt.
@@ -50,7 +75,7 @@ Gränser, så att de två inte flyter ihop:
 - **Laddas bara på sin egen sida**, så att de vanliga sidorna inte blir tyngre.
 - Om den senare behöver egen drift är den redan skild från resten och går att lyfta ut.
 
-Ordning: (1) texturfunktionen som ren funktion med tester på syntetiska bilder, (2) sidan "Mina texturer", (3) byggstenar och material per del för pumpen, (4) dekaler, (5) funktionsmarkering och export, (6) pröva i spelet.
+Ordning: (1) texturfunktionen som ren funktion med tester på syntetiska bilder, (2) sidan "Mina texturer", (3) byggstenar, ytval och materialrader (atlasen, se UV och atlas) för pumpen, (4) UV-fönstret och dekaler, (5) funktionsmarkering och export, (6) pröva i spelet.
 
 ## Risker
 
