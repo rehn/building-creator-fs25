@@ -42,6 +42,20 @@ export interface Asset {
   updatedAt: string;
 }
 
+/** A photo made into a game texture (private to its owner): the DDS files are at textureFileUrl. */
+export interface Texture {
+  id: string;
+  name: string;
+  /** The side in pixels (a power of two). */
+  size: number;
+  /** The real side of the texture in metres. */
+  meters: number;
+  /** A small JPEG data URL for the list. */
+  thumb: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** A part of a building saved to be put on other buildings (the editor's part file is data; info: a few numbers for the list). */
 export interface SavedPart {
   id: string;
@@ -160,6 +174,18 @@ export const api = {
     if (!res.ok) throw new ApiError(res.status, "file", `Couldn't load ${name} (${res.status}).`);
     return res.arrayBuffer();
   },
+
+  textures: () => request<Texture[]>("GET", "/textures"),
+  /** Saves a texture: form fields name, size, meters, thumb and the files diffuse, normal, specular (DDS). */
+  createTexture: (form: FormData) => send<Texture>("POST", "/textures", form),
+  /** One DDS file of a texture: diffuse, normal or specular. */
+  textureFile: async (id: string, kind: "diffuse" | "normal" | "specular") => {
+    const res = await fetch(`/api/textures/${encodeURIComponent(id)}/${kind}`, { credentials: "same-origin", cache: "no-store" });
+    if (!res.ok) throw new ApiError(res.status, "file", `Couldn't load the ${kind} map (${res.status}).`);
+    return res.arrayBuffer();
+  },
+  updateTexture: (id: string, patch: { name?: string; meters?: number }) => request<Texture>("PATCH", "/textures/" + encodeURIComponent(id), patch),
+  deleteTexture: (id: string) => request<void>("DELETE", "/textures/" + encodeURIComponent(id)),
 
   tokens: () => request<ApiToken[]>("GET", "/tokens"),
   createToken: (name: string, write = false) => request<ApiToken>("POST", "/tokens", { name, write }),

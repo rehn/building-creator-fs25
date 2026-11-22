@@ -3,7 +3,7 @@
 // Pure, no DOM. It imports the i3d writer only, never the house editor (editor.mjs, model.mjs): the two views share the export code, not each other.
 import { I3dDoc, tg, shape, boxMesh, v3 } from "../editor/i3d.mjs";
 
-export const FORMAT = "fs25-builder", VERSION = 1, MAX_PARTS = 200;
+export const FORMAT = "fs25-builder", VERSION = 1, MAX_PARTS = 200, MAX_MATERIALS = 32;
 export const SHAPES = ["box", "cylinder"];
 const DEFAULT_COLOR = "#9aa3a8";
 
@@ -23,26 +23,113 @@ function cleanPart(raw, id) {
     w: round(clamp(num(raw.w, 1), 0.01, 50)), h: round(clamp(num(raw.h, 1), 0.01, 50)), d: round(clamp(num(raw.d, 1), 0.01, 50)),
     r: round(clamp(num(raw.r, 0.5), 0.01, 25)), seg: Math.round(clamp(num(raw.seg, 16), 6, 64)),
     color: color(raw.color),
+    faces: {},
   };
+}
+
+/** The faces a shape has, in the order its mesh draws them: box -x +x -y +y -z +z (two triangles each), cylinder side, bottom, top. */
+const BOX_FACES = [["nx", "Left (-x)"], ["px", "Right (+x)"], ["ny", "Bottom (-y)"], ["py", "Top (+y)"], ["nz", "Back (-z)"], ["pz", "Front (+z)"]];
+const CYLINDER_FACES = [["side", "Side"], ["bottom", "Bottom"], ["top", "Top"]];
+export const partFaces = part => (part.shape === "cylinder" ? CYLINDER_FACES : BOX_FACES).map(([id, label]) => ({id, label}));
+
+/** For each triangle of partMesh(part) the face it is on. */
+export function faceOfTriangle(part) {
+  if (part.shape === "cylinder") return [...Array(part.seg * 2).fill("side"), ...Array(part.seg).fill("bottom"), ...Array(part.seg).fill("top")];
+  return BOX_FACES.flatMap(([id]) => [id, id]);
+}
+
+/** The faces of a part keep only what exists: a face its shape has, pointing at a material row that exists. */
+function cleanFaces(shape, raw, materialIds) {
+  const out = {}, has = new Set((shape === "cylinder" ? CYLINDER_FACES : BOX_FACES).map(f => f[0]));
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) for (const [f, m] of Object.entries(raw)) if (has.has(f) && typeof m === "number" && materialIds.has(m)) out[f] = m;
+  return out;
+}
+
+/** A row's texture: one of the user's saved textures (a plain id) and the real size of one repeat in metres; null for colour only. */
+function cleanTexture(t) {
+  if (!t || typeof t !== "object" || typeof t.id !== "string" || !/^[a-z0-9]{1,64}$/.test(t.id)) return null;
+  const meters = round(num(t.meters, 1));
+  return {id: t.id, meters: meters > 0 ? Math.min(100, meters) : 1};
+}
+
+/** Material rows: {id, name, color, texture}, ids kept when they are whole numbers and not taken, else the next free; at most MAX_MATERIALS. */
+function cleanMaterials(raw) {
+  const rows = (Array.isArray(raw) ? raw : []).filter(m => m && typeof m === "object" && !Array.isArray(m)).slice(0, MAX_MATERIALS), used = new Set(), out = [];
+  for (const m of rows) {
+    const id = Number.isInteger(m.id) && m.id > 0 && !used.has(m.id) ? m.id : Math.max(0, ...used) + 1;
+    used.add(id); out.push({id, name: text(m.name, `material${id}`), color: color(m.color), texture: cleanTexture(m.texture)});
+  }
+  return out;
 }
 
 /** The project as it can be kept and built: bad input becomes an empty project, the rest is cleaned (ids 1.. in order, at most MAX_PARTS). */
 export function sanitize(raw) {
   const o = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
   const parts = (Array.isArray(o.parts) ? o.parts : []).filter(p => p && typeof p === "object" && !Array.isArray(p)).slice(0, MAX_PARTS);
-  return {format: FORMAT, version: VERSION, kind: "prop", parts: parts.map((p, k) => cleanPart(p, k + 1))};
+  const materials = cleanMaterials(o.materials), ids = new Set(materials.map(m => m.id));
+  return {format: FORMAT, version: VERSION, kind: "prop", materials, parts: parts.map((p, k) => { const c = cleanPart(p, k + 1); c.faces = cleanFaces(c.shape, p.faces, ids); return c; })};
+}
+
+/** The colour a face is drawn in: its material row's if it has one, else the part's own. */
+export function faceColor(model, part, faceId) {
+  const m = part.faces[faceId] && model.materials.find(x => x.id === part.faces[faceId]);
+  return m ? m.color : part.color;
+}
+
+/** The material row a face is drawn in, or null (the part's own colour). */
+export function faceMaterial(model, part, faceId) {
+  return (part.faces[faceId] && model.materials.find(x => x.id === part.faces[faceId])) || null;
+}
+
+const MAX_UV = 30;   // (the game wants uvs inside [-32, 32])
+
+/**
+ * The uvs of a part's mesh (partMesh order, in its own frame: turning does not change them). A face drawn in a textured material gets uvs in
+ * repeats, from its real size in metres: u along the face as seen from outside (left to right), v up (the wall's y; on a cap, away from you),
+ * starting at 0 in the face's corner; a face too big for the limit is scaled down to fit. Other faces keep the mesh's own uvs.
+ */
+export function partUv(model, part) {
+  const g = partMesh(part), uv = [...g.uv], face = faceOfTriangle(part), seen = new Map();
+  face.forEach((f, t) => { for (let k = 0; k < 3; k++) { const v = g.i[t * 3 + k]; if (!seen.has(f)) seen.set(f, new Set()); seen.get(f).add(v); } });
+  for (const [f, verts] of seen) {
+    const row = faceMaterial(model, part, f);
+    if (!row || !row.texture) continue;
+    const ids = [...verts], x = v => g.p[v * 3], y = v => g.p[v * 3 + 1], z = v => g.p[v * 3 + 2], per = {
+      nx: v => [z(v), y(v)], px: v => [-z(v), y(v)], nz: v => [-x(v), y(v)], pz: v => [x(v), y(v)], py: v => [x(v), -z(v)], ny: v => [x(v), z(v)],
+      top: v => [x(v), -z(v)], bottom: v => [x(v), z(v)],
+      side: v => [-Math.round((v >> 1)) / part.seg * 2 * Math.PI * part.r, y(v)],
+    }[f];
+    const raw = ids.map(v => per(v)), lo = [0, 1].map(k => Math.min(...raw.map(r => r[k])));
+    let scale = 1 / row.texture.meters;
+    const extent = Math.max(...raw.map(r => Math.max(r[0] - lo[0], r[1] - lo[1])));
+    if (extent * scale > MAX_UV) scale = MAX_UV / extent;
+    ids.forEach((v, k) => { uv[v * 2] = (raw[k][0] - lo[0]) * scale; uv[v * 2 + 1] = (raw[k][1] - lo[1]) * scale; });
+  }
+  return uv;
+}
+
+/** The mesh made of some of g's triangles only (their vertices, renumbered). */
+function subsetMesh(g, tris) {
+  const g2 = {p: [], n: [], uv: [], i: []}, at = new Map();
+  for (const t of tris) for (let k = 0; k < 3; k++) {
+    const v = g.i[t * 3 + k];
+    if (!at.has(v)) { at.set(v, g2.p.length / 3); g2.p.push(g.p[v * 3], g.p[v * 3 + 1], g.p[v * 3 + 2]); g2.n.push(g.n[v * 3], g.n[v * 3 + 1], g.n[v * 3 + 2]); g2.uv.push(g.uv[v * 2], g.uv[v * 2 + 1]); }
+    g2.i.push(at.get(v));
+  }
+  return g2;
 }
 
 /** Closed cylinder mesh on its base: radius r, height h, seg sides; the side has smooth normals, the ends flat ones. */
 function cylinderMesh(r, h, seg) {
   const g = {p: [], n: [], uv: [], i: []};
-  const at = k => [Math.cos(k / seg * 2 * Math.PI), Math.sin(k / seg * 2 * Math.PI)];
-  for (let k = 0; k < seg; k++) {
+  const at = k => [Math.cos(k % seg / seg * 2 * Math.PI), Math.sin(k % seg / seg * 2 * Math.PI)];   // (k % seg: the last column is exactly the first)
+  // the side has seg + 1 columns: the last is the first again, so a texture can run all the way round without a jump
+  for (let k = 0; k <= seg; k++) {
     const [c, s] = at(k);
     g.p.push(r * c, 0, r * s, r * c, h, r * s); g.n.push(c, 0, s, c, 0, s); g.uv.push(k / seg, 0, k / seg, 1);
   }
   for (let k = 0; k < seg; k++) {
-    const j = (k + 1) % seg, loK = k * 2, hiK = k * 2 + 1, loJ = j * 2, hiJ = j * 2 + 1;
+    const loK = k * 2, hiK = k * 2 + 1, loJ = (k + 1) * 2, hiJ = (k + 1) * 2 + 1;
     g.i.push(loK, hiJ, loJ, loK, hiK, hiJ);
   }
   for (const [y, up] of [[0, false], [h, true]]) {
@@ -82,17 +169,46 @@ export function placedMesh(part) {
   return {...g, p, n};
 }
 
-/** The i3d: a group named name with a shape per part (at its place; the turn is in the mesh) and one material per colour. {i3d, doc}: doc has the meshes for the .shapes file. */
-export function exportI3d(model, {name = "prop"} = {}) {
-  const m = sanitize(model), doc = new I3dDoc(), mats = new Map();
+/** The files of a texture in the export (the three maps the browser made, see photoTexture.mjs). */
+export const textureFiles = id => ({diffuse: `textures/${id}_diffuse.dds`, normal: `textures/${id}_normal.dds`, specular: `textures/${id}_specular.dds`});
+
+/**
+ * The i3d: a group named name with a shape per part (at its place; the turn is in the mesh) and one material per colour or texture. A part whose
+ * faces are not all alike is a shape for each colour or material row (name, name_2 ...); a face in a textured row has uvs in repeats (partUv).
+ * withTextures (default true): false draws textured rows in their colour. -> {i3d, doc, textures}: the meshes for the .shapes file, and the ids
+ * of the textures used (their files are textures/<id>_diffuse.dds, _normal.dds, _specular.dds: textureFiles).
+ */
+export function exportI3d(model, {name = "prop", withTextures = true} = {}) {
+  const m = sanitize(model), doc = new I3dDoc(), mats = new Map(), used = [];
   const matOf = hex => {
     if (!mats.has(hex)) mats.set(hex, doc.material(`color_${hex.slice(1)}`, {diffuseColor: `${v3([1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255))} 1`}));
     return mats.get(hex);
   };
-  const nodes = m.parts.map(p => shape(p.name, {
-    translation: [p.x, p.y, p.z], shapeId: doc.shape(p.name, placedMesh(p)),
-    castsShadows: true, receiveShadows: true, materialIds: matOf(p.color)}));
-  return {i3d: doc.write(tg(name, [0, 0, 0], nodes), {name}), doc};
+  const texOf = id => {
+    const key = "t:" + id;
+    if (!mats.has(key)) {
+      const f = textureFiles(id); used.push(id);
+      mats.set(key, doc.material(`tex_${id}`, {}, [["Texture", f.diffuse], ["Normalmap", f.normal], ["Glossmap", f.specular]]));
+    }
+    return mats.get(key);
+  };
+  const nodes = [];
+  for (const p of m.parts) {
+    const mesh = {...placedMesh(p), uv: withTextures ? partUv(m, p) : partMesh(p).uv}, face = faceOfTriangle(p), groups = new Map();
+    face.forEach((f, t) => {
+      const row = faceMaterial(m, p, f), tex = withTextures && row && row.texture;
+      const key = tex ? `t:${row.id}` : `c:${faceColor(m, p, f)}`;
+      if (!groups.has(key)) groups.set(key, {tris: [], color: faceColor(m, p, f), tex: tex ? tex.id : null});
+      groups.get(key).tris.push(t);
+    });
+    [...groups.values()].forEach((gr, k) => {
+      const shapeName = k === 0 ? p.name : `${p.name}_${k + 1}`;
+      nodes.push(shape(shapeName, {
+        translation: [p.x, p.y, p.z], shapeId: doc.shape(shapeName, groups.size === 1 ? mesh : subsetMesh(mesh, gr.tris)),
+        castsShadows: true, receiveShadows: true, materialIds: gr.tex ? texOf(gr.tex) : matOf(gr.color)}));
+    });
+  }
+  return {i3d: doc.write(tg(name, [0, 0, 0], nodes), {name}), doc, textures: used};
 }
 
 /* ---------- Operations: each gives a new project and leaves the one it is given alone ---------- */
@@ -117,4 +233,25 @@ export function groundPart(model, id) {
   const g = placedMesh(p);
   let lo = Infinity; for (let k = 1; k < g.p.length; k += 3) lo = Math.min(lo, g.p[k]);
   return updatePart(m, id, {y: 0 - lo});   // (0 - lo, so a part already on the ground gets 0 and not -0)
+}
+
+/* ---------- Material rows and the face of a part that uses one ---------- */
+/** The project with a material row added last (extra: name, color); its id is the next free. Nothing is added past MAX_MATERIALS. */
+export function addMaterial(model, extra = {}) {
+  const m = sanitize(model);
+  return m.materials.length >= MAX_MATERIALS ? m : sanitize({...m, materials: [...m.materials, {...extra, id: undefined}]});
+}
+/** The project with material id changed by patch (its id stays). */
+export const updateMaterial = (model, id, patch) => { const m = sanitize(model); return sanitize({...m, materials: m.materials.map(x => x.id === id ? {...x, ...patch, id: x.id} : x)}); };
+/** The project without material id: the faces that used it are the part's own colour again. */
+export const removeMaterial = (model, id) => { const m = sanitize(model); return sanitize({...m, materials: m.materials.filter(x => x.id !== id)}); };
+/** The project with face faceId of part partId drawn in material materialId (null: the part's own colour again). */
+export function setFaceMaterial(model, partId, faceId, materialId) {
+  const m = sanitize(model);
+  return sanitize({...m, parts: m.parts.map(p => {
+    if (p.id !== partId) return p;
+    const faces = {...p.faces};
+    if (materialId === null) delete faces[faceId]; else faces[faceId] = materialId;
+    return {...p, faces};
+  })});
 }

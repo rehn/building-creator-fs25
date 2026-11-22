@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { api, ApiError, type Project } from "@/lib/api";
 import { useUser } from "@/lib/useUser";
-import { exportI3d } from "@/builder/model.mjs";
+import { exportI3d, textureFiles } from "@/builder/model.mjs";
 import type { BuilderHandle, BuilderModel } from "@/builder/Builder";
 
 const Builder = dynamic(() => import("@/builder/Builder"), { ssr: false, loading: () => <p className="loading">Loading the modeller…</p> });
@@ -80,11 +80,24 @@ export default function BuilderPage() {
     if (!n) { setName(savedName.current); return; }
     if (n !== savedName.current) queue({ name: n }, 0);
   }
-  function download() {
+  const [note, setNote] = useState("");
+  async function download() {
     if (!latest.current && !project) return;
-    const { i3d } = exportI3d(latest.current ?? project!.data, { name: (name || "prop").replace(/[^\w-]+/g, "_") });
+    setNote("");
+    const stem = (name || "prop").replace(/[^\w-]+/g, "_"), out = exportI3d(latest.current ?? project!.data, { name: stem });
+    let blob: Blob, file: string;
+    if (out.textures.length === 0) { blob = new Blob([out.i3d], { type: "application/xml" }); file = stem + ".i3d"; }
+    else {
+      // with textures: a zip with the i3d and the texture files beside it (textures/<id>_diffuse.dds ...)
+      try {
+        const { default: JSZip } = await import("jszip"), zip = new JSZip();
+        zip.file(stem + ".i3d", out.i3d);
+        for (const id of out.textures) for (const kind of ["diffuse", "normal", "specular"] as const) zip.file(textureFiles(id)[kind], await api.textureFile(id, kind));
+        blob = await zip.generateAsync({ type: "blob" }); file = stem + ".zip";
+      } catch (e) { setNote(e instanceof Error ? e.message : "Couldn’t make the file."); return; }
+    }
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([i3d], { type: "application/xml" })); a.download = (name || "prop").replace(/[^\w-]+/g, "_") + ".i3d";
+    a.href = URL.createObjectURL(blob); a.download = file;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   }
@@ -101,6 +114,7 @@ export default function BuilderPage() {
         <input id="propName" className="name" value={name} maxLength={100} disabled={!project} onChange={e => setName(e.target.value)} onBlur={commitName}
           onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
         <span className={"status" + (status === "error" || status === "conflict" ? " bad" : "")} role="status">{project ? STATUS_TEXT[status] : ""}</span>
+        {note && <span className="status bad" role="alert">{note}</span>}
         <button type="button" disabled={!project} onClick={download}>Download i3d</button>
       </div>
       {status === "conflict" && (
