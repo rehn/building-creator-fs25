@@ -963,4 +963,6 @@
   "Speed": "Hastighet",
   "A row of pumps on an island under the canopy, along its width. They are solid: vehicles and players cannot walk through them. Where the player fills up is the fuel area (under Game objects).": "En rad pumpar på en ö under skärmtaket, längs dess bredd. De är solida: fordon och spelare kan inte gå genom dem. Där spelaren tankar är tankningsytan (under Spelobjekt).",
   "The player drives into the fuel area and fills diesel from an endless tank. It cannot be bought or sold: a map places it.": "Spelaren kör in i tankningsytan och tankar diesel ur en outtömlig tank. Den kan inte köpas eller säljas: en karta placerar den."
+  "Collapse": "Fäll ihop",
+  "Expand": "Fäll ut"
 }
