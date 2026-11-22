@@ -259,14 +259,14 @@ What the tests cover:
 
 ## CI/CD and releases
 
-`.github/workflows/ci.yml` runs on every pull request and push:
+`.github/workflows/ci.yml` runs on pull requests and on release tags (tests are slow, so they only run for a release; a push to `main` runs nothing):
 
 | Event | Tests | Docker Hub |
 |---|---|---|
-| Pull request to `main` | Go tests (store on SQLite and Postgres), frontend tests, Next.js build, Helm chart tests | Images built, not pushed |
-| Push to `main` | Same | `building-creator-fs25-api:edge`, `building-creator-fs25-web:edge` |
-| Tag `v1.2.3` pushed | Same | `1.2.3`, `1.2`, `1` and `latest` for both images, the Helm chart `1.2.3` at `oci://registry-1.docker.io/rehn/building-creator-fs25`, then a GitHub release with generated notes |
-| Tag `v1.2.3-rc.1` pushed | Same | Images and chart `1.2.3-rc.1` (no `latest`), and a GitHub pre-release |
+| Pull request to `main` | None; only a Docker build check (amd64) | Images built, not pushed |
+| Push to `main` | None | Nothing (there is no `edge` image) |
+| Tag `v1.2.3` pushed | Go tests (store on SQLite and Postgres), frontend tests, Next.js build, Helm chart tests | `1.2.3`, `1.2`, `1` and `latest` for both images, the Helm chart `1.2.3` at `oci://registry-1.docker.io/rehn/building-creator-fs25`, then a GitHub release with generated notes |
+| Tag `v1.2.3-rc.1` pushed | Same as a release | Images and chart `1.2.3-rc.1` (no `latest`), and a GitHub pre-release |
 
 Images are only built after all tests pass, for `linux/amd64` and `linux/arm64`. The chart is pushed after the images, so a published chart version always has its images.
 
