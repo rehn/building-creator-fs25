@@ -95,6 +95,20 @@ CREATE TABLE IF NOT EXISTS asset_files (
 	data     BLOB    NOT NULL,
 	PRIMARY KEY (asset_id, name)
 );
+CREATE TABLE IF NOT EXISTS textures (
+	id         TEXT    PRIMARY KEY,
+	user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	name       TEXT    NOT NULL,
+	size       INTEGER NOT NULL,
+	meters     REAL    NOT NULL,
+	thumb      TEXT    NOT NULL,
+	diffuse    BLOB    NOT NULL,
+	normal     BLOB    NOT NULL,
+	specular   BLOB    NOT NULL,
+	created_at INTEGER NOT NULL,
+	updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS textures_user ON textures(user_id, updated_at DESC);
 CREATE TABLE IF NOT EXISTS parts (
 	id         TEXT    PRIMARY KEY,
 	user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -206,6 +220,20 @@ CREATE TABLE IF NOT EXISTS asset_files (
 	data     BYTEA  NOT NULL,
 	PRIMARY KEY (asset_id, name)
 );
+CREATE TABLE IF NOT EXISTS textures (
+	id         TEXT    PRIMARY KEY,
+	user_id    BIGINT  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	name       TEXT    NOT NULL,
+	size       INTEGER NOT NULL,
+	meters     DOUBLE PRECISION NOT NULL,
+	thumb      TEXT    NOT NULL,
+	diffuse    BYTEA    NOT NULL,
+	normal     BYTEA    NOT NULL,
+	specular   BYTEA    NOT NULL,
+	created_at BIGINT  NOT NULL,
+	updated_at BIGINT  NOT NULL
+);
+CREATE INDEX IF NOT EXISTS textures_user ON textures(user_id, updated_at DESC);
 CREATE TABLE IF NOT EXISTS parts (
 	id         TEXT    PRIMARY KEY,
 	user_id    BIGINT  NOT NULL REFERENCES users(id) ON DELETE CASCADE,

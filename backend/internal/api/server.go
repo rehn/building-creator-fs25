@@ -139,6 +139,11 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /api/parts/{id}", s.requireUser(s.getPart))
 	m.HandleFunc("PATCH /api/parts/{id}", s.requireUser(s.updatePart))
 	m.HandleFunc("DELETE /api/parts/{id}", s.requireUser(s.deletePart))
+	m.HandleFunc("GET /api/textures", s.requireUser(s.listTextures))
+	m.HandleFunc("POST /api/textures", s.requireUser(s.createTexture))
+	m.HandleFunc("GET /api/textures/{id}/{kind}", s.requireUser(s.textureFile))
+	m.HandleFunc("PATCH /api/textures/{id}", s.requireUser(s.updateTexture))
+	m.HandleFunc("DELETE /api/textures/{id}", s.requireUser(s.deleteTexture))
 
 	m.HandleFunc("GET /api/templates", s.requireUser(s.listTemplates))
 	m.HandleFunc("GET /api/templates/{id}/photos/{n}", s.requireUser(s.templatePhoto))

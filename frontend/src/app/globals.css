@@ -471,3 +471,9 @@ select.lang:hover { border-color: var(--muted); }
 .builder-part { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 4px; }
 .builder-part .field { display: flex; flex-direction: column; gap: 3px; margin: 8px 0; font-size: 13.5px; }
 @media (max-width: 820px) { .builder { flex-direction: column; } .builder-panel { width: auto; max-height: 45%; border-right: 0; border-bottom: 1px solid var(--line); } }
+
+/* My textures */
+.tex-preview { width: 100%; aspect-ratio: 1; border-radius: 8px; display: block; background: var(--stage); image-rendering: auto; }
+.tex-thumb { width: 64px; height: 64px; border-radius: 6px; object-fit: cover; flex: none; background: var(--stage); }
+.tex-source { width: 100%; max-width: 360px; border-radius: 8px; display: block; background: var(--stage); margin-bottom: 4px; }
+.item-fields label small { color: var(--muted); }
