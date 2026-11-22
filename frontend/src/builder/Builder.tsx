@@ -3,11 +3,36 @@
 import { useEffect, useRef, useState } from "react";
 import { addPart, duplicatePart, groundPart, removePart, sanitize, updatePart, type BuilderProject, type Part } from "./model.mjs";
 import { createBuilderView, type BuilderView } from "./view.mjs";
+import { draftValue, shownValue } from "./number.mjs";
 
 export type BuilderModel = BuilderProject;
 export interface BuilderHandle { snapshot: () => string | null }
 
 const NUM: Record<"x" | "y" | "z" | "rotX" | "rotY" | "rotZ" | "w" | "d" | "h" | "r" | "seg", [string, number]> = { x: ["x", 0.05], y: ["y", 0.05], z: ["z", 0.05], rotX: ["Tilt forward, around x (degrees)", 5], rotY: ["Turn, around y (degrees)", 5], rotZ: ["Tilt sideways, around z (degrees)", 5], seg: ["Sides (more is rounder)", 1], w: ["Width", 0.05], d: ["Depth", 0.05], h: ["Height", 0.05], r: ["Radius", 0.05] };
+
+/** A number field that keeps what is typed until it is left: the model clamps every value, and showing the clamped value while typing made 3 over 6 into 62. */
+function NumberField({ label, value, step, onCommit }: { label: string; value: number; step: number; onCommit: (v: number) => void }) {
+  const [text, setText] = useState(() => shownValue(value));
+  const editing = useRef(false);
+  useEffect(() => { if (!editing.current) setText(shownValue(value)); }, [value]);
+  const typed = (t: string) => { setText(t); const v = draftValue(t); if (v !== null) onCommit(v); };
+  return (
+    <label className="field">{label}
+      <input type="text" inputMode="decimal" value={text}
+        onFocus={e => { editing.current = true; e.target.select(); }}
+        onChange={e => typed(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === "Enter") e.currentTarget.blur();
+          if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+            e.preventDefault();
+            const v = (draftValue(text) ?? value) + (e.key === "ArrowUp" ? step : -step);
+            setText(shownValue(v)); onCommit(+shownValue(v));
+          }
+        }}
+        onBlur={() => { editing.current = false; setText(shownValue(value)); }} />
+    </label>
+  );
+}
 
 export default function Builder({ initial, onChange, onReady }: { initial: Record<string, unknown>; onChange: (m: BuilderModel) => void; onReady?: (h: BuilderHandle) => void }) {
   const [model, setModel] = useState<BuilderModel>(() => sanitize(initial));
@@ -38,11 +63,7 @@ export default function Builder({ initial, onChange, onReady }: { initial: Recor
   const set = (patch: Partial<Part>) => part && change(updatePart(model, part.id, patch));
   const field = (k: keyof typeof NUM) => {
     const [label, step] = NUM[k];
-    return (
-      <label key={k} className="field">{label}
-        <input type="number" step={step} value={part ? part[k] : 0} onChange={e => e.target.value !== "" && set({ [k]: +e.target.value })} />
-      </label>
-    );
+    return <NumberField key={`${part?.id}-${k}`} label={label} step={step} value={part ? part[k] : 0} onCommit={v => set({ [k]: v })} />;
   };
 
   return (
