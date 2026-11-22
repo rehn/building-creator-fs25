@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "jszip": "3.10.1",
-    "next": "16.4.1",
+    "next": "16.4.6",
     "react": "19.2.5",
     "react-dom": "19.2.5",
     "three": "0.128.0"
