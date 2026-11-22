@@ -964,5 +964,17 @@
   "A row of pumps on an island under the canopy, along its width. They are solid: vehicles and players cannot walk through them. Where the player fills up is the fuel area (under Game objects).": "En rad pumpar på en ö under skärmtaket, längs dess bredd. De är solida: fordon och spelare kan inte gå genom dem. Där spelaren tankar är tankningsytan (under Spelobjekt).",
   "The player drives into the fuel area and fills diesel from an endless tank. It cannot be bought or sold: a map places it.": "Spelaren kör in i tankningsytan och tankar diesel ur en outtömlig tank. Den kan inte köpas eller säljas: en karta placerar den.",
   "Collapse": "Fäll ihop",
-  "Expand": "Fäll ut"
+  "Expand": "Fäll ut",
+  "A free-form building made of boxes and cylinders": "En fri byggnad av lådor och cylindrar",
+  "Add a box or a cylinder to start. Drag in the view to turn, scroll to zoom, click a part to choose it.": "Lägg till en låda eller en cylinder för att börja. Dra i vyn för att vrida, scrolla för att zooma och klicka på en del för att välja den.",
+  "Colour": "Färg",
+  "Depth": "Djup",
+  "Download i3d": "Ladda ner i3d",
+  "Loading the modeller…": "Laddar modelleraren…",
+  "New prop": "Ny rekvisita",
+  "Parts": "Delar",
+  "Props": "Rekvisita",
+  "Turn (degrees)": "Vridning (grader)",
+  "This project doesn’t exist, or it isn’t yours.": "Projektet finns inte, eller så är det inte ditt.",
+  "This project was changed in another tab or browser.": "Projektet ändrades i en annan flik eller webbläsare."
 }

@@ -1,0 +1,118 @@
+"use client";
+// The modeller (docs/PLAN_BUILDER.md): a project of kind "prop", saved like any project (data = the parts), edited in Builder.
+import { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { api, ApiError, type Project } from "@/lib/api";
+import { useUser } from "@/lib/useUser";
+import { exportI3d } from "@/builder/model.mjs";
+import type { BuilderHandle, BuilderModel } from "@/builder/Builder";
+
+const Builder = dynamic(() => import("@/builder/Builder"), { ssr: false, loading: () => <p className="loading">Loading the modeller…</p> });
+
+type Status = "saved" | "dirty" | "saving" | "error" | "conflict";
+const STATUS_TEXT: Record<Status, string> = { saved: "All changes saved", dirty: "Unsaved changes", saving: "Saving…", error: "Couldn’t save. Retrying…", conflict: "Changed somewhere else" };
+const SAVE_DELAY = 1200;
+
+export default function BuilderPage() {
+  const { id } = useParams<{ id: string }>();
+  const { user, error: userError } = useUser();
+  const [project, setProject] = useState<Project | null>(null);
+  const [loadError, setLoadError] = useState("");
+  const [name, setName] = useState("");
+  const [status, setStatus] = useState<Status>("saved");
+  const handle = useRef<BuilderHandle | null>(null);
+  const version = useRef(0), savedName = useRef("");
+  const pending = useRef<{ data?: BuilderModel; name?: string }>({});
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const inFlight = useRef(false), statusRef = useRef<Status>("saved"), conflictVersion = useRef(0);
+  const set = (s: Status) => { statusRef.current = s; setStatus(s); };
+
+  useEffect(() => {
+    if (!user) return;
+    api.project(id).then(p => {
+      setProject(p); setName(p.name); savedName.current = p.name; version.current = p.version;
+    }).catch(e => setLoadError(e instanceof ApiError && e.status === 404 ? "This project doesn’t exist, or it isn’t yours." : e.message));
+  }, [user, id]);
+
+  const flush = useCallback(async () => {
+    clearTimeout(timer.current);
+    if (statusRef.current === "conflict") return;
+    if (inFlight.current) { timer.current = setTimeout(flush, 300); return; }
+    const patch = pending.current;
+    if (patch.data === undefined && patch.name === undefined) return;
+    pending.current = {};
+    inFlight.current = true;
+    set("saving");
+    try {
+      const thumbnail = patch.data ? handle.current?.snapshot() ?? undefined : undefined;
+      const p = await api.updateProject(id, { ...patch, data: patch.data as unknown as Record<string, unknown> | undefined, thumbnail, version: version.current });
+      version.current = p.version; savedName.current = p.name;
+      set(pending.current.data || pending.current.name !== undefined ? "dirty" : "saved");
+    } catch (e) {
+      pending.current = { ...patch, ...pending.current };
+      if (e instanceof ApiError && e.code === "version_conflict") { conflictVersion.current = e.version ?? 0; set("conflict"); } else set("error");
+    } finally {
+      inFlight.current = false;
+      const left = pending.current.data !== undefined || pending.current.name !== undefined;
+      const now = statusRef.current as Status;
+      if (left && now !== "conflict") timer.current = setTimeout(flush, now === "error" ? 5000 : SAVE_DELAY);
+    }
+  }, [id]);
+
+  const queue = useCallback((change: { data?: BuilderModel; name?: string }, delay = SAVE_DELAY) => {
+    pending.current = { ...pending.current, ...change };
+    if (statusRef.current !== "conflict") set("dirty");
+    clearTimeout(timer.current);
+    timer.current = setTimeout(flush, delay);
+  }, [flush]);
+
+  useEffect(() => {
+    const warn = (e: BeforeUnloadEvent) => { if (statusRef.current !== "saved") e.preventDefault(); };
+    window.addEventListener("beforeunload", warn);
+    return () => { window.removeEventListener("beforeunload", warn); flush(); };
+  }, [flush]);
+
+  const latest = useRef<BuilderModel | null>(null);
+  function commitName() {
+    const n = name.trim();
+    if (!n) { setName(savedName.current); return; }
+    if (n !== savedName.current) queue({ name: n }, 0);
+  }
+  function download() {
+    if (!latest.current && !project) return;
+    const { i3d } = exportI3d(latest.current ?? project!.data, { name: (name || "prop").replace(/[^\w-]+/g, "_") });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([i3d], { type: "application/xml" })); a.download = (name || "prop").replace(/[^\w-]+/g, "_") + ".i3d";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }
+  function keepMine() { version.current = conflictVersion.current; set("dirty"); flush(); }
+
+  if (loadError || userError) {
+    return (<main className="page"><p className="error" role="alert">{loadError || userError}</p><Link className="btn" href="/">Back to my buildings</Link></main>);
+  }
+  return (
+    <div className="editor-page">
+      <div className="editor-bar">
+        <Link className="btn back" href="/" aria-label="Back to my buildings">‹ Buildings</Link>
+        <label className="sr" htmlFor="propName">Name</label>
+        <input id="propName" className="name" value={name} maxLength={100} disabled={!project} onChange={e => setName(e.target.value)} onBlur={commitName}
+          onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+        <span className={"status" + (status === "error" || status === "conflict" ? " bad" : "")} role="status">{project ? STATUS_TEXT[status] : ""}</span>
+        <button type="button" disabled={!project} onClick={download}>Download i3d</button>
+      </div>
+      {status === "conflict" && (
+        <div className="editor-bar" role="alert">
+          <span className="status bad">This project was changed in another tab or browser.</span>
+          <button type="button" onClick={() => window.location.reload()}>Load that version</button>
+          <button type="button" className="primary" onClick={keepMine}>Keep my version</button>
+        </div>
+      )}
+      {project
+        ? <Builder initial={project.data} onChange={m => { latest.current = m; queue({ data: m }); }} onReady={h => { handle.current = h; }} />
+        : <p className="loading">Loading…</p>}
+    </div>
+  );
+}
