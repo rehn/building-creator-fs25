@@ -154,7 +154,10 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 ## How we work
 - TDD: write the failing test first, then the code.
 - Backend tests: cd backend && go test ./...  (TEST_DATABASE_URL=postgres://... also runs
-  the store tests on Postgres; CI does both)
+  the store tests on Postgres; CI does both, but only when a release tag is pushed)
+- CI runs the tests (backend, chart, frontend) only for a release tag vX.Y.Z (Lars, 2026-11-22: too slow on every PR). A pull request gets only the Docker build check,
+  a push to main nothing (no edge image, only releases are used), so run the tests locally before a release and before a PR that touches what they cover (a broken sv.json or a stale schema test
+  reached main that way once).
 - Chart tests: bash charts/test.sh (helm v4 in WSL at /usr/local/bin)
 - Frontend tests: cd frontend && npm test (node --test, no browser needed)
 
