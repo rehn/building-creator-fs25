@@ -88,9 +88,6 @@ label.stack input { margin-top: 5px; }
 .preset b { font-size: 16px; }
 .preset span { color: var(--muted); font-size: 14px; line-height: 1.4; }
 .kind-group { margin-bottom: 28px; }
-.folder-group { margin-bottom: 36px; }
-.folder-head { font-size: 22px; margin: 0 0 14px; padding-bottom: 6px; border-bottom: 1px solid var(--border, #ddd); }
-.folder-head small { color: var(--muted); font-size: 14px; font-weight: normal; margin-left: 6px; }
 .house select.move { margin-top: 6px; padding: 4px 6px; font-size: 14px; max-width: 100%; }
 .kind-group > h3, .kind-group > h4 { margin-bottom: 10px; }
 .kind-group > h3 { font-size: 20px; }
@@ -173,16 +170,6 @@ html:has(.editor-page) { overscroll-behavior: none; }
 .hx-panel .colors { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
 .hx-panel .colors .field { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
 .hx-panel input[type=color] { width: 34px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; cursor: pointer; }
-.hx-panel .wgrid { width: 100%; border-collapse: collapse; margin: 8px 0 4px; font-size: 14px; }
-.hx-panel .wgrid th { font-weight: 500; text-align: left; padding: 4px 4px 4px 0; color: var(--muted); }
-.hx-panel .wgrid thead th { text-align: center; }
-.hx-panel .wgrid td { padding: 3px 2px; text-align: center; }
-.hx-panel .step { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 6px; background: var(--field); }
-.hx-panel .step button { border: 0; background: none; padding: 2px 9px; font-size: 16px; line-height: 22px; border-radius: 5px; }
-.hx-panel .step span { min-width: 16px; text-align: center; font-variant-numeric: tabular-nums; }
-.hx-panel .selrow { display: flex; gap: 6px; align-items: center; margin-top: 4px; }
-.hx-panel .selrow select { margin-top: 0; flex: 1; min-width: 0; }
-.hx-panel .selrow button { padding: 5px 10px; }
 .hx-panel .wincard { border-left: 3px solid var(--accent); padding: 2px 0 4px 10px; margin: 8px 0; }
 /* the details panel: each section of settings is a card of its own (a tinted ground, a border, a header bar with an accent edge), so it is easy to see what belongs together */
 .hx-details details[data-section] { background: rgba(127, 127, 127, .07); border: 1px solid var(--line); border-radius: 10px; padding: 0 14px 12px; margin: 14px 0; }
@@ -353,13 +340,10 @@ html:has(.editor-page) { overscroll-behavior: none; }
 .hx-stage .hx-walk3 { top: 100px; }
 .hx-stage .hx-walk[hidden] { display: none; }
 .hx-stage .hx-walk[aria-pressed="true"] { background: var(--accent, #9B2A1F); color: #fff; border-color: transparent; }
-.hx-panel .wgrid .wdoors { font-size: 12px; color: var(--muted); margin-top: 2px; }
 
 /* the parts tree and the things on a wall */
 .hx-panel .ptree li { margin-left: calc(var(--d, 0) * 14px); }
-.hx-panel .ptree li.ptop { margin-left: 0; color: var(--muted); padding: 2px 0 4px; }
 .hx-panel .muted { color: var(--muted); font-size: 0.92em; }
-.hx-panel .wallview { margin-bottom: 14px; }
 .hx-panel label.inline { display: inline-flex; gap: 6px; align-items: center; margin-left: 6px; font-size: 14px; }
 .hx-panel .myparts { margin-top: 12px; }
 .hx-panel .myparts h4 { margin: 0 0 4px; font-size: 14px; color: var(--muted); font-weight: 600; }
