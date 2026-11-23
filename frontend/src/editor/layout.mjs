@@ -36,7 +36,7 @@ export function wallFrames(W, D, F) {
  */
 export let MAX_WINGS = 12;
 export const HARD_MAX_PARTS = 40;
-export const DEFAULT_MAX_PARTS = 12;
+const DEFAULT_MAX_PARTS = 12;
 export function setMaxParts(n) {
   const v = Math.round(+n);
   MAX_WINGS = Number.isFinite(v) ? Math.min(HARD_MAX_PARTS, Math.max(1, v)) : DEFAULT_MAX_PARTS;
@@ -313,7 +313,7 @@ export function openingSpan(win, L) {
   return [c - ww/2, c + ww/2];
 }
 /** The building's doors: the window list's ground-floor doors, in order. */
-export const doorsOf = p => (p.windows || []).filter(w => w.type === "door" && w.floor === 0);
+const doorsOf = p => (p.windows || []).filter(w => w.type === "door" && w.floor === 0);
 
 /**
  * The room inside a walk-in building: the main part's floor inside its walls {x0, x1, z0, z1}, floor height F,
@@ -631,7 +631,7 @@ export function pieceGroups(catalog) {
 }
 
 /** Most sections of wallpaper on the inside of the outer walls. */
-export const MAX_PAPERS = 80;
+const MAX_PAPERS = 80;
 /**
  * Sections of wallpaper on the inside of the outer walls, from anything: [{id, wall (a wall of the building), s0, s1 (m along the
  * wall, from its left end seen from outside), paper (an index into the wallpapers, 0..n-1)}], in range, at least 20 cm long, numbered 1, 2 ...

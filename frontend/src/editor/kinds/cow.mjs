@@ -15,7 +15,7 @@ import { INNER_WALL } from "./innerwall.mjs";
 /** What the pasture is painted with (ground types of the game's groundTypes.xml): grass is the living meadow the animals graze. */
 export const PASTURE_GROUNDS = [["grass", "Grass"], ["dirt", "Dirt"], ["animalMud", "Mud"], ["gravel", "Gravel"], ["sand", "Sand"], ["forestGround", "Forest floor"]];
 /** About one cow per 6 m² of floor; at most 100 (the base game's biggest pasture barn takes 99). */
-export const M2_PER_COW = 6;
+const M2_PER_COW = 6;
 export const MAX_COWS = 100;
 /** Food storage per cow, in litres (the base game's cow barns hold about 1600-1700 l per cow). */
 const FOOD_PER_COW = 1700;

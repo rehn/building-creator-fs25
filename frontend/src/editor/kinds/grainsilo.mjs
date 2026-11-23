@@ -10,7 +10,7 @@ import { objectOf, boxOf, iconOf } from "../objects.mjs";
 import shed from "./shed.mjs";
 
 /** What the station can buy: [setting, the game's fill type, name]. Wheat when none is ticked. */
-export const GRAINS = [
+const GRAINS = [
   ["buyWheat", "WHEAT", "Wheat"], ["buyBarley", "BARLEY", "Barley"], ["buyOat", "OAT", "Oat"], ["buyCanola", "CANOLA", "Canola"],
   ["buyMaize", "MAIZE", "Maize"], ["buySoybean", "SOYBEAN", "Soybeans"], ["buySunflower", "SUNFLOWER", "Sunflowers"], ["buySorghum", "SORGHUM", "Sorghum"],
 ];
@@ -18,7 +18,7 @@ const MAX_SILOS = 4;
 const HOPPER = "$data/placeables/shared/sellingStationGeneric/sellingStationGenericMedium.i3d";
 const MARKER = "$data/shared/assets/marker/markerIconUnload.i3d";
 
-export const grainsFor = p => {
+const grainsFor = p => {
   const on = GRAINS.filter(([k]) => p[k]).map(g => g[1]);
   return on.length ? on : ["WHEAT"];
 };

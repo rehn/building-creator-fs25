@@ -51,7 +51,7 @@ export const objectInfo = (kind, type) => ({...OBJECT_TYPES[type], ...((kind.obj
 export const OBJECT_LIMITS = {x: [-80, 80], z: [-80, 80], w: [0.5, 70], d: [0.5, 70], h: [0.2, 8], ix: [-10, 10], iz: [-10, 10], end: [-40, 40]};
 /** The opening to the pasture: width and height ranges, and what it is to start with. */
 export const GAP_LIMITS = {w: [0.8, 10], h: [1.2, 8]};
-export const GAP_DEFAULT = {w: 1.6, h: 2.2};
+const GAP_DEFAULT = {w: 1.6, h: 2.2};
 export const TROUGH_KINDS = ["cow", "sheep"];
 /** The objects a building can have several of (the rest are one each), and how many. */
 export const MANY = ["feedTrough", "waterTrough"];

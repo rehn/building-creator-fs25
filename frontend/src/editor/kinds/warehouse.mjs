@@ -12,7 +12,7 @@ import dealership, { CATALOG, furnish, autoFurnish } from "./dealership.mjs";
 const SHOPPING = "$data/shared/assets/marker/markerIconShopping.i3d", PALLET = "$data/shared/assets/marker/markerIconPallet.i3d";
 const MAX_LINES = 3;
 /** What can be bought (goods that come on pallets) and what can be sold to it (any fill type), by name, in the game's order. */
-export const BUY_OPTIONS = FILL_TYPES.filter(f => f[3]), SELL_OPTIONS = FILL_TYPES.filter(f => (f[2] > 0 || f[3]) && !f[4]); // bale types are left out: the game wants a BaleUnloadTrigger for them
+const BUY_OPTIONS = FILL_TYPES.filter(f => f[3]), SELL_OPTIONS = FILL_TYPES.filter(f => (f[2] > 0 || f[3]) && !f[4]); // bale types are left out: the game wants a BaleUnloadTrigger for them
 const START_LIST = ["BREAD", "CAKE", "CHEESE", "BUTTER", "EGG", "FLOUR", "HONEY", "MILK_BOTTLED", "SUGAR"];
 
 /** Where the game objects go to start with: the counter inside by the front, the pallets out on the right side, the selling area out in front. */

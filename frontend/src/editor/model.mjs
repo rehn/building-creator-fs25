@@ -363,7 +363,7 @@ function cleanWings(obj) {
   }
   return out;
 }
-export const clampN = (v, lo, hi, d) => { v = +v; return isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d; };
+const clampN = (v, lo, hi, d) => { v = +v; return isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d; };
 export function genRow(P, list, wall, floor, n) {
   const frame = wallsOf(P)[wall];
   if (!frame) return list;
@@ -402,7 +402,7 @@ export function genRow(P, list, wall, floor, n) {
   for (const s of pos) keep.push({id: ++id, wall, floor, pos: s / L, w: P.winW, h: P.winH, sill: P.sill, type: "window", style: "default", room: "auto", curtain: "default", curtainColor: "default"});
   return keep;
 }
-export function genAll(P, src, start = []) {
+function genAll(P, src, start = []) {
   let list = start;
   for (const wall of WALLS) {
     const key = "win" + wall[0].toUpperCase() + wall.slice(1);
@@ -437,20 +437,6 @@ export function splitAtOf(p, key) {
   const z = p.wallZones && p.wallZones[key], st = partStyle(p, wingIdOf(key)), mode = z ? z.split : st.wallSplit;
   const fh = wingIdOf(key) ? ((liveWings(p).find(x => x.id === wingIdOf(key)) || {}).fh || p.floorHeight) : p.floorHeight;
   return mode === "floor" ? fh : mode === "height" ? (z && z.height !== undefined ? z.height : st.splitHeight) : 0;
-}
-/** How many windows and doors each wall has on each floor: {wall: {floor: {windows, doors}}} for the house's walls and its wings' (floors 0 to 2). */
-export function openingCounts(p) {
-  const out = {};
-  for (const wall of Object.keys(wallsOf(p))) out[wall] = [0, 1, 2].map(f => ({windows: p.windows.filter(w => w.wall === wall && w.floor === f && w.type !== "door").length, doors: p.windows.filter(w => w.wall === wall && w.floor === f && w.type === "door").length}));
-  return out;
-}
-/** The list without the wall's last door, or null if it has none or it is the building's only door (a building keeps one). */
-export function removeDoor(list, wall) {
-  const doors = list.filter(w => w.type === "door");
-  const mine = doors.filter(w => w.wall === wall);
-  if (!mine.length || doors.length < 2) return null;
-  const last = mine[mine.length - 1];
-  return list.filter(w => w !== last);
 }
 /* ---------- Materials per part ---------- */
 // A part's own settings for how it looks: empty (left out) means as its parent, all the way up to the building.
@@ -737,7 +723,7 @@ function cleanDormers(arr) {
       room: pickRoom(d.room), curtain: pickCurtain(d.curtain), curtainColor: pickColor(d.curtainColor)};
   });
 }
-export function clampField(f, v) {
+function clampField(f, v) {
   if (!f) return undefined;
   if (f.type === "select") return f.options.some(o => o[0] === v) ? v : undefined;
   if (f.type === "check") return typeof v === "boolean" ? v : undefined;
@@ -2924,7 +2910,7 @@ export function rgb(hex) { const n = parseInt(hex.slice(1), 16); return [(n >> 1
 /** The material for one visual part (m: its material kind, g: its mesh). */
 const hexOf = rgb01 => "#" + rgb01.map(v => Math.round(v * 255).toString(16).padStart(2, "0")).join("");
 /** Texture files of an inside part with a surface: its own diffuse (the surface in its colour) and the surface's normal map. */
-export function fitTexture(surf, rgb01) {
+function fitTexture(surf, rgb01) {
   const color = hexOf(rgb01);
   return {surf, color, diffuse: `textures/fit_${surf}_${color.slice(1)}.dds`, normal: `textures/fit_${surf}_normal.dds`};
 }
@@ -3183,7 +3169,7 @@ const cdata = s => "<![CDATA[" + String(s).replace(/]]>/g, "]]]]><![CDATA[>") + 
 const shopName = name => String(name || "").trim() || "House";
 
 /** The modDesc's <placeableTypes> for the types a kind defines itself (kind.modTypes), or "" (with the line break to start with). */
-export function placeableTypesXml(types) {
+function placeableTypesXml(types) {
   if (!types || !types.length) return "";
   return `
     <placeableTypes>
@@ -3287,16 +3273,4 @@ ${icon ? `    <iconFilename>${MOD_FILES.icon}</iconFilename>
     </storeItems>
 </modDesc>
 `;
-}
-
-/**
- * One step of the Windows and doors table: a cell counts the windows and doors of a wall's floor together. + adds a window (they are spread evenly, as before; turn
- * one into a door in its own card), - takes a window away, or, with only doors left, the wall's last door. The new list, or null where it is not allowed
- * (no more than 8 in a cell, and a building keeps one door).
- */
-export function stepOpenings(P, list, wall, floor, d) {
-  const here = list.filter(w => w.wall === wall && w.floor === floor), windows = here.filter(w => w.type !== "door").length, doors = here.length - windows;
-  if (d > 0) return windows + doors >= 8 ? null : genRow(P, list, wall, floor, windows + 1);
-  if (windows > 0) return genRow(P, list, wall, floor, windows - 1);
-  return doors && floor === 0 ? removeDoor(list, wall) : null;
 }

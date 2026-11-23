@@ -108,7 +108,7 @@ export function tangentsOf(positions, normals, uv, indices) {
  * The data of one shape. s: {id, name, positions, normals, uv (one set), indices, usage (the XML's meshUsage, 0 for a mesh that is only drawn),
  * tangents (true: write them)}. The bounding sphere is the middle of the box round the vertices and the distance to the farthest one.
  */
-export function shapeData(s) {
+function shapeData(s) {
   const nv = s.positions.length / 3, nc = s.indices.length, wide = nv > 65536, tangents = s.tangents ? tangentsOf(s.positions, s.normals, s.uv, s.indices) : null;
   const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
   for (let i = 0; i < nv; i++) for (let c = 0; c < 3; c++) { const x = s.positions[i * 3 + c]; if (x < lo[c]) lo[c] = x; if (x > hi[c]) hi[c] = x; }

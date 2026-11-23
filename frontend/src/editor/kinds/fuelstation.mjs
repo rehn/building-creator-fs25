@@ -12,7 +12,7 @@ const MAX_PUMPS = 6, STEP = 1.9, ISLAND_H = 0.2;
 const COL = {island: "#8F8C85", edge: "#D9D6CE", body: "#ECEAE4", accent: "#2A4F94", display: "#2B2F33", hose: "#1E1F20"};
 
 /** Where the pumps stand: x of each, in a row along the canopy's width, the middle of the row at the middle of the canopy. */
-export function pumpSpots(p) {
+function pumpSpots(p) {
   const n = Math.max(0, Math.min(MAX_PUMPS, Math.round(+p.pumpCount || 0)));
   return Array.from({length: n}, (_, k) => (k - (n - 1) / 2) * STEP);
 }

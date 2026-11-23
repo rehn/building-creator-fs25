@@ -17,7 +17,7 @@ import { encodeDds } from "./dds.mjs";
 const latin1 = text => Uint8Array.from(text, c => c.charCodeAt(0) & 255);
 
 /** The glass texture: the tint at GLASS_ALPHA with a faint bright stripe along the diagonal (as paintGlass in interior.mjs, in pixels). */
-export function glassPixels(size = 64) {
+function glassPixels(size = 64) {
   const D = new Uint8ClampedArray(size * size * 4), base = [115, 150, 171];
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
     const t = (x + 0.5 + y + 0.5) / (2 * size), a = t < 0.35 || t > 0.65 ? 0 : 0.12 * (t < 0.5 ? (t - 0.35) / 0.15 : (0.65 - t) / 0.15);
@@ -29,7 +29,7 @@ export function glassPixels(size = 64) {
 }
 
 /** The room atlas as three plain colours (back and side walls, floor): the layout is model.mjs ATLAS, the top three quarters walls and the last the floors and the ceiling. */
-export function plainAtlasPixels(size = 64) {
+function plainAtlasPixels(size = 64) {
   const D = new Uint8ClampedArray(size * size * 4), wall = [224, 211, 184], floor = [154, 116, 80];
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
     const c = y < size * 0.75 ? wall : floor, j = (y * size + x) * 4;
@@ -83,7 +83,7 @@ export async function makeFiles(settings, name, opts = {}) {
 }
 
 /** The size of scenery's textures in pixels: a map has hundreds of buildings, and from where the player stands 512 is plenty (256 is smaller still). */
-export const SCENERY_TEXTURE_SIZE = 512;
+const SCENERY_TEXTURE_SIZE = 512;
 
 /** An RGBA picture w x w shrunk to to x to (both powers of two): each new pixel is the mean of the block it covers. */
 export function shrink(px, w, to) {

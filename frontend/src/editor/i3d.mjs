@@ -15,7 +15,7 @@ export const v3 = a => a.map(num).join(" ");
  */
 const CPU_MESH = 256;
 
-export function shapeXml(name, id, g, uv, {cpu = false} = {}) {
+function shapeXml(name, id, g, uv, {cpu = false} = {}) {
   uv = uv || g.uv;
   const nv = g.p.length / 3, nt = g.i.length / 3;
   const v = [], t = [];
@@ -120,7 +120,7 @@ export function writeScene(root, depth = 2) {
  * The <UserAttributes> block (with its line break and indent), "" if no node has any. A node gets them with the attribute userAttributes:
  * [[name, type, value] ...], e.g. ["onCreate", "scriptCallback", "ShopTrigger.onCreate"]; they are written by the node's id, numbered as writeScene does.
  */
-export function writeUserAttributes(root) {
+function writeUserAttributes(root) {
   let nid = 1; const out = [];
   const walk = n => {
     const id = nid++, list = n.attrs.userAttributes;

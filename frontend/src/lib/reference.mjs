@@ -5,7 +5,7 @@
 // and the building must not be mirrored (a mirrored one has its wing at the west end).
 import { osmToHouse } from "../editor/osm.mjs";
 
-export const FRONT_COLOR = "#c0392b";
+const FRONT_COLOR = "#c0392b";
 const MAIN = { x0: 100, y0: 200, w: 12, d: 8 };
 const WING = { x0: 107, w: 5, d: 6 };           // north of the main part, flush with its east end
 const FOOTPRINT = [[100, 200], [112, 200], [112, 214], [107, 214], [107, 208], [100, 208]];

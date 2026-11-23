@@ -4,7 +4,7 @@
 import { normalizeMeta, turnedSize } from "./assets.mjs";
 
 export const MAX_DECOR = 40;
-export const DECOR_LIMITS = {x: [-80, 80], z: [-80, 80], y: [0, 10]};
+const DECOR_LIMITS = {x: [-80, 80], z: [-80, 80], y: [0, 10]};
 
 const num = (v, d) => { v = typeof v === "number" || typeof v === "string" && v.trim() !== "" ? +v : NaN; return Number.isFinite(v) ? v : d; };
 const clamp = (v, [lo, hi]) => Math.min(hi, Math.max(lo, v));

@@ -13,7 +13,7 @@
 //   texture     the name of the item's picture file (the .obj then has uvs and the preview draws it); empty: plain grey
 //   use         "piece" (furniture inside, the default), "feedTrough" or "waterTrough": the look of that game object (objects.mjs)
 
-export const ASSET_PREFIX = "asset:";
+const ASSET_PREFIX = "asset:";
 export const assetType = id => ASSET_PREFIX + id;
 export const assetIdOf = type => typeof type === "string" && type.startsWith(ASSET_PREFIX) ? type.slice(ASSET_PREFIX.length) : null;
 
