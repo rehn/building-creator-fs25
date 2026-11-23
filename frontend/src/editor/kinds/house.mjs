@@ -1,6 +1,8 @@
 // Farmhouse: a house with rooms seen through the windows and, optionally, a sleep point that makes
 // it an FS25 farmhouse placeable. Imports only the i3d writer; the core hands in the rest.
 import { tg, camera } from "../i3d.mjs";
+import { shopFor } from "./shop.mjs";
+const FARMHOUSES = {category: "farmhouses", type: "placeable", brush: "buildings", tab: "farmhouses"};   // (the shop place of the kind: shop.mjs lets the player choose another)
 import { wallsOf, openingSpan } from "../layout.mjs";
 import { placeOnWall } from "../places.mjs";
 import { objectOf, boxFrom } from "../objects.mjs";
@@ -71,9 +73,9 @@ export default {
   hides: [],
   normalize: p => ({...p, interior: true}),
   placeable: p => hasSleep(p)
-    ? {type: "farmhouse", fn: "$l10n_function_farmHouse", shop: {category: "farmhouses", type: "placeable", brush: "buildings", tab: "farmhouses"},
+    ? {type: "farmhouse", fn: "$l10n_function_farmHouse", shop: shopFor(p, FARMHOUSES),
       note: `Sleep point: use <placeable type="farmhouse" ...> so the player can sleep here, as in the base game's farmhouses.`}
-    : {type: "simplePlaceable", fn: "$l10n_function_decoration", shop: {category: "farmhouses", type: "placeable", brush: "buildings", tab: "farmhouses"}},
+    : {type: "simplePlaceable", fn: "$l10n_function_decoration", shop: shopFor(p, FARMHOUSES)},
   description: p => `A ${(+p.width).toFixed(1)} x ${(+p.depth).toFixed(1)} m house made with House to i3d.${hasSleep(p) ? " Sleep here to skip the night." : ""}`,
   scene,
   // the sleep point is optional: with one, the house is a farmhouse in the game

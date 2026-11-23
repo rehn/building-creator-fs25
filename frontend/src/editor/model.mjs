@@ -2,12 +2,14 @@
 // what differs per kind of building (farmhouse, hen house ...) lives in kinds/.
 // Pure functions with no DOM or three.js, so they run (and are tested) in Node.
 import { I3dDoc, tg, shape, refNode, boxMesh, splitByColor, mappingsFor, num, v3 } from "./i3d.mjs";
-import { KINDS, kindOf } from "./kinds/index.mjs";
+import { KINDS, KIND, kindOf } from "./kinds/index.mjs";
+import { SHOP_CATEGORIES } from "./kinds/shop.mjs";
 import { WALL_T, openSide, wallFrames, wallsOf, liveWings, wingsOf, wingIdOf, eaveWalls, autoPipes, cleanPipes, cleanPapers, WING_PARTS, MAX_WINGS, HARD_MAX_PARTS, setMaxParts, WING_WALLS, wingWallKey, wingSplitKey, WING_SPLIT_WALLS, isSplitWall, openingSpan, splitsOf, sectionsOf, sectionRuns, sectionAtPoint, maxFloors, maxFloorsWithAttic, wallHasFloor, isGableWall, cascadeHeight, dividerAt, splitAtFrom, splitKey, SPLIT_WALLS, MAX_SPLITS, floorsOf, totalHeight, floorBase, floorAt, roomOf, footprint, toWorld, cleanItems, problems } from "./layout.mjs";
 import { withAssets, placement, assetFolder, normalizeMeta, troughAssets } from "./assets.mjs";
 import { SURFACES } from "./surfaces.mjs";
 import { agedColor } from "./age.mjs";
 import { cleanObjects, objectOf, boxOf, objectInfo } from "./objects.mjs";
+import { cleanDecor, decorRects } from "./decor.mjs";
 import { WALLPAPERS } from "./kinds/innerwall.mjs";
 import { WINDOW_STYLES, DOOR_STYLES, WINDOW_STYLE_IDS, DOOR_STYLE_IDS, DOUBLE_DOOR_FROM, isPair, styleOf, drawSash, drawLeaf } from "./openings.mjs";
 export { WINDOW_STYLES, DOOR_STYLES, DOUBLE_DOOR_FROM } from "./openings.mjs";
@@ -29,7 +31,7 @@ export const DEFAULTS = {
   gutters:true, downpipes:2, gutterColor:"#3B3F42",
   wallColor:"#8E2A1E", trimColor:"#F2EFE8", roofColor:"#2B2D2F", doorColor:"#3E5A4A", innerDoorColor:"#E9E3D3", foundationColor:"#6E6E6A",
   interior:true, loftBacking:true, insidePaper:"none", curtainStyle:"sides", curtainColor:"#EFE9DC", ventilators:0, age:0,
-  modPrice:75000, modUpkeep:75, modAuthor:"", modDescription:"", lodDistance:80, binaryShapes:true
+  modPrice:75000, modUpkeep:75, shopCategory:"auto", modAuthor:"", modDescription:"", lodDistance:80, binaryShapes:true
 };
 /** Curtain layouts: [id, name]. Windows can pick one or follow the house's choice ("default"). */
 export const CURTAIN_OPTIONS = [["sides","Side panels and valance"],["panels","Side panels"],["valance","Valance only"],["cafe","Caf\u00E9 curtain and valance"],["none","No curtains"]];
@@ -45,6 +47,8 @@ const LEAF_T = 0.05;
  */
 const DOOR_OPEN = -100;
 /** How far the plinth stands out from the walls. */
+/** How far under the walls' top a ceiling hangs (m): out of the plane of a flat roof's underside. */
+const CEILING_GAP = 0.003;
 /** Thickness of a leaning flat roof's slab (a flat one is 30 cm). */
 const TILT_T = 0.14;
 const PLINTH_OUT = 0.06;
@@ -132,6 +136,7 @@ const SHARED_SECTIONS = [
   {title:"Game mod", label:"Shop and mod", tab:"game", hint:"Used by \u201CExport game mod\u201D: what the house costs in the shop and who made it. The project name is the name in the shop.", fields:[
     {k:"modPrice", label:"Price", min:0, max:2000000, step:500, money:true},
     {k:"modUpkeep", label:"Daily upkeep", min:0, max:5000, step:5, money:true},
+    {k:"shopCategory", label:"Where it is in the shop (a house, shed or dealership)", type:"select", options:SHOP_CATEGORIES},
     {k:"lodDistance", label:"Simple model from this distance (0: always the detailed one)", min:0, max:300, step:10, unit:" m"},
     {k:"binaryShapes", label:"Keep the meshes in a binary shapes file, like Giants Editor (loads faster, and the game has no warning about text meshes)", type:"check"},
     {k:"modAuthor", label:"Author (empty: your name)", type:"text", max:60},
@@ -544,6 +549,8 @@ function groupTroughs(p, nodes) {
   }
   return out;
 }
+/** What a decoration is called in the tree: its item's name. */
+function decorName(d) { const a = ASSETS.find(q => q.id === d.asset); return a ? a.name : "(an item no longer in your list)"; }
 function objectName(p, o) {
   const name = objectInfo(kindOf(p), o.type).name, same = (p.objects || []).filter(x => x.type === o.type);
   return same.length > 1 ? `${name} ${same.indexOf(o) + 1}` : name;
@@ -592,7 +599,9 @@ export function buildingTree(p) {
   const ko = kindOf(p).objects, game = ko && ko.types && ko.types.length ? {type: "game", children: groupTroughs(p, (p.objects || []).map(o => ({type: "object", id: o.id, otype: o.type, name: objectName(p, o),
     // a fence drawn by hand is a folder of its posts
     ...(o.type === "pasture" && o.points ? {children: o.points.map((_, i) => ({type: "post", id: o.id, index: i, name: `Post ${i + 1}`, role: i === 0 ? "start" : i === o.points.length - 1 ? "stop" : ""}))} : {})})))} : null;
-  return {type: "main", children, lost, game};
+  // the decorations (decor.mjs): a node of their own after the game objects, always there (it is where they are added)
+  const decor = {type: "decor", children: (p.decor || []).map(d => ({type: "deco", id: d.id, name: decorName(d)}))};
+  return {type: "main", children, lost, game, decor};
 }
 /** The free stretches of a wall [s0, s1] on a floor: 30 cm from its ends and 20 cm from what stands there (a part blocks the floors it covers). forPart: for a part, which may stand over windows. */
 export function freeStretches(p, key, floor, forPart = false) {
@@ -744,6 +753,33 @@ export function clampField(f, v) {
  * none or unknown), every setting it has clamped to its range, and the kind's own rules applied.
  */
 const MAIN_WALLS = ["front", "back", "left", "right"];
+
+/** The types a building can be changed between: those built the same way (walls, roof, openings, a walked-in inside); not the animal buildings, which have a pasture and animals. */
+export const CONVERTIBLE_KINDS = ["house", "shed", "dealership", "defaultdealer", "warehouse", "grainsilo", "fuelstation"];
+/**
+ * The building as another type (docs/PLAN_TYPER.md step 2): -> {ok: true, settings, lost: {items, objects, settings, dormers}, added: {objects}} or {ok: false, error}.
+ * The form is kept (size, roof, walls, openings, parts, decorations, looks), the new type's rules apply (sanitize), and what only the old type has is dropped and listed: the furniture its
+ * pieces list lacks (names), game objects the new type lacks, settings of the old type's own sections that were changed, dormers where the new type has none.
+ * The game objects the new type must have are added where it puts them to start with. The input is not changed.
+ */
+export function changeKind(p, toId) {
+  const to = KIND[toId], q = sanitize(p), from = kindOf(q);
+  if (!to) return {ok: false, error: "That type does not exist."};
+  if (from.id === to.id) return {ok: false, error: "It already is that type."};
+  if (!CONVERTIBLE_KINDS.includes(from.id) || !CONVERTIBLE_KINDS.includes(to.id)) return {ok: false, error: "An animal building can't be changed to another type or from one: it has a pasture and animals. Make a new building of the type you want."};
+  const next = sanitize({...q, kind: to.id});
+  const oldCat = catalogFor(q), key = it => it.type + "|" + it.x + "|" + it.z, kept = new Set(next.items.map(key));
+  const lostItems = q.items.filter(it => !kept.has(key(it))).map(it => (oldCat[it.type] || {name: it.type}).name);
+  const newTypes = new Set(next.objects.map(o => o.type)), oldTypes = new Set(q.objects.map(o => o.type));
+  const lostObjects = q.objects.filter(o => !newTypes.has(o.type)).map(o => objectInfo(from, o.type).name);
+  const addedObjects = next.objects.filter(o => !oldTypes.has(o.type)).map(o => objectInfo(to, o.type).name);
+  const newFields = fieldsFor(to), oldDefs = {...DEFAULTS, ...from.defaults};
+  const lostSettings = from.sections.flatMap(g => g.fields).filter(f => !newFields[f.k] && JSON.stringify(q[f.k]) !== JSON.stringify(oldDefs[f.k])).map(f => f.label);
+  const dormers = to.hides.includes("Kupor (dormers)") ? q.dormers.length : 0;
+  if (dormers) next.dormers = [];
+  return {ok: true, settings: next, lost: {items: lostItems, objects: lostObjects, settings: lostSettings, dormers}, added: {objects: addedObjects}};
+}
+
 export function sanitize(obj) {
   if (!obj || typeof obj !== "object") obj = {};
   const kind = kindOf(obj), defs = {...DEFAULTS, ...kind.defaults}, fields = fieldsFor(kind);
@@ -752,6 +788,11 @@ export function sanitize(obj) {
     if (k === "kind") continue;
     const v = clampField(fields[k], obj[k]);
     if (v !== undefined) out[k] = typeof defs[k] === "number" ? +(+v).toFixed(3) : v;
+  }
+  // lists of names (a warehouse's goods): the ones the game has, once each, in the game's order; not a list: the kind's starting one
+  for (const [k, spec] of Object.entries(kind.lists || {})) {
+    const have = new Set(Array.isArray(obj[k]) ? obj[k].filter(x => typeof x === "string") : []);
+    out[k] = Array.isArray(obj[k]) ? spec.options.filter(n => have.has(n)) : spec.options.filter(n => spec.start.includes(n));
   }
   // (a height below 2.3 m on an upper floor means "as the ground floor")
   for (const k of ["floor2Height", "floor3Height"]) if (!(out[k] >= 2.3)) out[k] = 0;
@@ -789,6 +830,7 @@ export function sanitize(obj) {
   const legacy = {...out, pastureWall: WALLS.includes(obj.pastureWall) ? obj.pastureWall : out.pastureWall,
     fenceDepth: Number.isFinite(+obj.fenceDepth) && obj.fenceDepth !== null ? +obj.fenceDepth : out.fenceDepth, sleepPoint: obj.sleepPoint !== false};
   out.objects = cleanObjects(Array.isArray(obj.objects) ? obj.objects : kind.objects ? kind.objects.defaults(legacy) : [], kind, legacy);
+  out.decor = cleanDecor(obj.decor);   // (items of the user's placed round the building: decor.mjs)
   const q = kind.normalize(out);
   // The inside of a walk-in building: the saved pieces, or filled automatically for a new one.
   if (kind.catalog) q.items = Array.isArray(obj.items) ? cleanItems(obj.items, catalogFor({kind: kind.id, items: obj.items})) : kind.autoFurnish(q).items;
@@ -2668,6 +2710,9 @@ function build() {
         if (b - a > 0.05) pieces.push({r: axis === 0 ? {...r, x0: a, x1: b} : {...r, z0: a, z1: b}, yy: (i ? F : F) + sc.hs[0]});
       });
     });
+    // (where the ceiling is at the walls' top, under a flat roof: the roof's soffit is in the same plane, and the two flickered over the whole room, so the ceiling hangs 3 mm lower)
+    const tops = [top, ...WINGS.map(item => item.topW)], gap = yy => p.roofType !== "gable" && p.roofType !== "hip" && tops.some(t => Math.abs(t - yy) < 1e-6) ? CEILING_GAP : 0;
+    for (const piece of pieces) piece.yy -= gap(piece.yy);
     for (const {r, yy} of pieces) poly("fittings", [[r.x0, yy, r.z0], [r.x1, yy, r.z0], [r.x1, yy, r.z1], [r.x0, yy, r.z1]], neg(UP));
     if (wooden) {
       // beams (bjalkar) 10 x 20 cm about every 90 cm across the shorter way, under the boards
@@ -2684,7 +2729,7 @@ function build() {
     const mains = wallsOf(p);   // (the walls the parts open through: the house's, or a part's)
     for (const wg of liveWings(p)) {
       const m = mains[wg.wall];
-      const yp = Math.min(fhOf(wg.wall, (wg.s0 + wg.s1) / 2), wg.fh);
+      const yp0 = Math.min(fhOf(wg.wall, (wg.s0 + wg.s1) / 2), wg.fh), yp = yp0 - gap(F + yp0);
       if (m) poly("fittings", [WP(m, wg.s0 + WALL_T, yp, -WALL_T), WP(m, wg.s1 - WALL_T, yp, -WALL_T), WP(m, wg.s1 - WALL_T, yp, 0), WP(m, wg.s0 + WALL_T, yp, 0)], neg(UP));
     }
   } else if (hollow && p.roofType !== "flat") {
@@ -2702,6 +2747,13 @@ function build() {
     return true;
   };
   if (kind.outside) kind.outside({p, geo: {opsByWall, dims: {W, D}}, abox, cyl, cone, rod, tube, paint, asset});
+  // Decorations: the user's items standing round the building (decor.mjs); one whose item is gone (or has not loaded) is kept in the settings and left out here.
+  for (const d of p.decor || []) {
+    const found = ASSETS.find(q => q.id === d.asset);
+    if (!found) continue;
+    const a = {...found, meta: normalizeMeta(found.meta)}, pl = placement(a.meta, d, 0);
+    refs.push({asset: a, item: d, ...pl, translation: [pl.translation[0], pl.translation[1] + d.y, pl.translation[2]]});
+  }
   // The placed pieces last (tests find a piece's vertices after the empty barn's).
   if (hollow) buildInside(kind, F, H);
   dims = {W, D, top, ridgeY, F};
@@ -3012,7 +3064,7 @@ ${lv.map((leaf, j) => `                <part node="door${i + 1}Leaf${ks[j] + 1}"
     return refNode(stem + String(counts[stem]).padStart(2, "0"), {translation: r.translation, rotation: [0, r.rotY, 0],
       referenceId: doc.file(`${folder}/${r.asset.meta.i3d}`)});
   });
-  const A = placementAreas(geo, own.areas), t = A.test, {W, D} = geo.dims;
+  const A = placementAreas(geo, [...own.areas, ...decorRects(p, id => ASSETS.find(q => q.id === id) || null)]), t = A.test, {W, D} = geo.dims;
   const indoor = kind.walkIn || !!objectOf(p, "sleep");
   const root = tg("house", [0, 0, 0], [
     rect("clear", A.clear),
@@ -3123,7 +3175,7 @@ ${note ? `
 
 /* ---------- Game mod ---------- */
 /** File names inside the mod zip. */
-export const MOD_FILES = {i3d: "house.i3d", xml: "house.xml", icon: "icon.png", store: "store.png"};
+export const MOD_FILES = {i3d: "house.i3d", xml: "house.xml", icon: "icon.dds", store: "store.dds"};
 /** modDesc version the mod declares (FS25; most house mods use this one). */
 export const MOD_DESC_VERSION = 108;
 const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");

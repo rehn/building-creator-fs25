@@ -6,6 +6,8 @@
 // game's "vehicleBuyingStation" specialization; this is not yet tried in the game.
 // Imports only the i3d writer; the core hands in what it needs (see kinds/index.mjs).
 import { tg } from "../i3d.mjs";
+import { shopFor } from "./shop.mjs";
+const SHEDS = {category: "sheds", type: "placeable", brush: "buildings", tab: "sheds"};   // (the shop place of the kind: shop.mjs lets the player choose another)
 import { objectOf, boxOf, iconOf } from "../objects.mjs";
 import { tone } from "./props.mjs";
 import { INNER_WALL } from "./innerwall.mjs";
@@ -147,7 +149,7 @@ export default {
   /** Settings as this kind uses them: no sleep point, rooms or dormers. */
   normalize: p => ({...p, interior: false, dormers: []}),
   /** The placeable type is the mod's own (modTypes): its name is the mod's name, a dot and the type's name. */
-  placeable: (p, {mod = "FS25_Dealership"} = {}) => ({type: `${mod}.dealership`, fn: "$l10n_function_decoration", shop: {category: "sheds", type: "placeable", brush: "buildings", tab: "sheds"},
+  placeable: (p, {mod = "FS25_Dealership"} = {}) => ({type: `${mod}.dealership`, fn: "$l10n_function_decoration", shop: shopFor(p, SHEDS),
     note: `Vehicle dealership: add the placeable type to your modDesc.xml (<placeableTypes>, parent simplePlaceable, specialization vehicleBuyingStation).`}),
   /** Placeable types the mod's modDesc.xml must define: {name, parent, specializations}. */
   modTypes: [{name: "dealership", parent: "simplePlaceable", specializations: ["vehicleBuyingStation"]}],

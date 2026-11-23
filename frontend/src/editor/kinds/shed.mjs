@@ -3,6 +3,8 @@
 // placeable with the workshop's triggers, as the base game's garages (data/placeables/rudolfHormann/garageBigService).
 // Imports only the i3d writer; the core hands in what it needs (see kinds/index.mjs).
 import { tg } from "../i3d.mjs";
+import { shopFor } from "./shop.mjs";
+const SHEDS = {category: "sheds", type: "placeable", brush: "buildings", tab: "sheds"};   // (the shop place of the kind: shop.mjs lets the player choose another)
 import { objectOf, boxOf, iconOf } from "../objects.mjs";
 import { tone, shade } from "./props.mjs";
 import { INNER_WALL } from "./innerwall.mjs";
@@ -165,9 +167,9 @@ export default {
   /** Settings as this kind uses them: no sleep point, rooms or dormers. */
   normalize: p => ({...p, interior: false, dormers: []}),
   placeable: p => objectOf(p, "workshop")
-    ? {type: "garageWorkshopSolarPanels", fn: "$l10n_function_workshop", shop: {category: "sheds", type: "placeable", brush: "buildings", tab: "sheds"},
+    ? {type: "garageWorkshopSolarPanels", fn: "$l10n_function_workshop", shop: shopFor(p, SHEDS),
       note: `Vehicle workshop: use <placeable type="garageWorkshopSolarPanels" ...>, as in the base game's garages with a workshop.`}
-    : {type: "simplePlaceable", fn: "$l10n_function_decoration", shop: {category: "sheds", type: "placeable", brush: "buildings", tab: "sheds"}},
+    : {type: "simplePlaceable", fn: "$l10n_function_decoration", shop: shopFor(p, SHEDS)},
   description: p => `A ${(+p.width).toFixed(1)} x ${(+p.depth).toFixed(1)} m shed made with House to i3d.${objectOf(p, "workshop") ? " Repair and paint your vehicles inside." : ""}`,
   furnish,
   catalog: CATALOG,

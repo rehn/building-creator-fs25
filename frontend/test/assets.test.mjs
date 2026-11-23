@@ -254,3 +254,31 @@ test("turnedSize: the footprint of a model turned any angle is the box round it"
   assert.equal(w, d); assert.equal(w, 2.263); assert.equal(h, 0.6);   // (2.4 + 0.8) / sqrt(2)
   assert.deepEqual(turnedSize(normalizeMeta({...meta, turn: 90}), 0), [0.8, 2.4, 0.6], "the model's own turn counts");
 });
+
+/* texture coordinates in the .obj: the preview can draw an item with its picture */
+test("readObj: the uvs of each corner when the faces have them (f v/vt, f v/vt/vn), else none", () => {
+  const withUv = "v 0 0 0\nv 1 0 0\nv 0 1 0\nv 1 1 0\nvt 0 0\nvt 1 0\nvt 0 1\nvt 1 1\ng a\nf 1/1 2/2 3/3\nf 2/2/1 4/4/1 3/3/1\n";
+  const o = readObj(withUv);
+  assert.deepEqual(o.uvs, [0, 0, 1, 0, 0, 1, 1, 0, 1, 1, 0, 1]);
+  assert.equal(o.uvs.length / 2, o.positions.length / 3);
+  assert.equal(readObj("v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n").uvs, null);
+  assert.equal(readObj("v 0 0 0\nv 1 0 0\nv 0 1 0\nvt 0 0\nf 1/1 2/1 3\n").uvs, null, "a face with a corner that has none: no uvs at all");
+  const skip = readObj("v 0 0 0\nv 1 0 0\nv 0 1 0\nvt 0 0\nvt 1 0\nvt 0 1\ng hide\nf 1/1 2/2 3/3\ng show\nf 3/3 2/2 1/1\n", ["hide"]);
+  assert.deepEqual(skip.uvs, [0, 1, 1, 0, 0, 0], "left-out groups leave out their uvs too");
+});
+
+test("normalizeMeta: texture is the name of the item's picture file, empty for none", () => {
+  assert.equal(normalizeMeta({texture: "sign_diffuse.dds"}).texture, "sign_diffuse.dds");
+  assert.equal(normalizeMeta({}).texture, "");
+  assert.equal(normalizeMeta({texture: 5}).texture, "");
+});
+
+test("normalizeMeta: a list picture is kept only when it is a small JPEG or PNG data: URL", () => {
+  const ok = "data:image/jpeg;base64,/9j/4AAQ";
+  assert.equal(normalizeMeta({icon: ok}).icon, ok);
+  assert.equal(normalizeMeta({icon: "data:image/png;base64,iVBOR"}).icon, "data:image/png;base64,iVBOR");
+  assert.equal(normalizeMeta({icon: "https://example.com/a.png"}).icon, "");
+  assert.equal(normalizeMeta({icon: "data:text/html;base64,PHNjcmlwdD4="}).icon, "", "not an image");
+  assert.equal(normalizeMeta({icon: ok + "A".repeat(30000)}).icon, "", "too big");
+  assert.equal(normalizeMeta({}).icon, "");
+});
