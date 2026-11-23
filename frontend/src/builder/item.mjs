@@ -6,7 +6,7 @@ import { exportI3dAtlas, atlasFiles, partAtlasUv } from "./atlas.mjs";
 import { flattenI3d } from "../editor/assets.mjs";
 
 /** A file stem the server accepts: letters and digits with _ between ("My Silo / No. 2!" -> "My_Silo_No_2"), "item" when nothing is left. */
-export const itemStem = name => String(name || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "item";
+const itemStem = name => String(name || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "item";
 
 const round = v => Math.round(v * 1000) / 1000;
 

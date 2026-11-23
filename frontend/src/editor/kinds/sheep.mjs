@@ -9,7 +9,7 @@ import { tone } from "./props.mjs";
 import { INNER_WALL } from "./innerwall.mjs";
 
 /** About one sheep per 1.5 m² of floor; at most 70 (the base game's biggest sheep barn takes 68). */
-export const M2_PER_SHEEP = 1.5;
+const M2_PER_SHEEP = 1.5;
 export const MAX_SHEEP = 70;
 export const sheepCap = p => Math.max(1, Math.min(MAX_SHEEP, Math.floor(p.width * p.depth / M2_PER_SHEEP + 1e-9)));
 const sheepOf = p => Math.min(Math.round(p.sheep), sheepCap(p));
@@ -18,7 +18,7 @@ const FOOD_PER_SHEEP = 160;
 const MIN_PASTURE_WIDTH = 12;
 export const SHEEP = {...COW, count: sheepOf, minWidth: MIN_PASTURE_WIDTH, foodPer: FOOD_PER_SHEEP, animal: "SHEEP", fill: "DRYGRASS_WINDROW",
   fence: "sheepNetFence/sheepNetFence", pallets: {fills: "WOOL GOATMILK", max: 8}};
-export const sheepYard = (geo, p) => cowYard(geo, p, SHEEP);
+const sheepYard = (geo, p) => cowYard(geo, p, SHEEP);
 
 const LITTER = "#C9AE6B";
 /** The floor: deep straw litter over the whole room. */

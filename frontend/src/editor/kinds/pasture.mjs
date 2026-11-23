@@ -7,7 +7,7 @@ import { pastureOf, footprints } from "../objects.mjs";
 export const OPPOSITE = {front: "back", back: "front", left: "right", right: "left"};
 export const wallLength = (p, wall) => (wall === "front" || wall === "back") ? p.width : p.depth;
 /** The walls with a door (the window list's ground-floor doors). */
-export const doorWalls = p => new Set((p.windows || []).filter(w => w.type === "door" && w.floor === 0).map(w => w.wall));
+const doorWalls = p => new Set((p.windows || []).filter(w => w.type === "door" && w.floor === 0).map(w => w.wall));
 /**
  * The pasture's wall: the one asked for, unless it has a door; then the opposite wall, or else any
  * wall without a door. If every wall has a door it stays.
