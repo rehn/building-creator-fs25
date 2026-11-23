@@ -142,6 +142,44 @@ func (s *Store) UpdateAsset(ctx context.Context, userID int64, id string, name *
 	return s.GetAsset(ctx, userID, id)
 }
 
+// ReplaceAssetFiles gives one of the user's assets a whole new set of files (the old ones are removed), in one transaction: a failure leaves the asset as it was.
+// name and meta are changed if not nil; the id and who it is shared with stay. ErrNotFound if it is not the user's.
+func (s *Store) ReplaceAssetFiles(ctx context.Context, userID int64, id string, name *string, meta json.RawMessage, files []AssetFileData) (Asset, error) {
+	cur, err := s.GetAsset(ctx, userID, id)
+	if err != nil {
+		return Asset{}, err
+	}
+	n, m := cur.Name, string(cur.Meta)
+	if name != nil {
+		n = *name
+	}
+	if meta != nil {
+		m = string(meta)
+	}
+	err = s.inTx(ctx, func(tx *txx) error {
+		res, err := tx.exec(ctx, `UPDATE assets SET name = ?, meta = ?, updated_at = ? WHERE id = ? AND user_id = ?`, n, m, s.ms(), id, userID)
+		if err != nil {
+			return err
+		}
+		if c, _ := res.RowsAffected(); c != 1 {
+			return ErrNotFound
+		}
+		if _, err := tx.exec(ctx, `DELETE FROM asset_files WHERE asset_id = ?`, id); err != nil {
+			return err
+		}
+		for i, f := range files {
+			if _, err := tx.exec(ctx, `INSERT INTO asset_files (asset_id, pos, name, size, data) VALUES (?, ?, ?, ?, ?)`, id, i, f.Name, len(f.Data), f.Data); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return Asset{}, err
+	}
+	return s.GetAsset(ctx, userID, id)
+}
+
 // DeleteAsset removes an asset and its files.
 func (s *Store) DeleteAsset(ctx context.Context, userID int64, id string) error {
 	return s.inTx(ctx, func(tx *txx) error {

@@ -45,19 +45,24 @@ func (s *Server) listAssets(w http.ResponseWriter, r *http.Request, u store.User
 	writeJSON(w, http.StatusOK, list)
 }
 
-// createAsset imports an item: a multipart form with name, meta (JSON object) and files
-// (exactly one .i3d, plus its .shapes, the .obj for the preview, textures ...).
-func (s *Server) createAsset(w http.ResponseWriter, r *http.Request, u store.User) {
+// assetForm is what an item upload carries: name, meta (JSON object text), shared ("true") and the files, as sent (nothing checked yet).
+type assetForm struct {
+	name, meta, shared string
+	files              []store.AssetFileData
+}
+
+// readAssetForm reads an item's multipart form; it writes the error and returns false if it can't.
+func readAssetForm(w http.ResponseWriter, r *http.Request) (assetForm, bool) {
 	allowSlowUpload(w)
 	if mt, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); mt != "multipart/form-data" {
 		writeError(w, http.StatusUnsupportedMediaType, "unsupported_media_type", "Send the files as a form.")
-		return
+		return assetForm{}, false
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxAssetBytes+(1<<20))
 	mr, err := r.MultipartReader()
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_form", "Send the files as a form.")
-		return
+		return assetForm{}, false
 	}
 	var name, meta, shared string
 	var files []store.AssetFileData
@@ -69,14 +74,14 @@ func (s *Server) createAsset(w http.ResponseWriter, r *http.Request, u store.Use
 		}
 		if err != nil {
 			tooBig(w, err)
-			return
+			return assetForm{}, false
 		}
 		switch part.FormName() {
 		case "name", "meta", "shared":
 			b, err := io.ReadAll(io.LimitReader(part, maxMetaBytes+1))
 			if err != nil {
 				tooBig(w, err)
-				return
+				return assetForm{}, false
 			}
 			switch part.FormName() {
 			case "name":
@@ -90,11 +95,11 @@ func (s *Server) createAsset(w http.ResponseWriter, r *http.Request, u store.Use
 			data, err := io.ReadAll(io.LimitReader(part, int64(maxAssetBytes-total+1)))
 			if err != nil {
 				tooBig(w, err)
-				return
+				return assetForm{}, false
 			}
 			if total += len(data); total > maxAssetBytes {
 				writeError(w, http.StatusRequestEntityTooLarge, "too_large", "The files are too big together (50 MB at most).")
-				return
+				return assetForm{}, false
 			}
 			// The name as sent (FileName() would quietly drop folders): checkFiles turns paths away.
 			_, params, _ := mime.ParseMediaType(part.Header.Get("Content-Disposition"))
@@ -102,7 +107,18 @@ func (s *Server) createAsset(w http.ResponseWriter, r *http.Request, u store.Use
 		}
 	}
 
-	name, ok := cleanText(name, 100)
+	return assetForm{name, meta, shared, files}, true
+}
+
+// createAsset imports an item: a multipart form with name, meta (JSON object) and files
+// (exactly one .i3d, plus its .shapes, the .obj for the preview, textures ...).
+func (s *Server) createAsset(w http.ResponseWriter, r *http.Request, u store.User) {
+	form, ok := readAssetForm(w, r)
+	if !ok {
+		return
+	}
+	name, meta, shared, files := form.name, form.meta, form.shared, form.files
+	name, ok = cleanText(name, 100)
 	if !ok {
 		writeError(w, http.StatusBadRequest, "invalid_name", "Use a name of 1 to 100 characters.")
 		return
@@ -131,6 +147,42 @@ func (s *Server) createAsset(w http.ResponseWriter, r *http.Request, u store.Use
 		return
 	}
 	writeJSON(w, http.StatusCreated, a)
+}
+
+// replaceAsset gives one of the user's items new files (the modeller builds a prop again): the same multipart form as createAsset. The item keeps its id,
+// so buildings that placed it keep it; name and meta are changed only if sent; who it is shared with stays. A refused upload leaves the item as it was.
+func (s *Server) replaceAsset(w http.ResponseWriter, r *http.Request, u store.User) {
+	form, ok := readAssetForm(w, r)
+	if !ok {
+		return
+	}
+	var name *string
+	if form.name != "" {
+		n, ok := cleanText(form.name, 100)
+		if !ok {
+			writeError(w, http.StatusBadRequest, "invalid_name", "Use a name of 1 to 100 characters.")
+			return
+		}
+		name = &n
+	}
+	var meta json.RawMessage
+	if form.meta != "" {
+		if !validMeta([]byte(form.meta)) {
+			writeError(w, http.StatusBadRequest, "invalid_meta", "The item's settings must be a JSON object.")
+			return
+		}
+		meta = json.RawMessage(form.meta)
+	}
+	if msg := checkFiles(form.files); msg != "" {
+		writeError(w, http.StatusBadRequest, "invalid_files", msg)
+		return
+	}
+	a, err := s.st.ReplaceAssetFiles(r.Context(), u.ID, r.PathValue("id"), name, meta, form.files)
+	if err != nil {
+		assetError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, a)
 }
 
 // checkFiles returns what's wrong with an item's files, or "".
