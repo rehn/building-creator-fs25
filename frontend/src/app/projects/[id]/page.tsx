@@ -28,6 +28,7 @@ export default function ProjectPage() {
   const router = useRouter();
   const { user, error: userError } = useUser();
   const [project, setProject] = useState<Project | null>(null);
+  const [editorKey, setEditorKey] = useState(0);   // (a new key mounts the editor again: it is built for one type of building)
   const [loadError, setLoadError] = useState("");
   const [name, setName] = useState("");
   const [status, setStatus] = useState<Status>("saved");
@@ -197,7 +198,7 @@ export default function ProjectPage() {
         </div>
       )}
       {project
-        ? <Editor author={authorName(user)} initial={project.data} onChange={s => queue({ data: s })} onReady={ed => {
+        ? <Editor key={editorKey} author={authorName(user)} initial={project.data} onChange={s => queue({ data: s })} onKindChange={s => { queue({ data: s }, 0); setProject(p => p && { ...p, data: s, kind: String(s.kind ?? p.kind) }); setEditorKey(k => k + 1); }} onReady={ed => {
             editor.current = ed;
             // a new house has no preview or model files yet: save once so the list shows one and other programs get the model
             // (and once more for a model made before the game mod in it was the full one, with textures)

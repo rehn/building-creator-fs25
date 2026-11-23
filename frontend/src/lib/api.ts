@@ -168,6 +168,8 @@ export const api = {
   importAsset: (form: FormData) => send<Asset>("POST", "/assets", form),
   updateAsset: (id: string, patch: { name?: string; meta?: Record<string, unknown>; shared?: boolean }) =>
     request<Asset>("PATCH", "/assets/" + encodeURIComponent(id), patch),
+  /** New files (and settings) for an item of mine: it keeps its id. */
+  replaceAsset: (id: string, form: FormData) => send<Asset>("PUT", "/assets/" + encodeURIComponent(id), form),
   deleteAsset: (id: string) => request<void>("DELETE", "/assets/" + encodeURIComponent(id)),
   assetFile: async (id: string, name: string) => {
     const res = await fetch(`/api/assets/${encodeURIComponent(id)}/files/${encodeURIComponent(name)}`, { credentials: "same-origin", cache: "no-store" });

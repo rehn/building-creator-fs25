@@ -18,6 +18,15 @@ type upload struct {
 
 // importAsset posts an item the way the browser does: a multipart form with name, meta and files.
 func (c *client) importAsset(u upload) *httptest.ResponseRecorder {
+	return c.sendAsset("POST", "/api/assets", u)
+}
+
+// replaceAsset sends new files for an existing item (PUT).
+func (c *client) replaceAsset(id string, u upload) *httptest.ResponseRecorder {
+	return c.sendAsset("PUT", "/api/assets/"+id, u)
+}
+
+func (c *client) sendAsset(method, path string, u upload) *httptest.ResponseRecorder {
 	c.t.Helper()
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
@@ -38,7 +47,7 @@ func (c *client) importAsset(u upload) *httptest.ResponseRecorder {
 		fw.Write(u.files[n])
 	}
 	mw.Close()
-	req := httptest.NewRequest("POST", "/api/assets", &buf)
+	req := httptest.NewRequest(method, path, &buf)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
 	req.Header.Set("Origin", origin)
 	return c.send(req)
@@ -188,4 +197,55 @@ func TestSharedAssets(t *testing.T) {
 		t.Fatalf("unshared: %+v", c)
 	}
 	expectError(t, friend.do("GET", "/api/assets/"+a.ID+"/files/cow-feeder.i3d", nil), 404, "not_found")
+}
+
+// A saved prop is built again and sent again: the item keeps its id (buildings that placed it keep it), gets new files and settings.
+func TestAssetReplaceKeepsTheItem(t *testing.T) {
+	srv := newTestServer(t)
+	c := signupAdmin(t, srv)
+	rec := c.importAsset(feeder())
+	expect(t, rec, 201)
+	a := decode[store.Asset](t, rec)
+	expect(t, c.do("PATCH", "/api/assets/"+a.ID, map[string]any{"shared": true}), 200)
+
+	next := upload{meta: `{"mount":"floor","i3d":"sign.i3d"}`, files: map[string][]byte{
+		"sign.i3d": []byte(`<i3D/>`), "sign.obj": []byte("v 1 1 1\n")}, order: []string{"sign.i3d", "sign.obj"}}
+	rec = c.replaceAsset(a.ID, next)
+	expect(t, rec, 200)
+	b := decode[store.Asset](t, rec)
+	if b.ID != a.ID || b.Name != "Cow feeder" || !b.Shared || string(b.Meta) != `{"mount":"floor","i3d":"sign.i3d"}` || len(b.Files) != 2 || b.Files[0].Name != "sign.i3d" {
+		t.Fatalf("replaced: %+v", b)
+	}
+	expectError(t, c.do("GET", "/api/assets/"+a.ID+"/files/cow-feeder.i3d", nil), 404, "not_found") // the old files are gone
+	if got := c.do("GET", "/api/assets/"+a.ID+"/files/sign.obj", nil); got.Code != 200 || got.Body.String() != "v 1 1 1\n" {
+		t.Fatalf("new file: %d %q", got.Code, got.Body.String())
+	}
+	if list := decode[[]store.Asset](t, c.do("GET", "/api/assets", nil)); len(list) != 1 {
+		t.Fatalf("an item became %d items", len(list))
+	}
+
+	next.name = "Skylt"
+	if b := decode[store.Asset](t, c.replaceAsset(a.ID, next)); b.Name != "Skylt" {
+		t.Fatalf("a name sent is kept: %q", b.Name)
+	}
+
+	bad := next
+	bad.order = []string{"sign.obj"}
+	expectError(t, c.replaceAsset(a.ID, bad), 400, "invalid_files")
+	if got := c.do("GET", "/api/assets/"+a.ID+"/files/sign.i3d", nil); got.Code != 200 {
+		t.Fatal("a refused replacement must leave the item as it was")
+	}
+	bad = next
+	bad.meta = `[1]`
+	expectError(t, c.replaceAsset(a.ID, bad), 400, "invalid_meta")
+	expectError(t, c.replaceAsset("nope", next), 404, "not_found")
+}
+
+func TestAssetReplaceOnlyByTheOwner(t *testing.T) {
+	srv := newTestServer(t)
+	admin := signupAdmin(t, srv)
+	a := decode[store.Asset](t, admin.importAsset(feeder()))
+	expect(t, admin.do("PATCH", "/api/assets/"+a.ID, map[string]any{"shared": true}), 200)
+	friend := signupFriend(t, srv, admin, "friend@example.se")
+	expectError(t, friend.replaceAsset(a.ID, feeder()), 404, "not_found") // shared, still not theirs to change
 }

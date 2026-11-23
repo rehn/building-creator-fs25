@@ -13,7 +13,7 @@ const first = makeModFiles(SETTINGS, "Storgatan 4", { author: "Karta" });   // (
 test("the game mod has what a map takes: modDesc, the placeable XML, the i3d, its shapes and every texture the i3d names", () => {
   const f = first.mod, names = [...f.keys()];
   for (const n of ["modDesc.xml", "house.xml", "house.i3d", "house.i3d.shapes"]) assert.ok(f.has(n), "missing " + n);
-  assert.ok(!f.has("store.png") && !f.has("icon.png"), "no pictures from the server");
+  assert.ok(!f.has("store.dds") && !f.has("icon.dds"), "no pictures from the server");
   const i3d = text(f.get("house.i3d")), named = [...i3d.matchAll(/filename="([^"]*\.dds)"/g)].map(m => m[1]);
   assert.ok(named.length > 5, "the i3d names its textures");
   for (const n of named) assert.ok(f.has(n), `${n} is named in the i3d but not in the mod`);

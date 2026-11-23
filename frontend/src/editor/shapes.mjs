@@ -8,6 +8,8 @@
 // sublicense and/or sell copies of the software, provided this notice is kept in all copies or substantial portions. THE SOFTWARE IS PROVIDED
 // "AS IS", WITHOUT WARRANTY OF ANY KIND. The layout of versions 9 and 10 (FS25) was found by testing against the game's own files.
 
+import { keyRow } from "./shapesKeys.mjs";
+
 /** The seed byte of the files we write (byte 2 of the header), and its 16 words of the cipher's key table. */
 export const SEED = 0xa1;
 export const KEY_ROW = [0x6A747471, 0x635F6261, 0x57666866, 0x545E6258, 0x7B6D5C53, 0x88888682, 0x86898987, 0x80808787,
@@ -143,9 +145,9 @@ export function shapeData(s) {
   return out;
 }
 
-/** A whole .i3d.shapes file of the given shapes (see shapeData), encrypted with SEED. */
-export function writeShapes(shapes) {
-  const c = new Cipher(KEY_ROW), parts = [Uint8Array.of(VERSION, 0, SEED, 0)];
+/** A whole .i3d.shapes file of the given shapes (see shapeData), encrypted with SEED (or another seed byte: files from Giants Editor have all kinds). */
+export function writeShapes(shapes, seed = SEED) {
+  const c = new Cipher(seed === SEED ? KEY_ROW : keyRow(seed)), parts = [Uint8Array.of(VERSION, 0, seed, 0)];
   const num = x => { const b = new Uint8Array(4); new DataView(b.buffer).setUint32(0, x >>> 0, true); return c.apply(b); };
   parts.push(num(shapes.length));
   for (const s of shapes) { const body = shapeData(s); parts.push(num(1), num(body.length), c.apply(body)); }
@@ -156,9 +158,9 @@ export function writeShapes(shapes) {
 
 /**
  * Reads a .i3d.shapes file of version 9 or 10 (row: the key table's row of its seed, default the one we write with): [{id, name, centre, radius,
- * opts, subsets, indices, positions, normals, tangents, uv, attributes}]. A shape that does not use all its data in the layout above is an error.
+ * opts, subsets, indices, positions, normals, tangents, uv, attributes}]. The seed in the header (byte 2) says which row of the key table the file was scrambled with: any file the game or Giants Editor made can be read. A shape that does not use all its data in the layout above is an error.
  */
-export function readShapes(data, row = KEY_ROW) {
+export function readShapes(data, row = keyRow(data[2])) {
   if (data[0] < 9) throw new Error(`shapes file version ${data[0]} is not supported`);
   const c = new Cipher(row); let pos = 4;
   const chunk = n => { if (pos + n > data.length) throw new Error("the file ends inside its data"); const out = c.apply(data.subarray(pos, pos + n)); pos += n; return out; };

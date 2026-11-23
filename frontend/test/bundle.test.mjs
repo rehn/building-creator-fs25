@@ -34,6 +34,6 @@ test("modelBundle: the i3d is written as the ISO-8859-1 it says it is", async ()
 
 test("the shop picture and the icon are still in the ordinary export", () => {
   const p = sanitize({kind: "house"});
-  assert.match(placeableXml(p, "x"), /<image>store\.png<\/image>/);
-  assert.match(modDescXml(p, "x"), /<iconFilename>icon\.png<\/iconFilename>/);
+  assert.match(placeableXml(p, "x"), /<image>store.dds<\/image>/);
+  assert.match(modDescXml(p, "x"), /<iconFilename>icon.dds<\/iconFilename>/);
 });

@@ -8,6 +8,7 @@
 //   glyph, yard           animal kinds: the animal icon ("hen", "cow") and yard(geo, p) -> {fence ...} for the preview
 //   objects               its game objects (objects.mjs): {types, required, pasture, defaults(p)}
 //   defaults, sections    its own settings and the editor sections for them (shown first)
+//   lists                 optional: settings that are lists of names, {key: {options: [valid names in order], start: [names a new one has]}} (the warehouse's goods)
 //   hides                 titles of shared editor sections it doesn't use
 //   normalize(p)          the settings as this kind uses them (applied when loading and exporting)
 //   placeable(p, {mod})   FS25 placeable type, shop function and shop category (mod: the mod's name, for a type the mod defines itself)
@@ -27,8 +28,9 @@ import dealership from "./dealership.mjs";
 import defaultdealer from "./defaultdealer.mjs";
 import grainsilo from "./grainsilo.mjs";
 import fuelstation from "./fuelstation.mjs";
+import warehouse from "./warehouse.mjs";
 
-export const KINDS = [house, chicken, cow, sheep, shed, dealership, defaultdealer, grainsilo, fuelstation];
+export const KINDS = [house, chicken, cow, sheep, shed, dealership, defaultdealer, warehouse, grainsilo, fuelstation];
 export const KIND = Object.fromEntries(KINDS.map(k => [k.id, k]));
 /** The kind of a project's settings; saves without one are farmhouses. */
 export const kindOf = p => KIND[p && p.kind] || house;

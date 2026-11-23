@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { api, type ProjectSummary, type Template } from "@/lib/api";
 import { useUser } from "@/lib/useUser";
 import { TopBar } from "@/components/TopBar";
+import { confirmDialog, promptDialog } from "@/components/dialog.mjs";
 import { sanitize as newProp } from "@/builder/model.mjs";
 import { PRESETS, CATEGORIES, KINDS, groupByKind, modName, slugify, authorName, modDescXmlMulti } from "@/editor/model.mjs";
 
@@ -68,6 +69,11 @@ export default function HousesPage() {
       <span aria-hidden="true">{folded.includes(key) ? "\u25B6" : "\u25BC"}</span>
     </button>
   );
+  // The tabs of the list: buildings or props (the modeller's), the folder and the kind of building chosen ("*" = all), and the kind chosen in "New".
+  const [tab, setTab] = useState<"buildings" | "props">("buildings");
+  const [folderSel, setFolderSel] = useState("*");
+  const [kindSel, setKindSel] = useState("*");
+  const [newType, setNewType] = useState("");
   const [modTitle, setModTitle] = useState("My buildings");
   const [packing, setPacking] = useState<{ done: number; total: number; name: string } | null>(null);
 
@@ -121,6 +127,7 @@ export default function HousesPage() {
 
   // A preset is the settings the new project starts with; everything stays editable.
   const presetGroups = byKind([...presets, ...templates], x => x.kind);
+  const typeNow = newType === "prop" || presetGroups.some(g => g.kind.id === newType) ? newType : (presetGroups[0]?.kind.id ?? "prop");
   const create = (preset: Preset) => run(async () => {
     const p = await api.createProject(preset.id === "farmhouse" ? "New house" : preset.name, preset.settings);
     router.push(`/projects/${p.id}`);
@@ -136,10 +143,23 @@ export default function HousesPage() {
         <h3>What do you want to build?</h3>
         <button type="button" onClick={() => setChoosing(false)}>Cancel</button>
       </div>
-      {presetGroups.map(g => (
-        <div className="kind-group" key={g.kind.id}>
-          <h4>{g.kind.plural}</h4>
-          <div className="grid">
+      <div className="starttabs sub" role="tablist" aria-label={t("Type")}>
+        {presetGroups.map(g => (
+          <button type="button" role="tab" key={g.kind.id} className={"starttab" + (typeNow === g.kind.id ? " on" : "")} aria-selected={typeNow === g.kind.id} onClick={() => setNewType(g.kind.id)}>
+            {g.kind.plural} <small>{g.items.length}</small>
+          </button>
+        ))}
+        <button type="button" role="tab" className={"starttab" + (typeNow === "prop" ? " on" : "")} aria-selected={typeNow === "prop"} onClick={() => setNewType("prop")}>{t("Props")}</button>
+      </div>
+      {typeNow === "prop"
+        ? <div className="grid compact">
+            <button type="button" className="preset" onClick={createProp} disabled={busy}>
+              <b>{t("Empty prop")}</b>
+              <span>{t("A free-form object made of boxes and cylinders: a sign, a bike stand ...")}</span>
+            </button>
+          </div>
+        : presetGroups.filter(g => g.kind.id === typeNow).map(g => (
+          <div className="grid compact" key={g.kind.id}>
             {g.items.map(x => (
               <button type="button" className="preset" key={x.id} onClick={() => create(x)} disabled={busy}>
                 {(x.thumbnail || thumbs[x.id]) ? <img src={x.thumbnail || thumbs[x.id]} alt="" /> : making && !x.id.startsWith("template:") ? <div className="thumbph" aria-hidden="true" /> : null}
@@ -148,8 +168,7 @@ export default function HousesPage() {
               </button>
             ))}
           </div>
-        </div>
-      ))}
+        ))}
       {comingSoon.length > 0 && <p className="hint">Coming soon: {comingSoon.join(", ").toLowerCase()}.</p>}
     </section>
   );
@@ -159,8 +178,8 @@ export default function HousesPage() {
     const p = await api.duplicateProject(h.id);
     setHouses(list => [p, ...(list ?? [])]);
   });
-  const rename = (h: ProjectSummary) => {
-    const name = window.prompt(t("New name"), h.name)?.trim();
+  const rename = async (h: ProjectSummary) => {
+    const name = (await promptDialog(t("New name"), h.name, { title: t("Rename"), confirm: t("Rename"), maxLength: 80 }))?.trim();
     if (!name || name === h.name) return;
     run(async () => {
       const p = await api.updateProject(h.id, { name });
@@ -171,10 +190,10 @@ export default function HousesPage() {
   const folderOf = (h: ProjectSummary) => h.folder ?? "";
   const folders = [...new Set((houses ?? []).map(folderOf).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   const NEW_FOLDER = "\u0000new";
-  const move = (h: ProjectSummary, to: string) => {
+  const move = async (h: ProjectSummary, to: string) => {
     let folder = to;
     if (to === NEW_FOLDER) {
-      folder = window.prompt(t("Folder name"), "")?.trim() ?? "";
+      folder = (await promptDialog(t("Folder name"), "", { title: t("New folder…"), confirm: t("Create"), maxLength: 60 }))?.trim() ?? "";
       if (!folder) return;
     }
     if (folder === folderOf(h)) return;
@@ -183,8 +202,6 @@ export default function HousesPage() {
       setHouses(list => (list ?? []).map(x => (x.id === p.id ? { ...x, folder: p.folder, updatedAt: p.updatedAt, version: p.version } : x)));
     });
   };
-  const allPicked = !!houses && houses.length > 0 && houses.every(h => picked.includes(h.id));
-  const pickAll = () => setPicked(allPicked ? [] : (houses ?? []).map(h => h.id));
   const toggle = (id: string) => setPicked(list => (list.includes(id) ? list.filter(x => x !== id) : [...list, id]));
   /**
    * One game mod of the ticked buildings: each is opened in an editor that is not shown (the same code as the editor's own
@@ -195,7 +212,7 @@ export default function HousesPage() {
     if (!ids.length) return;
     const [{ createEditor }, { default: JSZip }] = await Promise.all([import("@/editor/editor.mjs"), import("jszip")]);
     const zip = new JSZip(), entries: { xml: string }[] = [], notes: string[] = [], used = new Set<string>(), types = new Map<string, { name: string; parent: string; specializations: string[] }>();
-    let icon: Blob | null = null, author = authorName(user);
+    let icon: Uint8Array | null = null, author = authorName(user);
     try {
       for (let i = 0; i < ids.length; i++) {
         const h = houses!.find(x => x.id === ids[i])!;
@@ -221,7 +238,7 @@ export default function HousesPage() {
       }
       setPacking({ done: ids.length, total: ids.length, name: "" });
       zip.file("modDesc.xml", modDescXmlMulti(entries, { title: modTitle, description: notes.join("\n\n"), author, types: [...types.values()] }));
-      if (icon) zip.file("icon.png", icon);
+      if (icon) zip.file("icon.dds", icon);
       const blob = await zip.generateAsync({ type: "blob" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob); a.download = modName(modTitle) + ".zip";
@@ -229,8 +246,8 @@ export default function HousesPage() {
       setTimeout(() => URL.revokeObjectURL(a.href), 4000);
     } finally { setPacking(null); }
   });
-  const remove = (h: ProjectSummary) => {
-    if (!window.confirm(t("Delete \u201C{name}\u201D? This can\u2019t be undone.", { name: h.name }))) return;
+  const remove = async (h: ProjectSummary) => {
+    if (!await confirmDialog(t("Delete \u201C{name}\u201D? This can\u2019t be undone.", { name: h.name }), { title: t("Delete"), confirm: t("Delete"), danger: true })) return;
     run(async () => {
       await api.deleteProject(h.id);
       setHouses(list => (list ?? []).filter(x => x.id !== h.id));
@@ -241,10 +258,11 @@ export default function HousesPage() {
   // A prop is a project of the modeller (docs/PLAN_BUILDER.md): its own group, opened on its own page.
   const isProp = (h: ProjectSummary) => kindOfHouse(h) === "prop";
   const openHref = (h: ProjectSummary) => (isProp(h) ? `/builder/${h.id}` : `/projects/${h.id}`);
-  const kindGroups = (list: ProjectSummary[], scope = "") => [
+  const kindGroups = (list: ProjectSummary[]) => [
     ...byKind(list.filter(h => !isProp(h)), kindOfHouse).map(g => ({ id: g.kind.id, title: g.kind.plural, items: g.items })),
     ...(list.some(isProp) ? [{ id: "prop", title: "Props", items: list.filter(isProp) }] : []),
-  ].map(g => (
+  ];
+  const renderGroup = (g: { id: string; title: string; items: ProjectSummary[] }, scope = "") => (
           <section className="kind-group" key={g.id} aria-label={g.title}>
             <h3>{foldButton(`k:${scope}:${g.id}`)}{g.title} <small>{g.items.length}</small>
               {g.items.length > 1 && (
@@ -282,20 +300,58 @@ export default function HousesPage() {
               ))}
             </div>}
           </section>
-        ));
+        );
+
+  // What the tabs show: buildings or props, then one folder, then one kind of building (a tab whose list has gone empty falls back to all).
+  const inTab = (houses ?? []).filter(h => (tab === "props") === isProp(h));
+  const tabFolders = [...new Set(inTab.map(folderOf).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const hasLoose = inTab.some(h => !folderOf(h));
+  const folderNow = folderSel === "*" || (folderSel === "" ? hasLoose && tabFolders.length > 0 : tabFolders.includes(folderSel)) ? folderSel : "*";
+  const inFolder = inTab.filter(h => folderNow === "*" || folderOf(h) === folderNow);
+  const groups = kindGroups(inFolder);
+  const kindNow = groups.some(g => g.id === kindSel) ? kindSel : "*";
+  const shown = groups.filter(g => kindNow === "*" || g.id === kindNow);
+  const visible = shown.flatMap(g => g.items);
+  const allVisiblePicked = visible.length > 0 && visible.every(h => picked.includes(h.id));
+  const pickVisible = () => setPicked(list => allVisiblePicked ? list.filter(id => !visible.some(h => h.id === id)) : [...new Set([...list, ...visible.map(h => h.id)])]);
+  const tabBtn = (key: string, label: string, count: number, on: boolean, set: () => void, noTranslate = false) => (
+    <button type="button" role="tab" key={key} className={"starttab" + (on ? " on" : "")} aria-selected={on} onClick={set}>
+      <span translate={noTranslate ? "no" : undefined}>{label}</span> <small>{count}</small>
+    </button>
+  );
+  const nBuildings = (houses ?? []).filter(h => !isProp(h)).length, nProps = (houses ?? []).filter(isProp).length;
 
   return (
     <>
       <TopBar user={user} />
       <main className="page">
         <div className="page-head">
-          <h2>My buildings</h2>
+          <h2>{tab === "props" ? t("Props") : t("Buildings")}</h2>
           <div className="head-actions">
-            {houses && houses.length > 1 && <button type="button" onClick={pickAll} disabled={busy}>{allPicked ? "Select none" : "Select all"}</button>}
-            <button type="button" onClick={createProp} disabled={!user || busy} title="A free-form building made of boxes and cylinders">New prop</button>
-            <button className="primary" type="button" onClick={() => setChoosing(true)} disabled={!user || busy} aria-expanded={choosing}>New</button>
+            {visible.length > 1 && <button type="button" onClick={pickVisible} disabled={busy}>{allVisiblePicked ? "Select none" : "Select all"}</button>}
+            <button className="primary" type="button" onClick={() => { if (tab === "props") setNewType("prop"); setChoosing(true); }} disabled={!user || busy} aria-expanded={choosing}>New</button>
           </div>
         </div>
+        {!choosing && houses && houses.length > 0 && (
+          <div className="starttabs" role="tablist" aria-label={t("What to show")}>
+            {tabBtn("buildings", t("Buildings"), nBuildings, tab === "buildings", () => { setTab("buildings"); setFolderSel("*"); setKindSel("*"); })}
+            {tabBtn("props", t("Props"), nProps, tab === "props", () => { setTab("props"); setFolderSel("*"); setKindSel("*"); })}
+            <Link className="starttab link" href="/items">{t("My items")}</Link>
+          </div>
+        )}
+        {!choosing && tabFolders.length > 0 && (
+          <div className="starttabs sub" role="tablist" aria-label={t("Folders")}>
+            {tabBtn("*", t("All folders"), inTab.length, folderNow === "*", () => { setFolderSel("*"); setKindSel("*"); })}
+            {tabFolders.map(f => tabBtn("f:" + f, f, inTab.filter(h => folderOf(h) === f).length, folderNow === f, () => { setFolderSel(f); setKindSel("*"); }, true))}
+            {hasLoose && tabBtn("", t("Not in a folder"), inTab.filter(h => !folderOf(h)).length, folderNow === "", () => { setFolderSel(""); setKindSel("*"); })}
+          </div>
+        )}
+        {!choosing && groups.length > 1 && (
+          <div className="starttabs sub" role="tablist" aria-label={t("Kinds")}>
+            {tabBtn("*", t("All kinds"), inFolder.length, kindNow === "*", () => setKindSel("*"))}
+            {groups.map(g => tabBtn(g.id, g.title, g.items.length, kindNow === g.id, () => setKindSel(g.id)))}
+          </div>
+        )}
         {(error || userError) && <p className="error" role="alert">{error || userError}</p>}
         {choosing && chooser}
         {!houses && !error && !userError && <p className="loading">Loading your buildings…</p>}
@@ -306,14 +362,10 @@ export default function HousesPage() {
             <button className="primary" type="button" onClick={() => setChoosing(true)} disabled={busy}>Build your first building</button>
           </div>
         )}
-        {houses && houses.length > 0 && (folders.length === 0
-          ? kindGroups(houses)
-          : [...folders, ""].map(f => ({ f, list: houses.filter(h => folderOf(h) === f) })).filter(x => x.list.length > 0).map(x => (
-            <section className="folder-group" key={x.f || "none"} aria-label={x.f || t("Not in a folder")}>
-              <h2 className="folder-head">{foldButton(`f:${x.f}`)}<span translate={x.f ? "no" : undefined}>{x.f || t("Not in a folder")}</span> <small>{x.list.length}</small></h2>
-              {!folded.includes(`f:${x.f}`) && kindGroups(x.list, x.f)}
-            </section>
-          )))}
+        {!choosing && houses && houses.length > 0 && shown.map(g => renderGroup(g))}
+        {!choosing && houses && houses.length > 0 && shown.length === 0 && (
+          <p className="hint">{tab === "props" ? t("No props yet. Choose New, then Props.") : t("No buildings here.")}</p>
+        )}
         {picked.length > 0 && (
           <div className="packbar" role="region" aria-label="Pack a game mod">
             <span><b>{picked.length}</b> selected</span>

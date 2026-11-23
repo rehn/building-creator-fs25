@@ -3,6 +3,7 @@
 import * as THREE from "three";
 import JSZip from "jszip";
 import { t } from "../i18n/index.mjs";
+import { confirmDialog } from "../components/dialog.mjs";
 import { walkArea, areaOf, cellRects } from "./walkarea.mjs";
 import {
   SCHEMA, TABS, fieldsFor, WALLS, WALL_NAMES, DTYPES, DORM_DEF, MATS, fittingTextures,
@@ -11,7 +12,7 @@ import {
 import { WINDOW_STYLES, DOOR_STYLES, PORCH_OPTIONS, PORCH_W, PORCH_D, WING_FIELDS, MAX_WINGS } from "./model.mjs";
 import { pieceSheet, pieceMeshes, buildingTree, matList, matTable, slotOf, partStyle, splitAtOf, wallLabel, partName, wallItems, addOpening, addPartOn, addSplit, addPartSplit, duplicateOpening, duplicateSplit, moveBeside, moveToWall, openingProblem, setSectionFloorHeight, setTotalHeight, addPartDoor } from "./model.mjs";
 import { lodKeeps, matTexture, i3dFiles } from "./model.mjs";
-import { encodeDds } from "./dds.mjs";
+import { encodeDds, decodeDds } from "./dds.mjs";
 import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, henYard, henCap, seeThroughGlass, kindOf } from "./model.mjs";
 import { cowYard } from "./kinds/cow.mjs";
 import { WALLPAPERS } from "./kinds/innerwall.mjs";
@@ -22,7 +23,11 @@ import { makeWalker } from "./walk.mjs";
 import { exportPart, importPart } from "./partfile.mjs";
 import { modelBundle } from "./bundle.mjs";
 import { OBJECT_TYPES, objectInfo, OBJECT_LIMITS, GAP_LIMITS, objectOf, pastureOf, snapBox, snapPasture, objectProblems, objectWarnings, fencePoints, snapFencePoint, MAX_FENCE_POINTS, MANY, MAX_TROUGHS, nextTroughSpot, TROUGH_KINDS } from "./objects.mjs";
-import { setAssets, catalogFor, usedAssets, troughLooks } from "./model.mjs";
+import { setAssets, catalogFor, usedAssets, troughLooks, changeKind, CONVERTIBLE_KINDS } from "./model.mjs";
+import { KINDS } from "./kinds/index.mjs";
+import FILL_TYPES from "./filltypes.mjs";
+import { SHOP_KINDS } from "./kinds/shop.mjs";
+import { cleanDecor, decorRect, decorRects, snapDecor, MAX_DECOR } from "./decor.mjs";
 import { readObj, assetFolder, flattenI3d, assetSize, normalizeMeta, turnedSize } from "./assets.mjs";
 import { paintInterior, paintGlass } from "./interior.mjs";
 import { TEX, baseFor, fitBase as fitBasePx, compose as composePx, textureFiles } from "./textures.mjs";
@@ -82,7 +87,7 @@ const MARKUP = `<div class="hx-editor" data-tab="building">
  * options.assets: the user's imported items, {list(), file(id, name)} (see editor.d.mts)
  * Returns {getSettings, setSettings, exportModel, exportSettings, importSettings, snapshot, toast, destroy}.
  */
-export function createEditor(root, {initial, onChange, author = "", assets = null, parts: partSource = null} = {}) {
+export function createEditor(root, {initial, onChange, onKindChange = null, author = "", assets = null, parts: partSource = null} = {}) {
 root.innerHTML = MARKUP;
 const $ = id => root.querySelector("#" + id);
 const cleanups = [];
@@ -264,6 +269,8 @@ for (const [s] of TABS) {
   };
 }
 setTab(remember.get("hx-tab"));
+renderKindCard();
+renderGoodsUI();
 installPanelResizers();
 $("settingsSearch").addEventListener("input", applySearch);
 $("settingsSearch").addEventListener("keydown", ev => { if (ev.key === "Escape") { ev.stopPropagation(); clearSearch(); } });
@@ -342,6 +349,7 @@ SCHEMA.forEach(g => {
     });
   });
   if (g.custom === "dormers") { const ed = document.createElement("div"); ed.id = "dormEditor"; d.appendChild(ed); }
+  if (g.custom === "filltypes") { const ed = document.createElement("div"); ed.id = "goodsEditor"; d.appendChild(ed); }
   if (g.custom === "inside") { const ed = document.createElement("div"); ed.id = "insideEditor"; d.appendChild(ed); }
   if (g.custom === "tree") { const ed = document.createElement("div"); ed.id = "treeEditor"; ed.innerHTML = `<div id="treeNav"></div>`; d.appendChild(ed); }
   if (g.custom === "windows") {
@@ -367,6 +375,29 @@ function syncControls() {
   renderObjectsUI();
   renderWingsUI();
   renderPipesUI(); renderPapersAll(); renderZonesAll();
+  renderGoodsUI();
+}
+/* ---------- A warehouse's goods: what it sells and what it buys, chosen from lists of the game's fill types ---------- */
+/** Two lists with a filter and checkboxes (kind.lists: buyList, sellList); "All shown" and "None shown" act on what the filter leaves. */
+function renderGoodsUI() {
+  const ed = $("goodsEditor");
+  if (!ed) return;
+  const kind = kindOf(p);
+  if (!kind.lists) { ed.innerHTML = ""; return; }
+  const info = Object.fromEntries(FILL_TYPES.map(f => [f[0], f])), titles = {buyList: "The player buys here (pallets)", sellList: "The player sells here"};
+  ed.innerHTML = Object.keys(kind.lists).map(k => `<div class="goods" data-list="${k}"><h4 class="sub">${titles[k] || k} <span class="muted" data-count></span></h4>
+    <input type="search" data-filter placeholder="Filter" aria-label="Filter the list">
+    <div class="row"><button type="button" data-all>All shown</button><button type="button" data-none>None shown</button></div>
+    <div class="goods-list" role="group">${kind.lists[k].options.map(n => `<label class="check" data-name="${n}"><input type="checkbox" value="${n}" ${(p[k] || []).includes(n) ? "checked" : ""}> <span translate="no">${esc((info[n] || [n, n])[1])}</span> <span class="muted">${info[n] ? info[n][2] : ""}</span></label>`).join("")}</div></div>`).join("");
+  ed.querySelectorAll(".goods").forEach(box => {
+    const k = box.dataset.list, rows = [...box.querySelectorAll("label[data-name]")], count = box.querySelector("[data-count]");
+    const save = () => { const on = new Set(rows.filter(r => r.querySelector("input").checked).map(r => r.dataset.name)); p[k] = kind.lists[k].options.filter(n => on.has(n)); count.textContent = String(p[k].length); persist(); rebuild(false); };
+    count.textContent = String((p[k] || []).length);
+    rows.forEach(r => r.querySelector("input").onchange = save);
+    box.querySelector("[data-filter]").oninput = e => { const q = e.target.value.trim().toLowerCase(); rows.forEach(r => { r.hidden = q !== "" && !r.textContent.toLowerCase().includes(q) && !r.dataset.name.toLowerCase().includes(q); }); };
+    const all = on => () => { rows.filter(r => !r.hidden).forEach(r => { r.querySelector("input").checked = on; }); save(); };
+    box.querySelector("[data-all]").onclick = all(true); box.querySelector("[data-none]").onclick = all(false);
+  });
 }
 function syncOutputs() {
   for (const k in inputs) {
@@ -386,6 +417,7 @@ function syncOutputs() {
   { const low = zonesUsed() || p.innerCladding === "sameLow"; off("lowerCladding", !low); off("lowerColor", !low); }
   for (const k of ["studSpacing", "studWidth", "studIrregular", "insidePanel"]) off(k, !p.insideSame);
   off("roofMaterial", false);
+  off("shopCategory", !SHOP_KINDS.includes(p.kind));   // (animal buildings and stations keep their own place in the shop)
   for (const w of ["Front", "Back", "Left", "Right"]) off("post" + w, !p["open" + w]);
   off("roofPitch", p.roofType === "flat"); off("ridge", p.roofType === "flat");
   off("roofTilt", p.roofType !== "flat"); off("tiltHigh", p.roofType !== "flat" || !p.roofTilt);
@@ -623,8 +655,14 @@ function setupOrbit() {
     if (e.button === 1 || e.button === 2 || e.shiftKey) { panIds.add(e.pointerId); downAt = null; } else panIds.delete(e.pointerId);
     // The yard's plan view: pressing on an object (or a pasture handle) picks it up.
     if (ob.on && ptrs.size === 1) {
-      const q = groundPoint(e), hit = q && objectAt(q);
-      if (hit) {
+      const q = groundPoint(e), hit = q && objectAt(q), dh = q && !(hit && hit.handle) ? decorAt(q) : null;
+      if (dh !== null && dh !== undefined && q) {
+        // a decoration: chosen in the tree and dragged (snapped to the grid and the walls)
+        const d = decorNow().find(x => x.id === dh);
+        decSel = dh; treeKind = "deco"; treeReveal = true;
+        ob.drag = {deco: true, id: dh, off: [q[0] - d.x, q[1] - d.z], moved: false};
+        renderTreeUI(); updatePlacesMarker();
+      } else if (hit) {
         const o = objectsNow().find(x => x.id === hit.id);
         if (hit.handle && /^m[0-9]+$/.test(hit.handle) && o.points) {
           // a pale dot between two posts: a new post there, to drag
@@ -655,6 +693,7 @@ function setupOrbit() {
     const click = downAt && ptrs.size === 1 && Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) < 5;
     if (ob.drag) {
       const d = ob.drag; ob.drag = null;
+      if (d.deco) { if (d.moved) setDecor(decorNow()); else { renderTreeUI(); updatePlacesMarker(); } downAt = null; return; }
       if (d.moved) setObjects(sanitize({...p, objects: p.objects}).objects, d.id); else { renderObjectsUI(); updatePlacesMarker(); }
       downAt = null; return;
     }
@@ -675,6 +714,12 @@ function setupOrbit() {
     if (ob.drag && ptrs.size === 1) {
       // where it would go, snapped as it moves (the pasture rebuilds the fence, doorway and troughs as it goes)
       const q = groundPoint(e);
+      if (q && ob.drag.deco) {
+        const cur = decorNow().find(x => x.id === ob.drag.id), at = snapDecor(p, decorFind, cur, q[0] - ob.drag.off[0], q[1] - ob.drag.off[1], e.altKey ? {walls: false, grid: false} : decSnap);
+        p.decor = decorNow().map(x => x.id === cur.id ? {...x, x: at.x, z: at.z, rot: at.rot} : x);
+        ob.drag.moved = true; rebuild(false); updatePlacesMarker();
+        return;
+      }
       if (q) {
         const next = dragTo(ob.drag, q);
         p.objects = objectsNow().map(x => x.id === ob.drag.id ? next : x);
@@ -1150,7 +1195,7 @@ function bindMyParts(ed) {
     try { await partSource.update(b.dataset.sharepart, {shared: b.dataset.shared !== "true"}); myParts = null; renderWingsUI(); } catch { toast("Couldn't change that. Try again."); }
   });
   ed.querySelectorAll("[data-delpart]").forEach(b => b.onclick = async () => {
-    if (!window.confirm(t("Delete this saved extension? Buildings that already have it are not changed."))) return;
+    if (!await confirmDialog(t("Delete this saved extension? Buildings that already have it are not changed."), {danger: true, confirm: t("Delete")})) return;
     try { await partSource.remove(b.dataset.delpart); myParts = null; renderWingsUI(); toast("Deleted"); } catch { toast("Couldn't delete it. Try again."); }
   });
   if ($("partSave")) $("partSave").onclick = async () => {
@@ -1233,6 +1278,11 @@ function renderPartCard() {
 /* ---------- The building as a tree ---------- */
 // The main building, its walls, and on each wall its windows, doors and parts (a part has its walls): one tree to choose from; what is chosen has its settings below.
 let treeKind = "main";
+let itemList = [];   // the user's items (My items), as the API lists them; loadAssets fills it (Decorations)
+let decSel = null;   // the decoration chosen in the tree
+// what dragging a decoration snaps to (kept in the browser: a way of working, not part of the building); Alt held while dragging switches both off
+const decSnap = (() => { try { const v = JSON.parse(localStorage.getItem("hx-decor-snap") || "{}"); return {walls: v.walls !== false, grid: v.grid !== false}; } catch { return {walls: true, grid: true}; } })();
+const saveDecSnap = () => { try { localStorage.setItem("hx-decor-snap", JSON.stringify(decSnap)); } catch { /* a private window: kept for this visit only */ } };
 const treeClosed = new Set();
 let treeScroll = 0;
 let treeReveal = false;   // (the next time the tree is drawn, what is chosen is made visible: its parents are opened)
@@ -1244,26 +1294,30 @@ function selectNode(kind, v) {
   if (kind === "floor") { wvPart = v.part; wvFloor = v.floor; wvSec = v.section || 0; }
   if (kind === "section") { wvPart = v.part; wvSec = v.index; }
   if (kind === "object") { ob.sel = v; ob.pt = null; }
+  if (kind === "deco") decSel = v;
+  if (kind === "decor") decSel = null;
   if (kind === "group") { treeKind = "game"; ob.sel = null; ob.pt = null; }   // (a folder of troughs: the card of the game objects, where they are added)
   if (kind === "post") { treeKind = "object"; ob.sel = v.id; ob.pt = v.index; }   // (a post of the fence drawn by hand: its object is chosen, and the post in it)
   if (searching) clearSearch();
   setTab("building");
   const det = $("treeEditor") && $("treeEditor").closest("details"); if (det) det.open = true;
   renderTreeUI(); updateHighlight(); updatePlacesMarker();
-  const card = {main: "mainCard", wall: "wallCard", floor: "wallCard", section: "wallCard", game: "wallCard", object: "wallCard", win: "winEditor", part: "wingsEditor"}[kind];
+  const card = {main: "mainCard", wall: "wallCard", floor: "wallCard", section: "wallCard", game: "wallCard", object: "wallCard", decor: "wallCard", deco: "wallCard", win: "winEditor", part: "wingsEditor"}[kind];
   if (card && $(card) && !window.matchMedia("(max-width: 820px)").matches) $(card).scrollIntoView({block: "nearest"});
 }
-const nodeKey = n => n.type === "main" ? "main" : n.type === "game" ? "game" : n.type === "group" ? "group:" + n.otype : n.type === "object" ? "object:" + n.id : n.type === "post" ? `post:${n.id}:${n.index}` : n.type === "section" ? `section:${n.part}:${n.index}` : n.type === "wall" ? `wall:${n.key}:${n.floor}:${n.section || 0}` : n.type === "floor" ? `floor:${n.part}:${n.floor}:${n.section || 0}` : n.type === "part" ? "part:" + n.id : "win:" + n.id;
+const nodeKey = n => n.type === "main" ? "main" : n.type === "game" ? "game" : n.type === "decor" ? "decor" : n.type === "deco" ? "deco:" + n.id : n.type === "group" ? "group:" + n.otype : n.type === "object" ? "object:" + n.id : n.type === "post" ? `post:${n.id}:${n.index}` : n.type === "section" ? `section:${n.part}:${n.index}` : n.type === "wall" ? `wall:${n.key}:${n.floor}:${n.section || 0}` : n.type === "floor" ? `floor:${n.part}:${n.floor}:${n.section || 0}` : n.type === "part" ? "part:" + n.id : "win:" + n.id;
 /** What selectNode takes for a node written by nodeKey as kind:v:f:sc. */
-const nodeArg = (kind, v, f, sc) => kind === "wall" ? {key: v, floor: +f, section: +sc || 0} : kind === "floor" ? {part: +v, floor: +f, section: +sc || 0} : kind === "section" ? {part: +v, index: +f} : kind === "post" ? {id: +v, index: +f} : kind === "main" || kind === "game" ? null : kind === "group" ? v : +v;
+const nodeArg = (kind, v, f, sc) => kind === "wall" ? {key: v, floor: +f, section: +sc || 0} : kind === "floor" ? {part: +v, floor: +f, section: +sc || 0} : kind === "section" ? {part: +v, index: +f} : kind === "post" ? {id: +v, index: +f} : kind === "main" || kind === "game" || kind === "decor" ? null : kind === "group" ? v : +v;
 /** The tree node of a divider's wall: it is under the section with more floors. */
 const splitNodeArg = key => { const runs = sectionRuns(p, key, (wallsOf(p)[key] || {L: 1}).L); return {key, floor: 0, section: runs.length ? runs[0].sec.index : 0}; };
 function treeNavHtml() {
   const t = buildingTree(p), live = liveWings(p), fmt = v => (+v).toFixed(2).replace(/\.?0+$/, "");
   const multi = id => (id ? (live.find(x => x.id === id) || {floors: 1}).floors : p.floors) > 1;
-  const isSel = n => n.type === "main" ? treeKind === "main" : n.type === "game" ? treeKind === "game" : n.type === "group" ? false : n.type === "object" ? treeKind === "object" && ob.sel === n.id && !((n.children || []).length && ob.pt !== null && ob.pt < n.children.length) : n.type === "post" ? treeKind === "object" && ob.sel === n.id && ob.pt === n.index : n.type === "section" ? treeKind === "section" && wvPart === n.part && wvSec === n.index : n.type === "wall" ? treeKind === "wall" && wvWall === n.key && wvFloor === n.floor && wvSec === (n.section || 0) : n.type === "floor" ? treeKind === "floor" && wvPart === n.part && wvFloor === n.floor && wvSec === (n.section || 0) : n.type === "part" ? treeKind === "part" && wSel === n.id : treeKind === "win" && selId === n.id;
+  const isSel = n => n.type === "main" ? treeKind === "main" : n.type === "game" ? treeKind === "game" : n.type === "decor" ? treeKind === "decor" : n.type === "deco" ? treeKind === "deco" && decSel === n.id : n.type === "group" ? false : n.type === "object" ? treeKind === "object" && ob.sel === n.id && !((n.children || []).length && ob.pt !== null && ob.pt < n.children.length) : n.type === "post" ? treeKind === "object" && ob.sel === n.id && ob.pt === n.index : n.type === "section" ? treeKind === "section" && wvPart === n.part && wvSec === n.index : n.type === "wall" ? treeKind === "wall" && wvWall === n.key && wvFloor === n.floor && wvSec === (n.section || 0) : n.type === "floor" ? treeKind === "floor" && wvPart === n.part && wvFloor === n.floor && wvSec === (n.section || 0) : n.type === "part" ? treeKind === "part" && wSel === n.id : treeKind === "win" && selId === n.id;
   const label = (n, parentKey) => {
     if (n.type === "group") return `${esc(n.name)} <span class="muted">${n.children.length}</span>`;
+    if (n.type === "decor") return `Decorations <span class="muted">${(n.children || []).length}</span>`;
+    if (n.type === "deco") return `<span translate="no">${esc(n.name)}</span>`;
     if (n.type === "game") return `Game objects <span class="muted">${(n.children || []).length}</span>`;
     if (n.type === "object") return esc(n.name) + ((n.children || []).length ? ` <span class="muted">${n.children.length} posts</span>` : "");
     if (n.type === "post") return esc(n.name) + (n.role ? ` <span class="muted">${n.role === "start" ? "start" : "stop"}</span>` : "");
@@ -1277,7 +1331,7 @@ function treeNavHtml() {
   if (treeReveal) {
     treeReveal = false;
     const reveal = (n, trail) => { if (isSel(n)) { trail.forEach(a => treeClosed.delete(nodeKey(a))); return true; } return (n.children || []).some(c => reveal(c, [...trail, n])); };
-    reveal(t, []); t.lost.forEach(l => reveal(l, [])); if (t.game) reveal(t.game, []);
+    reveal(t, []); t.lost.forEach(l => reveal(l, [])); if (t.game) reveal(t.game, []); reveal(t.decor, []);
   }
   const objProblems = t.game ? objectProblems(p) : new Map(), rows = [];
   const walk = (n, depth, parentKey) => {
@@ -1290,6 +1344,7 @@ function treeNavHtml() {
   walk(t, 0, "");
   for (const l of t.lost) walk(l, 1, "");
   if (t.game) walk(t.game, 0, "");
+  walk(t.decor, 0, "");
   return `<ul class="objlist ptree tree">${rows.join("")}</ul>`;
 }
 /** The dividers of the building (pid 0: p.splits) or of a part (its splits): walls across it up to the roof, each with its place along it; a divider is a wall in the tree. */
@@ -1356,6 +1411,70 @@ function bindDividers(host, pid = 0) {
 /** The card of the main building: its sections (the rest of what it has is in the sections below it, see placeShape). */
 function mainCardHtml() {
   return dividersHtml();
+}
+
+/* ---------- Decorations: the user's items standing round the building (decor.mjs), a group in the tree ---------- */
+const decorNow = () => p.decor || [];
+function selDecor() { return decorNow().find(d => d.id === decSel) || null; }
+const decorFind = id => itemList.find(x => x.id === id) || null;
+/** The decoration under a ground point q in the plan view: the smallest box that has it, or null. */
+function decorAt(q) {
+  let best = null;
+  for (const d of decorNow()) {
+    const r = decorRect(d, decorFind);
+    if (r && q[0] >= r.x0 && q[0] <= r.x1 && q[1] >= r.z0 && q[1] <= r.z1) { const a = (r.x1 - r.x0) * (r.z1 - r.z0); if (!best || a < best.a) best = {id: d.id, a}; }
+  }
+  return best ? best.id : null;
+}
+const decorName = d => { const a = itemList.find(x => x.id === d.asset); return a ? a.name : "(an item no longer in your list)"; };
+/** The two snap switches, shown in the plan view's cards. */
+const decSnapHtml = () => `<label class="check"><input type="checkbox" id="decSnapW" ${decSnap.walls ? "checked" : ""}> Snap to the walls (against them, facing out)</label><label class="check"><input type="checkbox" id="decSnapG" ${decSnap.grid ? "checked" : ""}> Snap to the grid</label><p class="hint">Hold Alt while dragging to switch both off for that drag.</p>`;
+/** The card of the Decorations group (add an item of the user's) or of one decoration (where it stands, how it is turned and how high). */
+function decorCardHtml() {
+  const list = decorNow(), d = treeKind === "deco" ? selDecor() : null, m = v => `${(+v).toFixed(2)} m`;
+  const range = (k, label, lo, hi, step, v, unit) => `<div class="field"><div class="fl"><label for="dc-${k}">${label}</label><output id="dc-${k}-o">${unit(v)}</output></div><input type="range" id="dc-${k}" data-k="${k}" min="${lo}" max="${hi}" step="${step}" value="${v}"></div>`;
+  if (d) {
+    return `<div class="wincard"><h3 class="sub"><span translate="no">${esc(decorName(d))}</span></h3><div class="row"><button type="button" class="primary" id="decPlan" ${renderer ? "" : "disabled"}>${ob.on ? "Done moving" : "Move it in the plan view"}</button></div>${decSnapHtml()}`
+      + range("x", "Left / right (+ to the right)", -30, 30, 0.25, d.x, m) + range("z", "Back / front (+ to the front)", -30, 30, 0.25, d.z, m)
+      + range("rot", "Turn", 0, 355, 5, d.rot, v => `${Math.round(v)}°`) + range("y", "Height above the ground", 0, 6, 0.05, d.y, m)
+      + `<div class="row"><button type="button" id="decDup">Duplicate</button><button type="button" class="danger" id="decRm">Remove</button></div></div>`;
+  }
+  let h = `<div class="row"><button type="button" class="primary" id="decPlan" ${renderer ? "" : "disabled"}>${ob.on ? "Done moving" : "Move them in the plan view"}</button></div>${decSnapHtml()}<p class="hint">Your saved items (a sign, a bench, planters ...) standing round the building. They are part of it: they go with it when it is placed or put on a map.</p>`;
+  if (!itemList.length) h += `<p class="hint">You have no items yet. Build one in the modeller and press “Save as item”, or import one under My items.</p>`;
+  else h += `<div class="row"><select id="decAddSel" aria-label="Item to add">${itemList.map(a => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join("")}</select><button type="button" id="decAdd" ${list.length >= MAX_DECOR ? "disabled" : ""}>+ Add</button></div>`;
+  return h;
+}
+/** An edit to the decorations: cleaned, saved and built, with sel chosen (null: the group) and the tree drawn again. */
+function setDecor(list, sel = decSel) {
+  p.decor = cleanDecor(list); decSel = sel; treeKind = sel === null ? "decor" : "deco";
+  persist(); rebuild(false); renderTreeUI(); updatePlacesMarker();
+}
+/** A new decoration of an item, in front of the building a few metres out where it is easy to see (then moved with the sliders); chosen. */
+function addDecor(assetId) {
+  if (decorNow().length >= MAX_DECOR) return;
+  setDecor([...decorNow(), {asset: assetId, x: 0, z: (+p.depth || 6) / 2 + 3, rot: 0, y: 0}], null);
+  decSel = decorNow().length ? decorNow()[decorNow().length - 1].id : null;
+  if (decSel !== null) { treeKind = "deco"; treeReveal = true; renderTreeUI(); }
+}
+const removeDecor = id => setDecor(decorNow().filter(d => d.id !== id), null);
+const duplicateDecor = id => { const d = decorNow().find(x => x.id === id); if (!d || decorNow().length >= MAX_DECOR) return false; setDecor([...decorNow(), {...d, x: d.x + 0.5, z: d.z + 0.5}], null); decSel = decorNow()[decorNow().length - 1].id; treeKind = "deco"; treeReveal = true; renderTreeUI(); return true; };
+function bindDecor(host) {
+  const add = host.querySelector("#decAdd");
+  if (add) add.onclick = () => addDecor(host.querySelector("#decAddSel").value);
+  const plan = host.querySelector("#decPlan"); if (plan) plan.onclick = () => { if (ob.on) leaveObjects(); else enterObjects(); renderTreeUI(); };
+  const sw = host.querySelector("#decSnapW"); if (sw) sw.onchange = () => { decSnap.walls = sw.checked; saveDecSnap(); };
+  const sg = host.querySelector("#decSnapG"); if (sg) sg.onchange = () => { decSnap.grid = sg.checked; saveDecSnap(); };
+  const rm = host.querySelector("#decRm"); if (rm) rm.onclick = () => removeDecor(decSel);
+  const dup = host.querySelector("#decDup"); if (dup) dup.onclick = () => duplicateDecor(decSel);
+  host.querySelectorAll("input[data-k]").forEach(inp => {
+    const k = inp.dataset.k, out = host.querySelector(`#dc-${k}-o`);
+    inp.oninput = () => {
+      p.decor = decorNow().map(d => d.id === decSel ? {...d, [k]: +inp.value} : d);
+      if (out) out.textContent = k === "rot" ? `${Math.round(+inp.value)}°` : `${(+inp.value).toFixed(2)} m`;
+      rebuild(false); updatePlacesMarker();
+    };
+    inp.onchange = () => setDecor(decorNow());
+  });
 }
 const FLOOR_KEYS = ["floorHeight", "floor2Height", "floor3Height"], FLOOR_LABELS = ["Height of the ground floor", "Height of the second floor", "Height of the third floor"];
 /** A floor of the building or of a part: its height (the attic's: the knee wall). */
@@ -1466,6 +1585,7 @@ function renderTreeNav() {
   if (treeKind === "wall" && !wallsOf(p)[wvWall]) treeKind = "main";
   if (treeKind === "object" && !objectsNow().some(o => o.id === ob.sel)) treeKind = "game";
   if (treeKind === "game" && !(kindOf(p).objects || {types: []}).types.length) treeKind = "main";
+  if (treeKind === "deco" && !selDecor()) treeKind = "decor";
   if ((treeKind === "floor" || treeKind === "section") && wvPart && !(p.wings || []).some(w => w.id === wvPart)) treeKind = "main";
   { const n = sectionsOf(p, treeKind === "wall" ? wingIdOf(wvWall) : wvPart).length; if (wvSec >= n) wvSec = 0; }
   nav.innerHTML = treeNavHtml();
@@ -1522,6 +1642,7 @@ function renderTreeUI() {
   mainChosen = treeKind === "main"; placeShape();
   wall.innerHTML = treeKind === "wall" ? wallCardHtml() : treeKind === "floor" ? floorCardHtml() : treeKind === "section" ? sectionCardHtml() : "";
   if (treeKind === "game" || treeKind === "object") renderObjectsCard(wall);
+  if (treeKind === "decor" || treeKind === "deco") { wall.innerHTML = decorCardHtml(); bindDecor(wall); }
   if (treeKind === "section" || treeKind === "floor") wall.querySelectorAll("[data-gosplit]").forEach(b => b.onclick = () => selectNode("wall", splitNodeArg(wvPart ? wingSplitKey(wvPart, +b.dataset.gosplit) : "s" + b.dataset.gosplit)));
   if (treeKind === "main") {
     bindDividers(main, 0);
@@ -1561,6 +1682,7 @@ function ctxAdds(kind, v, f) {
   // (a part is added on a wall, so the menus of the building and of a part have no "add part": the walls under them have; what they are divided into is sections)
   if (kind === "main") return [{act: "add-section", label: "Add section", on: p.roofType !== "hip" && (p.splits || []).length < MAX_SPLITS}];
   if (kind === "part") { const w = (p.wings || []).find(x => x.id === +v); return [{act: "add-section", label: "Add section", on: !!w && (w.splits || []).length < MAX_SPLITS}]; }
+  if (kind === "decor") return decorNow().length >= MAX_DECOR ? [] : itemList.map(a => ({act: "add-deco:" + a.id, label: "Add " + a.name, on: true}));
   if (kind === "group") return objectsNow().filter(o => o.type === v).length < MAX_TROUGHS ? [{act: "add-obj:" + v, label: "Add " + objectInfo(kindOf(p), v).name.toLowerCase(), on: true}] : [];
   if (kind === "game") { const have = new Set(objectsNow().map(o => o.type)); return ((kindOf(p).objects || {types: []}).types).filter(t => MANY.includes(t) ? objectsNow().filter(o => o.type === t).length < MAX_TROUGHS : !have.has(t)).map(t => ({act: "add-obj:" + t, label: "Add " + objectInfo(kindOf(p), t).name.toLowerCase(), on: true})); }
   return [];
@@ -1613,6 +1735,7 @@ function duplicateDivider(pid, id) {
 /** What a tree node (as nodeKey writes it) can do: {kind, ...ids} for a window or door, a part or a divider, else null (walls, floors and the main building are not copied or deleted). */
 function nodeTarget(kind, v, f) {
   if (kind === "object" && objectsNow().some(o => o.id === +v)) return {kind: "object", id: +v};
+  if (kind === "deco" && decorNow().some(d => d.id === +v)) return {kind: "deco", id: +v};
   if (kind === "section" && +f >= 1) { const w = +v ? (liveWings(p).find(x => x.id === +v) || {splits: []}) : null, dv = (w ? w.splits : splitsOf(p))[+f - 1]; return dv ? {kind: "split", pid: +v, id: dv.id} : null; }
   if (kind === "win" && p.windows.some(w => w.id === +v)) return {kind: "win", id: +v};
   if (kind === "part" && (p.wings || []).some(w => w.id === +v)) return {kind: "part", id: +v};
@@ -1620,9 +1743,9 @@ function nodeTarget(kind, v, f) {
   return null;
 }
 /** The target of what is chosen now. */
-const chosenTarget = () => treeKind === "object" ? nodeTarget("object", ob.sel) : treeKind === "win" ? nodeTarget("win", selId) : treeKind === "part" ? nodeTarget("part", wSel) : treeKind === "wall" ? nodeTarget("wall", wvWall) : treeKind === "section" ? nodeTarget("section", wvPart, wvSec) : null;
-const duplicateTarget = t => t.kind === "object" ? false : t.kind === "win" ? duplicateWindow(t.id) : t.kind === "part" ? duplicatePart(t.id) : duplicateDivider(t.pid, t.id);
-const deleteTarget = t => t.kind === "object" ? removeObject(t.id) : t.kind === "win" ? removeWindow(t.id) : t.kind === "part" ? removePart(t.id) : removeDivider(t.pid, t.id);
+const chosenTarget = () => treeKind === "deco" ? nodeTarget("deco", decSel) : treeKind === "object" ? nodeTarget("object", ob.sel) : treeKind === "win" ? nodeTarget("win", selId) : treeKind === "part" ? nodeTarget("part", wSel) : treeKind === "wall" ? nodeTarget("wall", wvWall) : treeKind === "section" ? nodeTarget("section", wvPart, wvSec) : null;
+const duplicateTarget = t => t.kind === "deco" ? duplicateDecor(t.id) : t.kind === "object" ? false : t.kind === "win" ? duplicateWindow(t.id) : t.kind === "part" ? duplicatePart(t.id) : duplicateDivider(t.pid, t.id);
+const deleteTarget = t => t.kind === "deco" ? removeDecor(t.id) : t.kind === "object" ? removeObject(t.id) : t.kind === "win" ? removeWindow(t.id) : t.kind === "part" ? removePart(t.id) : removeDivider(t.pid, t.id);
 /** Applies what moveBeside / moveToWall gave (or says why not), and chooses the thing that was moved. */
 function applyMove(item, r) {
   if (!r || r.error) { toast((r && r.error) || "It can't be moved there."); return false; }
@@ -1680,7 +1803,7 @@ function showCtx(x, y, target, adds = []) {
   m.style.left = Math.max(4, Math.min(x, window.innerWidth - r.width - 4)) + "px"; m.style.top = Math.max(4, Math.min(y, window.innerHeight - r.height - 4)) + "px";
   const on = (act, fn) => { const b = m.querySelector(`[data-act="${act}"]`); if (b) b.onclick = () => { closeCtx(); fn(); }; };
   const addRun = {"add-window": () => addOnWall("window"), "add-door": () => addOnWall("door"), "add-part": () => treeKind === "wall" ? addOnWall("part") : addChildPart(treeKind === "part" ? wSel : 0), "add-section": () => addSectionTo(treeKind === "part" ? wSel : 0)};
-  for (const a of adds) on(a.act, a.act.startsWith("add-obj:") ? () => addObject(a.act.slice(8)) : addRun[a.act]);
+  for (const a of adds) on(a.act, a.act.startsWith("add-obj:") ? () => addObject(a.act.slice(8)) : a.act.startsWith("add-deco:") ? () => addDecor(a.act.slice(9)) : addRun[a.act]);
   if (target) { on("dup", () => duplicateTarget(target)); on("del", () => deleteTarget(target)); on("up", () => moveStep(target, -1)); on("down", () => moveStep(target, 1)); }
   const first = m.querySelector("button:not([disabled])");
   if (first) first.focus();
@@ -1912,6 +2035,7 @@ function fitSite() {
   const rs = [{x0: -p.width / 2, x1: p.width / 2, z0: -p.depth / 2, z1: p.depth / 2}];
   for (const o of objectsNow()) if (o.type !== "pasture") rs.push({x0: o.x - o.w / 2, x1: o.x + o.w / 2, z0: o.z - o.d / 2, z1: o.z + o.d / 2});
   const pa = pastureOf(p); if (pa) rs.push(pa.rect);
+  rs.push(...decorRects(p, decorFind));
   const x0 = Math.min(...rs.map(r => r.x0)) - 3, x1 = Math.max(...rs.map(r => r.x1)) + 3, z0 = Math.min(...rs.map(r => r.z0)) - 3, z1 = Math.max(...rs.map(r => r.z1)) + 3;
   const s = stage.getBoundingClientRect(), aspect = (s.width || 1) / (s.height || 1);
   const cx = (x0 + x1) / 2 + ob.pan[0], cz = (z0 + z1) / 2 + ob.pan[1];
@@ -1993,17 +2117,33 @@ function applyKindRules() {
 // Geometries by asset id: null while loading, false if the file couldn't be read.
 const itemGeos = new Map();
 let itemsGroup = null, itemMat = null, lastRefs = [];
+const itemMats = new Map();   // an item with a picture (a prop from the modeller: meta.texture): its material, by asset id
+// (kept by id and the time it was last changed: an item replaced by the modeller is read again)
+const itemKey = a => a.id + ":" + (a.updatedAt || "");
 function itemGeometry(asset) {
-  if (itemGeos.has(asset.id)) return itemGeos.get(asset.id);
-  itemGeos.set(asset.id, null);
+  const key = itemKey(asset);
+  if (itemGeos.has(key)) return itemGeos.get(key);
+  itemGeos.set(key, null);
   if (assets && asset.meta.obj) assets.file(asset.id, asset.meta.obj).then(buf => {
     if (destroyed) return;
     const o = readObj(new TextDecoder().decode(buf), asset.meta.hidden);
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.Float32BufferAttribute(o.positions, 3));
+    if (o.uvs) g.setAttribute("uv", new THREE.Float32BufferAttribute(o.uvs, 2));
     g.computeVertexNormals();
-    itemGeos.set(asset.id, g); drawItems(lastRefs);
-  }).catch(() => itemGeos.set(asset.id, false));
+    itemGeos.set(key, g); drawItems(lastRefs);
+    // a prop from the modeller has its atlas as a picture and uvs in the .obj: drawn with them, in the grey until the picture is read
+    if (o.uvs && asset.meta.texture) assets.file(asset.id, asset.meta.texture).then(pic => {
+      if (destroyed) return;
+      const d = decodeDds(new Uint8Array(pic)), flipped = new Uint8Array(d.width * d.height * 4);
+      for (let y = 0; y < d.height; y++) flipped.set(d.data.subarray(y * d.width * 4, (y + 1) * d.width * 4), (d.height - 1 - y) * d.width * 4);   // (v goes up, a picture's first row is its top)
+      const map = new THREE.DataTexture(flipped, d.width, d.height, THREE.RGBAFormat);
+      map.wrapS = map.wrapT = THREE.RepeatWrapping; map.minFilter = THREE.LinearMipmapLinearFilter; map.magFilter = THREE.LinearFilter; map.generateMipmaps = true;
+      map.anisotropy = 4; map.needsUpdate = true;
+      itemMats.set(key, new THREE.MeshStandardMaterial({map, roughness: 0.7, metalness: 0.1}));
+      drawItems(lastRefs);
+    }).catch(() => {});
+  }).catch(() => itemGeos.set(key, false));
   return null;
 }
 /** The placed items (buildGeometry's refs), each its model turned and moved like the game will. */
@@ -2014,7 +2154,7 @@ function drawItems(refs) {
   for (const r of refs) {
     const g = itemGeometry(r.asset);
     if (!g) continue;
-    const m = new THREE.Mesh(g, itemMat);
+    const m = new THREE.Mesh(g, itemMats.get(itemKey(r.asset)) || itemMat);
     m.castShadow = m.receiveShadow = true;
     m.position.set(...r.translation); m.rotation.y = r.rotY * Math.PI / 180;
     itemsGroup.add(m);
@@ -2027,7 +2167,8 @@ async function loadAssets() {
   try {
     const list = await assets.list();
     if (destroyed) return;
-    setAssets(list); rebuild(false);
+    setAssets(list); itemList = list; rebuild(false);
+    if (treeKind === "main") renderTreeUI();   // (the Decorations card offers them)
   } catch (e) { /* the building still works without them; its items wait as stand-ins */ }
 }
 if (assets) {
@@ -2514,6 +2655,12 @@ function updatePlacesMarker() {
   const list = gamePlaces(p), shown = new Set(list.map(x => x.type)), pr = objectProblems(p);
   for (const [id, b] of Object.entries(placesObj.boxes)) b.mesh.visible = shown.has(id);
   for (const [id, s] of Object.entries(placesObj.icons)) s.visible = shown.has(id);
+  const dr = treeKind === "deco" && selDecor() ? decorRect(selDecor(), decorFind) : null, bd = placesObj.boxFor("decor");
+  bd.mesh.visible = !!dr;
+  if (dr) {
+    bd.mesh.position.set((dr.x0 + dr.x1) / 2, (dr.y0 + dr.y1) / 2, (dr.z0 + dr.z1) / 2); bd.mesh.scale.set(dr.x1 - dr.x0, Math.max(0.05, dr.y1 - dr.y0), dr.z1 - dr.z0);
+    bd.mesh.material.color.set(0x2f6fd0); bd.mesh.material.opacity = 0.2; bd.edges.material.color.set(0x2f6fd0); bd.edges.material.opacity = 1;
+  }
   for (const x of list) {
     const b = placesObj.boxFor(x.type), on = x.id === ob.sel, bad = pr.has(x.id);
     b.mesh.position.set(...x.box.center); b.mesh.scale.set(...x.box.size);
@@ -2886,7 +3033,6 @@ function saveFile(name, data, fallback) {
     toast(`Saved ${name}`);
   } catch (e) { (fallback || (() => showText(name, typeof data === "string" ? data : "")))(); }
 }
-const canvasBlob = c => new Promise(res => c.toBlob(res, "image/png"));
 /** A canvas as a DDS file (DXT with mips), for the game's textures. */
 const canvasDds = c => {
   const {width, height} = c, px = c.getContext("2d").getImageData(0, 0, width, height).data;
@@ -2927,7 +3073,7 @@ function renderStoreImage(size) {
 }
 /**
  * One building's files for a game mod, into dir (a zip or a folder of one): the placeable XML, the i3d, its textures and imported
- * items and the shop picture. Returns the 256 px icon as a PNG blob (or null), for the mod's own icon.
+ * items and the shop picture. Returns the 256 px icon as DDS bytes (or null), for the mod's own icon.
  */
 async function fillMod(dir, name, prefix = "", mod = modName(name)) {
   dir.file(MOD_FILES.xml, placeableXml(p, name, {dir: prefix, mod}));
@@ -2935,8 +3081,8 @@ async function fillMod(dir, name, prefix = "", mod = modName(name)) {
   await addTextures(dir);
   await addItems(dir);
   const store = renderStoreImage(512), icon = renderStoreImage(256);
-  if (store) dir.file(MOD_FILES.store, await canvasBlob(store));
-  return icon ? await canvasBlob(icon) : null;
+  if (store) dir.file(MOD_FILES.store, canvasDds(store));
+  return icon ? canvasDds(icon) : null;
 }
 /** For a mod of several buildings: this one's files into folder dir (named prefix, "folder/": the game reads the XML's paths from the mod's root); {icon, description, author} for the modDesc. */
 async function exportInto(dir, name, prefix = "", mod = modName(name)) {
@@ -2977,6 +3123,38 @@ async function importSettings(file) {
   try { setSettings(JSON.parse(await file.text())); persist(); toast("Settings loaded"); return true; }
   catch (e) { toast("That file isn\u2019t a settings file from this app."); return false; }
 }
+/* ---------- The type of building (docs/PLAN_TYPER.md step 2) ---------- */
+/** The card at the top of the Game tab: what the building is for FS25, and (between the simple walk-in types) a way to change it. The editor's controls are built for one type, so a change
+ *  is handed to the page (onKindChange), which saves it and starts the editor again on the new settings. */
+function renderKindCard() {
+  const host = $("controls-game");
+  if (!host) return;
+  let card = host.querySelector("#kindCard");
+  if (!card) { card = document.createElement("div"); card.id = "kindCard"; card.className = "hx-card"; const h = host.querySelector("h2"); if (h) h.after(card); else host.prepend(card); }
+  const cur = kindOf(p), others = KINDS.filter(k => k.id !== cur.id && CONVERTIBLE_KINDS.includes(k.id));
+  const can = CONVERTIBLE_KINDS.includes(cur.id) && !!onKindChange;
+  card.innerHTML = `<h3 class="hx-card-h">Type of building</h3><p class="hint">What it is in FS25: <b>${esc(cur.name)}</b>. The type decides the game objects, the pieces that can stand inside and what is written for the game.</p>`
+    + (can ? `<div class="row"><select id="kindSel" aria-label="New type">${others.map(k => `<option value="${k.id}">${esc(k.name)}</option>`).join("")}</select><button type="button" id="kindGo">Change the type…</button></div>
+      <p class="hint">The form stays: the size, roof, walls, windows, doors, parts and decorations. You are told what is lost before it is changed.</p>`
+      : `<p class="hint">${CONVERTIBLE_KINDS.includes(cur.id) ? "" : "An animal building can't be changed to another type: it has a pasture and animals. Make a new building of the type you want."}</p>`);
+  const go = card.querySelector("#kindGo");
+  if (go) go.onclick = async () => {
+    const to = card.querySelector("#kindSel").value, r = changeKind(p, to), name = (KINDS.find(k => k.id === to) || {}).name || to;
+    if (!r.ok) { toast(r.error); return; }
+    const lines = [t("Change this building to “{name}”?", {name}), ""];
+    lines.push(t("The form stays: the size, roof, walls, windows, doors, parts and decorations."));
+    const lost = [...r.lost.objects, ...r.lost.settings, ...(r.lost.dormers ? [t("Dormers: {n}", {n: r.lost.dormers})] : [])];
+    const counts = {}; for (const n of r.lost.items) counts[n] = (counts[n] || 0) + 1;
+    const items = Object.entries(counts).map(([n, c]) => c > 1 ? `${n} × ${c}` : n);
+    if (items.length) lines.push(t("Furniture that is dropped: {list}.", {list: items.join(", ")}));
+    if (lost.length) lines.push(t("Dropped: {list}.", {list: lost.join(", ")}));
+    if (r.added.objects.length) lines.push(t("Added: {list}.", {list: r.added.objects.join(", ")}));
+    lines.push("", t("Changing back does not bring back what was dropped."));
+    if (!await confirmDialog(lines.join("\n"), {title: t("Change the type of building"), confirm: t("Change the type")})) return;
+    persist();   // (what is saved now is the building as it was; the change is saved by the page)
+    onKindChange(serialize(r.settings));
+  };
+}
 // Imported settings keep this project's kind: the editor is built for it.
 function setSettings(obj) { p = sanitize({...obj, kind: p.kind}); selId = null; dSel = null; syncControls(); rebuild(true); }
 
@@ -3009,6 +3187,7 @@ function destroy() {
   if (interiorTex) interiorTex.dispose();
   for (const g of itemGeos.values()) if (g) g.dispose();
   if (itemMat) itemMat.dispose();
+  for (const m of itemMats.values()) { if (m.map) m.map.dispose(); m.dispose(); }
   setAssets([]);
   if (renderer) renderer.dispose();
   root.innerHTML = "";

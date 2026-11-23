@@ -10,6 +10,7 @@
 //   mount       "floor" or "wall" (a wall piece's back, -z after turning, goes against the wall)
 //   turn        degrees (0, 90, 180, 270) the model is turned before placing
 //   kinds       kinds of building it's offered in; empty: every walk-in kind (a trough's: every kind with troughs)
+//   texture     the name of the item's picture file (the .obj then has uvs and the preview draws it); empty: plain grey
 //   use         "piece" (furniture inside, the default), "feedTrough" or "waterTrough": the look of that game object (objects.mjs)
 
 export const ASSET_PREFIX = "asset:";
@@ -38,6 +39,27 @@ export function readI3d(text) {
   };
 }
 
+/**
+ * The picture files (as the i3d names them: "textures/x_diffuse.png") that the drawn shapes of an i3d use as their diffuse map, each once, the game's own
+ * ($data/...) too. Shapes that are not drawn (nonRenderable: collision) do not count. One entry that is not a $data file means the whole item can be drawn with it.
+ */
+export function diffuseFiles(text) {
+  const files = new Map([...text.matchAll(/<File\b[^>]*>/g)].map(m => [attr(m[0], "fileId"), attr(m[0], "filename")]));
+  const diffuse = new Map();   // materialId -> the file of its first <Texture>
+  for (const m of text.matchAll(/<Material\b[^>]*?(?:\/>|>[\s\S]*?<\/Material>)/g)) {
+    const id = attr(m[0].match(/^<Material\b[^>]*>/)[0], "materialId"), tex = m[0].match(/<Texture\b[^>]*>/);
+    if (id !== null && tex) diffuse.set(id, files.get(attr(tex[0], "fileId")));
+  }
+  const used = new Set();
+  const scene = text.indexOf("<Scene");
+  if (scene < 0) return [];
+  for (const m of text.slice(scene).matchAll(/<Shape\b[^>]*>/g)) {
+    if (attr(m[0], "nonRenderable") === "true") continue;
+    for (const id of (attr(m[0], "materialIds") || "").split(/[\s,]+/).filter(Boolean)) { const f = diffuse.get(id); if (f) used.add(f); }
+  }
+  return [...used];
+}
+
 /** The i3d's own files (by name) that aren't among names. A .dds stands in for a .png of the same name. */
 export function missingFiles(i3dText, names) {
   const have = new Set(names.map(stem));
@@ -45,27 +67,31 @@ export function missingFiles(i3dText, names) {
 }
 
 /**
- * The triangles of an .obj ({positions: flat [x, y, z, ...], box: {min, max}}), leaving out the
- * groups (Giants Editor writes one per node, "g name") named in skip.
+ * The triangles of an .obj ({positions: flat [x, y, z, ...], uvs: flat [u, v, ...] per corner or null, box: {min, max}}), leaving out the
+ * groups (Giants Editor writes one per node, "g name") named in skip. uvs: when every corner of every face has a texture coordinate (f v/vt ...), else null.
  */
 export function readObj(text, skip = []) {
-  const v = [], out = [], leave = new Set(skip);
+  const v = [], vt = [], out = [], uvs = [], leave = new Set(skip);
+  let uvOk = true;
   let group = "", min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
   for (const line of text.split(/\r?\n/)) {
     const w = line.trim().split(/\s+/);
     if (w[0] === "v") v.push([+w[1], +w[2], +w[3]]);
+    else if (w[0] === "vt") vt.push([+w[1], +w[2]]);
     else if (w[0] === "g" || w[0] === "o") group = w.slice(1).join(" ");
     else if (w[0] === "f" && !leave.has(group)) {
       const idx = w.slice(1).map(s => { const k = parseInt(s, 10); return k < 0 ? v.length + k : k - 1; });
-      for (let i = 1; i + 1 < idx.length; i++) for (const k of [idx[0], idx[i], idx[i + 1]]) {
-        const q = v[k]; if (!q) throw new Error("The .obj file is damaged (a face uses a corner that isn't there).");
+      const tex = w.slice(1).map(s => { const t = s.split("/")[1]; if (t === undefined || t === "") return null; const k = parseInt(t, 10); return vt[k < 0 ? vt.length + k : k - 1] || null; });
+      for (let i = 1; i + 1 < idx.length; i++) for (const c of [0, i, i + 1]) {
+        const k = idx[c], q = v[k]; if (!q) throw new Error("The .obj file is damaged (a face uses a corner that isn't there).");
         out.push(...q);
+        if (tex[c]) uvs.push(...tex[c]); else uvOk = false;
         for (let a = 0; a < 3; a++) { min[a] = Math.min(min[a], q[a]); max[a] = Math.max(max[a], q[a]); }
       }
     }
   }
   if (!out.length) throw new Error("The .obj file has no faces.");
-  return {positions: out, box: {min, max}};
+  return {positions: out, uvs: uvOk && uvs.length ? uvs : null, box: {min, max}};
 }
 
 const TURNS = [0, 90, 180, 270];
@@ -84,6 +110,10 @@ export function normalizeMeta(m) {
     turn: TURNS.includes(m.turn) ? m.turn : 0,
     kinds: Array.isArray(m.kinds) ? m.kinds.filter(x => typeof x === "string") : [],
     use: USES.includes(m.use) ? m.use : "piece",
+    texture: typeof m.texture === "string" ? m.texture : "",
+    // a small picture of the item for lists (a data: URL made in the browser, see itemView.mjs itemIcon); kept only if it looks like one and is small
+    iconV: Number.isInteger(m.iconV) ? m.iconV : 0,
+    icon: typeof m.icon === "string" && /^data:image\/(jpeg|png);base64,/.test(m.icon) && m.icon.length <= 30000 ? m.icon : "",
   };
 }
 

@@ -5,6 +5,7 @@ import { api, type Invite } from "@/lib/api";
 import { useUser } from "@/lib/useUser";
 import { TopBar } from "@/components/TopBar";
 import { Templates } from "./Templates";
+import { confirmDialog } from "@/components/dialog.mjs";
 
 const date = (iso: string) => new Date(iso).toLocaleDateString("sv-SE");
 
@@ -47,7 +48,7 @@ export default function AdminPage() {
   }
 
   async function remove(inv: Invite) {
-    if (!window.confirm(t("Remove the invite for {email}?", { email: inv.email }))) return;
+    if (!await confirmDialog(t("Remove the invite for {email}?", { email: inv.email }), { confirm: t("Remove"), danger: true })) return;
     try {
       await api.deleteInvite(inv.id);
       setInvites(list => (list ?? []).filter(x => x.id !== inv.id));

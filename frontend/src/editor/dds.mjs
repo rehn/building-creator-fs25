@@ -99,13 +99,26 @@ export function encodeDds(width, height, rgba) {
   return out;
 }
 
-/** The top level of a DDS file made by encodeDds, as {width, height, data (RGBA)} (for tests and previews). */
-export function decodeDds(file) {
-  const v = new DataView(file.buffer, file.byteOffset, file.byteLength), height = v.getUint32(12, true), width = v.getUint32(16, true);
-  const alpha = String.fromCharCode(...file.slice(84, 88)) === "DXT5", step = alpha ? 16 : 8, bw = Math.ceil(width / 4);
+/** Is this a DDS file decodeDds can read: the DXT1 or DXT5 the game's textures and ours are made in (not DX10, BC5, 8-bit ...). */
+export function ddsReadable(file) {
+  return file.length > 128 && String.fromCharCode(...file.slice(0, 4)) === "DDS " && ["DXT1", "DXT5"].includes(String.fromCharCode(...file.slice(84, 88)));
+}
+
+/**
+ * A level of a DDS file (0 = the full size, 1 = half ... down to the smallest it has) as {width, height, data (RGBA)}: for tests and previews.
+ * A smaller level is much quicker to decode, which is all a small picture needs.
+ */
+export function decodeDds(file, level = 0) {
+  const v = new DataView(file.buffer, file.byteOffset, file.byteLength);
+  let height = v.getUint32(12, true), width = v.getUint32(16, true);
+  const alpha = String.fromCharCode(...file.slice(84, 88)) === "DXT5", step = alpha ? 16 : 8;
+  let base = 128;
+  const levels = Math.max(1, v.getUint32(28, true));
+  for (let l = 0; l < level && l < levels - 1; l++) { base += Math.ceil(width / 4) * Math.ceil(height / 4) * step; width = Math.max(1, width >> 1); height = Math.max(1, height >> 1); }
+  const bw = Math.ceil(width / 4);
   const data = new Uint8Array(width * height * 4);
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
-    const o = 128 + ((y >> 2) * bw + (x >> 2)) * step, k = (y & 3) * 4 + (x & 3), c = alpha ? o + 8 : o;
+    const o = base + ((y >> 2) * bw + (x >> 2)) * step, k = (y & 3) * 4 + (x & 3), c = alpha ? o + 8 : o;
     const c0 = file[c] | file[c + 1] << 8, c1 = file[c + 2] | file[c + 3] << 8, a = from565(c0), b = from565(c1);
     const idx = (file[c + 4] | file[c + 5] << 8 | file[c + 6] << 16 | file[c + 7] << 24) >>> (2 * k) & 3;
     const rgb = idx === 0 ? a : idx === 1 ? b : idx === 2 ? a.map((q, i) => (2 * q + b[i]) / 3) : a.map((q, i) => (q + 2 * b[i]) / 3);

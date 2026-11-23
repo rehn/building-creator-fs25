@@ -5,6 +5,7 @@ import { api, type ApiToken } from "@/lib/api";
 import { useUser } from "@/lib/useUser";
 import { TopBar } from "@/components/TopBar";
 import { t } from "@/i18n/index.mjs";
+import { confirmDialog } from "@/components/dialog.mjs";
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : null);
 
@@ -34,8 +35,8 @@ export default function ApiAccessPage() {
     setFresh(tok); setCopied(false); setName(""); setWrite(false);
     setTokens(list => [{ ...tok, token: undefined }, ...(list ?? [])]);
   });
-  const remove = (tok: ApiToken) => {
-    if (!window.confirm(t("Delete the token “{name}”? Programs that use it stop working.", { name: tok.name }))) return;
+  const remove = async (tok: ApiToken) => {
+    if (!await confirmDialog(t("Delete the token “{name}”? Programs that use it stop working.", { name: tok.name }), { confirm: t("Delete"), danger: true })) return;
     run(async () => {
       await api.deleteToken(tok.id);
       setTokens(list => (list ?? []).filter(x => x.id !== tok.id));
@@ -51,7 +52,6 @@ export default function ApiAccessPage() {
       <TopBar user={user} />
       <main className="page">
         <div className="page-head">
-          <Link className="btn back" href="/" aria-label="Back to my buildings"><span aria-hidden="true">‹</span> My buildings</Link>
           <h2>API access</h2>
         </div>
         <p className="hint">Let your own programs read your buildings: the list with name, type and picture, and each building as an .i3d or .obj file.

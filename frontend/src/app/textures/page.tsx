@@ -8,9 +8,15 @@ import { useUser } from "@/lib/useUser";
 import { TopBar } from "@/components/TopBar";
 import { t } from "@/i18n/index.mjs";
 import { makePhotoTexture, photoTextureDds, squareCrop, nearestPow2 } from "@/editor/photoTexture.mjs";
+import { confirmDialog } from "@/components/dialog.mjs";
 
 type Picture = { width: number; height: number; rgba: Uint8ClampedArray };
-type Draft = { file: File; picture: Picture; name: string; zoom: number; cx: number; cy: number; rotate: number; flatten: number; size: number; meters: number; seamless: boolean; bump: number; mine: boolean };
+type Draft = { file: File; picture: Picture; name: string; zoom: number; cx: number; cy: number; rotate: number; flatten: number; size: number; meters: number; seamless: boolean; bump: number; mine: boolean; whole: boolean; background: string; margin: number };
+
+/** The part of the picture that is used: all of it for a logo or a sign (stretched to the square), else the square frame. */
+const cropOf = (d: Draft) => d.whole ? { x: 0, y: 0, w: 1, h: 1 } : squareCrop(d.picture.width, d.picture.height, d);
+/** What makePhotoTexture is given for a draft: the whole picture is not straightened, evened out or blended at its edges. */
+const optsOf = (d: Draft, size: number, bump = d.bump) => ({ size, crop: cropOf(d), rotate: d.whole ? 0 : d.rotate, flatten: d.whole ? 0 : d.flatten, seamless: d.seamless && !d.whole, bump, meters: d.meters, background: d.background, margin: d.whole ? d.margin / 100 : 0 });
 
 // (kept as string literals so that npm run i18n finds them)
 const TEXT = {
@@ -53,10 +59,10 @@ function Preview({ d }: { d: Draft }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const c = canvas.current; if (!c) return;
-    const tex = makePhotoTexture(d.picture, { size: PREVIEW, crop: squareCrop(d.picture.width, d.picture.height, d), rotate: d.rotate, flatten: d.flatten, seamless: d.seamless, bump: d.bump, meters: d.meters });
+    const tex = makePhotoTexture(d.picture, optsOf(d, PREVIEW));
     const one = canvasOf(tex.diffuse, PREVIEW), g = c.getContext("2d")!;
     for (let y = 0; y < 2; y++) for (let x = 0; x < 2; x++) g.drawImage(one, x * PREVIEW, y * PREVIEW);
-  }, [d.picture, d.zoom, d.cx, d.cy, d.rotate, d.flatten, d.seamless, d.bump, d.meters]);
+  }, [d.picture, d.zoom, d.cx, d.cy, d.rotate, d.flatten, d.seamless, d.bump, d.meters, d.whole, d.background, d.margin]);
   return <canvas ref={canvas} className="tex-preview" width={PREVIEW * 2} height={PREVIEW * 2} aria-label="Preview of the texture, repeated twice across and down" />;
 }
 
@@ -70,12 +76,12 @@ function SourceView({ d }: { d: Draft }) {
     c.width = Math.round(d.picture.width * k); c.height = Math.round(d.picture.height * k);
     const g = c.getContext("2d")!;
     g.drawImage(full, 0, 0, c.width, c.height);
-    const r = squareCrop(d.picture.width, d.picture.height, d), w = r.w * c.width, h = r.h * c.height;
+    const r = cropOf(d), w = r.w * c.width, h = r.h * c.height;
     g.save(); g.translate((r.x + r.w / 2) * c.width, (r.y + r.h / 2) * c.height); g.rotate(d.rotate * Math.PI / 180);
     g.lineWidth = 3; g.strokeStyle = "#000"; g.strokeRect(-w / 2, -h / 2, w, h);
     g.lineWidth = 1.5; g.strokeStyle = "#fff"; g.strokeRect(-w / 2, -h / 2, w, h);
     g.restore();
-  }, [full, d.picture, d.zoom, d.cx, d.cy, d.rotate]);
+  }, [full, d.picture, d.zoom, d.cx, d.cy, d.rotate, d.whole]);
   return <canvas ref={canvas} className="tex-source" aria-label="The photo, with a frame round the part that is used" />;
 }
 
@@ -95,7 +101,7 @@ export default function TexturesPage() {
     setError(""); setEditing(null);
     try {
       const picture = await readPicture(file);
-      setDraft({ file, picture, name: file.name.replace(/\.[^.]+$/, "").slice(0, 100), zoom: 1, cx: 0.5, cy: 0.5, rotate: 0, flatten: 0, size: 1024, meters: 1, seamless: false, bump: 2, mine: false });
+      setDraft({ file, picture, name: file.name.replace(/\.[^.]+$/, "").slice(0, 100), zoom: 1, cx: 0.5, cy: 0.5, rotate: 0, flatten: 0, size: 1024, meters: 1, seamless: false, bump: 2, mine: false, whole: false, background: "#ffffff", margin: 0 });
     } catch { setError(t("That file isn’t a picture the browser can read (use a JPEG, PNG or WebP).")); }
   }
 
@@ -104,9 +110,9 @@ export default function TexturesPage() {
     setBusy(true); setError("");
     try {
       await new Promise(r => setTimeout(r, 30)); // let "Making the texture…" show before the heavy part
-      const tex = makePhotoTexture(draft.picture, { size: draft.size, crop: squareCrop(draft.picture.width, draft.picture.height, draft), rotate: draft.rotate, flatten: draft.flatten, seamless: draft.seamless, bump: draft.bump, meters: draft.meters });
+      const tex = makePhotoTexture(draft.picture, optsOf(draft, draft.size));
       const thumb = (() => {
-        const small = makePhotoTexture(draft.picture, { size: 64, crop: squareCrop(draft.picture.width, draft.picture.height, draft), rotate: draft.rotate, flatten: draft.flatten, seamless: draft.seamless, bump: 0 });
+        const small = makePhotoTexture(draft.picture, optsOf(draft, 64, 0));
         return canvasOf(small.diffuse, 64).toDataURL("image/jpeg", 0.85);
       })();
       const dds = photoTextureDds(tex);
@@ -135,7 +141,7 @@ export default function TexturesPage() {
   }
 
   async function remove(x: Texture) {
-    if (!window.confirm(t("Delete “{name}”?", { name: x.name }))) return;
+    if (!await confirmDialog(t("Delete “{name}”?", { name: x.name }), { confirm: t("Delete"), danger: true })) return;
     setBusy(true); setError("");
     try { await api.deleteTexture(x.id); setItems(list => (list ?? []).filter(y => y.id !== x.id)); }
     catch (e) { setError((e as Error).message); } finally { setBusy(false); }
@@ -154,6 +160,12 @@ export default function TexturesPage() {
       </div>
       <div className="item-fields">
         <label>Name <input type="text" value={draft.name} maxLength={100} onChange={e => change({ name: e.target.value })} /></label>
+        <label className="choice"><input type="checkbox" checked={draft.whole} onChange={e => change({ whole: e.target.checked })} /> Keep the whole picture (for a logo or a sign)</label>
+        <p className="hint">The whole picture is stretched to the square, nothing is cut off. On a face set to “Fit to face” it comes back at its own proportions. Zoom, straighten and the seamless option are not used.</p>
+        {draft.whole && <label>Margin round the picture <small>{draft.margin} %</small> <input type="range" min={0} max={40} step={1} value={draft.margin} onChange={e => change({ margin: Number(e.target.value) })} /></label>}
+        {draft.whole && <p className="hint">A sign with a border: the picture is made smaller and the margin gets the colour below. The margin is a share of the face, so a wide sign gets a wider margin along its length.</p>}
+        <label>Fill see-through parts with <input type="color" value={draft.background} onChange={e => change({ background: e.target.value })} /></label>
+        <p className="hint">A picture with a see-through background (a logo) is put on this colour, so it is not black round the edges.</p>
         <label>Zoom <small>{Math.round(draft.zoom * 100)} %</small> <input type="range" min={0.05} max={1} step={0.01} value={draft.zoom} onChange={e => change({ zoom: Number(e.target.value) })} /></label>
         <label>Left to right <small>{Math.round(draft.cx * 100)} %</small> <input type="range" min={0} max={1} step={0.01} value={draft.cx} onChange={e => change({ cx: Number(e.target.value) })} /></label>
         <label>Up and down <small>{Math.round(draft.cy * 100)} %</small> <input type="range" min={0} max={1} step={0.01} value={draft.cy} onChange={e => change({ cy: Number(e.target.value) })} /></label>
@@ -192,8 +204,7 @@ export default function TexturesPage() {
       <TopBar user={user} />
       <main className="page">
         <div className="page-head">
-          <Link className="btn back" href="/" aria-label="Back to my buildings"><span aria-hidden="true">‹</span> My buildings</Link>
-          <h2>My textures</h2>
+          <h2>Textures</h2>
           <button className="primary" type="button" onClick={() => fileInput.current?.click()} disabled={!user || busy}>Add a photo</button>
           <input ref={fileInput} type="file" hidden accept="image/jpeg,image/png,image/webp" onChange={e => { pick(e.target.files); e.target.value = ""; }} />
         </div>

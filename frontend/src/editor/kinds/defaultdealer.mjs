@@ -7,6 +7,8 @@
 // Not yet tried in the game: whether the game runs the callbacks for a placeable; if not, the nodes can be copied into the map's i3d.
 // Imports only the i3d writer and the dealership's pieces (see kinds/index.mjs).
 import { tg, refNode } from "../i3d.mjs";
+import { shopFor } from "./shop.mjs";
+const SHEDS = {category: "sheds", type: "placeable", brush: "buildings", tab: "sheds"};   // (the shop place of the kind: shop.mjs lets the player choose another)
 import { objectOf, boxOf, iconOf } from "../objects.mjs";
 import dealership, { CATALOG, furnish, autoFurnish, defaultObjects } from "./dealership.mjs";
 
@@ -57,7 +59,7 @@ export default {
   /** Settings as this kind uses them: no sleep point, rooms or dormers. */
   normalize: p => ({...p, interior: false, dormers: []}),
   /** An ordinary placeable; sellable: false leaves it out of the shop and makes it unsellable (for a map that places it). */
-  placeable: p => ({type: "simplePlaceable", fn: "$l10n_function_decoration", sellable: p.shopBuyable !== false, shop: {category: "sheds", type: "placeable", brush: "buildings", tab: "sheds"},
+  placeable: p => ({type: "simplePlaceable", fn: "$l10n_function_decoration", sellable: p.shopBuyable !== false, shop: shopFor(p, SHEDS),
     note: `Default dealer: the map's shop nodes (vehicleShopTrigger, storeSpawnPlace1Start/End) with their onCreate callbacks as user attributes.`}),
   description: p => `A ${(+p.width).toFixed(1)} x ${(+p.depth).toFixed(1)} m shop for the map, made with House to i3d. Buy vehicles at the counter and they appear outside.`,
   furnish,

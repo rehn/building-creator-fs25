@@ -7,7 +7,7 @@ test("mod of several buildings: modDesc lists every building's placeable in its 
   assert.match(xml, /<modDesc descVersion="\d+">/);
   assert.match(xml, /<author>Lars<\/author>/);
   assert.match(xml, /<en>My farm<\/en>/);
-  assert.match(xml, /<iconFilename>icon.png<\/iconFilename>/);
+  assert.match(xml, /<iconFilename>icon.dds<\/iconFilename>/);
   assert.deepEqual([...xml.matchAll(/<storeItem xmlFilename="([^"]+)"\/>/g)].map(m => m[1]), ["red_barn/house.xml", "farmhouse/house.xml", "sheep_barn/house.xml"]);
   assert.match(xml, /<!\[CDATA\[Three buildings.\]\]>/);
 });
@@ -24,12 +24,12 @@ test("mod of several buildings: names are escaped, an empty title and author hav
 
 test("mod of several buildings: the placeable's shop picture and i3d are named from the mod's root (the game does not read them from the XML's folder)", () => {
   const xml = placeableXml(sanitize({}), "House", {dir: "farmhouse/"});
-  assert.match(xml, /<image>farmhouse\/store.png<\/image>/);
+  assert.match(xml, /<image>farmhouse\/store.dds<\/image>/);
   assert.match(xml, /<filename>farmhouse\/house.i3d<\/filename>/);
   // a single building's mod is in the root as before
   const one = placeableXml(sanitize({}), "House");
-  assert.match(one, /<image>store.png<\/image>/);
+  assert.match(one, /<image>store.dds<\/image>/);
   assert.match(one, /<filename>house.i3d<\/filename>/);
   // nothing else in the XML is a path of the mod
-  assert.deepEqual([...xml.matchAll(/<(?:image|filename|xmlFilename)>([^<]+)</g)].map(m => m[1]), ["farmhouse/store.png", "farmhouse/house.i3d"]);
+  assert.deepEqual([...xml.matchAll(/<(?:image|filename|xmlFilename)>([^<]+)</g)].map(m => m[1]), ["farmhouse/store.dds", "farmhouse/house.i3d"]);
 });

@@ -4,11 +4,16 @@ export interface Part {
   w: number; h: number; d: number; r: number; seg: number; color: string;
   /** face id -> material id (a face drawn in a material row instead of the part\u2019s colour) */
   faces: Record<string, number>;
+  /** face id -> quarter turn of its texture (90, 180 or 270; none = 0) */
+  faceRot: Record<string, number>;
+  /** solid for players and vehicles (default true) */
+  collision: boolean;
 }
-export interface MaterialTexture { id: string; meters: number }
-export interface Material { id: number; name: string; color: string; texture: MaterialTexture | null }
+export interface MaterialTexture { id: string; meters: number; fit: boolean }
+export interface Material { id: number; name: string; color: string; texture: MaterialTexture | null; smoothness: number; metalness: number }
 export interface Face { id: string; label: string }
-export interface BuilderProject { format: string; version: number; kind: "prop"; materials: Material[]; parts: Part[] }
+export interface ModSettings { price: number; upkeep: number; sellable: boolean }
+export interface BuilderProject { format: string; version: number; kind: "prop"; mod: ModSettings; item: { id: string } | null; materials: Material[]; parts: Part[] }
 export const FORMAT: string;
 export const VERSION: number;
 export const MAX_PARTS: number;
@@ -34,3 +39,4 @@ export function addMaterial(model: unknown, extra?: Partial<Material>): BuilderP
 export function updateMaterial(model: unknown, id: number, patch: Partial<Material>): BuilderProject;
 export function removeMaterial(model: unknown, id: number): BuilderProject;
 export function setFaceMaterial(model: unknown, partId: number, faceId: string, materialId: number | null): BuilderProject;
+export function setFaceRotation(model: unknown, partId: number, faceId: string, deg: number): BuilderProject;
