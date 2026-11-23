@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, templatePhotoUrl, type Template } from "@/lib/api";
 import { KIND } from "@/editor/model.mjs";
+import { confirmDialog, formDialog } from "@/components/dialog.mjs";
 
 const kindName = (id: string) => (KIND as Record<string, { name: string } | undefined>)[id]?.name ?? id;
 
@@ -21,15 +22,14 @@ export function Templates() {
   }
   const replace = (t: Template) => setList(l => (l ?? []).map(x => (x.id === t.id ? t : x)));
   const publish = (t: Template, on: boolean) => run(async () => replace(await api.updateTemplate(t.id, { published: on })));
-  const rename = (t: Template) => {
-    const name = window.prompt(tr("Name"), t.name)?.trim();
-    if (name === undefined || name === "") return;
-    const blurb = window.prompt("Short description", t.blurb);
-    if (blurb === null) return;
-    run(async () => replace(await api.updateTemplate(t.id, { name, blurb: blurb.trim() })));
+  const rename = async (t: Template) => {
+    const r = await formDialog({ title: tr("Rename"), confirm: tr("Save"), fields: [{ label: tr("Name"), value: t.name, maxLength: 80 }, { label: tr("Short description"), value: t.blurb, multiline: true }] });
+    const name = r?.[0].trim();
+    if (!r || !name) return;
+    run(async () => replace(await api.updateTemplate(t.id, { name, blurb: r[1].trim() })));
   };
-  const remove = (t: Template) => {
-    if (!window.confirm(tr("Delete the template “{name}” and its photos? Buildings made from it stay.", { name: t.name }))) return;
+  const remove = async (t: Template) => {
+    if (!await confirmDialog(tr("Delete the template “{name}” and its photos? Buildings made from it stay.", { name: t.name }), { confirm: tr("Delete"), danger: true })) return;
     run(async () => { await api.deleteTemplate(t.id); setList(l => (l ?? []).filter(x => x.id !== t.id)); });
   };
 
