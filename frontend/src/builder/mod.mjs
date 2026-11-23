@@ -1,0 +1,133 @@
+// The modeller's game mod (docs/PLAN_BUILDER.md): the prop as a placeable the player can buy and put down: the i3d (with the atlas and collision), the placeable
+// XML with its placement areas and i3dMappings, and the modDesc. Pure, no DOM; the pictures (store.dds, icon.dds) and the atlas's DDS files are made by the page.
+// The areas follow the base game's: a clear area (cleared of trees and stones), a level area (the ground is levelled to it) and a test area (where nothing else may stand).
+import { sanitize, placedMesh } from "./model.mjs";
+import { exportI3dAtlas } from "./atlas.mjs";
+import { tg, mappingsFor } from "../editor/i3d.mjs";
+
+export const MOD_STEM = "prop", MOD_DESC_VERSION = 108, CLEAR_MARGIN = 1;
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const cdata = s => "<![CDATA[" + String(s).replace(/]]>/g, "]]]]><![CDATA[>") + "]]>";
+
+/** The ground the prop covers: {level: {x0, x1, z0, z1} (the footprint of all the parts as they stand), clear (the same with a margin), test: {min, max} (a box from the ground to the top)}. An empty project gets 2 x 2 m. */
+export function propAreas(model) {
+  const m = sanitize(model);
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity, top = 0;
+  for (const p of m.parts) {
+    const g = placedMesh(p);
+    for (let k = 0; k < g.p.length; k += 3) {
+      x0 = Math.min(x0, g.p[k] + p.x); x1 = Math.max(x1, g.p[k] + p.x);
+      z0 = Math.min(z0, g.p[k + 2] + p.z); z1 = Math.max(z1, g.p[k + 2] + p.z);
+      top = Math.max(top, g.p[k + 1] + p.y);
+    }
+  }
+  if (!Number.isFinite(x0)) { x0 = z0 = -1; x1 = z1 = 1; top = 1; }
+  const level = {x0, x1, z0, z1};
+  return {level, clear: {x0: x0 - CLEAR_MARGIN, x1: x1 + CLEAR_MARGIN, z0: z0 - CLEAR_MARGIN, z1: z1 + CLEAR_MARGIN}, test: {min: [x0, 0, z0], max: [x1, top, z1]}};
+}
+
+/** The nodes the placeable XML names for the areas, built as the house export does (a rectangle: start, then width along z and height along x; a box: start and its end as a child). */
+function areaNodes(A) {
+  const rect = (k, r) => tg(`${k}Areas`, [0, 0, 0], [tg(`${k}AreaStart01`, [r.x0, 0, r.z0], [tg(`${k}AreaWidth01`, [0, 0, r.z1 - r.z0]), tg(`${k}AreaHeight01`, [r.x1 - r.x0, 0, 0])])]);
+  const corner = (group, k, min, max) => tg(group, [0, 0, 0], [tg(`${k}Start01`, min, [tg(`${k}End01`, max.map((v, i) => v - min[i]))])]);
+  // the game warns about a placeable with no indoor areas: a tiny one in the middle (a prop has no inside)
+  const cx = (A.level.x0 + A.level.x1) / 2, cz = (A.level.z0 + A.level.z1) / 2;
+  return [rect("clear", A.clear), rect("level", A.level), rect("indoor", {x0: cx - 0.05, x1: cx + 0.05, z0: cz - 0.05, z1: cz + 0.05}), corner("testAreas", "testArea", A.test.min, A.test.max),
+    corner("tipOcclusionUpdateAreas", "tipOcclusionUpdateArea", [A.test.min[0], 0, A.test.min[2]], [A.test.max[0], 0, A.test.max[2]])];
+}
+
+const BLOCKS = `
+    <indoorAreas>
+        <indoorArea startNode="indoorAreaStart01" widthNode="indoorAreaWidth01" heightNode="indoorAreaHeight01"/>
+    </indoorAreas>
+
+    <placement useRandomYRotation="false" useManualYRotation="true">
+        <testAreas>
+            <testArea startNode="testAreaStart01" endNode="testAreaEnd01"/>
+        </testAreas>
+    </placement>
+
+    <clearAreas>
+        <clearArea startNode="clearAreaStart01" widthNode="clearAreaWidth01" heightNode="clearAreaHeight01"/>
+    </clearAreas>
+
+    <leveling requireLeveling="true" maxSmoothDistance="3" maxSlope="75" maxEdgeAngle="30">
+        <levelAreas>
+            <levelArea startNode="levelAreaStart01" widthNode="levelAreaWidth01" heightNode="levelAreaHeight01"/>
+        </levelAreas>
+    </leveling>
+
+    <tipOcclusionUpdateAreas>
+        <tipOcclusionUpdateArea startNode="tipOcclusionUpdateAreaStart01" endNode="tipOcclusionUpdateAreaEnd01"/>
+    </tipOcclusionUpdateAreas>
+
+    <ai>
+        <updateAreas>
+            <updateArea startNode="tipOcclusionUpdateAreaStart01" endNode="tipOcclusionUpdateAreaEnd01"/>
+        </updateAreas>
+    </ai>
+`;
+
+/**
+ * The prop as a game mod. -> {files: {"prop.i3d", "prop.i3d.shapes", "prop.xml", "modDesc.xml"}, layout, textures}: the atlas's pictures (textures/prop_diffuse|normal|specular.dds, from
+ * atlasDdsFiles(layout, ...)), store.dds and icon.dds are left to the page. name: the shop name; author, description: for the modDesc.
+ */
+export function exportMod(model, {name = "Prop", author = "", description = "", width} = {}) {
+  const m = sanitize(model), A = propAreas(m), shop = String(name).trim() || "Prop";
+  const atlas = exportI3dAtlas(m, {name: MOD_STEM, ...(width ? {width} : {}), extraNodes: areaNodes(A)});
+  const maps = mappingsFor(atlas.root, BLOCKS).map(([id, path]) => `        <i3dMapping id="${id}" node="${path}"/>`);
+  const sell = m.mod.sellable;
+  const xml = `<?xml version="1.0" encoding="utf-8" standalone="no" ?>
+<placeable type="simplePlaceable">
+    <!-- Generated by House to i3d (the modeller). -->
+    <storeData>
+        <name>${esc(shop)}</name>
+        <functions>
+            <function>$l10n_function_decoration</function>
+        </functions>
+        <image>store.dds</image>
+        <canBeSold>${sell}</canBeSold>
+        <showInStore>${sell}</showInStore>
+        <price>${Math.round(m.mod.price)}</price>
+        <lifetime>1000</lifetime>
+        <dailyUpkeep>${Math.round(m.mod.upkeep)}</dailyUpkeep>
+        <rotation>0</rotation>
+        <brand>NONE</brand>
+        <species>PLACEABLE</species>
+        <category>placeableMisc</category>
+        <brush>
+            <type>placeable</type>
+            <category>buildings</category>
+            <tab>sheds</tab>
+        </brush>
+    </storeData>
+
+    <base>
+        <filename>${MOD_STEM}.i3d</filename>
+        <canBeRenamed>true</canBeRenamed>
+    </base>
+${BLOCKS}
+    <i3dMappings>
+${maps.join("\n")}
+    </i3dMappings>
+</placeable>
+`;
+  const modDesc = `<?xml version="1.0" encoding="utf-8" standalone="no" ?>
+<modDesc descVersion="${MOD_DESC_VERSION}">
+    <author>${esc(String(author).trim() || "House to i3d")}</author>
+    <version>1.0.0.0</version>
+    <title>
+        <en>${esc(shop)}</en>
+    </title>
+    <description>
+        <en>${cdata(description || `${shop}, made with the House to i3d modeller.`)}</en>
+    </description>
+    <iconFilename>icon.dds</iconFilename>
+    <multiplayer supported="true"/>
+    <storeItems>
+        <storeItem xmlFilename="${MOD_STEM}.xml"/>
+    </storeItems>
+</modDesc>
+`;
+  return {files: {[`${MOD_STEM}.i3d`]: atlas.i3d, [`${MOD_STEM}.i3d.shapes`]: atlas.shapes, [`${MOD_STEM}.xml`]: xml, "modDesc.xml": modDesc}, layout: atlas.layout, textures: atlas.textures};
+}

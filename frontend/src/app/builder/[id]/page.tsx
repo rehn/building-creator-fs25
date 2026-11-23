@@ -6,7 +6,21 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { api, ApiError, type Project } from "@/lib/api";
 import { useUser } from "@/lib/useUser";
-import { exportI3d, textureFiles } from "@/builder/model.mjs";
+import { exportI3dAtlas, atlasFiles, atlasDdsFiles, type TextureMaps } from "@/builder/atlas.mjs";
+import { exportMod, MOD_STEM } from "@/builder/mod.mjs";
+import { makeItem } from "@/builder/item.mjs";
+import { t } from "@/i18n/index.mjs";
+import { decodeDds, encodeDds } from "@/editor/dds.mjs";
+
+/** The atlas's DDS files: the user's textures the atlas is made of are fetched (diffuse and normal) and put together. */
+async function atlasPictures(layout: Parameters<typeof atlasDdsFiles>[0], ids: string[]) {
+  const maps = new Map<string, TextureMaps>();
+  for (const id of ids) {
+    const [d, n] = await Promise.all((["diffuse", "normal"] as const).map(async k => decodeDds(new Uint8Array(await api.textureFile(id, k)))));
+    maps.set(id, { size: d.width, diffuse: new Uint8ClampedArray(d.data), normal: new Uint8ClampedArray(n.data) });
+  }
+  return atlasDdsFiles(layout, id => maps.get(id) ?? null);
+}
 import type { BuilderHandle, BuilderModel } from "@/builder/Builder";
 
 const Builder = dynamic(() => import("@/builder/Builder"), { ssr: false, loading: () => <p className="loading">Loading the modeller…</p> });
@@ -80,26 +94,57 @@ export default function BuilderPage() {
     if (!n) { setName(savedName.current); return; }
     if (n !== savedName.current) queue({ name: n }, 0);
   }
-  const [note, setNote] = useState("");
-  async function download() {
+  const [note, setNote] = useState(""), [done, setDone] = useState("");
+  /** mod: the whole game mod (placeable XML, modDesc, shop picture, icon) instead of just the i3d and the atlas. */
+  async function download(mod = false) {
     if (!latest.current && !project) return;
     setNote("");
-    const stem = (name || "prop").replace(/[^\w-]+/g, "_"), out = exportI3d(latest.current ?? project!.data, { name: stem });
+    const data = latest.current ?? project!.data;
+    const stem = mod ? MOD_STEM : (name || "prop").replace(/[^\w-]+/g, "_");
+    const modOut = mod ? exportMod(data, { name, author: user?.name || user?.email.split("@")[0] || "" }) : null;
+    const out = modOut ? { ...modOut, i3d: String(modOut.files[stem + ".i3d"]), shapes: modOut.files[stem + ".i3d.shapes"] as Uint8Array } : exportI3dAtlas(data, { name: stem });
+    if (!out.layout.fits) { setNote("The textures are too many or too big for one atlas (at most 4096 pixels high). Use fewer textures."); return; }
     let blob: Blob, file: string;
-    if (out.textures.length === 0) { blob = new Blob([out.i3d], { type: "application/xml" }); file = stem + ".i3d"; }
-    else {
-      // with textures: a zip with the i3d and the texture files beside it (textures/<id>_diffuse.dds ...)
-      try {
-        const { default: JSZip } = await import("jszip"), zip = new JSZip();
-        zip.file(stem + ".i3d", out.i3d);
-        for (const id of out.textures) for (const kind of ["diffuse", "normal", "specular"] as const) zip.file(textureFiles(id)[kind], await api.textureFile(id, kind));
-        blob = await zip.generateAsync({ type: "blob" }); file = stem + ".zip";
-      } catch (e) { setNote(e instanceof Error ? e.message : "Couldn’t make the file."); return; }
-    }
+    try {
+      // a zip with the i3d and the atlas beside it: the materials' textures are put together into one picture (atlas.mjs)
+      const dds = await atlasPictures(out.layout, out.textures), names = atlasFiles(stem);
+      const { default: JSZip } = await import("jszip"), zip = new JSZip();
+      if (modOut) for (const [f, v] of Object.entries(modOut.files)) { if (v) zip.file(f, v); }
+      else { zip.file(stem + ".i3d", out.i3d); if (out.shapes) zip.file(stem + ".i3d.shapes", out.shapes); }
+      for (const k of ["diffuse", "normal", "specular"] as const) zip.file(names[k], dds[k]);
+      if (modOut) {   // the shop picture and the icon, from the view
+        const store = await handle.current?.picture(512), icon = await handle.current?.picture(256);
+        if (store) zip.file("store.dds", encodeDds(store.width, store.height, store.rgba));
+        if (icon) zip.file("icon.dds", encodeDds(icon.width, icon.height, icon.rgba));
+      }
+      blob = await zip.generateAsync({ type: "blob" }); file = (mod ? (name || "prop").replace(/[^\w-]+/g, "_") : stem) + ".zip";
+    } catch (e) { setNote(e instanceof Error ? e.message : "Couldn’t make the file."); return; }
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob); a.download = file;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }
+  /** The prop as an item in My items (buildings can place it): i3d, shapes, the atlas and a preview .obj. Saved again, it replaces the item it was saved as. */
+  async function saveItem() {
+    if (!latest.current && !project) return;
+    setNote(""); setDone("");
+    try {
+      const item = makeItem(latest.current ?? project!.data, { name: name || "prop" });
+      if (!item.layout.fits) { setNote("The textures are too many or too big for one atlas (at most 4096 pixels high). Use fewer textures."); return; }
+      const dds = await atlasPictures(item.layout, item.textures), form = new FormData();
+      form.append("name", name || "Prop");
+      form.append("meta", JSON.stringify(item.meta));
+      for (const [file, data] of item.files) if (data) form.append("files", new Blob([data as BlobPart]), file);
+      for (const k of ["diffuse", "normal", "specular"] as const) form.append("files", new Blob([dds[k] as BlobPart]), item.pictures[k]);
+      // an item saved before is given the new files (it keeps its id, so buildings that placed it keep it); if it is gone, a new one is made
+      const before = ((latest.current ?? project!.data) as BuilderModel).item?.id;
+      let replaced = false;
+      if (before) {
+        try { await api.replaceAsset(before, form); replaced = true; } catch (e) { if (!(e instanceof ApiError && e.status === 404)) throw e; }
+      }
+      if (!replaced) { const a = await api.importAsset(form); handle.current?.setItemId(a.id); }
+      setDone(t(replaced ? "The item in My items is updated." : "Saved in My items."));
+    } catch (e) { setNote(e instanceof Error ? e.message : "Couldn’t save the item."); }
   }
   function keepMine() { version.current = conflictVersion.current; set("dirty"); flush(); }
 
@@ -115,7 +160,10 @@ export default function BuilderPage() {
           onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
         <span className={"status" + (status === "error" || status === "conflict" ? " bad" : "")} role="status">{project ? STATUS_TEXT[status] : ""}</span>
         {note && <span className="status bad" role="alert">{note}</span>}
-        <button type="button" disabled={!project} onClick={download}>Download i3d</button>
+        {done && <span className="status" role="status">{done}</span>}
+        <button type="button" disabled={!project} onClick={() => download(false)}>Download i3d + atlas</button>
+        <button type="button" disabled={!project} onClick={() => download(true)}>Download game mod</button>
+        <button type="button" disabled={!project} onClick={saveItem}>Save as item</button>
       </div>
       {status === "conflict" && (
         <div className="editor-bar" role="alert">

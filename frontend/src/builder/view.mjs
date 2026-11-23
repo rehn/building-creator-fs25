@@ -9,7 +9,18 @@ export function createBuilderView(canvas, {onPick = () => {}} = {}) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xe9ece4);
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x7d8a72, 0.8));
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x7d8a72, 0.4));
+  // something for shiny and metal surfaces to reflect (a sky, a bright horizon, a darker ground): without it metal is black and gloss invisible
+  const sky = document.createElement("canvas"); sky.width = 256; sky.height = 128;
+  const sg = sky.getContext("2d"), grad = sg.createLinearGradient(0, 0, 0, 128);
+  grad.addColorStop(0, "#9ec3ee"); grad.addColorStop(0.45, "#ffffff"); grad.addColorStop(0.55, "#dfe3d8"); grad.addColorStop(1, "#6f7a68");
+  sg.fillStyle = grad; sg.fillRect(0, 0, 256, 128);
+  // a bright sun and a bright window band so a shiny surface shows something sharp to reflect (a smooth gradient alone hardly shows)
+  sg.fillStyle = "#f4f4f0"; sg.beginPath(); sg.arc(150, 34, 6, 0, 2 * Math.PI); sg.fill();
+  sg.fillStyle = "#3a4238"; sg.fillRect(0, 74, 256, 10);
+  const skyTex = new THREE.CanvasTexture(sky); skyTex.mapping = THREE.EquirectangularReflectionMapping;
+  const pmrem = new THREE.PMREMGenerator(renderer), envRT = pmrem.fromEquirectangular(skyTex);
+  scene.environment = envRT.texture; skyTex.dispose(); pmrem.dispose();
   const sun = new THREE.DirectionalLight(0xffffff, 0.7);
   sun.position.set(6, 10, 8); scene.add(sun);
   scene.add(new THREE.GridHelper(40, 40, 0x8a9484, 0xc4cabd));
@@ -38,7 +49,9 @@ export function createBuilderView(canvas, {onPick = () => {}} = {}) {
   }
 
   /** Draws the project (each face in its own colour); the chosen part gets an outline, the chosen face an orange tint. Keeps the camera where it is. */
+  let shown = null;
   function show(model, selectedId, selectedFace = null) {
+    shown = [model, selectedId, selectedFace];
     for (const m of meshes) { m.geometry.dispose(); [].concat(m.material).forEach(x => x.dispose()); }
     group.clear(); meshes = [];
     for (const part of model.parts) {
@@ -54,7 +67,7 @@ export function createBuilderView(canvas, {onPick = () => {}} = {}) {
         if (t < face.length && face[t] === face[start]) continue;
         const row = faceMaterial(model, part, face[start]), map = row && row.texture ? textures.get(row.texture.id) : null;
         geo.addGroup(start * 3, (t - start) * 3, mats.length);
-        mats.push(new THREE.MeshStandardMaterial(map ? {map, roughness: 0.7, metalness: 0.1} : {color: faceColor(model, part, face[start]), roughness: 0.7, metalness: 0.1}));
+        mats.push(new THREE.MeshStandardMaterial({...(map ? {map} : {color: faceColor(model, part, face[start])}), roughness: 1 - (row ? row.smoothness : 0.3), metalness: row ? row.metalness : 0, envMapIntensity: 0.25 + 0.6 * (row ? row.smoothness : 0.3) ** 2}));
         start = t;
       }
       const mesh = new THREE.Mesh(geo, mats);
@@ -138,11 +151,25 @@ export function createBuilderView(canvas, {onPick = () => {}} = {}) {
         return c.toDataURL("image/jpeg", 0.8);
       } catch { return null; }
     },
+    /** A square picture (size px) of the middle of the view, without the selection marks, as pixels {width, height, rgba}: the shop picture and icon of the game mod (made into DDS by the page). */
+    picture: size => new Promise(resolve => {
+      try {
+        const keep = shown; if (keep) show(keep[0], null, null);
+        render();
+        const c = document.createElement("canvas"); c.width = c.height = size;
+        const side = Math.min(canvas.width, canvas.height), x = c.getContext("2d");
+        x.fillStyle = "#e9ece4"; x.fillRect(0, 0, size, size);
+        x.drawImage(canvas, (canvas.width - side) / 2, (canvas.height - side) / 2, side, side, 0, 0, size, size);
+        if (keep) show(keep[0], keep[1], keep[2]);
+        resolve({width: size, height: size, rgba: x.getImageData(0, 0, size, size).data});
+      } catch { resolve(null); }
+    }),
     dispose() {
       canvas.removeEventListener("pointerdown", down); canvas.removeEventListener("pointermove", move); canvas.removeEventListener("pointerup", up);
       canvas.removeEventListener("wheel", wheel); if (ro) ro.disconnect();
       for (const m of meshes) { m.geometry.dispose(); [].concat(m.material).forEach(x => x.dispose()); }
       for (const t of textures.values()) t.dispose();
+      envRT.dispose();
       renderer.dispose();
     },
   };

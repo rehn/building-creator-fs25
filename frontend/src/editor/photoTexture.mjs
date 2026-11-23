@@ -103,18 +103,47 @@ const luma = (f, i) => (0.299 * f[i * 3] + 0.587 * f[i * 3 + 1] + 0.114 * f[i * 
 const byte = v => Math.min(255, Math.max(0, Math.round(v)));
 
 /**
+ * A picture with see-through parts laid over a colour (a logo with no background: the empty pixels are black in the data, so left alone they would be a black box). The
+ * picture itself when it is opaque. background: "#rrggbb", white if it is not one.
+ */
+const backgroundRgb = c => /^#[0-9a-f]{6}$/i.test(c) ? [1, 3, 5].map(k => parseInt(c.slice(k, k + 2), 16)) : [255, 255, 255];
+function overBackground(img, background) {
+  let see = false;
+  for (let i = 3; i < img.rgba.length; i += 4) if (img.rgba[i] < 255) { see = true; break; }
+  if (!see) return img;
+  const bg = backgroundRgb(background);
+  const out = new Uint8ClampedArray(img.rgba.length);
+  for (let i = 0; i < img.rgba.length; i += 4) {
+    const a = img.rgba[i + 3] / 255;
+    for (let c = 0; c < 3; c++) out[i + c] = img.rgba[i + c] * a + bg[c] * (1 - a);
+    out[i + 3] = 255;
+  }
+  return {...img, rgba: out};
+}
+
+/**
  * img: {width, height, rgba}. opts: size (output side, rounded to a power of two, default 1024), crop {x, y, w, h} as fractions of the picture,
  * rotate (degrees, -45 to 45: straighten a photo taken at an angle; positive levels lines that slope down to the right),
  * flatten (0-1: take out the left-to-right shading, so a photo lit from one side repeats without a step),
- * seamless (blend the edges so it repeats), bump (normal map strength, 0 = flat, default 2), meters (the real side of the texture in metres, default 1).
+ * seamless (blend the edges so it repeats), background (a colour for see-through parts, default white), margin (0 to 0.45: the picture is shrunk to leave this share of the square free on every side, in the background colour), bump (normal map strength, 0 = flat, default 2), meters (the real side of the texture in metres, default 1).
  * -> {size, meters, diffuse, normal, specular}: Uint8ClampedArray size * size * 4 each, opaque.
  * Specular channels are an assumption (R shine from brightness, G a fixed level, B 255); check them against the game's own maps.
  */
-export function makePhotoTexture(img, {size = DEFAULT_SIZE, crop, rotate = 0, flatten = 0, seamless = false, bump = 2, meters = 1} = {}) {
+export function makePhotoTexture(img, {size = DEFAULT_SIZE, crop, rotate = 0, flatten = 0, seamless = false, bump = 2, meters = 1, background = "#ffffff", margin = 0} = {}) {
   if (!img || !(img.width > 0) || !(img.height > 0) || !img.rgba || img.rgba.length !== img.width * img.height * 4) throw new Error("That is not a usable picture.");
+  img = overBackground(img, background);
   const n = nearestPow2(size), r = cropRect(img.width, img.height, crop);
   const deg = Number.isFinite(rotate) ? Math.max(-MAX_ROTATE, Math.min(MAX_ROTATE, rotate)) : 0;
-  let f = deg ? resample(turnedWindow(img, r, deg, n), {x0: 0, y0: 0, w: Math.max(1, Math.min(Math.round(Math.max(r.w, r.h)), 2 * n)), h: Math.max(1, Math.min(Math.round(Math.max(r.w, r.h)), 2 * n))}, n) : resample(img, r, n);
+  const edge = Number.isFinite(margin) ? Math.max(0, Math.min(0.45, margin)) : 0;
+  // a margin: the picture shrunk into the middle of the square, the rest the background colour (a sign: the logo with the board round it)
+  const inner = edge > 0 ? Math.max(1, Math.round(n * (1 - 2 * edge))) : n;
+  let f = deg && !edge ? resample(turnedWindow(img, r, deg, n), {x0: 0, y0: 0, w: Math.max(1, Math.min(Math.round(Math.max(r.w, r.h)), 2 * n)), h: Math.max(1, Math.min(Math.round(Math.max(r.w, r.h)), 2 * n))}, n) : resample(img, r, inner);
+  if (edge > 0) {
+    const bg = backgroundRgb(background), g = new Float32Array(n * n * 3), o = Math.floor((n - inner) / 2);
+    for (let i = 0; i < n * n; i++) g.set(bg, i * 3);
+    for (let y = 0; y < inner; y++) g.set(f.subarray(y * inner * 3, (y + 1) * inner * 3), ((y + o) * n + o) * 3);
+    f = g;
+  }
   if (flatten > 0) flattenLight(f, n, Math.min(1, flatten));
   if (seamless) f = makeSeamless(f, n);
   const H = new Float32Array(n * n);

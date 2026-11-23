@@ -11,6 +11,7 @@ const num = (v, d) => { v = +v; return Number.isFinite(v) ? v : d; };
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const round = v => Math.round(v * 1000) / 1000;
 const text = (s, d) => (typeof s === "string" ? s.replace(/[<>"&'\u0000-\u001f]/g, "").trim().slice(0, 60) : "") || d;
+const unit = (v, d) => round(clamp(num(v, d), 0, 1));
 const color = c => (typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c) ? c.toLowerCase() : DEFAULT_COLOR);
 
 /** A part as the model keeps it: known shape, every number in range. id: its place in the list. */
@@ -23,7 +24,7 @@ function cleanPart(raw, id) {
     w: round(clamp(num(raw.w, 1), 0.01, 50)), h: round(clamp(num(raw.h, 1), 0.01, 50)), d: round(clamp(num(raw.d, 1), 0.01, 50)),
     r: round(clamp(num(raw.r, 0.5), 0.01, 25)), seg: Math.round(clamp(num(raw.seg, 16), 6, 64)),
     color: color(raw.color),
-    faces: {},
+    faces: {}, faceRot: {}, collision: raw.collision !== false,
   };
 }
 
@@ -45,21 +46,39 @@ function cleanFaces(shape, raw, materialIds) {
   return out;
 }
 
-/** A row's texture: one of the user's saved textures (a plain id) and the real size of one repeat in metres; null for colour only. */
+/** The quarter turns of faces' textures: {faceId: 90 | 180 | 270}, only for faces the shape has (0 is the same as none). */
+function cleanRot(shape, raw) {
+  const out = {}, has = new Set((shape === "cylinder" ? CYLINDER_FACES : BOX_FACES).map(f => f[0]));
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) for (const [f, d] of Object.entries(raw)) if (has.has(f) && (d === 90 || d === 180 || d === 270)) out[f] = d;
+  return out;
+}
+
+/** A row's texture: one of the user's saved textures (a plain id), the real size of one repeat in metres and fit (the picture once over each whole face, for a logo or a sign: the size is not used); null for colour only. */
 function cleanTexture(t) {
   if (!t || typeof t !== "object" || typeof t.id !== "string" || !/^[a-z0-9]{1,64}$/.test(t.id)) return null;
   const meters = round(num(t.meters, 1));
-  return {id: t.id, meters: meters > 0 ? Math.min(100, meters) : 1};
+  return {id: t.id, meters: meters > 0 ? Math.min(100, meters) : 1, fit: t.fit === true};
 }
 
-/** Material rows: {id, name, color, texture}, ids kept when they are whole numbers and not taken, else the next free; at most MAX_MATERIALS. */
+/** Material rows: {id, name, color, texture, smoothness (0-1, how shiny: the game's specular map red), metalness (0-1)}, ids kept when they are whole numbers and not taken, else the next free; at most MAX_MATERIALS. */
 function cleanMaterials(raw) {
   const rows = (Array.isArray(raw) ? raw : []).filter(m => m && typeof m === "object" && !Array.isArray(m)).slice(0, MAX_MATERIALS), used = new Set(), out = [];
   for (const m of rows) {
     const id = Number.isInteger(m.id) && m.id > 0 && !used.has(m.id) ? m.id : Math.max(0, ...used) + 1;
-    used.add(id); out.push({id, name: text(m.name, `material${id}`), color: color(m.color), texture: cleanTexture(m.texture)});
+    used.add(id); out.push({id, name: text(m.name, `material${id}`), color: color(m.color), texture: cleanTexture(m.texture), smoothness: unit(m.smoothness, 0.3), metalness: unit(m.metalness, 0)});
   }
   return out;
+}
+
+/** The item (in My items) this project was last saved as: {id}, or null. The next "Save as item" replaces that item's files instead of making another. */
+function cleanItem(raw) {
+  return raw && typeof raw === "object" && !Array.isArray(raw) && typeof raw.id === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(raw.id) ? {id: raw.id} : null;
+}
+
+/** The game mod's settings: shop price, daily upkeep (both whole numbers in range) and whether it can be bought and sold. */
+function cleanMod(raw) {
+  const o = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  return {price: Math.round(clamp(num(o.price, 1000), 0, 10000000)), upkeep: Math.round(clamp(num(o.upkeep, 0), 0, 100000)), sellable: o.sellable !== false};
 }
 
 /** The project as it can be kept and built: bad input becomes an empty project, the rest is cleaned (ids 1.. in order, at most MAX_PARTS). */
@@ -67,7 +86,7 @@ export function sanitize(raw) {
   const o = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
   const parts = (Array.isArray(o.parts) ? o.parts : []).filter(p => p && typeof p === "object" && !Array.isArray(p)).slice(0, MAX_PARTS);
   const materials = cleanMaterials(o.materials), ids = new Set(materials.map(m => m.id));
-  return {format: FORMAT, version: VERSION, kind: "prop", materials, parts: parts.map((p, k) => { const c = cleanPart(p, k + 1); c.faces = cleanFaces(c.shape, p.faces, ids); return c; })};
+  return {format: FORMAT, version: VERSION, kind: "prop", mod: cleanMod(o.mod), item: cleanItem(o.item), materials, parts: parts.map((p, k) => { const c = cleanPart(p, k + 1); c.faces = cleanFaces(c.shape, p.faces, ids); c.faceRot = cleanRot(c.shape, p.faceRot); return c; })};
 }
 
 /** The colour a face is drawn in: its material row's if it has one, else the part's own. */
@@ -99,7 +118,14 @@ export function partUv(model, part) {
       top: v => [x(v), -z(v)], bottom: v => [x(v), z(v)],
       side: v => [-Math.round((v >> 1)) / part.seg * 2 * Math.PI * part.r, y(v)],
     }[f];
-    const raw = ids.map(v => per(v)), lo = [0, 1].map(k => Math.min(...raw.map(r => r[k])));
+    const rot = part.faceRot[f] || 0;   // (a quarter turn of the texture on the face: u and v swap, one of them runs the other way)
+    const fit = row.texture.fit;
+    const raw = ids.map(v => per(v)).map(([a, b]) => rot === 90 ? [b, -a] : rot === 180 ? [-a, -b] : rot === 270 ? [-b, a] : [a, b]), lo = [0, 1].map(k => Math.min(...raw.map(r => r[k])));
+    if (fit) {   // the picture once over the face: 0 to 1 each way (turned first, so a turned picture still fills it)
+      const hi = [0, 1].map(k => Math.max(...raw.map(r => r[k])));
+      ids.forEach((v, k) => { uv[v * 2] = hi[0] > lo[0] ? (raw[k][0] - lo[0]) / (hi[0] - lo[0]) : 0; uv[v * 2 + 1] = hi[1] > lo[1] ? (raw[k][1] - lo[1]) / (hi[1] - lo[1]) : 0; });
+      continue;
+    }
     let scale = 1 / row.texture.meters;
     const extent = Math.max(...raw.map(r => Math.max(r[0] - lo[0], r[1] - lo[1])));
     if (extent * scale > MAX_UV) scale = MAX_UV / extent;
@@ -253,5 +279,16 @@ export function setFaceMaterial(model, partId, faceId, materialId) {
     const faces = {...p.faces};
     if (materialId === null) delete faces[faceId]; else faces[faceId] = materialId;
     return {...p, faces};
+  })});
+}
+
+/** The project with the texture on face faceId of part partId turned deg (0, 90, 180 or 270) on the face; anything else changes nothing. */
+export function setFaceRotation(model, partId, faceId, deg) {
+  const m = sanitize(model);
+  return sanitize({...m, parts: m.parts.map(p => {
+    if (p.id !== partId) return p;
+    const faceRot = {...p.faceRot};
+    if (deg === 0) delete faceRot[faceId]; else faceRot[faceId] = deg;
+    return {...p, faceRot};
   })});
 }

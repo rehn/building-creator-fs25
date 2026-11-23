@@ -206,3 +206,39 @@ test("flatten 0, NaN and a missing value change nothing; a plain picture stays p
   const flat = makePhotoTexture(image(64, 64, () => [120, 130, 140]), {size: 64, flatten: 1});
   assert.deepEqual(px(flat.diffuse, 5, 5), [120, 130, 140, 255]);
 });
+
+/* transparent pictures (a logo with no background): laid over a colour, never black */
+test("transparent parts of a picture take the background colour, half transparent ones a mix; the default background is white", () => {
+  const n = 4, rgba = new Uint8ClampedArray(n * n * 4);   // all transparent black, as a canvas gives for a PNG's empty pixels
+  rgba.set([200, 0, 0, 255], 0);                           // one red opaque pixel
+  rgba.set([0, 0, 0, 128], 4);                             // one half transparent black pixel
+  const img = {width: n, height: n, rgba};
+  const white = makePhotoTexture(img, {size: 64, bump: 0}), blue = makePhotoTexture(img, {size: 64, bump: 0, background: "#0000ff"});
+  const px = (t, x, y) => [...t.diffuse.slice((y * 64 + x) * 4, (y * 64 + x) * 4 + 3)];
+  assert.deepEqual(px(white, 40, 40), [255, 255, 255], "empty pixels are white, not black");
+  assert.deepEqual(px(blue, 40, 40), [0, 0, 255]);
+  assert.deepEqual(px(blue, 2, 2), [200, 0, 0], "an opaque pixel is itself");
+  const mix = px(white, 24, 8);
+  assert.ok(mix[0] > 110 && mix[0] < 200 && mix[0] === mix[1] && mix[1] === mix[2], `half transparent black over white is grey: ${mix}`);
+  assert.equal(white.diffuse[3], 255, "the texture is opaque");
+});
+
+test("a bad background colour is white", () => {
+  const img = {width: 2, height: 2, rgba: new Uint8ClampedArray(16)};
+  assert.deepEqual([...makePhotoTexture(img, {size: 64, bump: 0, background: "red"}).diffuse.slice(0, 3)], [255, 255, 255]);
+});
+
+/* a margin round the picture (a sign: the logo with the board's colour round it) */
+test("margin: the picture is shrunk into the middle of the square and the rest is the background colour", () => {
+  const img = {width: 4, height: 4, rgba: new Uint8ClampedArray(64).map((_, i) => i % 4 === 0 ? 255 : i % 4 === 3 ? 255 : 0)};   // opaque red
+  const t = makePhotoTexture(img, {size: 64, bump: 0, margin: 0.25, background: "#0000ff"});
+  const px = (x, y) => [...t.diffuse.slice((y * 64 + x) * 4, (y * 64 + x) * 4 + 3)];
+  assert.deepEqual(px(1, 1), [0, 0, 255], "the corner is the background");
+  assert.deepEqual(px(32, 5), [0, 0, 255], "so is the strip above the picture");
+  assert.deepEqual(px(32, 32), [255, 0, 0], "the middle is the picture");
+  assert.deepEqual(px(18, 18), [255, 0, 0], "the picture starts a quarter in");
+  assert.deepEqual(px(14, 32), [0, 0, 255], "and ends a quarter from the edge");
+  const none = makePhotoTexture(img, {size: 64, bump: 0, margin: 0});
+  assert.deepEqual([...none.diffuse.slice(0, 3)], [255, 0, 0], "no margin: the picture to the edge, as before");
+  assert.deepEqual([...makePhotoTexture(img, {size: 64, bump: 0, margin: 9}).diffuse.slice(0, 3)], [255, 255, 255], "a margin is kept below half the square (a sliver of picture is left)");
+});

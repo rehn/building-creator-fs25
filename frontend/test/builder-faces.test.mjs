@@ -109,7 +109,7 @@ const withTexture = (extra, faces, meters = 1, parts) => sanitize({materials: [{
 
 test("a material row may point at one of the user's textures, with the real size of one repeat in metres", () => {
   const m = withTexture({}, {py: 1}, 2);
-  assert.deepEqual(m.materials[0].texture, {id: TEX, meters: 2});
+  assert.deepEqual(m.materials[0].texture, {id: TEX, meters: 2, fit: false});
   assert.equal(sanitize({materials: [{texture: null}]}).materials[0].texture, null);
   assert.equal(sanitize({materials: [{texture: {id: "../etc/passwd", meters: 1}}]}).materials[0].texture, null, "an id that is not a plain id is refused");
   assert.equal(sanitize({materials: [{texture: {id: TEX, meters: -5}}]}).materials[0].texture.meters, 1, "a bad size falls back to 1 m");
