@@ -16,6 +16,9 @@ import { I3dDoc, tg, prefixNames } from "./i3d.mjs";
 import { mergeContainers } from "./kinds/gameobjects.mjs";
 import { projectGroups, boundsOf, footprint, feetOf, buildingFeet, keepClear } from "./modPlan.mjs";
 import { fenceProblems } from "../lib/modObjects.mjs";
+import { insideNav } from "./kinds/modinside.mjs";
+import { navContourNodes, ccwFence } from "./kinds/pasture.mjs";
+import { KEEP } from "./walkarea.mjs";
 import { exportI3dAtlas, atlasDdsFiles } from "../builder/atlas.mjs";
 import { sanitize as sanitizeProp } from "../builder/model.mjs";
 import { encodeDds } from "./dds.mjs";
@@ -87,8 +90,18 @@ export async function makeModPackage({name, author = "", description = "", posts
   // the frame: a building (a shed's settings) with the mod's game objects, drawing nothing, with the areas of the whole
   const shift = r => ({x0: round(r.x0 - cx), x1: round(r.x1 - cx), z0: round(r.z0 - cz), z1: round(r.z1 - cz)});
   const host = {refs, nodes, doc, xml: mergeContainers(doorXml.join(""), ["animatedObjects"]), rects: [frame], footprints: feet.map(shift), inside: insideInfo, width: round(frame.x1 - frame.x0), depth: round(frame.z1 - frame.z0)};
-  // (the fence is stood off the walls it was put against: modPlan.mjs keepClear)
-  const placed = objects.map(o => ({...o, x: round((o.x || 0) - cx), z: round((o.z || 0) - cz), ...(o.points ? {points: keepClear(o.points, feet).map(([x, z]) => [round(x - cx), round(z - cz)])} : {})}));
+  // The fence is stood 15 cm off the walls it was put against (modPlan.mjs keepClear): the hen type with only a footprint to cut out of the area made a sliver where the fence touched a building (seen in
+  // the game). Where the hens walk inside a building the game makes the area outside as the fence less the walking shape, as in the cow barn, which has its posts on the walls: then the fence stays where it
+  // was put, if the hens can get in with it there (else it is stood off, as without the choice).
+  const feetShifted = feet.map(shift), asPut = pts => pts.map(([x, z]) => [round(x - cx), round(z - cz)]);
+  const keeps = pts => {
+    if (!insideInfo) return false;
+    const fence = ccwFence(asPut(pts).map(([x, z]) => [x, 0, z]));
+    const contour = [...fence, ...navContourNodes(fence, feetShifted).map(([x, z]) => [x, 0, z])];
+    const blockers = feetShifted.map(r => ({center: [(r.x0 + r.x1) / 2, 1, (r.z0 + r.z1) / 2], size: [r.x1 - r.x0, 2, r.z1 - r.z0], keep: KEEP.wall}));
+    return !!insideNav({settings: insideInfo.settings, place: insideInfo.place, contour, blockers}).nav;
+  };
+  const placed = objects.map(o => ({...o, x: round((o.x || 0) - cx), z: round((o.z || 0) - cz), ...(o.points ? {points: keeps(o.points) ? asPut(o.points) : asPut(keepClear(o.points, feet))} : {})}));
   const p0 = sanitize({kind: "modframe", objects: placed, hens, modDescription: description});
   for (const [file, data] of Object.entries(i3dFiles(p0, {host}))) files.set(file, typeof data === "string" ? latin1(data) : data);
   const icon = (pictures && pictures.icon) || plain(256, [155, 42, 31]), store = (pictures && pictures.store) || plain(512, [155, 42, 31]);
@@ -106,8 +119,8 @@ export async function makeModPackage({name, author = "", description = "", posts
   const why = insideInfo && host.insideResult && !host.insideResult.nav ? host.insideResult.reason : null;
   if (why) warnings.push({
     turned: `“${insideInfo.name}” is turned at an angle that is not a quarter turn, so the hens cannot walk inside it: turn it a quarter, or take the choice off.`,
-    "no-door": `“${insideInfo.name}” has no open framed doorway on its ground floor (door style “Open doorway, framed”), so the hens stay outside it.`,
-    "no-entrance-faces-fence": `No open doorway of “${insideInfo.name}” faces the hens' fence, so the hens stay outside it: put the fence on the side of the doorway.`,
+    "no-door": `“${insideInfo.name}” has no open framed doorway on its ground floor (door style “Open doorway, framed”) and no open side, so the hens stay outside it.`,
+    "no-entrance-faces-fence": `No open doorway or open side of “${insideInfo.name}” faces the hens' fence, so the hens stay outside it: put the fence on the side of the way in.`,
     "no-fence": `The hens cannot walk inside “${insideInfo.name}”: the fence is too small.`,
   }[why] || `The hens cannot walk inside “${insideInfo.name}”.`);
   if (!live.length) warnings.push("The mod holds no buildings or props yet.");

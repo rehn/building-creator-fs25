@@ -354,7 +354,7 @@ export default function ModPage() {
                 </label>
               )}
               {post.kind === "building" && !post.missing && objects.some(o => o.type === "pasture") && (
-                <label className="check" title={t("Gives the building a floor the hens can walk on, and a ramp through each open framed doorway (door style Open doorway, framed) that faces the fence, as in the game's own hen barns. One building in a mod. The doorway has to be on the side of the fence.")}>
+                <label className="check" title={t("Gives the building a floor the hens can walk on, and a ramp through each open framed doorway (door style Open doorway, framed) or open side (a carport) that faces the fence, as in the game's own hen barns. One building in a mod. The way in has to be on the side of the fence.")}>
                   <input type="checkbox" checked={insideId === post.id} onChange={e => save({ inside: e.target.checked ? post.id : null })} disabled={busy} /> {t("The hens walk inside this building")}
                 </label>
               )}
