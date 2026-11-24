@@ -2876,7 +2876,7 @@ export function sleepPoint(geo, p = {}) {
   };
   const trigger = piece ? {center: [o.x, dims.F + (o.y || 0) + o.h / 2, o.z], size: [o.w, o.h, o.d]} : boxOf(o), marker = [o.x + o.ix, dims.F + (o.y || 0), o.z + o.iz];
   // The spawn point: out past the far side of the cleared area, then one metre more.
-  const {clear} = placementAreas(geo);
+  const {clear} = placementAreas(geo, geo.hostRects || []);
   const reach = Math.max(...[[clear.x0, clear.z0], [clear.x1, clear.z0], [clear.x0, clear.z1], [clear.x1, clear.z1]]
     .map(([x, z]) => (x - c[0]) * n[0] + (z - c[2]) * n[2]));
   const target = [0, dims.ridgeY * 0.45, 0];
@@ -2967,20 +2967,23 @@ function doorTrigger(geo, wall, o) {
 /**
  * Everything the export writes, built once: the i3d document and scene tree, and the placeable XML
  * blocks that name its nodes. The i3dMappings are looked up in the scene by name, so they always match.
+ * host (a mod: its things are in files of their own and the building is only its frame): {refs: [{name, translation, rotation, file}] (what the mod holds, each a ReferenceNode to the i3d `file`),
+ * rects (ground the mod covers, {x0, x1, z0, z1}), width, depth (of all of it)}: nothing is drawn or collides here, the areas cover the rects and the shared game objects (a sleep point ...) are as usual.
  * Scene: house > clear/level/test/tipOcclusion areas, visuals, collisions (like the base game's
  * garden sheds), then a walk-in building's doors, the kind's own nodes and the indoor area.
  */
-function exportParts(p, {withTex = false, scenery = false} = {}) {
+function exportParts(p, {withTex = false, scenery = false, host = null} = {}) {
   p = normalize(p);
   const kind = kindOf(p), geo = buildGeometry(p), {G} = geo, doc = new I3dDoc();
+  if (host) { geo.dims = {...geo.dims, W: host.width, D: host.depth}; geo.hostRects = host.rects; }
   // A walk-in building's door leaves move, so what they carry (door, trim, glass, ironwork) comes
   // out of the building's own parts and goes on the leaves.
-  const doors = kind.walkIn && !scenery ? geo.doors : [];   // (scenery: doors stay shut and are part of the walls)
+  const doors = kind.walkIn && !scenery && !host ? geo.doors : [];   // (scenery: doors stay shut and are part of the walls)
   const moving = {};
   for (const d of doors) for (const leaf of d.leaves) for (const [m, r] of Object.entries(leaf.parts)) (moving[m] = moving[m] || []).push(r);
   // One part per material, except curtains and fittings: one per color (i3d materials have one color).
   const parts = [];
-  for (const m of matList(p)) {
+  for (const m of host ? [] : matList(p)) {
     if (scenery && !sceneryKeeps(m)) continue;
     const g = moving[m] ? exceptRanges(G[m], moving[m]) : G[m];
     if (!g.i.length) continue;
@@ -3001,7 +3004,7 @@ function exportParts(p, {withTex = false, scenery = false} = {}) {
   const lod = !scenery && p.lodDistance > 0 && far.length < visuals.length;
   const visualNodes = lod ? [tg("visuals_lod", [0, 0, 0], [tg("LOD0", [0, 0, 0], visuals), tg("LOD1", [0, 0, 0], far)], {lodDistance: `0 ${num(p.lodDistance)}`})] : visuals;
   const cm = doc.material("collision_mat", {diffuseColor: "1 0 1 1"});
-  const collision = scenery ? null : shape("collision", {shapeId: doc.shape("collision", geo.collision, {cpu: true}), static: true, collisionFilterGroup: "0x3e",
+  const collision = scenery || host ? null : shape("collision", {shapeId: doc.shape("collision", geo.collision, {cpu: true}), static: true, collisionFilterGroup: "0x3e",
     collisionFilterMask: "0xfffffbff", nonRenderable: true, castsShadows: false, receiveShadows: false, materialIds: cm});
   if (scenery) {
     // the outside shell and a solid collision: nothing that only means something with the placeable XML (areas, triggers, the kind's own nodes)
@@ -3016,7 +3019,7 @@ function exportParts(p, {withTex = false, scenery = false} = {}) {
     nonRenderable: true, castsShadows: false, receiveShadows: false, materialIds: cm}, children);
   const trigger = (group, mask) => ({static: true, trigger: true, collisionFilterGroup: group, collisionFilterMask: mask});
   const ctx = {p, kind, geo, doc, box, trigger, sleepPoint};
-  const kindScene = kind.scene ? kind.scene(ctx) : {nodes: [], xml: "", areas: []}, shared = sharedScene(ctx);
+  const kindScene = kind.scene && !host ? kind.scene(ctx) : {nodes: [], xml: "", areas: []}, shared = sharedScene(ctx);
   // (the kind's own nodes, then those of the objects every kind can have: a sleep point, a workshop)
   const own = {nodes: [...kindScene.nodes, ...shared.nodes], xml: mergeContainers(kindScene.xml + shared.xml), areas: [...kindScene.areas, ...shared.areas]};
 
@@ -3071,13 +3074,13 @@ ${lv.map((leaf, j) => `                <part node="door${i + 1}Leaf${ks[j] + 1}"
   const corner = (group, k, min, max) => tg(group, [0, 0, 0], [tg(`${k}Start01`, min, [tg(`${k}End01`, max.map((v, i) => v - min[i]))])]);
   // Imported items: their own i3d, in items/<name>_<id>/ next to this one, loaded where they're placed.
   const counts = {};
-  const refNodes = geo.refs.map(r => {
+  const refNodes = host ? host.refs.map(r => refNode(r.name, {translation: r.translation, rotation: r.rotation, referenceId: doc.file(r.file)})) : geo.refs.map(r => {
     const folder = assetFolder(r.asset), stem = folder.slice(6).replace(/_.*$/, "");
     counts[stem] = (counts[stem] || 0) + 1;
     return refNode(stem + String(counts[stem]).padStart(2, "0"), {translation: r.translation, rotation: [0, r.rotY, 0],
       referenceId: doc.file(`${folder}/${r.asset.meta.i3d}`)});
   });
-  const A = placementAreas(geo, [...own.areas, ...decorRects(p, id => ASSETS.find(q => q.id === id) || null)]), t = A.test, {W, D} = geo.dims;
+  const A = placementAreas(geo, [...own.areas, ...decorRects(p, id => ASSETS.find(q => q.id === id) || null), ...(host ? host.rects : [])]), t = A.test, {W, D} = geo.dims;
   const indoor = kind.walkIn || !!objectOf(p, "sleep");
   const root = tg("house", [0, 0, 0], [
     rect("clear", A.clear),
@@ -3085,7 +3088,7 @@ ${lv.map((leaf, j) => `                <part node="door${i + 1}Leaf${ks[j] + 1}"
     corner("testAreas", "testArea", t.min, t.max),
     corner("tipOcclusionUpdateAreas", "tipOcclusionUpdateArea", [t.min[0], 0, t.min[2]], [t.max[0], 0, t.max[2]]),
     tg("visuals", [0, 0, 0], visualNodes),
-    tg("collisions", [0, 0, 0], [collision]),
+    tg("collisions", [0, 0, 0], collision ? [collision] : []),
     ...doorNodes,
     ...own.nodes,
     ...(indoor ? [rect("indoor", {x0: -W / 2, x1: W / 2, z0: -D / 2, z1: D / 2})] : []),
@@ -3251,8 +3254,8 @@ ${t.specializations.map(s => `            <specialization name="${s}"/>`).join("
  * The placeable (store item) XML for the mod: shop data and the same blocks as placeableSnippet. The game reads the shop picture and the i3d
  * relative to the mod's root, not to the XML: in a mod of several buildings each is in a folder, so dir ("farmhouse/") goes in front of them.
  */
-export function placeableXml(p, name, {dir = "", image = true, mod = modName(name)} = {}) {
-  const {kind, blocks, p: q} = exportParts(p), {type, fn, shop, sellable = true} = placeableFor(q, kind, mod);
+export function placeableXml(p, name, {dir = "", image = true, mod = modName(name), host = null} = {}) {
+  const {kind, blocks, p: q} = exportParts(p, host ? {host} : undefined), {type, fn, shop, sellable = true} = placeableFor(q, kind, mod);
   return `<?xml version="1.0" encoding="utf-8" standalone="no" ?>
 <placeable type="${type}">
     <!-- Generated by House to i3d. -->
