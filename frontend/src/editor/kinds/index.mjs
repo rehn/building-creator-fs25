@@ -10,6 +10,7 @@
 //   defaults, sections    its own settings and the editor sections for them (shown first)
 //   lists                 optional: settings that are lists of names, {key: {options: [valid names in order], start: [names a new one has]}} (the warehouse's goods)
 //   hides                 titles of shared editor sections it doesn't use
+//   handles               optional: object types (objects.mjs) it uses for its own thing, so the shared export of gameobjects.mjs leaves them alone (the warehouse's counter)
 //   normalize(p)          the settings as this kind uses them (applied when loading and exporting)
 //   placeable(p, {mod})   FS25 placeable type, shop function and shop category (mod: the mod's name, for a type the mod defines itself)
 //   modTypes              optional: placeable types the mod's modDesc.xml defines [{name, parent, specializations}]

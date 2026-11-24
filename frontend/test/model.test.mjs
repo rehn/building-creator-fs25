@@ -36,7 +36,7 @@ test("schema: every section is in a tab, in the order of what you do", () => {
   assert.deepEqual(SCHEMA.filter(g => g.detail).map(g => g.title), ["Open sides", "Silos", "Pumps", "Size", "Roof", "Kupor (dormers)", "Surfaces", "Inside walls"]);
   assert.deepEqual(inTab("inside"), ["Inside"]);
   assert.deepEqual(inTab("settings"), ["Windows", "Doors", "Colors", "Interior"], "what the whole building has unless something says otherwise");
-  assert.deepEqual(inTab("game"), ["Chickens", "Cows", "Sheep", "Vehicles for sale", "Map shop", "Prices and pallets", "Goods", "What it buys", "Fuel", "Game mod"], "the game objects are in the tree");
+  assert.deepEqual(inTab("game"), ["Chickens", "Cows", "Sheep", "Map shop", "Prices and pallets", "Goods", "What it buys", "Fuel", "Vehicles for sale", "Game mod"], "the game objects are in the tree");
   // the names shown say what the section is for
   const label = t => { const g = SCHEMA.find(x => x.title === t); return g.label || g.title; };
   assert.deepEqual(["Inside", "Interior", "Inside walls", "Game mod"].map(label), ["Furniture and pieces", "Rooms and curtains", "Inside walls", "Shop and mod"]);

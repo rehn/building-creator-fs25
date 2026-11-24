@@ -7,6 +7,7 @@ import { tg, camera } from "../i3d.mjs";
 import { wallsOf, openingSpan } from "../layout.mjs";
 import { placeOnWall } from "../places.mjs";
 import { objectOf, boxOf, iconOf, boxFrom } from "../objects.mjs";
+import { shopScene, shopDefaults } from "./vehicleshop.mjs";
 
 /** The specializations each of the game's placeable types has of its own on top of simplePlaceable (sdk/xmlDoku/placeableTypes.xml). */
 const GAME_TYPES = {
@@ -84,21 +85,30 @@ function workshopDefaults(p) {
 }
 
 /**
- * The shared objects, in the order their nodes are written. has(p): the building has it; scene(c): its nodes and XML; defaults(p): where a new one goes;
- * gameType: the game's placeable type that has what it needs, with specializations (the ones that type adds to simplePlaceable); fn: the shop function.
+ * The shared objects, in the order their nodes are written. types: the object types it owns (objects.mjs SHARED_GROUPS has the same lists); has(p): the building has it;
+ * scene(c): its nodes and XML; defaults(p): where new ones go; gameType: the game's placeable type that has what it needs (null: the game has none, the mod defines one),
+ * with its specializations (the ones that type adds to simplePlaceable); fn: the shop function. A kind that uses the same object types for its own thing says so in
+ * kind.handles, and the shared export leaves it alone.
  */
 export const SHARED = {
-  sleep: {has: p => !!objectOf(p, "sleep") || (p.items || []).some(it => it.type === "sleeppoint"), scene: sleepScene, defaults: sleepDefaults,
+  sleep: {types: ["sleep"], has: p => !!objectOf(p, "sleep") || (p.items || []).some(it => it.type === "sleeppoint"), scene: sleepScene, defaults: sleepDefaults,
     gameType: "farmhouse", specializations: GAME_TYPES.farmhouse, fn: "$l10n_function_farmHouse", name: "SleepPoint",
     note: `Sleep point: use <placeable type="farmhouse" ...> so the player can sleep here, as in the base game's farmhouses.`},
-  workshop: {has: p => !!objectOf(p, "workshop"), scene: workshopScene, defaults: workshopDefaults,
+  workshop: {types: ["workshop"], has: p => !!objectOf(p, "workshop"), scene: workshopScene, defaults: workshopDefaults,
     gameType: "garageWorkshopSolarPanels", specializations: GAME_TYPES.garageWorkshopSolarPanels, fn: "$l10n_function_workshop", name: "Workshop",
     note: `Vehicle workshop: use <placeable type="garageWorkshopSolarPanels" ...>, as in the base game's garages with a workshop.`},
+  // a shop counter and a delivery place: the player buys vehicles (kinds/vehicleshop.mjs); the game has no type for it, so the mod defines one
+  vehicleshop: {types: ["counter", "spawn"], has: p => !!objectOf(p, "counter") && !!objectOf(p, "spawn"), scene: shopScene, defaults: shopDefaults,
+    gameType: null, specializations: ["vehicleBuyingStation"], fn: null, name: "VehicleShop",
+    note: `Vehicle shop: add the placeable type to your modDesc.xml (<placeableTypes>, parent simplePlaceable, specialization vehicleBuyingStation).`},
 };
-/** The shared object types the building has. */
-export const sharedOf = p => Object.keys(SHARED).filter(t => SHARED[t].has(p));
+/** The shared objects (ids) the building has, except those its kind uses the object types of for its own (kind.handles). */
+export const sharedOf = (p, kind = null) => Object.keys(SHARED).filter(id => !(kind && (kind.handles || []).some(t => SHARED[id].types.includes(t))) && SHARED[id].has(p));
 /** Where a new shared object of a type goes (a list with one box, or none). */
-export const sharedDefaults = (p, type) => (SHARED[type] ? SHARED[type].defaults(p) : []);
+export const sharedDefaults = (p, type) => {
+  const id = Object.keys(SHARED).find(k => SHARED[k].types.includes(type));
+  return id ? SHARED[id].defaults(p).filter(o => o.type === type) : [];
+};
 
 /**
  * One <triggerMarkers> and one <hotspots> in the placeable XML: the game reads only the first of each, so the ones that several objects (or a kind and an object) each write
@@ -118,7 +128,7 @@ export function mergeContainers(xml, tags = ["triggerMarkers", "hotspots"]) {
 /** The nodes and XML of the shared objects the building has, merged. c: the export context. */
 export function sharedScene(c) {
   const out = {nodes: [], xml: "", areas: []};
-  for (const t of sharedOf(c.p)) { const s = SHARED[t].scene(c); out.nodes.push(...s.nodes); out.xml += s.xml; out.areas.push(...s.areas); }
+  for (const t of sharedOf(c.p, c.kind)) { const s = SHARED[t].scene(c); out.nodes.push(...s.nodes); out.xml += s.xml; out.areas.push(...s.areas); }
   return out;
 }
 
@@ -128,12 +138,13 @@ export function sharedScene(c) {
  * type for it; otherwise the type is the mod's (`<mod>.<name>`), built on the kind's type with the specializations it does not have.
  * mod: the mod's name (the game puts it in front of a type the mod defines); left out, the type is named without it (the snippet).
  */
-export function sharedPlaceable(p, base, mod = "") {
-  const has = sharedOf(p);
+export function sharedPlaceable(p, base, mod = "", kind = null) {
+  const has = sharedOf(p, kind);
   if (!has.length) return {...base, modType: null};
-  const fns = [...new Set([].concat(base.fn).filter(f => f !== "$l10n_function_decoration").concat(has.map(t => SHARED[t].fn)))];
+  const fns = [...new Set([].concat(base.fn).filter(f => f !== "$l10n_function_decoration").concat(has.map(t => SHARED[t].fn)).filter(Boolean))];
+  if (!fns.length) fns.push("$l10n_function_decoration");
   const notes = [base.note, ...has.map(t => SHARED[t].note)].filter(Boolean);
-  if (has.length === 1 && base.type === "simplePlaceable") return {...base, type: SHARED[has[0]].gameType, fn: fns, note: SHARED[has[0]].note, modType: null};
+  if (has.length === 1 && base.type === "simplePlaceable" && SHARED[has[0]].gameType) return {...base, type: SHARED[has[0]].gameType, fn: fns, note: SHARED[has[0]].note, modType: null};
   const local = base.type.split(".").pop();   // (a type the kind defines for the mod is `<mod>.<name>`)
   const have = new Set(GAME_TYPES[base.type] || []);
   const specializations = [...new Set(has.flatMap(t => SHARED[t].specializations))].filter(s => !have.has(s));

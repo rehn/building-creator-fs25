@@ -110,7 +110,9 @@ export default {
       {k: "shopBuyable", label: "Can be bought in the shop (to try it out; the game's own is placed by a map)", type: "check"}]},
     {title: "Goods", tab: "game", custom: "filltypes", hint: "What the player can buy here (pallets) and what the shop buys from the player. Choose from the lists.", fields: []},
   ],
-  hides: ["Interior", "Kupor (dormers)"],
+  hides: ["Interior", "Kupor (dormers)", "Vehicles for sale"],
+  // (its counter is for pallets, not the vehicle shop of gameobjects.mjs)
+  handles: ["counter"],
   normalize: p => ({...p, interior: false, dormers: []}),
   /** The game's warehouse type; not for sale unless shopBuyable. */
   placeable: p => ({type: "warehouse", fn: "$l10n_function_decoration", sellable: p.shopBuyable === true, shop: {category: "placeableMisc", type: "placeable", brush: "buildings", tab: "sheds"},

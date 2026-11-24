@@ -64,17 +64,20 @@ const round = v => +v.toFixed(3);
 const snap = v => Math.round(v / GRID) * GRID;
 
 /** The object types every kind of building can have, besides its own (kinds/gameobjects.mjs has their export; a test keeps the two lists equal). */
-export const SHARED_TYPES = ["sleep", "workshop"];
+// (a group is the object types that go together: a shop counter needs its delivery place)
+export const SHARED_GROUPS = {sleep: ["sleep"], workshop: ["workshop"], vehicleshop: ["counter", "spawn"]};
+/** Whether the kind uses a group's object types for its own thing (kind.handles: the warehouse's and the map shop's counters), so the shared export leaves them alone. */
+const handled = (kind, types) => (kind.handles || []).some(t => types.includes(t));
 /** The kind's objects spec, or one with nothing. */
 const specOf = kind => kind.objects || {types: [], required: [], defaults: () => []};
 /** The types a building of this kind can have: the kind's own and the shared ones. */
-export const allowedTypes = kind => [...new Set([...specOf(kind).types, ...SHARED_TYPES])];
+export const allowedTypes = kind => [...new Set([...specOf(kind).types, ...Object.values(SHARED_GROUPS).filter(ts => !handled(kind, ts)).flat()])];
 
 /**
  * The objects as the building can have them: known types its kind takes, one of each, numbers in range;
  * any it must have and doesn't get the kind's default. p: the building's settings (for its walls).
  */
-export function cleanObjects(list, kind, p) {
+export function cleanObjects(list, kind, p, sharedDefaults = null) {
   const spec = specOf(kind), allowed = allowedTypes(kind), out = [], seen = new Set();
   let id = 0;
   for (const o of Array.isArray(list) ? list : []) {
@@ -88,6 +91,11 @@ export function cleanObjects(list, kind, p) {
   if (missing.length) {
     const defs = spec.defaults(p);
     for (const t of missing) { const d = defs.find(x => x.type === t); if (d) out.push({...(t === "pasture" ? cleanPasture(d, spec.pasture, p) : cleanBox(d)), id: ++id}); }
+  }
+  // objects that go together (a shop counter and its delivery place): the one that is missing is added where it goes to start with
+  if (sharedDefaults) for (const types of Object.values(SHARED_GROUPS)) {
+    if (handled(kind, types) || !types.some(t => out.some(o => o.type === t))) continue;
+    for (const t of types) if (!out.some(o => o.type === t)) { const d = sharedDefaults(p, t)[0]; if (d) out.push({...cleanBox(d), id: ++id}); }
   }
   return out;
 }

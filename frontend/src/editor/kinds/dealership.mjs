@@ -5,83 +5,18 @@
 // The base game has no placeable of this kind, so the mod defines its own placeable type (modDesc <placeableTypes>, see modTypes) with the
 // game's "vehicleBuyingStation" specialization; this is not yet tried in the game.
 // Imports only the i3d writer; the core hands in what it needs (see kinds/index.mjs).
-import { tg } from "../i3d.mjs";
 import { shopFor } from "./shop.mjs";
 const SHEDS = {category: "sheds", type: "placeable", brush: "buildings", tab: "sheds"};   // (the shop place of the kind: shop.mjs lets the player choose another)
-import { objectOf, boxOf, iconOf } from "../objects.mjs";
 import { tone } from "./props.mjs";
 import { INNER_WALL } from "./innerwall.mjs";
-import VEHICLES from "../vehicles.mjs";
-
-/** The groups of vehicles a dealership can sell: the setting that switches it on, its name, and which of the game's store categories are in it. */
-export const DEALER_GROUPS = [
-  {key: "sellTractors", name: "Tractors", test: /^tractors/},
-  {key: "sellLoaders", name: "Loaders and telehandlers", test: /^(frontLoader|teleLoader|wheelLoader|skidSteer|forklift)/},
-  {key: "sellHarvesters", name: "Harvesters and headers", test: /(Harvest|harvest|^cutters|^cutterTrailers|Headers|^potatoHarvesting)/},
-  {key: "sellSoil", name: "Soil work (ploughs, cultivators, harrows)", test: /^(cultivators|discHarrows|plows|powerHarrows|subsoilers|rollers|stonePickers|spaders|leveler)$/},
-  {key: "sellSowing", name: "Seeders and planters", test: /^(seeders|seedTanks|planters|potatoPlanting|vegetablePlanters|ricePlanters|sugarcanePlanters)$/},
-  {key: "sellSpreading", name: "Spreaders and sprayers", test: /^(fertilizerSpreaders|manureSpreaders|slurry|sprayers|weeders)/},
-  {key: "sellHay", name: "Mowers, balers and hay", test: /^(balers|baleWrappers|baleLoaders|balingMisc|mowers|tedders|windrowers|strawBlowers|loaderWagons|mulchers|grasslandCare)/},
-  {key: "sellTransport", name: "Trailers and trucks", test: /^(trailers|lowloaders|trucks|animalTransport|augerWagons|forageMixers|cottonTransport|sugarcaneTransport|beetLoading|woodTransport|barrels|grapeTrailers)/},
-  {key: "sellForestry", name: "Forestry", test: /^(forestry|woodChippers)/},
-  {key: "sellOther", name: "Everything else (cars, weights, tools)", test: () => true},
-];
-const groupOf = cat => DEALER_GROUPS.find((g, i) => i < DEALER_GROUPS.length - 1 && g.test.test(cat)) || DEALER_GROUPS[DEALER_GROUPS.length - 1];
-/** Vehicles [path, name, brand, category, price] of the groups switched on in p (the tractors if none are). */
-export function vehiclesFor(p) {
-  const on = DEALER_GROUPS.filter(g => p[g.key]), keys = new Set((on.length ? on : [DEALER_GROUPS[0]]).map(g => g.key));
-  return VEHICLES.filter(v => keys.has(groupOf(v[3]).key));
-}
+import { DEALER_GROUPS, vehiclesFor, shopDefaults } from "./vehicleshop.mjs";
+export { DEALER_GROUPS, vehiclesFor };
+export const defaultObjects = shopDefaults;
 
 const COL = {floor: "#B9B7B0", wood: "#9C7448", dark: "#3C3F42", steel: "#6C7378", red: "#B8382C", paper: "#E9E4D8", green: "#2F8F6F"};
 
 /** The floor: smooth concrete, as a showroom has. */
 export function furnish(c) { c.floor(COL.floor, "concrete"); }
-
-/** Counter just inside the front wall in the middle, and the spawn area on open ground in front of it. (The default dealer has the same.) */
-export function defaultObjects(p) {
-  const W = +p.width, D = +p.depth, F = +p.foundation, H = Math.min(3, Math.max(2.2, +p.floorHeight));
-  return [
-    {type: "counter", x: 0, z: D / 2 - 2, w: 2, d: 1.4, h: F + H, ix: 0, iz: 0},
-    {type: "spawn", x: 0, z: D / 2 + 5, w: Math.min(16, W + 4), d: 5, h: 3.5, ix: 0, iz: 0},
-  ];
-}
-
-/**
- * Scene: the counter's trigger and the shopping icon, the spawn line (start node with the end node as its child) and the vehicle buying
- * station XML with the vehicles for sale.
- */
-function scene(c) {
-  const {p} = c, counter = objectOf(p, "counter"), spawn = objectOf(p, "spawn");
-  if (!counter || !spawn) return {nodes: [], xml: "", areas: []};
-  const [ix, , iz] = iconOf(counter), alongX = spawn.w >= spawn.d, len = alongX ? spawn.w : spawn.d, wid = alongX ? spawn.d : spawn.w;
-  const a = alongX ? [spawn.x - len / 2, 0, spawn.z] : [spawn.x, 0, spawn.z - len / 2], d = alongX ? [len, 0, 0] : [0, 0, len];
-  const nodes = [
-    tg("shop", [0, 0, 0], [c.box("shopTrigger", boxOf(counter), c.trigger("0x20000000", "0x100000")), tg("markerShop", [ix, p.foundation, iz])]),
-    tg("vehicleSpawnStart01", a, [tg("vehicleSpawnEnd01", d)]),
-  ];
-  const factor = (+p.sellPrice || 100) / 100, esc = s => String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;");
-  const items = vehiclesFor(p).map(v => `        <storeItem xmlFilename="${esc(v[0])}" price="${Math.round(v[4] * factor)}" transportCosts="${Math.round(+p.sellDelivery || 0)}"/>`).join("\n");
-  const xml = `
-    <triggerMarkers>
-        <triggerMarker node="markerShop" filename="$data/shared/assets/marker/markerIconShopping.i3d"/>
-    </triggerMarkers>
-
-    <hotspots>
-        <hotspot type="SHOP" linkNode="shopTrigger" teleportNode="shopTrigger"/>
-    </hotspots>
-
-    <!-- The vehicles for sale: ${vehiclesFor(p).length} from the base game. They appear on the spawn line (vehicleSpawnStart01 to vehicleSpawnEnd01). -->
-    <vehicleBuyingStation>
-        <trigger node="shopTrigger"/>
-        <spawnPlaces>
-            <spawnPlace startNode="vehicleSpawnStart01" endNode="vehicleSpawnEnd01" width="${wid.toFixed(2)}" maxWidth="${wid.toFixed(2)}" maxLength="${Math.min(len, 14).toFixed(2)}" maxHeight="${spawn.h.toFixed(2)}"/>
-        </spawnPlaces>
-${items}
-    </vehicleBuyingStation>
-`;
-  return {nodes, xml, areas: []};
-}
 
 /* ---------- Pieces ---------- */
 export const CATALOG = {
@@ -129,7 +64,6 @@ for (const [k, g] of Object.entries({innerwall: "Walls and doors", salesdesk: "S
 /** The showroom is left empty to start with: the player adds a desk, podiums and brochure stands. */
 export function autoFurnish() { return {style: "shed", items: []}; }
 
-const sellField = g => ({k: g.key, label: g.name, type: "check"});
 const paint = {wallCladding: "lockpanel", wallColor: "#C9C4B6", trimColor: "#3B3F42"};
 export default {
   id: "dealership",
@@ -137,27 +71,18 @@ export default {
   plural: "Dealerships",
   category: "shops",
   walkIn: true,
-  defaults: {ceiling: false, insideSame: true, winStyle: "single", doorStyle: "sliding", sellPrice: 100, sellDelivery: 0,
-    ...Object.fromEntries(DEALER_GROUPS.map(g => [g.key, ["sellTractors", "sellLoaders", "sellTransport"].includes(g.key)]))},
-  sections: [
-    {title: "Vehicles for sale", tab: "game", hint: "What the shop counter sells: pick the groups of the base game's vehicles. The player walks into the counter (under Game objects) to open the shop; a bought vehicle appears in the spawn area outside. With no group ticked it sells tractors.", fields: [
-      ...DEALER_GROUPS.map(sellField),
-      {k: "sellPrice", label: "Prices, per cent of the game's own", min: 50, max: 200, step: 5, unit: " %"},
-      {k: "sellDelivery", label: "Delivery fee", min: 0, max: 20000, step: 500, unit: " $"}]},
-  ],
+  // (the vehicle settings are every building's: sellTractors ..., in the Vehicles for sale section; a dealership starts by selling tractors, loaders and trucks)
+  defaults: {ceiling: false, insideSame: true, winStyle: "single", doorStyle: "sliding", sellTractors: true, sellLoaders: true, sellTransport: true},
+  sections: [],
   hides: ["Interior", "Kupor (dormers)"],
   /** Settings as this kind uses them: no sleep point, rooms or dormers. */
   normalize: p => ({...p, interior: false, dormers: []}),
-  /** The placeable type is the mod's own (modTypes): its name is the mod's name, a dot and the type's name. */
-  placeable: (p, {mod = "FS25_Dealership"} = {}) => ({type: `${mod}.dealership`, fn: "$l10n_function_decoration", shop: shopFor(p, SHEDS),
-    note: `Vehicle dealership: add the placeable type to your modDesc.xml (<placeableTypes>, parent simplePlaceable, specialization vehicleBuyingStation).`}),
-  /** Placeable types the mod's modDesc.xml must define: {name, parent, specializations}. */
-  modTypes: [{name: "dealership", parent: "simplePlaceable", specializations: ["vehicleBuyingStation"]}],
+  // (the vehicle buying station and the type that has it: kinds/vehicleshop.mjs and gameobjects.mjs, as for any building with a shop counter)
+  placeable: p => ({type: "simplePlaceable", fn: "$l10n_function_decoration", shop: shopFor(p, SHEDS)}),
   description: p => `A ${(+p.width).toFixed(1)} x ${(+p.depth).toFixed(1)} m dealership made with House to i3d. Buy ${vehiclesFor(p).length} vehicles at the counter.`,
   furnish,
   catalog: CATALOG,
   autoFurnish,
-  scene,
   // the game objects: the counter and the spawn area are both needed
   objects: {types: ["counter", "spawn"], required: ["counter", "spawn"], defaults: defaultObjects},
   presets: [

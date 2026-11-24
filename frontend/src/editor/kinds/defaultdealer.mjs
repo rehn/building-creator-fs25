@@ -55,7 +55,9 @@ export default {
       {k: "deliveryHeight", label: "Delivery place: height above the ground (vehicles drop onto the ground from there)", min: 0, max: 2, step: 0.05, unit: " m"},
       {k: "shopBuyable", label: "Can be bought and sold in the shop (for trying it out)", type: "check"}]},
   ],
-  hides: ["Interior", "Kupor (dormers)"],
+  hides: ["Interior", "Kupor (dormers)", "Vehicles for sale"],
+  // (its counter and delivery place are the map's shop nodes, not the vehicle shop of gameobjects.mjs)
+  handles: ["counter", "spawn"],
   /** Settings as this kind uses them: no sleep point, rooms or dormers. */
   normalize: p => ({...p, interior: false, dormers: []}),
   /** An ordinary placeable; sellable: false leaves it out of the shop and makes it unsellable (for a map that places it). */
