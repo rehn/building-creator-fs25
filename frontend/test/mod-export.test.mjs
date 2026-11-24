@@ -21,6 +21,8 @@ test("a mod is one placeable: a modDesc, one placeable XML, one frame i3d, and t
   for (const f of ["modDesc.xml", "house.xml", "house.i3d", "icon.dds", "store.dds", "posts/p1/house.i3d", "posts/p2/house.i3d", "posts/p3/prop.i3d"]) assert.ok(files.has(f), f);
   assert.equal([...files.keys()].filter(f => f.endsWith(".xml")).length, 2, "the modDesc and the one placeable");
   assert.ok([...files.keys()].some(f => /^posts\/p3\/textures\/prop_diffuse\.dds$/.test(f)), "a prop's atlas");
+  assert.ok(files.has("posts/p1/textures/interior_diffuse.dds") && files.has("posts/p1/textures/glass_diffuse.dds"), "the rooms behind the windows and the see-through glass of a house");
+  assert.ok(!files.has("posts/p1/house.xml") && !files.has("posts/p1/modDesc.xml"), "a post has no XML of its own, the mod has one placeable");
   assert.match(text(files.get("modDesc.xml")), /<storeItem xmlFilename="house\.xml"\/>/);
   assert.match(text(files.get("modDesc.xml")), /<author>Anna<\/author>/);
   assert.match(text(files.get("modDesc.xml")), /<iconFilename>icon\.dds<\/iconFilename>/, "the game does not load a mod without an icon");

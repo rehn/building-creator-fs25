@@ -1,6 +1,6 @@
 // A mod as a game mod (docs/PLAN_MOD.md, decided 2026-11-24): the WHOLE mod is ONE placeable. Its i3d is a frame: the areas the placeable needs (clear, level, test ...) covering everything the
 // mod holds, and the mod's game objects (sleep point, workshop ... of kinds/gameobjects.mjs) as the building export makes them; each building and prop is a ReferenceNode to an i3d of its own
-// in posts/pN/, put where the plan puts it (a building as the outside shell of the scenery export, a prop with its atlas). The origin of the placeable is the middle of everything, so the posts and
+// in posts/pN/, put where the plan puts it (a building as its own game mod's i3d, with the inside, a prop with its atlas). The origin of the placeable is the middle of everything, so the posts and
 // the objects are moved by minus that middle. Not tried in the game: that a placeable's i3d may reference others this way is how the imported items already work (editor/model.mjs refNode).
 //
 //   makeModPackage({name, author, description, posts, objects, loadTextures})  ->  {files: Map(path -> text | bytes), warnings: [text], middle: [x, z]}
@@ -9,7 +9,7 @@
 // pictures: {icon, store} as {width, height, rgba} (a snapshot of the 3D view; the game needs an icon.dds, else "Missing icon filename" and the mod is not loaded): a plain one is made when there is none.
 // loadTextures(ids) -> Map(id -> {size, diffuse, normal}) gives the user's textures a prop is made of (the page reads them from the server); without it they are plain grey.
 import { sanitize, i3dFiles, placeableXml, modDescXml, modName, MOD_FILES } from "./model.mjs";
-import { makeSceneryFiles } from "./headless.mjs";
+import { makeModFiles } from "./headless.mjs";
 import { projectGroups, boundsOf, footprint } from "./modPlan.mjs";
 import { exportI3dAtlas, atlasDdsFiles } from "../builder/atlas.mjs";
 import { sanitize as sanitizeProp } from "../builder/model.mjs";
@@ -19,7 +19,7 @@ import { encodeDds } from "./dds.mjs";
 const latin1 = text => Uint8Array.from(text, c => c.charCodeAt(0) & 255);
 const round = v => Math.round(v * 1000) / 1000;
 
-/** The files of one post in its folder, and the i3d to reference: a building as scenery, a prop with its atlas. */
+/** The files of one post in its folder, and the i3d to reference: a building as its own game mod's i3d (inside, curtains, see-through glass, doors), a prop with its atlas. */
 async function postFiles(post, folder, {loadTextures, encode}) {
   const out = new Map();
   if (post.kind === "prop") {
@@ -31,8 +31,9 @@ async function postFiles(post, folder, {loadTextures, encode}) {
     for (const [k, bytes] of Object.entries(dds)) out.set(`${folder}/textures/prop_${k}.dds`, bytes);
     return {files: out, i3d: `${folder}/prop.i3d`};
   }
-  const s = makeSceneryFiles(post.data, post.name, {encode});
-  for (const [path, bytes] of s.files) out.set(`${folder}/${path}`, bytes);
+  // (the whole building: what is behind the windows shows. Its doors stay shut for now: they are animated by the placeable XML, which is the mod's and not the building's.)
+  const f = makeModFiles(post.data, post.name, {encode});
+  for (const [path, bytes] of f.mod) if (path !== "modDesc.xml" && path !== MOD_FILES.xml) out.set(`${folder}/${path}`, bytes);
   return {files: out, i3d: `${folder}/${MOD_FILES.i3d}`};
 }
 
