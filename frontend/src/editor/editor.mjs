@@ -343,7 +343,7 @@ SCHEMA.forEach(g => {
       const ruled = applyKindRules();
       if (ruled) syncControls(); else syncOutputs();
       persist(); rebuild(false);
-      if (["floors", "halfStorey", "roofType", "ridge", "interior", "curtainStyle", "curtainColor", "winStyle", "doorStyle"].includes(f.k)) { renderWinUI(); renderDormUI(); renderWingsUI(); }
+      if (["floors", "halfStorey", "roofType", "ridge", "interior", "curtainStyle", "curtainColor", "winStyle", "doorStyle"].includes(f.k)) { renderTreeUI(); renderDormUI(); }
       renderPipesUI(); renderPapersAll(); renderZonesAll();
       if (ob.sel || ob.on) renderObjectsUI();
     });
@@ -358,7 +358,7 @@ SCHEMA.forEach(g => {
   d.appendChild(wrap);
   if (g.custom === "windows") {
     const b = document.createElement("button"); b.type = "button"; b.className = "wide"; b.textContent = "Use this size for all windows";
-    b.onclick = () => { p.windows.forEach(w => { if (w.type === "door") return; w.w = p.winW; w.h = p.winH; w.sill = p.sill; }); persist(); rebuild(false); renderWinUI(); toast("All windows now use this size"); };
+    b.onclick = () => { p.windows.forEach(w => { if (w.type === "door") return; w.w = p.winW; w.h = p.winH; w.sill = p.sill; }); persist(); rebuild(false); renderTreeUI(); toast("All windows now use this size"); };
     d.appendChild(b);
   }
   $(g.detail ? "controls-shape" : "controls-" + g.tab).appendChild(d);
@@ -370,10 +370,10 @@ function syncControls() {
   }
   syncOutputs();
   syncKind();
-  renderWinUI();
+  renderTreeUI();
   renderDormUI();
   renderObjectsUI();
-  renderWingsUI();
+  renderTreeUI();
   renderPipesUI(); renderPapersAll(); renderZonesAll();
   renderGoodsUI();
 }
@@ -985,13 +985,13 @@ function renderWinCard() {
       // a new door gets a door's size and no porch, a window made again the building's window size
       if (e.target.value === "door") Object.assign(s, {type: "door", style: "default", w: 0.9, h: Math.min(2, p.floorHeight - 0.3), porch: "none", porchW: PORCH_W[2], porchD: PORCH_D[2]});
       else { Object.assign(s, {type: "window", style: "default", w: p.winW, h: p.winH, sill: p.sill}); delete s.porch; delete s.porchW; delete s.porchD; }
-      winChanged(); renderWinUI(); updateHighlight();
+      winChanged(); renderTreeUI(); updateHighlight();
     };
-    $("wf-wall").onchange = e => { s.wall = e.target.value; winChanged(); renderWinUI(); updateHighlight(); };
+    $("wf-wall").onchange = e => { s.wall = e.target.value; winChanged(); renderTreeUI(); updateHighlight(); };
     $("wf-style").onchange = e => { s.style = e.target.value; persist(); rebuild(false); };
-    if ($("wf-porch")) $("wf-porch").onchange = e => { s.porch = e.target.value; winChanged(); renderWinUI(); };
+    if ($("wf-porch")) $("wf-porch").onchange = e => { s.porch = e.target.value; winChanged(); renderTreeUI(); };
     if ($("wf-ramp")) $("wf-ramp").onchange = e => { s.ramp = e.target.checked; winChanged(); };
-    if ($("wf-opens")) $("wf-opens").onchange = e => { s.opens = e.target.checked; winChanged(); renderWinUI(); };
+    if ($("wf-opens")) $("wf-opens").onchange = e => { s.opens = e.target.checked; winChanged(); renderTreeUI(); };
     if ($("wf-swing")) $("wf-swing").onchange = e => { s.swing = e.target.value; winChanged(); };
     if ($("wf-hinge")) $("wf-hinge").onchange = e => { s.hinge = e.target.value; winChanged(); };
     if ($("winRemove")) $("winRemove").onclick = () => removeWindow(s.id);
@@ -1119,7 +1119,7 @@ function partsChanged(renderToo = true) {
   // (a removed part takes its downpipes with it)
   const ids = new Set(liveWings(p).map(x => x.id));
   p.pipes = (p.pipes || []).filter(x => !wingIdOf(x.wall) || ids.has(wingIdOf(x.wall)));
-  persist(); rebuild(false); if (renderToo) { renderWingsUI(); renderWinUI(); renderPipesUI(); renderPapersAll(); renderZonesAll(); }
+  persist(); rebuild(false); if (renderToo) { renderTreeUI(); renderPipesUI(); renderPapersAll(); renderZonesAll(); }
 }
 /* ---------- A part's materials ---------- */
 // Each is "as the parent" (the building for a part on the building) until the part sets its own.
@@ -1175,7 +1175,7 @@ async function loadMyParts() {
   try { const [list, admin] = await Promise.all([partSource.list(), partSource.isAdmin().catch(() => false)]); if (destroyed) return; myParts = list; myPartsAdmin = !!admin; }
   catch { myParts = myParts || []; }
   finally { myPartsLoading = false; }
-  renderWingsUI();
+  renderTreeUI();
 }
 function myPartsHtml() {
   if (!partSource) return "";
@@ -1192,16 +1192,16 @@ function bindMyParts(ed) {
     try { const full = await partSource.get(b.dataset.usepart); applyPart(full.data); } catch { toast("Couldn't load that extension. Try again."); }
   });
   ed.querySelectorAll("[data-sharepart]").forEach(b => b.onclick = async () => {
-    try { await partSource.update(b.dataset.sharepart, {shared: b.dataset.shared !== "true"}); myParts = null; renderWingsUI(); } catch { toast("Couldn't change that. Try again."); }
+    try { await partSource.update(b.dataset.sharepart, {shared: b.dataset.shared !== "true"}); myParts = null; renderTreeUI(); } catch { toast("Couldn't change that. Try again."); }
   });
   ed.querySelectorAll("[data-delpart]").forEach(b => b.onclick = async () => {
     if (!await confirmDialog(t("Delete this saved extension? Buildings that already have it are not changed."), {danger: true, confirm: t("Delete")})) return;
-    try { await partSource.remove(b.dataset.delpart); myParts = null; renderWingsUI(); toast("Deleted"); } catch { toast("Couldn't delete it. Try again."); }
+    try { await partSource.remove(b.dataset.delpart); myParts = null; renderTreeUI(); toast("Deleted"); } catch { toast("Couldn't delete it. Try again."); }
   });
   if ($("partSave")) $("partSave").onclick = async () => {
     const w = (p.wings || []).find(x => x.id === wSel), f = w && exportPart(p, w.id);
     if (!f) return;
-    try { await partSource.save({name: f.name, info: {parts: f.parts.length, windows: f.windows.length, items: f.items.length}, data: f}); myParts = null; renderWingsUI(); toast(`${f.name} saved to My extensions`); }
+    try { await partSource.save({name: f.name, info: {parts: f.parts.length, windows: f.windows.length, items: f.items.length}, data: f}); myParts = null; renderTreeUI(); toast(`${f.name} saved to My extensions`); }
     catch (e) { toast((e && e.message) || "Couldn't save it. Try again."); }
   };
 }
@@ -1403,7 +1403,7 @@ function bindDividers(host, pid = 0) {
     const s = get().find(x => x.id === +sel.dataset.splitfloors); if (!s) return;
     const v = +sel.value, lw = pid ? liveWings(p).find(x => x.id === pid) : null, baseHalf = !!(lw ? lw.half : p.halfStorey);
     s.floors = Math.floor(v); s.half = v === 0 ? null : v % 1 ? true : false; s.heights = [];   // (the floors share the height again; a whole number says no attic, a half one an attic)
-    persist(); rebuild(false); renderTreeUI(); renderWinUI();
+    persist(); rebuild(false); renderTreeUI();
   });
   host.querySelectorAll("[data-splitrm]").forEach(btn => btn.onclick = () => removeDivider(pid, +btn.dataset.splitrm));
 }
@@ -1831,9 +1831,6 @@ window.addEventListener("keydown", treeKey);
 const closeCtxOutside = e => { if (ctxMenu && !ctxMenu.contains(e.target)) closeCtx(); };
 window.addEventListener("pointerdown", closeCtxOutside, true); window.addEventListener("resize", closeCtx); window.addEventListener("blur", closeCtx);
 cleanups.push(() => { window.removeEventListener("keydown", treeKey); window.removeEventListener("pointerdown", closeCtxOutside, true); window.removeEventListener("resize", closeCtx); window.removeEventListener("blur", closeCtx); closeCtx(); });
-// (the old names: the parts and the windows used to be two editors; both are the tree now)
-function renderWinUI() { renderTreeUI(); }
-function renderWingsUI() { renderTreeUI(); }
 /* ---------- Game objects ---------- */
 // The game's boxes and icons and the pasture's fence (objects.mjs): a list in the Game objects section, and
 // a plan view of the yard to drag them in (ob.on).
