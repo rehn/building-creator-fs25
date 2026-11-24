@@ -11,7 +11,7 @@ func TestModLifecycle(t *testing.T) {
 	u := mustUser(t, s, "anna@example.se")
 	house, _ := s.CreateProject(ctx, u.ID, "Huset", json.RawMessage(`{}`))
 	barn, _ := s.CreateProject(ctx, u.ID, "Ladan", json.RawMessage(`{}`))
-	prop, err := s.CreateAsset(ctx, u.ID, "Brevlåda", json.RawMessage(`{}`), nil)
+	prop, err := s.CreateProject(ctx, u.ID, "Brevlåda", json.RawMessage(`{"kind":"prop"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,21 +82,19 @@ func TestModRulesAndOwners(t *testing.T) {
 	anna := mustUser(t, s, "anna@example.se")
 	bo := mustUser(t, s, "bo@example.se")
 	house, _ := s.CreateProject(ctx, anna.ID, "Huset", json.RawMessage(`{}`))
-	prop, _ := s.CreateAsset(ctx, anna.ID, "Staty", json.RawMessage(`{}`), nil)
+	prop, _ := s.CreateProject(ctx, anna.ID, "Staty", json.RawMessage(`{"kind":"prop"}`))
 	m, _ := s.CreateMod(ctx, bo.ID, "Bos mod", nil)
 
-	// Bo can't use Anna's building, nor her prop until she shares it
+	// Bo can't use Anna's building or her prop
 	if _, err := s.UpdateMod(ctx, bo.ID, m.ID, ModUpdate{Items: &[]ModItem{{Kind: ModBuilding, Ref: house.ID}}}, 0); !errors.Is(err, ErrBadRef) {
 		t.Fatalf("someone else's building: %v", err)
 	}
 	if _, err := s.UpdateMod(ctx, bo.ID, m.ID, ModUpdate{Items: &[]ModItem{{Kind: ModProp, Ref: prop.ID}}}, 0); !errors.Is(err, ErrBadRef) {
-		t.Fatalf("a prop that isn't shared: %v", err)
+		t.Fatalf("someone else's prop: %v", err)
 	}
-	if _, err := s.SetAssetShared(ctx, anna.ID, prop.ID, true); err != nil {
-		t.Fatal(err)
-	}
-	if got, err := s.UpdateMod(ctx, bo.ID, m.ID, ModUpdate{Items: &[]ModItem{{Kind: ModProp, Ref: prop.ID}}}, 0); err != nil || got.Items[0].Name != "Staty" {
-		t.Fatalf("a shared prop: %+v %v", got, err)
+	own, _ := s.CreateProject(ctx, bo.ID, "Bos staty", json.RawMessage(`{"kind":"prop"}`))
+	if got, err := s.UpdateMod(ctx, bo.ID, m.ID, ModUpdate{Items: &[]ModItem{{Kind: ModProp, Ref: own.ID}}}, 0); err != nil || got.Items[0].Name != "Bos staty" {
+		t.Fatalf("their own prop: %+v %v", got, err)
 	}
 	if _, err := s.UpdateMod(ctx, bo.ID, m.ID, ModUpdate{Items: &[]ModItem{{Kind: "tree", Ref: "x"}}}, 0); !errors.Is(err, ErrBadRef) {
 		t.Fatalf("an unknown kind: %v", err)

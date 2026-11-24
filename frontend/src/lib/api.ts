@@ -42,6 +42,33 @@ export interface Asset {
   updatedAt: string;
 }
 
+/** One post of a mod: a building or a prop (a project) with its place in the mod's plan and the mod type it is generated with ("" = as the building is). */
+export interface ModPost {
+  id: string;
+  kind: "building" | "prop";
+  /** The project's id. */
+  ref: string;
+  type: string;
+  x: number;
+  z: number;
+  rot: number;
+  /** The project's name now (the mod follows it); "" and missing when it was deleted. */
+  name: string;
+  missing: boolean;
+}
+
+/** A mod: a container of buildings and props (docs/PLAN_MOD.md). The list has only itemCount; one mod has its items and plan data. */
+export interface Mod {
+  id: string;
+  name: string;
+  data?: Record<string, unknown>;
+  items?: ModPost[];
+  itemCount: number;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** A photo made into a game texture (private to its owner): the DDS files are at textureFileUrl. */
 export interface Texture {
   id: string;
@@ -177,6 +204,12 @@ export const api = {
     return res.arrayBuffer();
   },
 
+  mods: () => request<Mod[]>("GET", "/mods"),
+  mod: (id: string) => request<Mod>("GET", "/mods/" + encodeURIComponent(id)),
+  createMod: (name: string) => request<Mod>("POST", "/mods", { name }),
+  updateMod: (id: string, patch: { name?: string; items?: Pick<ModPost, "id" | "kind" | "ref" | "type" | "x" | "z" | "rot">[]; version?: number }) =>
+    request<Mod>("PATCH", "/mods/" + encodeURIComponent(id), patch),
+  deleteMod: (id: string) => request<void>("DELETE", "/mods/" + encodeURIComponent(id)),
   textures: () => request<Texture[]>("GET", "/textures"),
   /** Saves a texture: form fields name, size, meters, thumb and the files diffuse, normal, specular (DDS). */
   createTexture: (form: FormData) => send<Texture>("POST", "/textures", form),

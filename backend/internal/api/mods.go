@@ -80,7 +80,7 @@ func checkMod(w http.ResponseWriter, in *modInput) (store.ModUpdate, bool) {
 				typ, typOK = cleanText(it.Type, 40)
 			}
 			if !kindOK || it.Ref == "" || len(it.Ref) > 64 || len(it.ID) > 64 || !typOK || !finite(it.X, it.Z) || !finite(it.Rot) {
-				writeError(w, http.StatusBadRequest, "invalid_item", "Each item needs a kind (building or prop), the id of what it points at, a mod type of up to 40 characters and a place in the plan.")
+				writeError(w, http.StatusBadRequest, "invalid_item", "Each item needs a kind (building or prop), the id of the building or prop (a project of yours), a mod type of up to 40 characters and a place in the plan.")
 				return upd, false
 			}
 			items = append(items, store.ModItem{ID: it.ID, Kind: it.Kind, Ref: it.Ref, Type: typ, X: it.X, Z: it.Z, Rot: it.Rot})
@@ -131,7 +131,7 @@ func (s *Server) createMod(w http.ResponseWriter, r *http.Request, u store.User)
 		}
 	}
 	if errors.Is(err, store.ErrBadRef) {
-		writeError(w, http.StatusBadRequest, "invalid_ref", "An item points at a building that isn't yours, or at a prop that isn't yours or shared.")
+		writeError(w, http.StatusBadRequest, "invalid_ref", "An item points at a building or prop that isn't yours.")
 		return
 	}
 	if err != nil {
@@ -155,7 +155,7 @@ func (s *Server) updateMod(w http.ResponseWriter, r *http.Request, u store.User)
 	case errors.Is(err, store.ErrConflict):
 		writeJSON(w, http.StatusConflict, apiError{Error: "version_conflict", Message: "This mod was changed somewhere else, for example in another tab.", Version: m.Version})
 	case errors.Is(err, store.ErrBadRef):
-		writeError(w, http.StatusBadRequest, "invalid_ref", "An item points at a building that isn't yours, or at a prop that isn't yours or shared.")
+		writeError(w, http.StatusBadRequest, "invalid_ref", "An item points at a building or prop that isn't yours.")
 	case err != nil:
 		modError(w, err)
 	default:

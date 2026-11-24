@@ -57,7 +57,7 @@ outline with 2 px offset on every focusable thing (`:focus-visible`).
 
 ### 4.1 Top bar
 Panel background, 1 px bottom border, `10px 16px` padding, wraps. Left to right: brand (logo 30 px + condensed title 24 px + small muted tagline), the
-**app switch**, then the pages of the work as buttons (here `My buildings`, `My items`, `My textures`; the current one has an accent border, `.current`),
+**app switch**, then the pages of the work as buttons (here `Buildings`, `Mods`, `Items`, `Textures`; the current one has an accent border, `.current`),
 pushed to the right, then two **icon buttons** (34 px square, muted, ink on hover): the **gear** (settings menu) and the **log-out arrow**.
 - **Settings menu** (`SettingsMenu.tsx`): opens under the gear, right-aligned, panel fill, 10 px radius, shadow; closes on Esc, a click outside and a page change. Top
   to bottom: the user's name (muted, separated by a line), Language (label + select), the other pages that are not daily work (API, Admin when the user is admin), and
@@ -111,7 +111,7 @@ one filled `--accent`). Sliders pair with an editable number (click the number t
 
 ## 5. Layout patterns
 
-- **List pages** (My buildings, My items, My textures): top bar > page head > tab rows > grid of cards > (sticky bar). Max width 1080 px.
+- **List pages** (My buildings, Mods, My items, My textures): top bar > page head > tab rows > grid of cards > (sticky bar). Max width 1080 px.
 - **Chooser** ("New"): replaces the list while open (list and tab rows hidden), title "What do you want to build?" with Cancel at the right,
   one row of secondary tabs for the type, then the compact grid of starting points for that type.
 - **Editor / tool pages** (building editor, modeller): full-height, three columns on a wide screen (left panel with its own tabs + tree, details
