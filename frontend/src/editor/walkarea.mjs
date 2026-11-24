@@ -51,12 +51,13 @@ const distToPoly = (poly, x, z) => {
 /**
  * Where animals can walk, as rectangles with a height {x0, x1, z0, z1, y, inside}, and the ramps (sloped quads) where they come in through a doorway.
  * The middle of an animal keeps away from what it must not go through (KEEP): the area is the fence's, less its edge, the building (wall) and the troughs.
+ *   flat: the doorways are level at floorY (a building without a foundation) instead of ramps from the ground;
  *   fence, blockers [{center, size, keep?}]: the yard; rooms: the floors inside the building [{x0, x1, z0, z1}] at height floorY (kept off the walls);
  *   items: boxes on the floor inside [{x0, x1, z0, z1, keep?}]; doors: [{a, b, c, d}] each doorway's strip, from outside (a-b, ground level, where the
  *   ramp starts) to inside (c-d, at floorY): the ground there is a ramp, so it is taken out of the yard's cells, and a landing inside keeps the way open
  *   through the strip kept off the walls.
  */
-export function animalNav({fence, blockers = [], rooms = [], items = [], door = null, doors = door ? [door] : [], floorY = 0, cell = 0.2, keep = KEEP}) {
+export function animalNav({fence, blockers = [], rooms = [], items = [], door = null, doors = door ? [door] : [], floorY = 0, flat = false, cell = 0.2, keep = KEEP}) {
   if (!fence || fence.length < 3) return null;
   const xs = fence.map(q => q[0]), zs = fence.map(q => q[2]);
   const x0 = Math.min(...xs), z0 = Math.min(...zs), nx = Math.max(1, Math.ceil((Math.max(...xs) - x0) / cell)), nz = Math.max(1, Math.ceil((Math.max(...zs) - z0) / cell));
@@ -118,7 +119,7 @@ export function animalNav({fence, blockers = [], rooms = [], items = [], door = 
       rects.push({x0: Math.min(...xsB), x1: Math.max(...xsB), z0: Math.min(...zsB), z1: Math.max(...zsB), y: floorY, inside: true});
     }
   }
-  const ramps = doors.map(d => ({points: [d.a, d.b, d.c, d.d], y0: 0, y1: floorY}));
+  const ramps = doors.map(d => ({points: [d.a, d.b, d.c, d.d], y0: flat ? floorY : 0, y1: floorY}));   // (flat: a floor on the ground has nothing to climb: the way in is level, as the game own small hen barn has it)
   return {rects, ramps, ramp: ramps[0] || null};
 }
 
