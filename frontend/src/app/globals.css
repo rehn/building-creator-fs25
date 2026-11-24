@@ -533,3 +533,15 @@ dialog.dlg input, dialog.dlg textarea { font: inherit; width: 100%; padding: 9px
   .tb-nav { grid-column: 1 / -1; order: 3; justify-content: center; }
 }
 .item-icon { width: 96px; height: 72px; border-radius: 6px; background: var(--stage); object-fit: cover; flex: none; }
+
+/* The mod's 3D plan (components/ModPlan.tsx): the view and a side panel for the chosen thing */
+.modplan { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 16px; align-items: start; }
+.modplan-stage { position: relative; background: var(--stage); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; height: 62vh; min-height: 320px; }
+.modplan-stage canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+.modplan-note { position: absolute; left: 12px; bottom: 8px; margin: 0; }
+.modplan-side { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.modplan-side .hint { margin: 0; }
+.modplan-post h4 { margin: 4px 0 0; text-transform: none; letter-spacing: 0; font-size: 16px; overflow-wrap: anywhere; }
+.modplan-post .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.modplan-post label.stack input { width: 100%; }
+@media (max-width: 760px) { .modplan { grid-template-columns: minmax(0, 1fr); } }

@@ -1,7 +1,7 @@
 // The mod's list of posts (docs/PLAN_MOD.md step 3): what the /mods pages do to it before it is saved (the server keeps the list, backend/internal/store/mods.go).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addPost, removePost, setPostType, countsOf, choices, payload } from "../src/lib/mods.mjs";
+import { addPost, removePost, setPostType, placePost, countsOf, choices, payload } from "../src/lib/mods.mjs";
 
 const post = (id, kind, ref, extra = {}) => ({id, kind, ref, type: "", x: 0, z: 0, rot: 0, name: ref, missing: false, ...extra});
 
@@ -39,4 +39,14 @@ test("what can be added: the projects of that kind that are not in the mod yet",
 test("what is sent to the server has only what it stores", () => {
   const sent = payload([post("a", "building", "h1", {type: "shop", x: 2, z: -1, rot: 90, missing: true})]);
   assert.deepEqual(sent, [{id: "a", kind: "building", ref: "h1", type: "shop", x: 2, z: -1, rot: 90}]);
+});
+
+test("placing a post changes its place only, and keeps the turn within 0 to 360", () => {
+  const list = [post("a", "building", "h1", {x: 1}), post("b", "prop", "p1")];
+  const moved = placePost(list, "a", {x: 5.5, z: -2});
+  assert.deepEqual([moved[0].x, moved[0].z, moved[0].rot], [5.5, -2, 0]);
+  assert.equal(moved[1], list[1]);
+  assert.equal(placePost(list, "a", {rot: -90})[0].rot, 270);
+  assert.equal(placePost(list, "a", {rot: 450})[0].rot, 90);
+  assert.equal(list[0].x, 1, "the original is untouched");
 });

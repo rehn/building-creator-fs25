@@ -15,6 +15,9 @@ export const removePost = (items, id) => items.filter(p => p.id !== id);
 
 export const setPostType = (items, id, type) => items.map(p => p.id === id ? {...p, type} : p);
 
+/** The post with its place changed: any of x, z (metres) and rot (degrees, kept in 0 to 360). */
+export const placePost = (items, id, place) => items.map(p => p.id === id ? {...p, ...place, ...(place.rot === undefined ? {} : {rot: ((place.rot % 360) + 360) % 360})} : p);
+
 /** How many buildings and props the mod holds (the counts on its tabs). */
 export function countsOf(items) {
   const n = {building: 0, prop: 0};

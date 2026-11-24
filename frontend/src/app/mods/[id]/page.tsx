@@ -1,6 +1,7 @@
 "use client";
 // One mod (docs/PLAN_MOD.md step 3): the buildings and props in it. Each change is saved at once; the server gives each post its id and its
 // name (the mod follows the building), and a post whose building was deleted is marked and stays until it is taken out.
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -12,9 +13,10 @@ import { KINDS } from "@/editor/model.mjs";
 import { confirmDialog, promptDialog } from "@/components/dialog.mjs";
 import { addPost, removePost, setPostType, countsOf, choices, payload } from "@/lib/mods.mjs";
 
-type Tab = "building" | "prop";
+type Tab = "building" | "prop" | "plan";
 type Kind = { id: string; name: string };
 const TYPES = KINDS as Kind[];
+const ModPlan = dynamic(() => import("@/components/ModPlan"), { ssr: false, loading: () => <p className="loading">Loading the plan…</p> });
 
 export default function ModPage() {
   const { id } = useParams<{ id: string }>();
@@ -61,12 +63,13 @@ export default function ModPage() {
 
   const items = mod?.items ?? [];
   const n = countsOf(items);
+  const list = tab !== "plan";
   const shown = items.filter(p => p.kind === tab);
   const open = (p: ModPost) => (p.kind === "prop" ? `/builder/${p.ref}` : `/projects/${p.ref}`);
-  const tabBtn = (k: Tab, label: string, count: number) => (
-    <button type="button" role="tab" className={"starttab" + (tab === k ? " on" : "")} aria-selected={tab === k} onClick={() => { setTab(k); setAdding(false); }}>{label} <small>{count}</small></button>
+  const tabBtn = (k: Tab, label: string, count?: number) => (
+    <button type="button" role="tab" className={"starttab" + (tab === k ? " on" : "")} aria-selected={tab === k} onClick={() => { setTab(k); setAdding(false); }}>{label}{count !== undefined && <> <small>{count}</small></>}</button>
   );
-  const options: ProjectSummary[] = mod ? choices(projects, items, tab) : [];
+  const options: ProjectSummary[] = mod && list ? choices(projects, items, tab) : [];
 
   return (
     <>
@@ -76,8 +79,8 @@ export default function ModPage() {
           <h2 translate="no">{mod ? mod.name : t("Mod")}</h2>
           {mod && !adding && <button type="button" onClick={rename} disabled={busy}>Rename</button>}
           {mod && !adding && <button type="button" className="danger" onClick={remove} disabled={busy}>Delete</button>}
-          {mod && !adding && <button type="button" className="primary" onClick={() => setAdding(true)} disabled={busy}>{tab === "prop" ? t("Add props") : t("Add buildings")}</button>}
-          {mod && adding && <button type="button" onClick={() => setAdding(false)}>Done</button>}
+          {mod && !adding && list && <button type="button" className="primary" onClick={() => setAdding(true)} disabled={busy}>{tab === "prop" ? t("Add props") : t("Add buildings")}</button>}
+          {mod && adding && list && <button type="button" onClick={() => setAdding(false)}>Done</button>}
         </div>
         <p className="hint"><Link href="/mods">{t("All mods")}</Link></p>
         {(error || userError) && <p className="error" role="alert">{error || userError}</p>}
@@ -86,9 +89,10 @@ export default function ModPage() {
           <div className="starttabs" role="tablist" aria-label={t("What to show")}>
             {tabBtn("building", t("Buildings"), n.building)}
             {tabBtn("prop", t("Props"), n.prop)}
+            {tabBtn("plan", t("Plan"))}
           </div>
         )}
-        {mod && adding && (
+        {mod && list && adding && (
           options.length === 0
             ? <div className="empty"><h3>{tab === "prop" ? t("No props to add") : t("No buildings to add")}</h3><p className="hint">{tab === "prop" ? t("Every prop you have is in this mod already, or you have none yet. Props are made in the modeller, from My buildings.") : t("Every building you have is in this mod already, or you have none yet.")}</p></div>
             : <ul className="item-list">
@@ -100,13 +104,13 @@ export default function ModPage() {
               ))}
             </ul>
         )}
-        {mod && !adding && shown.length === 0 && (
+        {mod && list && !adding && shown.length === 0 && (
           <div className="empty">
             <h3>{tab === "prop" ? t("No props in this mod yet") : t("No buildings in this mod yet")}</h3>
             <p className="hint">{tab === "prop" ? t("A prop stands on its own in the mod. Add one with the button above.") : t("Add a building with the button above. The mod follows it when you change it.")}</p>
           </div>
         )}
-        {mod && !adding && shown.length > 0 && (
+        {mod && list && !adding && shown.length > 0 && (
           <ul className="item-list">
             {shown.map(p => (
               <li key={p.id}>
@@ -130,6 +134,9 @@ export default function ModPage() {
             ))}
           </ul>
         )}
+        {mod && !list && (items.length === 0
+          ? <div className="empty"><h3>{t("Nothing to place yet")}</h3><p className="hint">{t("Add buildings and props first. Then you place them here.")}</p></div>
+          : <ModPlan items={items} busy={busy} onChange={save} />)}
       </main>
     </>
   );
