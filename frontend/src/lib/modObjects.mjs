@@ -6,6 +6,7 @@ import { SHARED } from "../editor/kinds/gameobjects.mjs";
 import { SHARED_GROUPS, OBJECT_LIMITS, fencePoints, MAX_FENCE_POINTS } from "../editor/objects.mjs";
 import { HEN_TYPES } from "../editor/kinds/modframe.mjs";
 import { MAX_HENS } from "../editor/kinds/chicken.mjs";
+import { wallsOf } from "../editor/layout.mjs";
 import { sanitize } from "../editor/model.mjs";
 
 // The groups a mod can take: the shared ones (every one is a few boxes) and the hen yard (boxes and a fence of posts, kinds/modframe.mjs).
@@ -32,18 +33,37 @@ const round = v => Math.round(v * 1000) / 1000;
  * The objects with a group added where it goes to start with (ids after the highest): the defaults of settings p are around the origin, so they are moved by `at`
  * ([x, z], the middle of what the mod holds); the same list if the mod has the group already.
  */
-export function addGroup(objects, group, p, at = [0, 0]) {
+export function addGroup(objects, group, p, at = [0, 0], {wall = "back"} = {}) {
   if (!MOD_GROUPS[group] || has(objects, group)) return objects;
   let id = objects.reduce((m, o) => Math.max(m, o.id), 0);
-  const made = group === "hens" ? henDefaults(p) : SHARED[group].defaults(p);
+  const made = group === "hens" ? henDefaults(p, wall) : SHARED[group].defaults(p);
   // (a fence has no middle: its posts are moved)
   return [...objects, ...made.map(o => ({...o, id: ++id, ...(o.type === "pasture" ? {points: o.points.map(([x, z]) => [round(x + at[0]), round(z + at[1])])} : {x: round(o.x + at[0]), z: round(o.z + at[1])})}))];
 }
 
 /** Where a hen yard goes to start with: what a hen house as wide and deep as p has (its feed pad, trailer spot, egg pallets, info area), and its fence as posts the player can move. */
-function henDefaults({width, depth, foundation = 0}) {
-  const q = sanitize({kind: "chicken", width, depth, foundation}), pa = q.objects.find(o => o.type === "pasture");
+function henDefaults({width, depth, foundation = 0}, wall = "back") {
+  // (the pasture goes on a wall without a door, so the door of the stand-in building is put on the opposite one)
+  const q = sanitize({kind: "chicken", width, depth, foundation, pastureWall: wall, doorWall: OPPOSITE[wall] || "front"}), pa = q.objects.find(o => o.type === "pasture");
   return [...q.objects.filter(o => o.type !== "pasture"), {type: "pasture", wall: pa.wall, a: 0, b: 0, depth: pa.depth, points: fencePoints(q).slice(0, MAX_FENCE_POINTS)}];
+}
+
+const OPPOSITE = {front: "back", back: "front", left: "right", right: "left"};
+
+/**
+ * The side of the mod (a wall of a stand-in building as big as the mod: front, back, left or right) that the first building's ground floor door faces, as the building stands (turned by its rot):
+ * where a hen yard's fence goes to start with, on the side people come in. posts: [{kind, rot, data}]; "back" when no building has a door on a main wall.
+ */
+export function entranceWall(posts) {
+  for (const p of posts) {
+    if (p.kind !== "building" || !p.data) continue;
+    const q = sanitize(p.data), walls = wallsOf(q), door = (q.windows || []).find(w => w.type === "door" && w.floor === 0 && walls[w.wall] && OPPOSITE[w.wall]);
+    if (!door) continue;
+    const [nx, , nz] = walls[door.wall].n, a = (p.rot || 0) * Math.PI / 180;
+    const x = nx * Math.cos(a) + nz * Math.sin(a), z = -nx * Math.sin(a) + nz * Math.cos(a);
+    return Math.abs(x) > Math.abs(z) ? (x > 0 ? "right" : "left") : (z > 0 ? "front" : "back");
+  }
+  return "back";
 }
 
 /** The objects without the group of the object `objectId`: its objects come and go together (a shop counter and its delivery place). */
