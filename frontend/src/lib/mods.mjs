@@ -8,7 +8,7 @@ const GAP = 12;
 /** The list with a new post for the project `ref` (a plain one, further along the row); the same list if it is in the mod already. */
 export function addPost(items, kind, ref) {
   if (items.some(p => p.ref === ref)) return items;
-  return [...items, {id: "", kind, ref, type: "", x: items.length * GAP, z: 0, rot: 0}];
+  return [...items, {id: "", kind, ref, type: "", x: items.length * GAP, z: 0, rot: 0, objects: []}];
 }
 
 export const removePost = (items, id) => items.filter(p => p.id !== id);
@@ -32,4 +32,4 @@ export function choices(projects, items, kind) {
 }
 
 /** The list as the server takes it (it works out the names and what is missing itself). */
-export const payload = items => items.map(({id, kind, ref, type, x, z, rot}) => ({id, kind, ref, type, x, z, rot}));
+export const payload = items => items.map(({id, kind, ref, type, x, z, rot, objects}) => ({id, kind, ref, type, x, z, rot, objects: objects || []}));

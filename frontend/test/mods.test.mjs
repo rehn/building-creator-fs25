@@ -7,7 +7,7 @@ const post = (id, kind, ref, extra = {}) => ({id, kind, ref, type: "", x: 0, z: 
 
 test("a new post is a plain building or prop, one row further along than the last, and the same thing is not added twice", () => {
   let list = addPost([], "building", "h1");
-  assert.deepEqual(list, [{id: "", kind: "building", ref: "h1", type: "", x: 0, z: 0, rot: 0}]);
+  assert.deepEqual(list, [{id: "", kind: "building", ref: "h1", type: "", x: 0, z: 0, rot: 0, objects: []}]);
   list = addPost(list, "prop", "p1");
   assert.equal(list.length, 2);
   assert.ok(list[1].x > list[0].x, "placed beside the first, not on top of it");
@@ -38,7 +38,8 @@ test("what can be added: the projects of that kind that are not in the mod yet",
 
 test("what is sent to the server has only what it stores", () => {
   const sent = payload([post("a", "building", "h1", {type: "shop", x: 2, z: -1, rot: 90, missing: true})]);
-  assert.deepEqual(sent, [{id: "a", kind: "building", ref: "h1", type: "shop", x: 2, z: -1, rot: 90}]);
+  assert.deepEqual(sent, [{id: "a", kind: "building", ref: "h1", type: "shop", x: 2, z: -1, rot: 90, objects: []}]);
+  assert.deepEqual(payload([post("b", "prop", "p1", {objects: [{id: 1, type: "sleep"}]})])[0].objects, [{id: 1, type: "sleep"}], "the game objects go along");
 });
 
 test("placing a post changes its place only, and keeps the turn within 0 to 360", () => {

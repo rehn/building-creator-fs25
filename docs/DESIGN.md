@@ -114,7 +114,7 @@ one filled `--accent`). Sliders pair with an editable number (click the number t
 - **List pages** (My buildings, Mods, My items, My textures): top bar > page head > tab rows > grid of cards > (sticky bar). Max width 1080 px.
 - **Chooser** ("New"): replaces the list while open (list and tab rows hidden), title "What do you want to build?" with Cancel at the right,
   one row of secondary tabs for the type, then the compact grid of starting points for that type.
-- **Editor / tool pages** (building editor, modeller): full-height, three columns on a wide screen (left panel with its own tabs + tree, details
+- **Editor / tool pages** (building editor, modeller, a mod's page `/mods/[id]`: tree and details at the left, the 3D view filling the rest): full-height, three columns on a wide screen (left panel with its own tabs + tree, details
   panel, 3D preview), drag handles between panels, stacked below 820 px. The 3D stage uses `--stage`/`--ground`.
 
 ## 6. Checklist for the map app
