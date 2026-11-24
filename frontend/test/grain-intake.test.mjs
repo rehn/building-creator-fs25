@@ -42,6 +42,14 @@ test("the station is turned 0 90 0, so its icon lands where the editor shows the
   }
 });
 
+test("the game's hopper stands on the ground: its link node is the middle of the box (h / 2 up), so it is moved down that far (and 1 cm under the ground)", () => {
+  for (const h of [1.5, 3]) {
+    const xml = placeableXml(sanitize({kind: "house", objects: [{...intake, h}]}), "S");
+    const y = +xml.match(/linkNode="unloadNodeTrailer" position="[-\d.]+ ([-\d.]+) /)[1];
+    assert.ok(Math.abs(y + h / 2 + 0.01) < 0.002, `h ${h}: y ${y}`);
+  }
+});
+
 test("with no grain ticked it buys wheat; the hopper can be left out", () => {
   const p = sanitize({kind: "house", objects: [intake]});
   assert.equal(fills(placeableXml(p, "S")), "WHEAT");

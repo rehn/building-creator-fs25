@@ -52,7 +52,7 @@ export function intakeScene(c) {
     </hotspots>
 ${p.siloHopper === false ? "" : `
     <dynamicallyLoadedParts>
-        <dynamicallyLoadedPart filename="${HOPPER}" node="0" linkNode="unloadNodeTrailer" position="0.05 -0.01 0.3" rotation="0 90 0"/>
+        <dynamicallyLoadedPart filename="${HOPPER}" node="0" linkNode="unloadNodeTrailer" position="0.05 ${+(-b.center[1] - 0.01).toFixed(3)} 0.3" rotation="0 90 0"/>
     </dynamicallyLoadedParts>
 `}
     <sellingStation supportsExtension="false" litersForFullPriceDrop="200000" fullPriceRecoverHours="48">
