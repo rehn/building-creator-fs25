@@ -1154,5 +1154,8 @@
   "Post {posts} of the fence stands inside a building. Move it out, or the game cannot make the area the hens walk in.": "Stolpe {posts} i stängslet står inne i en byggnad. Flytta ut den, annars kan spelet inte göra ytan som hönsen går på.",
   "The fence between {stretches} runs through a building. Move the posts to the wall or out from it, or the game cannot make the area the hens walk in.": "Stängslet mellan {stretches} går genom en byggnad. Flytta stolparna till väggen eller ut från den, annars kan spelet inte göra ytan som hönsen går på.",
   "The fence round the hens' yard. The green post is where it starts, the red where it stops: put them at a corner of a building or against a wall (they snap there, to any building, and can be on different walls). Drag a post to move it, or drag a pale dot between two posts out to a new post.": "Stängslet runt hönsgården. Den gröna stolpen är där det börjar, den röda där det slutar: sätt dem vid ett hörn på en byggnad eller mot en vägg (de fäster där, på vilken byggnad som helst, och kan sitta på olika väggar). Dra en stolpe för att flytta den, eller dra en blek prick mellan två stolpar ut till en ny stolpe.",
-  "{d} m to the next post": "{d} m till nästa stolpe"
+  "{d} m to the next post": "{d} m till nästa stolpe",
+  "Post {n}": "Stolpe {n}",
+  "Post {n} (start)": "Stolpe {n} (start)",
+  "Post {n} (stop)": "Stolpe {n} (stopp)"
 }
