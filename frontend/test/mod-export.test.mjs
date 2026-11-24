@@ -18,29 +18,47 @@ test("a mod is one placeable: a modDesc, one placeable XML, one frame i3d, and t
   const sleep = addGroup([], "sleep", settingsFor({width: 30, depth: 12}), [30, 14]);
   const {files, warnings} = await makeModPackage({name: "Gården", author: "Anna", posts, objects: sleep});
   assert.deepEqual(warnings, []);
-  for (const f of ["modDesc.xml", "house.xml", "house.i3d", "icon.dds", "store.dds", "posts/p1/house.i3d", "posts/p2/house.i3d", "posts/p3/prop.i3d"]) assert.ok(files.has(f), f);
+  for (const f of ["modDesc.xml", "house.xml", "house.i3d", "icon.dds", "store.dds", "posts/p3/prop.i3d"]) assert.ok(files.has(f), f);
   assert.equal([...files.keys()].filter(f => f.endsWith(".xml")).length, 2, "the modDesc and the one placeable");
+  assert.equal([...files.keys()].filter(f => f.endsWith(".i3d")).length, 2, "the mod's own i3d (with the buildings in it) and the prop's");
   assert.ok([...files.keys()].some(f => /^posts\/p3\/textures\/prop_diffuse\.dds$/.test(f)), "a prop's atlas");
   assert.ok(files.has("posts/p1/textures/interior_diffuse.dds") && files.has("posts/p1/textures/glass_diffuse.dds"), "the rooms behind the windows and the see-through glass of a house");
   assert.ok(!files.has("posts/p1/house.xml") && !files.has("posts/p1/modDesc.xml"), "a post has no XML of its own, the mod has one placeable");
+  assert.ok(files.has("posts/p2/textures/walls_diffuse.dds") || [...files.keys()].some(f => f.startsWith("posts/p2/textures/")), "each building has its textures in a folder of its own");
   assert.match(text(files.get("modDesc.xml")), /<storeItem xmlFilename="house\.xml"\/>/);
   assert.match(text(files.get("modDesc.xml")), /<author>Anna<\/author>/);
   assert.match(text(files.get("modDesc.xml")), /<iconFilename>icon\.dds<\/iconFilename>/, "the game does not load a mod without an icon");
   assert.match(text(files.get("house.xml")), /<image>store\.dds<\/image>/);
 });
 
-test("the frame i3d references each post, moved by minus the middle of everything, turned and lifted as the plan has them", async () => {
+test("each building is in the mod's i3d (its nodes b1_, b2_), each prop a reference, all moved by minus the middle, turned and lifted as the plan has them", async () => {
   const {files, middle} = await makeModPackage({name: "Gården", posts});
   const i3d = text(files.get("house.i3d"));
-  for (const f of ["posts/p1/house.i3d", "posts/p2/house.i3d", "posts/p3/prop.i3d"]) assert.ok(i3d.includes(`filename="${f}"`), f);
-  assert.equal((i3d.match(/<ReferenceNode /g) || []).length, 3);
-  const at = n => i3d.match(new RegExp(`<ReferenceNode name="${n}"[^>]*`))[0];
-  const near = (tag, key, want) => { const got = tag.match(new RegExp(`${key}="([^"]+)"`))[1].split(" ").map(Number); got.forEach((v, i) => assert.ok(Math.abs(v - want[i]) < 0.01, `${key} ${got} is not ${want}`)); };
-  near(at("post01"), "translation", [20 - middle[0], 0, 10 - middle[1]]);
-  near(at("post02"), "rotation", [0, 90, 0]);
-  near(at("post02"), "translation", [40 - middle[0], 0, 10 - middle[1]]);
-  near(at("post03"), "translation", [20 - middle[0], 6.5, 10 - middle[1]]);
+  assert.ok(i3d.includes('filename="posts/p3/prop.i3d"'));
+  assert.equal((i3d.match(/<ReferenceNode /g) || []).length, 1, "only the prop is a reference");
+  const at = (tag, n) => i3d.match(new RegExp(`<${tag} name="${n}"[^>]*`))[0];
+  const near = (el, key, want) => { const got = el.match(new RegExp(`${key}="([^"]+)"`))[1].split(" ").map(Number); got.forEach((v, i) => assert.ok(Math.abs(v - want[i]) < 0.01, `${key} ${got} is not ${want}`)); };
+  near(at("TransformGroup", "b1_post"), "translation", [20 - middle[0], 0, 10 - middle[1]]);
+  near(at("TransformGroup", "b2_post"), "rotation", [0, 90, 0]);
+  near(at("TransformGroup", "b2_post"), "translation", [40 - middle[0], 0, 10 - middle[1]]);
+  near(at("ReferenceNode", "post03"), "translation", [20 - middle[0], 6.5, 10 - middle[1]]);
+  assert.ok(i3d.includes('name="b1_house"') && i3d.includes('name="b2_house"') && i3d.includes('name="b1_visuals"'), "the nodes of each building have its prefix");
   assert.ok(Math.abs(middle[0] - 30) < 6 && Math.abs(middle[1] - 10) < 3, "the middle of the three");
+});
+
+test("the doors of every building are animated by one animatedObjects block that names the prefixed nodes, with saveIds that are all different", async () => {
+  const {files} = await makeModPackage({name: "Gården", posts});
+  const xml = text(files.get("house.xml")), i3d = text(files.get("house.i3d"));
+  assert.equal((xml.match(/<animatedObjects>/g) || []).length, 1, "one block, as the game takes one");
+  const ids = [...xml.matchAll(/saveId="([^"]+)"/g)].map(m => m[1]);
+  assert.ok(ids.length >= 2, "a door in each house: " + ids);
+  assert.equal(new Set(ids).size, ids.length, "each saveId once");
+  assert.ok(ids.every(id => /^b[12]_/.test(id)));
+  for (const m of xml.matchAll(/<part node="([^"]+)"/g)) assert.ok(i3d.includes(`name="${m[1]}"`), `${m[1]} is a node of the i3d`);
+  for (const m of xml.matchAll(/triggerNode="([^"]+)"/g)) assert.ok(i3d.includes(`name="${m[1]}"`), `${m[1]} is a node of the i3d`);
+  const maps = [...xml.matchAll(/<i3dMapping id="([^"]+)"/g)].map(m => m[1]);
+  assert.equal(new Set(maps).size, maps.length, "each mapping once");
+  assert.ok(maps.some(id => /^b1_door/.test(id)) && maps.some(id => /^b2_door/.test(id)), "both buildings' doors are mapped");
 });
 
 test("nothing is drawn or collides in the frame itself, and the areas cover the whole mod", async () => {
@@ -72,7 +90,8 @@ test("a post that could not be read is left out with a warning, and an empty mod
   const bad = await makeModPackage({name: "X", posts: [{...posts[0]}, {id: "z", kind: "building", name: "Borta", x: 0, z: 0, y: 0, rot: 0, data: null}]});
   assert.equal(bad.warnings.length, 1);
   assert.match(bad.warnings[0], /Borta/);
-  assert.equal((text(bad.files.get("house.i3d")).match(/<ReferenceNode /g) || []).length, 1);
+  const badI3d = text(bad.files.get("house.i3d"));
+  assert.ok(badI3d.includes('name="b1_post"') && !badI3d.includes('name="b2_post"'), "one building in the i3d");
   const empty = await makeModPackage({name: "Tom", posts: []});
   assert.ok(empty.files.has("house.xml") && empty.files.has("house.i3d"));
   assert.ok(empty.warnings.some(w => /no buildings or props/.test(w)));
