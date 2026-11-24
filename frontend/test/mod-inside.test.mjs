@@ -147,3 +147,18 @@ test("the ramp and the floor always meet: the floor covers the ramp inner edge, 
   }
   assert.ok(tried > 150, "many sizes were tried: " + tried);
 });
+
+// ---- no foundation: a flat apron out over the yard, as the game own small hen barn has (seen with showNavMesh: the strip of the doorway was missing in the game mesh) ----
+test("a building without a foundation gets a flat way in 2.5 m out over the yard, at the height of its floor; one with a foundation keeps its ramp from the ground", () => {
+  const low = sanitize({kind: "shed", width: 8, depth: 6, foundation: 0, openFront: true, doorWall: "back"});
+  const high = sanitize({kind: "shed", width: 8, depth: 6, foundation: 0.3, openFront: true, doorWall: "back"});
+  const feet = {x0: 16, x1: 24, z0: 7, z1: 13}, contour = [[15.85, 13.15], [15.85, 24], [24.15, 24], [24.15, 13.15]].map(([x, z]) => [x, 0, z]);
+  const a = insideNav({settings: low, place: {x: 20, z: 10, y: 0, rot: 0}, contour, blockers: [rectBlock(feet)]});
+  assert.ok(a.nav, JSON.stringify(a.reason));
+  const [p, , c] = a.nav.ramps[0].points;
+  assert.ok(Math.abs(a.nav.ramps[0].y0 - a.nav.ramps[0].y1) < 1e-9, "flat: both ends at the height of the floor");
+  assert.ok(Math.abs(p[1] - 13) > 2.4 && Math.abs(p[1] - 13) < 2.7, `the outer edge is 2.5 m out: ${p[1]}`);
+  assert.ok(c[1] < 13, "and the inner edge inside the front wall");
+  const b = insideNav({settings: high, place: {x: 20, z: 10, y: 0, rot: 0}, contour, blockers: [rectBlock(feet)]});
+  assert.ok(b.nav.ramps[0].y0 === 0 && b.nav.ramps[0].y1 > 0.3, "a raised floor has a ramp from the ground");
+});

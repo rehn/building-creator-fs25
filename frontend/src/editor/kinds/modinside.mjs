@@ -39,7 +39,8 @@ export function insideNav({settings: q, place, contour, blockers}) {
   const pt = ([px, pz]) => [px * c + pz * s + x, -px * s + pz * c + z];
   const rectW = r => { const u = pt([r.x0, r.z0]), v = pt([r.x1, r.z1]); return {x0: Math.min(u[0], v[0]), x1: Math.max(u[0], v[0]), z0: Math.min(u[1], v[1]), z1: Math.max(u[1], v[1])}; };
   const boxW = b => { const m = pt([b.center[0], b.center[2]]), swap = Math.abs(s) === 1; return {...b, center: [m[0], b.center[1], m[1]], size: swap ? [b.size[2], b.size[1], b.size[0]] : b.size}; };
-  const frames = wallsOf(q), F = q.foundation || 0, run = Math.max(F > 0.02 ? Math.max(0.8, F * 5) : 0.6, KEEP.wall + 0.4);
+  // (without a foundation there is nothing to climb: the way in is level and goes 2.5 m out over the yard, as the game own small hen barn has its walking shape out over the fence area, which is what joins the inside and the outside; with a foundation, a ramp from the ground)
+  const frames = wallsOf(q), F = q.foundation || 0, level = F < 0.03, run = level ? 2.5 : Math.max(F > 0.02 ? Math.max(0.8, F * 5) : 0.6, KEEP.wall + 0.4);
   const kept = [];
   for (const e of all) {
     const w = frames[e.wall], at = (sv, d) => [w.o[0] + w.u[0] * sv + w.n[0] * d, w.o[2] + w.u[2] * sv + w.n[2] * d];
@@ -50,7 +51,7 @@ export function insideNav({settings: q, place, contour, blockers}) {
   if (!kept.length) return {nav: null, reason: "no-entrance-faces-fence"};
   const rooms = roomOf(q, []).floorRects.map(rectW);
   const floorY = (F < 0.03 ? F + 0.03 : F + 0.004) + y;   // (the top of the floor: see FLOOR_LIFT in model.mjs)
-  const nav = animalNav({fence: contour, blockers, rooms, items: [], doors: kept.map(k => k.door), floorY});
+  const nav = animalNav({fence: contour, blockers, rooms, items: [], doors: kept.map(k => k.door), floorY, flat: level});
   if (!nav) return {nav: null, reason: "no-fence"};
   nav.blockers = wallSlabs(q, kept.map(k => k.e), []).map(boxW);
   return {nav, entrances: kept.length};
