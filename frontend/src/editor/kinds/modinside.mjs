@@ -28,7 +28,7 @@ export function entrancesOf(q) {
  * (the posts and the way back along the buildings, [[x, y, z] ...], in the mod's coordinates), the blockers of the buildings ([{center, size, keep}], as animalNav takes them).
  * -> {nav, entrances} (nav as animalNav gives it, with nav.blockers: the walls as boxes), or {nav: null, reason}: "turned" (only quarter turns are made), "no-door", "no-entrance-faces-fence", "no-fence".
  */
-export function insideNav({settings: q, place, contour, blockers}) {
+export function insideNav({settings: q, place, contour, blockers}) {   // (blockers with keep KEEP.trough are the troughs: the game gets them as obstacles too)
   const {x = 0, z = 0, y = 0, rot = 0} = place;
   const quarter = Math.abs(((rot % 90) + 90) % 90) < 1e-6 || Math.abs(((rot % 90) + 90) % 90 - 90) < 1e-6;
   if (!quarter) return {nav: null, reason: "turned"};
@@ -53,6 +53,6 @@ export function insideNav({settings: q, place, contour, blockers}) {
   const floorY = (F < 0.03 ? F + 0.03 : F + 0.004) + y;   // (the top of the floor: see FLOOR_LIFT in model.mjs)
   const nav = animalNav({fence: contour, blockers, rooms, items: [], doors: kept.map(k => k.door), floorY, flat: level});
   if (!nav) return {nav: null, reason: "no-fence"};
-  nav.blockers = wallSlabs(q, kept.map(k => k.e), []).map(boxW);
+  nav.blockers = [...wallSlabs(q, kept.map(k => k.e), []).map(boxW), ...blockers.filter(b => b.keep === KEEP.trough).map(({center, size}) => ({center, size}))];
   return {nav, entrances: kept.length};
 }

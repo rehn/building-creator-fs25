@@ -11,7 +11,8 @@ test("the groups the mod can take are the shared ones and the hen yard, named fo
   assert.ok(GROUPS.every(g => g.name && g.types.length));
   assert.equal(groupOf("spawn"), "vehicleshop");
   assert.equal(groupOf("pasture"), "hens", "the fence is part of the hen yard");
-  assert.equal(groupOf("feedTrough"), null, "the other animals' objects are not here yet");
+  assert.equal(groupOf("feedTrough"), "hens", "the hens' feed and water troughs are part of the hen yard");
+  assert.equal(groupOf("bales"), null, "the other animals' objects (bales ...) are not here yet");
 });
 
 test("adding a group puts all its objects where they go to start with, moved to the middle of the mod, with ids of their own", () => {
