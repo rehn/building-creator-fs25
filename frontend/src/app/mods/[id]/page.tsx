@@ -59,6 +59,7 @@ export default function ModPage() {
   const datas = useRef(new Map<string, Record<string, unknown>>());   // the projects' data as read, for the game mod
   const [made, setMade] = useState<{ name: string; warnings: string[] } | null>(null);
   const [postIx, setPostIx] = useState(0);   // the post of a fence the properties show
+  const [postOn, setPostOn] = useState(false);   // a post of the fence is chosen (in the tree or the view), not the fence as a whole
   const hens: number = hensOfData(mod?.data);
 
   useEffect(() => {
@@ -108,7 +109,7 @@ export default function ModPage() {
       onObjectDrop: (oid: number, at: { x: number; z: number }) => changeObjects(setObjectOf(objectsRef.current, oid, at)),
       onPointMove: (oid: number, i: number, at: { x: number; z: number }) => { setPostIx(i); setObjects(setPoint(objectsRef.current, oid, i, at)); },
       onPointDrop: (oid: number, i: number, at: { x: number; z: number }) => changeObjects(setPoint(objectsRef.current, oid, i, at)),
-      onPointSelect: (_oid: number, i: number) => setPostIx(i),
+      onPointSelect: (_oid: number, i: number) => { setPostIx(i); setPostOn(true); },
       onPointInsert: (oid: number, i: number, at: { x: number; z: number }) => setObjects(insertPoint(objectsRef.current, oid, i, at)),
     });
     view.current = v;
@@ -211,6 +212,14 @@ export default function ModPage() {
   const object = sel.kind === "object" ? objects.find(o => o.id === sel.object) ?? null : null;
   // a fence with a post inside a building: the game cannot make the animals' area from it, so it is marked (the tree, and its properties)
   const fenceBad = fenceProblems(objects, feetOf(draft.flatMap(p => { const s = shapes[p.ref]; return s && s !== "error" ? [{ x: p.x, z: p.z, rot: p.rot, bounds: s.bounds, feet: s.feet }] : []; }))) as Map<number, { posts: number[]; edges: number[] }>;
+  /** The warning for post i of fence id: the problems that are about it (it is inside a building, or a stretch it ends runs through one). */
+  const postWarning = (id: number, i: number) => {
+    const bad = fenceBad.get(id), n = objects.find(o => o.id === id)?.points?.length ?? 0;
+    if (!bad) return "";
+    const mine = { posts: bad.posts.filter(k => k === i), edges: bad.edges.filter(k => k === i || (k + 1) % n === i) };
+    if (!mine.posts.length && !mine.edges.length) return "";
+    return (fenceProblemList(mine, n) as [string, Record<string, string>][]).map(([text, values]) => t(text, values)).join(" ");
+  };
   const fenceWarning = (id: number) => {
     const bad = fenceBad.get(id), n = objects.find(o => o.id === id)?.points?.length ?? 0;
     return bad ? (fenceProblemList(bad, n) as [string, Record<string, string>][]).map(([text, values]) => t(text, values)).join(" ") : "";
@@ -273,7 +282,16 @@ export default function ModPage() {
         ...draft.map(p => row(p.id, 1, p.missing ? t("Deleted") : p.name, sel.kind === "post" && sel.post === p.id, () => setSel({ kind: "post", post: p.id }),
           { hint: p.kind === "prop" ? t("prop") : p.type ? TYPES.find(k => k.id === p.type)?.name : undefined })),
         row("objects", 1, t("Game objects"), sel.kind === "group", () => setSel({ kind: "group" }), { kids: objects.length > 0 }),
-        ...(closed.objects ? [] : objects.map(o => row(`o:${o.id}`, 2, typeName(o.type), sel.kind === "object" && sel.object === o.id, () => setSel({ kind: "object", object: o.id }), { warn: fenceWarning(o.id) }))),
+        ...(closed.objects ? [] : objects.flatMap(o => {
+          const posts = Array.isArray(o.points) ? o.points : null, mine = sel.kind === "object" && sel.object === o.id;
+          return [
+            row(`o:${o.id}`, 2, typeName(o.type), mine && !(posts && postOn), () => { setPostOn(false); setSel({ kind: "object", object: o.id }); }, { warn: fenceWarning(o.id), kids: !!posts }),
+            // (each post of a fence is an item of its own under it: the first is where it starts, the last where it stops)
+            ...(posts && !closed[`o:${o.id}`] ? posts.map((_, i) => row(`o:${o.id}:${i}`, 3,
+              i === 0 ? t("Post {n} (start)", { n: i + 1 }) : i === posts.length - 1 ? t("Post {n} (stop)", { n: i + 1 }) : t("Post {n}", { n: i + 1 }),
+              mine && postOn && Math.min(postIx, posts.length - 1) === i, () => { setPostIx(i); setPostOn(true); setSel({ kind: "object", object: o.id }); }, { warn: postWarning(o.id, i) })) : []),
+          ];
+        })),
       ]}
     </ul>
   );

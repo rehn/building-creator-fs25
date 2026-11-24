@@ -92,5 +92,8 @@
   "Post {posts} of the fence stands inside a building. Move it out, or the game cannot make the area the hens walk in.",
   "The fence between {stretches} runs through a building. Move the posts to the wall or out from it, or the game cannot make the area the hens walk in.",
   "The fence round the hens' yard. The green post is where it starts, the red where it stops: put them at a corner of a building or against a wall (they snap there, to any building, and can be on different walls). Drag a post to move it, or drag a pale dot between two posts out to a new post.",
-  "{d} m to the next post"
+  "{d} m to the next post",
+  "Post {n}",
+  "Post {n} (start)",
+  "Post {n} (stop)"
 ]
