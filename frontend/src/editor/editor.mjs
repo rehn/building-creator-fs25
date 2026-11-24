@@ -14,6 +14,7 @@ import { pieceSheet, pieceMeshes, buildingTree, matList, matTable, slotOf, partS
 import { lodKeeps, matTexture, i3dFiles, modTypesFor } from "./model.mjs";
 import { sharedDefaults } from "./kinds/gameobjects.mjs";
 import { DEALER_GROUPS } from "./kinds/vehicleshop.mjs";
+import { GRAINS } from "./kinds/grainintake.mjs";
 import { encodeDds, decodeDds } from "./dds.mjs";
 import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, henYard, henCap, seeThroughGlass, kindOf } from "./model.mjs";
 import { cowYard } from "./kinds/cow.mjs";
@@ -420,6 +421,7 @@ function syncOutputs() {
   for (const k of ["studSpacing", "studWidth", "studIrregular", "insidePanel"]) off(k, !p.insideSame);
   off("roofMaterial", false);
   { const shop = !!objectOf(p, "counter") && !!objectOf(p, "spawn") && !(kindOf(p).handles || []).includes("counter"); for (const k of [...DEALER_GROUPS.map(g => g.key), "sellPrice", "sellDelivery"]) off(k, !shop); }   // (the vehicle shop: a counter and its delivery place)
+  { const on = !!objectOf(p, "intake"); for (const k of [...GRAINS.map(g => g[0]), "grainPrice", "siloHopper"]) off(k, !on); }   // (the grain intake)
   off("shopCategory", !SHOP_KINDS.includes(p.kind));   // (animal buildings and stations keep their own place in the shop)
   for (const w of ["Front", "Back", "Left", "Right"]) off("post" + w, !p["open" + w]);
   off("roofPitch", p.roofType === "flat"); off("ridge", p.roofType === "flat");

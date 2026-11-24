@@ -65,7 +65,7 @@ const snap = v => Math.round(v / GRID) * GRID;
 
 /** The object types every kind of building can have, besides its own (kinds/gameobjects.mjs has their export; a test keeps the two lists equal). */
 // (a group is the object types that go together: a shop counter needs its delivery place)
-export const SHARED_GROUPS = {sleep: ["sleep"], workshop: ["workshop"], vehicleshop: ["counter", "spawn"]};
+export const SHARED_GROUPS = {sleep: ["sleep"], workshop: ["workshop"], vehicleshop: ["counter", "spawn"], intake: ["intake"]};
 /** Whether the kind uses a group's object types for its own thing (kind.handles: the warehouse's and the map shop's counters), so the shared export leaves them alone. */
 const handled = (kind, types) => (kind.handles || []).some(t => types.includes(t));
 /** The kind's objects spec, or one with nothing. */

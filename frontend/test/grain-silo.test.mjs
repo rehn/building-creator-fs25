@@ -73,8 +73,8 @@ test("what it buys is a choice: the checked grains go in the station, wheat when
 });
 
 test("the price is a share of the game's: priceScale follows the setting", () => {
-  assert.match(placeableXml(silo({sellPrice: 100}), "S"), /<unloadTrigger[^>]*priceScale="1"/);
-  assert.match(placeableXml(silo({sellPrice: 120}), "S"), /<unloadTrigger[^>]*priceScale="1\.2"/);
+  assert.match(placeableXml(silo({grainPrice: 100}), "S"), /<unloadTrigger[^>]*priceScale="1"/);
+  assert.match(placeableXml(silo({grainPrice: 120}), "S"), /<unloadTrigger[^>]*priceScale="1\.2"/);
 });
 
 test("the game's hopper can be left out", () => {
