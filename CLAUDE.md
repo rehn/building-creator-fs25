@@ -18,10 +18,12 @@ Web app for building Farming Simulator 25 houses and exporting them as .i3d
 - TDD: write the failing test first, then the code.
 - A new or changed page follows docs/DESIGN.md (tokens, tabs with counts, one primary button, dialogs from components/dialog.mjs, `t()` on every text).
 - Backend tests: cd backend && go test ./...  (TEST_DATABASE_URL=postgres://... also runs
-  the store tests on Postgres; CI does both, but only when a release tag is pushed)
-- CI runs the tests (backend, chart, frontend) only for a release tag vX.Y.Z (Lars, 2026-11-22: too slow on every PR). A pull request gets only the Docker build check,
-  a push to main nothing (no edge image, only releases are used), so run the tests locally before a release and before a PR that touches what they cover (a broken sv.json or a stale schema test
-  reached main that way once).
+  the store tests on Postgres; CI does both, on every pull request and on a release tag)
+- CI runs the tests (backend, chart, frontend) and the Docker build check on every pull request to main (Lars, 2026-11-24; before that only on release tags), and the images, chart and
+  release on a tag vX.Y.Z. A push to main runs nothing (no edge image, only releases are used).
+- Pull requests (Lars, 2026-11-24): Claude makes one per piece of work, waits for CI (`gh pr checks --watch`), merges it when it is green (a merge commit, the branch deleted) and, when it is
+  not, reads the log (`gh run view --log-failed`), fixes it on the same branch and pushes again; after three tries without progress it stops and says what is wrong. A PR that builds on another is
+  merged after it, with its base changed to main first. Claude makes no release or tag, and changes no setting of the repository. Changes to the game's XML are marked "not tried in the game" in the PR.
 - Chart tests: bash charts/test.sh (helm v4 in WSL at /usr/local/bin)
 - Frontend tests: cd frontend && npm test (node --test, no browser needed)
 
