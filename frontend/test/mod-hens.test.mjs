@@ -313,3 +313,14 @@ test("the generated fence stands 15 cm off the house when its posts were put on 
   assert.equal(nodes.length, 4);
   for (const n of nodes) assert.ok(away(n) > 0.14, `post ${n} is ${away(n)} from the house`);
 });
+
+// ---- the whole side on the wall line is stood off, not only the posts at the building (seen in the game: the posts out along the wall line stayed on it, a 15 cm jog at the ends, and the fence gave the meadow warning) ----
+test("posts out along the line of a wall, beyond the building, are stood off with the ones at it, so the whole side is on one line 15 cm out", () => {
+  const r = [{x0: -7.5, x1: 7.5, z0: -4.5, z1: 4.5}];
+  const out = keepClear([[7.35, 4.5], [11.5, 4.5], [11.5, 14.75], [-13.25, 13.75], [-13.25, 4.5], [-7.35, 4.5]], r);
+  assert.deepEqual(out.map(q => q[1]), [4.65, 4.65, 14.75, 13.75, 4.65, 4.65], "the four on the wall line, all 15 cm out");
+  assert.deepEqual(out.map(q => q[0]), [7.35, 11.5, 11.5, -13.25, -13.25, -7.35], "along it nothing moves");
+  assert.deepEqual(keepClear([[0, 4.5000001]], r), [[0, 4.65]]);
+  assert.deepEqual(keepClear([[20, 10]], r), [[20, 10]], "far from every line it was on: stays");
+  assert.deepEqual(keepClear([[0, 0]], r), [[0, 0]], "inside: left to the warning");
+});

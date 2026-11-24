@@ -180,20 +180,31 @@ function clipsRect(a, b, r) {
 export const FENCE_STAND_OFF = 0.15;
 
 /**
- * The fence's posts [[x, z] ...] with those that stand ON a wall or a corner of a building (rects [{x0, x1, z0, z1}], within 1 cm) moved FENCE_STAND_OFF out from it, a corner from both of its walls;
+ * The fence's posts [[x, z] ...] with those that stand ON the line of a wall of a building (rects [{x0, x1, z0, z1}], within 1 cm, at the building or out along the line of the wall) moved FENCE_STAND_OFF out from it, a corner from both of its walls;
  * the others as they were (a post inside a building is the warning's business). Made for the game: the hen type has no walking shape of its own, and a fence that touched a building gave "Could not
  * shrink polygon for creation task", where the hen house's own, 15 cm out from the wall, does not. The player still puts a post against the wall in the editor, as in the cow pasture.
  */
 export function keepClear(points, rects, gap = FENCE_STAND_OFF, eps = 0.01) {
-  return points.map(([x, z]) => {
-    let nx = x, nz = z;
+  const n = points.length, dx = Array(n).fill(0), dz = Array(n).fill(0);
+  // the posts at a building: on a wall or at a corner (within its length), moved out from it
+  points.forEach(([x, z], i) => {
     for (const r of rects) {
       if (x < r.x0 - eps || x > r.x1 + eps || z < r.z0 - eps || z > r.z1 + eps) continue;   // not at this building
-      const inner = x > r.x0 + eps && x < r.x1 - eps && z > r.z0 + eps && z < r.z1 - eps;
-      if (inner) continue;
-      if (Math.abs(z - r.z0) <= eps) nz = r.z0 - gap; else if (Math.abs(z - r.z1) <= eps) nz = r.z1 + gap;
-      if (Math.abs(x - r.x0) <= eps) nx = r.x0 - gap; else if (Math.abs(x - r.x1) <= eps) nx = r.x1 + gap;
+      if (x > r.x0 + eps && x < r.x1 - eps && z > r.z0 + eps && z < r.z1 - eps) continue;   // inside: the warning's business
+      if (Math.abs(z - r.z0) <= eps) dz[i] = -gap; else if (Math.abs(z - r.z1) <= eps) dz[i] = gap;
+      if (Math.abs(x - r.x0) <= eps) dx[i] = -gap; else if (Math.abs(x - r.x1) <= eps) dx[i] = gap;
     }
-    return [Math.round(nx * 1000) / 1000, Math.round(nz * 1000) / 1000];
   });
+  // the posts that follow along the same line (the hen house's six posts: the ends at the corners, the next two out along the wall line): stood off the same way, so the side stays one straight line
+  // (a fence with the ends 15 cm off and its neighbours on the wall line has a jog at each end, which the game could not make a meadow of)
+  for (const [d, k] of [[dz, 1], [dx, 0]]) {
+    for (const step of [1, -1]) {
+      for (let i = 0; i < n; i++) {
+        if (!d[i]) continue;
+        const line = points[i][k];
+        for (let j = i + step; j >= 0 && j < n && !d[j] && Math.abs(points[j][k] - line) <= eps; j += step) d[j] = d[i];
+      }
+    }
+  }
+  return points.map(([x, z], i) => [Math.round((x + dx[i]) * 1000) / 1000, Math.round((z + dz[i]) * 1000) / 1000]);
 }

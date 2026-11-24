@@ -16,9 +16,6 @@ import { I3dDoc, tg, prefixNames } from "./i3d.mjs";
 import { mergeContainers } from "./kinds/gameobjects.mjs";
 import { projectGroups, boundsOf, footprint, feetOf, buildingFeet, keepClear } from "./modPlan.mjs";
 import { fenceProblems } from "../lib/modObjects.mjs";
-import { insideNav } from "./kinds/modinside.mjs";
-import { navContourNodes, ccwFence } from "./kinds/pasture.mjs";
-import { KEEP } from "./walkarea.mjs";
 import { exportI3dAtlas, atlasDdsFiles } from "../builder/atlas.mjs";
 import { sanitize as sanitizeProp } from "../builder/model.mjs";
 import { encodeDds } from "./dds.mjs";
@@ -90,18 +87,11 @@ export async function makeModPackage({name, author = "", description = "", posts
   // the frame: a building (a shed's settings) with the mod's game objects, drawing nothing, with the areas of the whole
   const shift = r => ({x0: round(r.x0 - cx), x1: round(r.x1 - cx), z0: round(r.z0 - cz), z1: round(r.z1 - cz)});
   const host = {refs, nodes, doc, xml: mergeContainers(doorXml.join(""), ["animatedObjects"]), rects: [frame], footprints: feet.map(shift), inside: insideInfo, width: round(frame.x1 - frame.x0), depth: round(frame.z1 - frame.z0)};
-  // The fence is stood 15 cm off the walls it was put against (modPlan.mjs keepClear): the hen type with only a footprint to cut out of the area made a sliver where the fence touched a building (seen in
-  // the game). Where the hens walk inside a building the game makes the area outside as the fence less the walking shape, as in the cow barn, which has its posts on the walls: then the fence stays where it
-  // was put, if the hens can get in with it there (else it is stood off, as without the choice).
-  const feetShifted = feet.map(shift), asPut = pts => pts.map(([x, z]) => [round(x - cx), round(z - cz)]);
-  const keeps = pts => {
-    if (!insideInfo) return false;
-    const fence = ccwFence(asPut(pts).map(([x, z]) => [x, 0, z]));
-    const contour = [...fence, ...navContourNodes(fence, feetShifted).map(([x, z]) => [x, 0, z])];
-    const blockers = feetShifted.map(r => ({center: [(r.x0 + r.x1) / 2, 1, (r.z0 + r.z1) / 2], size: [r.x1 - r.x0, 2, r.z1 - r.z0], keep: KEEP.wall}));
-    return !!insideNav({settings: insideInfo.settings, place: insideInfo.place, contour, blockers}).nav;
-  };
-  const placed = objects.map(o => ({...o, x: round((o.x || 0) - cx), z: round((o.z || 0) - cz), ...(o.points ? {points: keeps(o.points) ? asPut(o.points) : asPut(keepClear(o.points, feet))} : {})}));
+  // The fence is stood 15 cm off the walls it was put against, all the posts along a wall line together (modPlan.mjs keepClear): in the game a fence that touched a building gave "Could not shrink polygon for
+  // creation task" with and without the walking shape of the building, and one with a jog (the ends off the wall, their neighbours on its line) did too; the cow barn's own fence, 15 cm out in a line, gave none
+  // in both modes.
+  const asPut = pts => pts.map(([x, z]) => [round(x - cx), round(z - cz)]);
+  const placed = objects.map(o => ({...o, x: round((o.x || 0) - cx), z: round((o.z || 0) - cz), ...(o.points ? {points: asPut(keepClear(o.points, feet))} : {})}));
   const p0 = sanitize({kind: "modframe", objects: placed, hens, modDescription: description});
   for (const [file, data] of Object.entries(i3dFiles(p0, {host}))) files.set(file, typeof data === "string" ? latin1(data) : data);
   const icon = (pictures && pictures.icon) || plain(256, [155, 42, 31]), store = (pictures && pictures.store) || plain(512, [155, 42, 31]);
