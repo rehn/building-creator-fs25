@@ -34,7 +34,7 @@ export function intakeDefaults(p) {
 export function intakeScene(c) {
   const {p} = c, o = objectOf(p, "intake");
   if (!o) return {nodes: [], xml: "", areas: []};
-  const F = +p.foundation, local = ([x, y, z]) => [z, y, -x], b = boxOf(o), [ix, , iz] = iconOf(o);
+  const F = +p.foundation, local = ([x, y, z]) => [-z, y, x], b = boxOf(o), [ix, , iz] = iconOf(o);
   const nodes = [tg("unloadStationTrailer", [0, 0, 0], [
     c.box("unloadNodeTrailer", {center: local(b.center), size: [b.size[2], b.size[1], b.size[0]]},
       {kinematic: true, compound: true, collisionFilterGroup: "0x40000000", collisionFilterMask: "0x20000000"}),
