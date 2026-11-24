@@ -140,7 +140,6 @@ CREATE TABLE IF NOT EXISTS mod_items (
 	x      REAL    NOT NULL DEFAULT 0,
 	z      REAL    NOT NULL DEFAULT 0,
 	rot    REAL    NOT NULL DEFAULT 0,
-	objects TEXT   NOT NULL DEFAULT '[]',
 	PRIMARY KEY (mod_id, id)
 );
 CREATE INDEX IF NOT EXISTS mod_items_ref ON mod_items(kind, ref_id);
@@ -289,7 +288,6 @@ CREATE TABLE IF NOT EXISTS mod_items (
 	x      DOUBLE PRECISION NOT NULL DEFAULT 0,
 	z      DOUBLE PRECISION NOT NULL DEFAULT 0,
 	rot    DOUBLE PRECISION NOT NULL DEFAULT 0,
-	objects TEXT            NOT NULL DEFAULT '[]',
 	PRIMARY KEY (mod_id, id)
 );
 CREATE INDEX IF NOT EXISTS mod_items_ref ON mod_items(kind, ref_id);
@@ -384,7 +382,6 @@ func openPostgres(url string) (*Store, error) {
 			`ALTER TABLE projects ADD COLUMN IF NOT EXISTS generated_version BIGINT NOT NULL DEFAULT 0`,
 			`ALTER TABLE api_tokens ADD COLUMN IF NOT EXISTS can_write BOOLEAN NOT NULL DEFAULT FALSE`,
 			`ALTER TABLE users ADD COLUMN IF NOT EXISTS sso_sub TEXT`,
-			`ALTER TABLE mod_items ADD COLUMN IF NOT EXISTS objects TEXT NOT NULL DEFAULT '[]'`,
 			`CREATE UNIQUE INDEX IF NOT EXISTS users_sso_sub ON users (sso_sub)`,
 			projectIndexes[0], projectIndexes[1],
 		} {
@@ -442,7 +439,7 @@ func openSQLite(path string) (*Store, error) {
 		return nil, fmt.Errorf("updating schema: %w", err)
 	}
 	for _, c := range [][3]string{{"projects", "folder", "TEXT NOT NULL DEFAULT ''"}, {"projects", "source_id", "TEXT NOT NULL DEFAULT ''"},
-		{"projects", "generated_version", "INTEGER NOT NULL DEFAULT 0"}, {"api_tokens", "can_write", "INTEGER NOT NULL DEFAULT 0"}, {"users", "sso_sub", "TEXT"}, {"mod_items", "objects", "TEXT NOT NULL DEFAULT '[]'"}} {
+		{"projects", "generated_version", "INTEGER NOT NULL DEFAULT 0"}, {"api_tokens", "can_write", "INTEGER NOT NULL DEFAULT 0"}, {"users", "sso_sub", "TEXT"}} {
 		if err := addColumnSQLite(db, c[0], c[1], c[2]); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("updating schema: %w", err)

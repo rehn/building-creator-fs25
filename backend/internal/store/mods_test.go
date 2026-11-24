@@ -38,16 +38,6 @@ func TestModLifecycle(t *testing.T) {
 		t.Fatalf("the others: %+v", m.Items)
 	}
 
-	// the game objects on a post are kept as given, and an item without any has an empty list
-	withObjects := []ModItem{{ID: "a", Kind: ModBuilding, Ref: house.ID, Objects: json.RawMessage(`[{"type":"sleep","x":1}]`)}, {ID: "b", Kind: ModProp, Ref: prop.ID}}
-	if m, err = s.UpdateMod(ctx, u.ID, m.ID, ModUpdate{Items: &withObjects}, 0); err != nil || string(m.Items[0].Objects) != `[{"type":"sleep","x":1}]` || string(m.Items[1].Objects) != `[]` {
-		t.Fatalf("objects: %+v %v", m.Items, err)
-	}
-	m, err = s.UpdateMod(ctx, u.ID, m.ID, ModUpdate{Items: &items}, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	// it follows the building live: a rename shows, a deletion makes the item missing (and the mod keeps it)
 	name := "Stora huset"
 	if _, err := s.UpdateProject(ctx, u.ID, house.ID, ProjectUpdate{Name: &name}, 0); err != nil {

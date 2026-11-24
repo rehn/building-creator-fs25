@@ -26,18 +26,15 @@ type Mod struct {
 // mod type it is generated with (the building has no type of its own; "" is a plain building). Name and Missing are read from what it
 // points at: a thing that was deleted is Missing and stays in the list until it is taken out.
 type ModItem struct {
-	ID   string  `json:"id"`
-	Kind string  `json:"kind"` // ModBuilding or ModProp
-	Ref  string  `json:"ref"`  // the project's id
-	Type string  `json:"type"`
-	X    float64 `json:"x"`
-	Z    float64 `json:"z"`
-	Rot  float64 `json:"rot"` // degrees
-	// Objects: the game objects put on this post (sleep point, workshop ...), as the editor keeps them (objects.mjs), in the post's own coordinates.
-	// The server only stores the list.
-	Objects json.RawMessage `json:"objects"`
-	Name    string          `json:"name"`
-	Missing bool            `json:"missing"`
+	ID      string  `json:"id"`
+	Kind    string  `json:"kind"` // ModBuilding or ModProp
+	Ref     string  `json:"ref"`  // the project's id
+	Type    string  `json:"type"`
+	X       float64 `json:"x"`
+	Z       float64 `json:"z"`
+	Rot     float64 `json:"rot"` // degrees
+	Name    string  `json:"name"`
+	Missing bool    `json:"missing"`
 }
 
 const (
@@ -94,7 +91,7 @@ func scanMod(row scanner, withData bool) (Mod, error) {
 const modCols = `m.id, m.name, m.version, m.created_at, m.updated_at, (SELECT COUNT(*) FROM mod_items i WHERE i.mod_id = m.id)`
 
 // modItemsSQL reads a mod's items with the names of the projects they point at.
-const modItemsSQL = `SELECT i.id, i.kind, i.ref_id, i.type, i.x, i.z, i.rot, i.objects, COALESCE(p.name, ''), CASE WHEN p.id IS NULL THEN 1 ELSE 0 END
+const modItemsSQL = `SELECT i.id, i.kind, i.ref_id, i.type, i.x, i.z, i.rot, COALESCE(p.name, ''), CASE WHEN p.id IS NULL THEN 1 ELSE 0 END
 	FROM mod_items i
 	JOIN mods m ON m.id = i.mod_id
 	LEFT JOIN projects p ON p.id = i.ref_id AND p.user_id = m.user_id
@@ -112,11 +109,9 @@ func (s *Store) modItems(ctx context.Context, q interface {
 	for rows.Next() {
 		var it ModItem
 		var missing int
-		var objects string
-		if err := rows.Scan(&it.ID, &it.Kind, &it.Ref, &it.Type, &it.X, &it.Z, &it.Rot, &objects, &it.Name, &missing); err != nil {
+		if err := rows.Scan(&it.ID, &it.Kind, &it.Ref, &it.Type, &it.X, &it.Z, &it.Rot, &it.Name, &missing); err != nil {
 			return nil, err
 		}
-		it.Objects = json.RawMessage(objects)
 		it.Missing = missing == 1
 		items = append(items, it)
 	}
@@ -200,11 +195,8 @@ func (s *Store) UpdateMod(ctx context.Context, userID int64, id string, u ModUpd
 				it.ID = newID()
 			}
 			seen[it.ID] = true
-			if len(it.Objects) == 0 {
-				it.Objects = json.RawMessage(`[]`)
-			}
-			if _, err := tx.exec(ctx, `INSERT INTO mod_items (mod_id, id, pos, kind, ref_id, type, x, z, rot, objects) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-				id, it.ID, pos, it.Kind, it.Ref, it.Type, it.X, it.Z, it.Rot, string(it.Objects)); err != nil {
+			if _, err := tx.exec(ctx, `INSERT INTO mod_items (mod_id, id, pos, kind, ref_id, type, x, z, rot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				id, it.ID, pos, it.Kind, it.Ref, it.Type, it.X, it.Z, it.Rot); err != nil {
 				return Mod{}, err
 			}
 		}
