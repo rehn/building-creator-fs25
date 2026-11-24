@@ -324,3 +324,46 @@ test("posts out along the line of a wall, beyond the building, are stood off wit
   assert.deepEqual(keepClear([[20, 10]], r), [[20, 10]], "far from every line it was on: stays");
   assert.deepEqual(keepClear([[0, 0]], r), [[0, 0]], "inside: left to the warning");
 });
+
+// ---- the game's fence is made of 2 m panels; a stretch whose rest (length mod 2) is between 0.6 and about 1.5 m is cut short in the game, leaving a hole ----
+import { fitPanels, panelRest } from "../src/editor/modPlan.mjs";
+
+const lengthsOf = pts => pts.slice(1).map((q, i) => Math.hypot(q[0] - pts[i][0], q[1] - pts[i][1]));
+const fits = L => { const r = panelRest(L); return r <= 0.56 || r >= 1.59; };
+
+test("the stretches that the game cuts short are the ones with a rest of 0.6 to 1.5 m after the 2 m panels (read from the segments it made)", () => {
+  // (length, was it cut?) from Lars savegames: FS25_HentestFencechanged, FS25_ModHons, FS25_Hons2, the cow barn and the hen yards that were whole
+  for (const [L, cut] of [[24.77, true], [9.25, true], [9.0, true], [4.75, true], [7.354, true], [10.25, false], [9.603, false], [13.85, false], [14.5, false], [16, false], [4, false], [5.75, false], [3.588, false]])
+    assert.equal(panelRest(L) > 0.6005 && panelRest(L) < 1.55, cut, `${L}: rest ${panelRest(L).toFixed(3)}`);   // (what the game was seen to do: not the margin the fit keeps)
+});
+
+test("fitting the posts to the panels: every stretch gets a length that is made whole and nothing moves more than about a metre", () => {
+  const game = [[6.475, 4.75], [10.475, 4.6], [10.475, 14.85], [-14.275, 13.85], [-14.275, 4.6], [-8.525, 4.75]];   // the fence of FS25_HentestFencechanged as the game got it
+  assert.ok(lengthsOf(game).some(L => !fits(L)), "it has stretches that are cut");
+  const out = fitPanels(game);
+  for (const L of lengthsOf(out)) assert.ok(fits(L), `a stretch of ${L.toFixed(3)} is cut`);
+  out.forEach((q, i) => assert.ok(Math.hypot(q[0] - game[i][0], q[1] - game[i][1]) < 1.3, `post ${i + 1} moved ${Math.hypot(q[0] - game[i][0], q[1] - game[i][1])}`));
+  // a stretch that is whole already is not touched: 4 m, 10.25 m
+});
+
+test("a fence that is whole already stays as it is, and any fence can be fitted: the posts follow their stretch, so a side along a wall stays along it", () => {
+  const whole = [[0, 0], [9.6, 0], [9.6, 14.5], [-4, 14.5]];
+  assert.deepEqual(fitPanels(whole), whole);
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let k = 0; k < 200; k++) {
+    const pts = Array.from({length: 2 + Math.floor(rnd() * 7)}, () => [Math.round(rnd() * 400) / 10 - 20, Math.round(rnd() * 400) / 10 - 20]);
+    const out = fitPanels(pts);
+    lengthsOf(out).forEach((L, i) => assert.ok(L < 0.01 || fits(L), `random ${k}: stretch ${i + 1} is ${L}`));
+  }
+});
+
+test("posts on a wall line only slide along it: the free corner takes the fitting, so a side along the wall stays straight (the fence of FS25_HentestFencechanged)", () => {
+  // as the export has it: the posts at the building (1, 2, 5, 6) 15 cm out from the wall, so pinned to z 4.65; the far corners (3, 4) free
+  const pts = [[7.35, 4.65], [11.5, 4.65], [11.5, 14.75], [-13.25, 13.75], [-13.25, 4.65], [-7.35, 4.65]];
+  const pins = [{z: true}, {z: true}, {}, {}, {z: true}, {z: true}];
+  const out = fitPanels(pts, pins);
+  for (const L of lengthsOf(out)) assert.ok(fits(L), `a stretch of ${L.toFixed(3)} is cut`);
+  for (const i of [0, 1, 4, 5]) assert.equal(out[i][1], 4.65, `post ${i + 1} stays on the wall line`);
+  out.forEach((q, i) => assert.ok(Math.hypot(q[0] - pts[i][0], q[1] - pts[i][1]) < 1.3, `post ${i + 1} moved ${Math.hypot(q[0] - pts[i][0], q[1] - pts[i][1]).toFixed(2)}`));
+});

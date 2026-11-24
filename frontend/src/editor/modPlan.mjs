@@ -208,3 +208,57 @@ export function keepClear(points, rects, gap = FENCE_STAND_OFF, eps = 0.01) {
   }
   return points.map(([x, z], i) => [Math.round((x + dx[i]) * 1000) / 1000, Math.round((z + dz[i]) * 1000) / 1000]);
 }
+
+/**
+ * The game's fence is made of 2 m panels (chickenNetFence.xml: panel length 2, maxScale 1.3). Read from the segments the game made of Lars fences: a stretch is made whole when its rest after the
+ * 2 m panels is at most 0.6 m (the last panel is stretched to 1.3 times) or at least about 1.54 m (one more panel, squeezed to 1 / 1.3); a rest between them is cut down to 0.6 m, which leaves a hole of
+ * the difference before the next post (0.15 to 0.75 m seen), and the fences with holes gave "Could not shrink polygon for creation task" in 5 of 6 placements.
+ */
+export const PANEL = {length: 2, stretch: 0.6, squeeze: 1.54};
+/** The rest of a stretch of length L after the whole 2 m panels. */
+export const panelRest = L => L - PANEL.length * Math.floor(L / PANEL.length + 1e-9);
+
+/** The length nearest to L that the game makes whole (a rest of at most 0.55 m or at least 1.6 m after the 2 m panels, a little inside the edges so that rounding does not decide). */
+const wholeNear = L => {
+  const r = panelRest(L), lo = PANEL.stretch - 0.05, hi = PANEL.squeeze + 0.06;
+  if (r <= lo + 0.01 || r >= hi - 0.01) return L;
+  const n = L - r;
+  return r - lo <= hi - r ? n + lo : n + hi;
+};
+
+/**
+ * The fence's posts [[x, z] ...] fitted to the panels, so that no stretch is cut short by the game (a hole before the next post). Each stretch gets the whole length nearest to its own (one that is whole
+ * already keeps its length), and the posts are pulled there together, half of the change each, until every stretch has it. pins: [{x?, z?}] for the posts (a post on a wall line is pinned in the
+ * coordinate the line fixes: it can only slide along the line, so a side along a wall stays straight and the free corners take the fitting). Where that cannot be done (everything pinned across the
+ * stretch) the posts are moved one by one along their stretch instead, which always works.
+ */
+export function fitPanels(points, pins = []) {
+  const n = points.length, p = points.map(q => [q[0], q[1]]);
+  const len = (i, q = p) => Math.hypot(q[i + 1][0] - q[i][0], q[i + 1][1] - q[i][1]);
+  const target = Array.from({length: Math.max(0, n - 1)}, (_, i) => (len(i) < 0.01 ? null : wholeNear(len(i))));
+  const free = (i, k) => !(pins[i] && (k === 0 ? pins[i].x : pins[i].z));
+  for (let it = 0; it < 300; it++) {
+    let worst = 0;
+    for (let i = 0; i + 1 < n; i++) {
+      if (target[i] === null) continue;
+      const L = len(i), e = target[i] - L;
+      worst = Math.max(worst, Math.abs(e));
+      if (Math.abs(e) < 1e-5 || L < 1e-9) continue;
+      const ux = (p[i + 1][0] - p[i][0]) / L, uz = (p[i + 1][1] - p[i][1]) / L;
+      for (const [j, sgn] of [[i, -1], [i + 1, 1]]) { if (free(j, 0)) p[j][0] += sgn * e / 2 * ux; if (free(j, 1)) p[j][1] += sgn * e / 2 * uz; }
+    }
+    if (worst < 1e-4) break;
+  }
+  const out = p.map(q => [Math.round(q[0] * 1000) / 1000, Math.round(q[1] * 1000) / 1000]);
+  const whole = q => q.every((_, i) => i + 1 >= q.length || Math.hypot(q[i + 1][0] - q[i][0], q[i + 1][1] - q[i][1]) < 0.01 || (panelRest(Math.hypot(q[i + 1][0] - q[i][0], q[i + 1][1] - q[i][1])) <= PANEL.stretch - 0.04 || panelRest(Math.hypot(q[i + 1][0] - q[i][0], q[i + 1][1] - q[i][1])) >= PANEL.squeeze + 0.05));
+  if (whole(out)) return out;
+  // (the fallback: each post along its stretch from the post before it; the pins are given up)
+  const q = points.map(r => [r[0], r[1]]);
+  for (let i = 1; i < q.length; i++) {
+    const dx = q[i][0] - q[i - 1][0], dz = q[i][1] - q[i - 1][1], L = Math.hypot(dx, dz);
+    if (L < 0.01) continue;
+    const to = wholeNear(L);
+    q[i] = [Math.round((q[i - 1][0] + dx * to / L) * 1000) / 1000, Math.round((q[i - 1][1] + dz * to / L) * 1000) / 1000];
+  }
+  return q;
+}
