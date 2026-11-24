@@ -10,6 +10,7 @@ import { objectOf, boxOf, iconOf, boxFrom } from "../objects.mjs";
 import { shopScene, shopDefaults } from "./vehicleshop.mjs";
 import { intakeScene, intakeDefaults } from "./grainintake.mjs";
 import { pumpScene, pumpDefaults } from "./fuelpump.mjs";
+import { palletScene, palletDefaults } from "./palletshop.mjs";
 
 /** The specializations each of the game's placeable types has of its own on top of simplePlaceable (sdk/xmlDoku/placeableTypes.xml). */
 const GAME_TYPES = {
@@ -17,6 +18,7 @@ const GAME_TYPES = {
   garageWorkshopSolarPanels: ["workshop", "solarPanels", "incomePerHour"],
   sellingStation: ["sellingStation"],
   buyingStation: ["buyingStation"],
+  warehouse: ["sellingStation", "palletBuyingStation"],
 };
 
 /** Scene nodes and placeable XML for the sleep point (an object outside or the sleep point piece inside). c: {p, geo, box, trigger, sleepPoint}. */
@@ -113,6 +115,10 @@ export const SHARED = {
   pump: {types: ["pump"], has: p => !!objectOf(p, "pump"), scene: pumpScene, defaults: pumpDefaults,
     gameType: "buyingStation", specializations: GAME_TYPES.buyingStation, fn: null, name: "FuelPump",
     note: `Fuel area: use <placeable type="buyingStation" ...> with canBeSold and showInStore false for a map to place, as the base game's gasStation (mapUS/sellingPoints).`},
+  // the pallet shop: the game's warehouse is a sellingStation with a palletBuyingStation (kinds/palletshop.mjs)
+  warehouse: {types: ["palletcounter", "palletspawn", "unload"], has: p => !!objectOf(p, "palletcounter") && !!objectOf(p, "palletspawn") && !!objectOf(p, "unload"), scene: palletScene, defaults: palletDefaults,
+    gameType: "warehouse", specializations: GAME_TYPES.warehouse, fn: null, name: "PalletShop",
+    note: `Pallet shop: use <placeable type="warehouse" ...>: a selling station with a pallet buying station, as the base game's warehouses (mapEU/warehouseEU, mapAS/warehouseAS).`},
 };
 /** The shared objects (ids) the building has, except those its kind uses the object types of for its own (kind.handles). */
 export const sharedOf = (p, kind = null) => Object.keys(SHARED).filter(id => !(kind && (kind.handles || []).some(t => SHARED[id].types.includes(t))) && SHARED[id].has(p));
@@ -126,13 +132,14 @@ export const sharedDefaults = (p, type) => {
  * One <triggerMarkers> and one <hotspots> in the placeable XML: the game reads only the first of each, so the ones that several objects (or a kind and an object) each write
  * are merged into the first, with every entry in order.
  */
-export function mergeContainers(xml, tags = ["triggerMarkers", "hotspots"]) {
+export function mergeContainers(xml, tags = ["triggerMarkers", "hotspots", "sellingStation"]) {
   for (const tag of tags) {
-    const re = new RegExp(`[ \\t]*<${tag}>([\\s\\S]*?)</${tag}>[ \\t]*\\n?`, "g"), found = [...xml.matchAll(re)];
+    // (the first one's own tag, with its attributes, is kept: a selling station has some; the others' children are moved into it)
+    const re = new RegExp(`[ \\t]*(<${tag}\\b[^>]*>)([\\s\\S]*?)</${tag}>[ \\t]*\\n?`, "g"), found = [...xml.matchAll(re)];
     if (found.length < 2) continue;
-    const entries = found.map(m => m[1].replace(/^\s*\n/, "").replace(/\s+$/, "")).filter(Boolean).join("\n");
+    const entries = found.map(m => m[2].replace(/^\s*\n/, "").replace(/\s+$/, "")).filter(Boolean).join("\n");
     let first = true;
-    xml = xml.replace(re, () => { if (!first) return ""; first = false; return `    <${tag}>\n${entries}\n    </${tag}>\n`; });
+    xml = xml.replace(re, () => { if (!first) return ""; first = false; return `    ${found[0][1]}\n${entries}\n    </${tag}>\n`; });
   }
   return xml;
 }

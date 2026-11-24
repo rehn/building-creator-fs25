@@ -15,6 +15,7 @@ import { lodKeeps, matTexture, i3dFiles, modTypesFor } from "./model.mjs";
 import { sharedDefaults } from "./kinds/gameobjects.mjs";
 import { DEALER_GROUPS } from "./kinds/vehicleshop.mjs";
 import { GRAINS } from "./kinds/grainintake.mjs";
+import { LISTS } from "./kinds/palletshop.mjs";
 import { encodeDds, decodeDds } from "./dds.mjs";
 import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, henYard, henCap, seeThroughGlass, kindOf } from "./model.mjs";
 import { cowYard } from "./kinds/cow.mjs";
@@ -381,20 +382,19 @@ function syncControls() {
   renderGoodsUI();
 }
 /* ---------- A warehouse's goods: what it sells and what it buys, chosen from lists of the game's fill types ---------- */
-/** Two lists with a filter and checkboxes (kind.lists: buyList, sellList); "All shown" and "None shown" act on what the filter leaves. */
+/** Two lists with a filter and checkboxes (LISTS: buyList, sellList); "All shown" and "None shown" act on what the filter leaves. */
 function renderGoodsUI() {
   const ed = $("goodsEditor");
   if (!ed) return;
   const kind = kindOf(p);
-  if (!kind.lists) { ed.innerHTML = ""; return; }
   const info = Object.fromEntries(FILL_TYPES.map(f => [f[0], f])), titles = {buyList: "The player buys here (pallets)", sellList: "The player sells here"};
-  ed.innerHTML = Object.keys(kind.lists).map(k => `<div class="goods" data-list="${k}"><h4 class="sub">${titles[k] || k} <span class="muted" data-count></span></h4>
+  ed.innerHTML = Object.keys(LISTS).map(k => `<div class="goods" data-list="${k}"><h4 class="sub">${titles[k] || k} <span class="muted" data-count></span></h4>
     <input type="search" data-filter placeholder="Filter" aria-label="Filter the list">
     <div class="row"><button type="button" data-all>All shown</button><button type="button" data-none>None shown</button></div>
-    <div class="goods-list" role="group">${kind.lists[k].options.map(n => `<label class="check" data-name="${n}"><input type="checkbox" value="${n}" ${(p[k] || []).includes(n) ? "checked" : ""}> <span translate="no">${esc((info[n] || [n, n])[1])}</span> <span class="muted">${info[n] ? info[n][2] : ""}</span></label>`).join("")}</div></div>`).join("");
+    <div class="goods-list" role="group">${LISTS[k].options.map(n => `<label class="check" data-name="${n}"><input type="checkbox" value="${n}" ${(p[k] || []).includes(n) ? "checked" : ""}> <span translate="no">${esc((info[n] || [n, n])[1])}</span> <span class="muted">${info[n] ? info[n][2] : ""}</span></label>`).join("")}</div></div>`).join("");
   ed.querySelectorAll(".goods").forEach(box => {
     const k = box.dataset.list, rows = [...box.querySelectorAll("label[data-name]")], count = box.querySelector("[data-count]");
-    const save = () => { const on = new Set(rows.filter(r => r.querySelector("input").checked).map(r => r.dataset.name)); p[k] = kind.lists[k].options.filter(n => on.has(n)); count.textContent = String(p[k].length); persist(); rebuild(false); };
+    const save = () => { const on = new Set(rows.filter(r => r.querySelector("input").checked).map(r => r.dataset.name)); p[k] = LISTS[k].options.filter(n => on.has(n)); count.textContent = String(p[k].length); persist(); rebuild(false); };
     count.textContent = String((p[k] || []).length);
     rows.forEach(r => r.querySelector("input").onchange = save);
     box.querySelector("[data-filter]").oninput = e => { const q = e.target.value.trim().toLowerCase(); rows.forEach(r => { r.hidden = q !== "" && !r.textContent.toLowerCase().includes(q) && !r.dataset.name.toLowerCase().includes(q); }); };
@@ -423,6 +423,7 @@ function syncOutputs() {
   { const shop = !!objectOf(p, "counter") && !!objectOf(p, "spawn") && !(kindOf(p).handles || []).includes("counter"); for (const k of [...DEALER_GROUPS.map(g => g.key), "sellPrice", "sellDelivery"]) off(k, !shop); }   // (the vehicle shop: a counter and its delivery place)
   { const on = !!objectOf(p, "intake"); for (const k of [...GRAINS.map(g => g[0]), "grainPrice", "siloHopper"]) off(k, !on); }   // (the grain intake)
   { const on = !!objectOf(p, "pump"); off("fuelPrice", !on); off("fuelRate", !on); }   // (the fuel area)
+  { const on = ["palletcounter", "palletspawn", "unload"].every(t => objectOf(p, t)); for (const k of ["buyPrice", "goodsPrice", "palletLines"]) off(k, !on); }   // (the pallet shop)
   off("shopCategory", !SHOP_KINDS.includes(p.kind));   // (animal buildings and stations keep their own place in the shop)
   for (const w of ["Front", "Back", "Left", "Right"]) off("post" + w, !p["open" + w]);
   off("roofPitch", p.roofType === "flat"); off("ridge", p.roofType === "flat");

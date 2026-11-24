@@ -38,6 +38,8 @@ export const OBJECT_TYPES = {
     hint: "Where the player fills up: vehicles standing in this box can fuel from the pumps, and the fuel icon floats over it. It covers the island and the lanes beside it, under the canopy; keep it high enough for the tallest machine."},
   info: {name: "Info area", glyph: null, icon: false, size: [10, 10, 3],
     hint: "Standing in it shows the building's info box. It usually goes round the whole building."},
+  palletcounter: {name: "Pallet shop counter", glyph: "cart", icon: true, indoors: true, size: [2.4, 1.4, 2.2],
+    hint: "Walk into the box to open the shop where the player buys pallets; the shopping icon floats over it. It goes inside the building, by the counter."},
   palletspawn: {name: "Pallet delivery area", glyph: null, icon: false, size: [3, 8, 0.4],
     hint: "Where the pallets the player buys appear: in lines along the long side of the box."},
   unload: {name: "Selling area", glyph: "pallet", icon: true, size: [6, 4, 3],
@@ -65,7 +67,7 @@ const snap = v => Math.round(v / GRID) * GRID;
 
 /** The object types every kind of building can have, besides its own (kinds/gameobjects.mjs has their export; a test keeps the two lists equal). */
 // (a group is the object types that go together: a shop counter needs its delivery place)
-export const SHARED_GROUPS = {sleep: ["sleep"], workshop: ["workshop"], vehicleshop: ["counter", "spawn"], intake: ["intake"], pump: ["pump"]};
+export const SHARED_GROUPS = {sleep: ["sleep"], workshop: ["workshop"], vehicleshop: ["counter", "spawn"], intake: ["intake"], pump: ["pump"], warehouse: ["palletcounter", "palletspawn", "unload"]};
 /** Whether the kind uses a group's object types for its own thing (kind.handles: the warehouse's and the map shop's counters), so the shared export leaves them alone. */
 const handled = (kind, types) => (kind.handles || []).some(t => types.includes(t));
 /** The kind's objects spec, or one with nothing. */

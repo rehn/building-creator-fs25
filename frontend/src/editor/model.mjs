@@ -7,6 +7,7 @@ import { SHOP_CATEGORIES } from "./kinds/shop.mjs";
 import { sharedScene, sharedPlaceable, mergeContainers, sharedDefaults } from "./kinds/gameobjects.mjs";
 import { DEALER_GROUPS } from "./kinds/vehicleshop.mjs";
 import { GRAINS } from "./kinds/grainintake.mjs";
+import { LISTS, MAX_LINES } from "./kinds/palletshop.mjs";
 import { WALL_T, openSide, wallFrames, wallsOf, liveWings, wingsOf, wingIdOf, eaveWalls, autoPipes, cleanPipes, cleanPapers, WING_PARTS, MAX_WINGS, HARD_MAX_PARTS, setMaxParts, WING_WALLS, wingWallKey, wingSplitKey, WING_SPLIT_WALLS, isSplitWall, openingSpan, splitsOf, sectionsOf, sectionRuns, sectionAtPoint, maxFloors, maxFloorsWithAttic, wallHasFloor, isGableWall, cascadeHeight, dividerAt, splitAtFrom, splitKey, SPLIT_WALLS, MAX_SPLITS, floorsOf, totalHeight, floorBase, floorAt, roomOf, footprint, toWorld, cleanItems, problems } from "./layout.mjs";
 import { withAssets, placement, assetFolder, normalizeMeta, troughAssets } from "./assets.mjs";
 import { SURFACES } from "./surfaces.mjs";
@@ -39,6 +40,8 @@ export const DEFAULTS = {
   ...Object.fromEntries(GRAINS.map(([k]) => [k, false])), grainPrice:100, siloHopper:true,
   // (what a fuel area gives, if the building has one)
   fuelPrice:100, fuelRate:20,
+  // (what a pallet shop sells and buys, if the building has one; the lists, buyList and sellList, are made in sanitize)
+  buyPrice:144, goodsPrice:100, palletLines:2,
   modPrice:75000, modUpkeep:75, shopCategory:"auto", modAuthor:"", modDescription:"", lodDistance:80, binaryShapes:true
 };
 /** Curtain layouts: [id, name]. Windows can pick one or follow the house's choice ("default"). */
@@ -152,6 +155,11 @@ const SHARED_SECTIONS = [
   {title:"Fuel", tab:"game", hint:"The fuel a fuel area gives (add one under Game objects): the player drives into it and fills diesel from an endless tank.", fields:[
     {k:"fuelPrice", label:"Price, per cent of the game's own", min:50, max:200, step:5, unit:" %"},
     {k:"fuelRate", label:"Speed", min:5, max:100, step:5, unit:" l/s"}]},
+  {title:"Prices and pallets", tab:"game", hint:"The price of the pallets the player buys at a pallet shop, and of what the player sells there, as per cent of the game's own price (the base game's warehouses sell at 144 %). Add the shop counter, the delivery area and the selling area under Game objects.", fields:[
+    {k:"buyPrice", label:"Pallets bought here, per cent of the price", min:50, max:300, step:2, unit:" %"},
+    {k:"goodsPrice", label:"Goods sold here, per cent of the price", min:50, max:200, step:5, unit:" %"},
+    {k:"palletLines", label:"Lines of pallets on the delivery area", min:1, max:MAX_LINES, step:1}]},
+  {title:"Goods", tab:"game", custom:"filltypes", hint:"What the player can buy at a pallet shop (pallets) and what the shop buys from the player. Choose from the lists.", fields:[]},
   {title:"Game mod", label:"Shop and mod", tab:"game", hint:"Used by \u201CExport game mod\u201D: what the house costs in the shop and who made it. The project name is the name in the shop.", fields:[
     {k:"modPrice", label:"Price", min:0, max:2000000, step:500, money:true},
     {k:"modUpkeep", label:"Daily upkeep", min:0, max:5000, step:5, money:true},
@@ -795,7 +803,7 @@ export function sanitize(obj) {
     if (v !== undefined) out[k] = typeof defs[k] === "number" ? +(+v).toFixed(3) : v;
   }
   // lists of names (a warehouse's goods): the ones the game has, once each, in the game's order; not a list: the kind's starting one
-  for (const [k, spec] of Object.entries(kind.lists || {})) {
+  for (const [k, spec] of Object.entries({...LISTS, ...(kind.lists || {})})) {
     const have = new Set(Array.isArray(obj[k]) ? obj[k].filter(x => typeof x === "string") : []);
     out[k] = Array.isArray(obj[k]) ? spec.options.filter(n => have.has(n)) : spec.options.filter(n => spec.start.includes(n));
   }
