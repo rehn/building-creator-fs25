@@ -8,8 +8,8 @@ import { LanguageSelect } from "./LanguageSelect";
 import { SettingsMenu } from "./SettingsMenu";
 import { Version } from "./Version";
 
-// The work (buildings, items, textures) as buttons; everything else is behind the gear (SettingsMenu), and logging out is the arrow at the end.
-const NAV: [string, string][] = [["/", "Buildings"], ["/items", "Items"], ["/textures", "Textures"]];
+// The work (buildings, mods, items, textures) as buttons; everything else is behind the gear (SettingsMenu), and logging out is the arrow at the end.
+const NAV: [string, string][] = [["/", "Buildings"], ["/mods", "Mods"], ["/items", "Items"], ["/textures", "Textures"]];
 
 export function TopBar({ user }: { user: User | null }) {
   const router = useRouter();

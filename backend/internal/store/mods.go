@@ -22,13 +22,13 @@ type Mod struct {
 	UpdatedAt time.Time       `json:"updatedAt"`
 }
 
-// A ModItem is one post of a mod: a building (a project) or a prop (an item of My items) with the place it has in the mod's plan and the
+// A ModItem is one post of a mod: a building or a prop (both are projects: a prop is a project of kind "prop", made in the modeller) with the place it has in the mod's plan and the
 // mod type it is generated with (the building has no type of its own; "" is a plain building). Name and Missing are read from what it
 // points at: a thing that was deleted is Missing and stays in the list until it is taken out.
 type ModItem struct {
 	ID      string  `json:"id"`
 	Kind    string  `json:"kind"` // ModBuilding or ModProp
-	Ref     string  `json:"ref"`  // the project's or the asset's id
+	Ref     string  `json:"ref"`  // the project's id
 	Type    string  `json:"type"`
 	X       float64 `json:"x"`
 	Z       float64 `json:"z"`
@@ -42,7 +42,7 @@ const (
 	ModProp     = "prop"
 )
 
-// ErrBadRef: an item points at a building that is not the user's or a prop that is neither theirs nor shared.
+// ErrBadRef: an item points at a project that is not the user's.
 var ErrBadRef = errors.New("store: a mod item points at something the user can't use")
 
 // ModUpdate: what is changed (nil / empty: left as it is). Items replaces the whole list.
@@ -90,12 +90,11 @@ func scanMod(row scanner, withData bool) (Mod, error) {
 
 const modCols = `m.id, m.name, m.version, m.created_at, m.updated_at, (SELECT COUNT(*) FROM mod_items i WHERE i.mod_id = m.id)`
 
-// modItemsSQL reads a mod's items with the names of what they point at (a project of the user's, a prop of theirs or a shared one).
-const modItemsSQL = `SELECT i.id, i.kind, i.ref_id, i.type, i.x, i.z, i.rot, COALESCE(p.name, a.name, ''), CASE WHEN p.id IS NULL AND a.id IS NULL THEN 1 ELSE 0 END
+// modItemsSQL reads a mod's items with the names of the projects they point at.
+const modItemsSQL = `SELECT i.id, i.kind, i.ref_id, i.type, i.x, i.z, i.rot, COALESCE(p.name, ''), CASE WHEN p.id IS NULL THEN 1 ELSE 0 END
 	FROM mod_items i
 	JOIN mods m ON m.id = i.mod_id
-	LEFT JOIN projects p ON i.kind = 'building' AND p.id = i.ref_id AND p.user_id = m.user_id
-	LEFT JOIN assets a ON i.kind = 'prop' AND a.id = i.ref_id AND (a.user_id = m.user_id OR a.shared)
+	LEFT JOIN projects p ON p.id = i.ref_id AND p.user_id = m.user_id
 	WHERE i.mod_id = ? ORDER BY i.pos`
 
 func (s *Store) modItems(ctx context.Context, q interface {
@@ -177,15 +176,10 @@ func (s *Store) UpdateMod(ctx context.Context, userID int64, id string, u ModUpd
 	if u.Items != nil {
 		for _, it := range *u.Items {
 			var n int
-			switch it.Kind {
-			case ModBuilding:
-				err = tx.queryRow(ctx, `SELECT COUNT(*) FROM projects WHERE id = ? AND user_id = ?`, it.Ref, userID).Scan(&n)
-			case ModProp:
-				err = tx.queryRow(ctx, `SELECT COUNT(*) FROM assets WHERE id = ? AND (user_id = ? OR shared)`, it.Ref, userID).Scan(&n)
-			default:
+			if it.Kind != ModBuilding && it.Kind != ModProp {
 				return Mod{}, ErrBadRef
 			}
-			if err != nil {
+			if err = tx.queryRow(ctx, `SELECT COUNT(*) FROM projects WHERE id = ? AND user_id = ?`, it.Ref, userID).Scan(&n); err != nil {
 				return Mod{}, err
 			}
 			if n != 1 {
