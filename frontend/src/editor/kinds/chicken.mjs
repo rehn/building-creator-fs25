@@ -2,6 +2,7 @@
 // chicken barns (data/placeables/rudolfHormann/chickenBarnBig is the 360-hen one).
 // Imports only the i3d writer; the core hands in what it needs (see kinds/index.mjs).
 import { tg, shape } from "../i3d.mjs";
+import { navMesh } from "../walkarea.mjs";
 import { roomOf, furnisher } from "../layout.mjs";
 import { OPPOSITE, wallLength, yardFrame, shellOf, teleportFor, withPasture, pastureWallFor, cornerStripes, palletLines, contourClosure, navContourNodes, ccwFence } from "./pasture.mjs";
 import { objectOf, objectsOf, boxOf, iconOf, boxFrom, pastureOf, blockersOf, footprints } from "../objects.mjs";
@@ -356,7 +357,9 @@ function scene(c) {
  * rects ({x0, x1, z0, z1}) the way back along the fence follows. A mod (kinds/modframe.mjs) builds its own yard and uses the same export.
  */
 export function henScene(c, y, n, rects) {
-  const {doc} = c;
+  const {doc} = c, blocker = (b, i) => c.box(i ? `navmeshBlocker${i + 1}` : "navmeshBlocker", b, {static: true, collisionFilterGroup: "0x800000", collisionFilterMask: "0x1", buildNavMeshMask: "0xfe"});
+  // (hens that can go inside: a walking mesh of the floor and a walking plane, as the base game's hen barns have; the area outside is the fence less that shape, the walls are the blockers)
+  const floor = y.nav && {...y.nav, rects: y.nav.rects.filter(r => r.inside)}, forage = y.nav && doc.material("forage_mat", {diffuseColor: "0.42 0.45 0.2 1"});
   const stripesMat = doc.material("warningStripes_mat", {}, ["diffuse", "normal", "specular"].map((k, i) =>
     [["Texture", "Normalmap", "Glossmap"][i], `$data/shared/warningStripes_${k}.png`])); // the game finds the .dds
   const nodes = [tg("chickenFeatures", [0, 0, 0], [
@@ -370,7 +373,11 @@ export function henScene(c, y, n, rects) {
     c.box("palletTrigger", y.pallet.trigger, c.trigger("0x20000000", "0x10000")),
     ...y.pallet.lines.map(([a, b], i) => tg(`palletAreaStart0${i + 1}`, a, [tg(`palletAreaEnd0${i + 1}`, b.map((v, k) => v - a[k]))])),
     // Like the base game's horse barn: the footprint is cut out of the walking area made from the fence.
-    tg("navigationRootNode", [0, 0, 0], y.blockers.map((b, i) => c.box(i ? `navmeshBlocker${i + 1}` : "navmeshBlocker", b, {static: true, collisionFilterGroup: "0x800000", collisionFilterMask: "0x1", buildNavMeshMask: "0xfe"}))),
+    tg("navigationRootNode", [0, 0, 0], y.nav
+      ? [shape("navigationMeshShape", {shapeId: doc.shape("navigationMeshShape", navMesh(floor), {cpu: true}), nonRenderable: true, buildNavMeshMask: "0xfe", castsShadows: false, receiveShadows: false, materialIds: forage}),
+        shape("walkingPlane", {shapeId: doc.shape("walkingPlane", navMesh(floor), {cpu: true}), static: true, collisionFilterGroup: "0x400000", collisionFilterMask: "0x1", nonRenderable: true, castsShadows: false, receiveShadows: false, materialIds: forage}),
+        ...y.nav.blockers.map(blocker)]
+      : y.blockers.map(blocker)),
     tg("fence1", [0, 0, 0], y.fence.map((q, i) => tg(`fence1Node${i + 1}`, q))),
     // the way back from the last post to the first along the building (the game would close the area with a straight line, through the building)
     tg("navContour", [0, 0, 0], navContourNodes(y.fence, rects).map(([x, z], i) => tg(`navContourNode${i + 1}`, [x, 0, z]))),
@@ -395,7 +402,7 @@ export function henScene(c, y, n, rects) {
     <husbandry saveId="Animals_CHICKEN" hasStatistics="false">
         <!-- The walking area is made from the fence when the barn is placed; the barn itself is blocked out. -->
         <animals type="CHICKEN" baseMaxNumAnimals="${n}" maxNumAnimals="${n}">
-            <navigation rootNode="navigationRootNode"/>
+            <navigation rootNode="navigationRootNode"${y.nav ? ' shape="navigationMeshShape"' : ""}/>
             <loadingTrigger node="loadingTrigger"/>
         </animals>
         <food capacity="${n * FEED_PER_HEN}">

@@ -5,7 +5,9 @@
 // Not tried in the game: that the game takes a chicken barn whose buildings are several, and a fence round them all.
 import shed from "./shed.mjs";
 import { henScene, HEN_PLACEABLE, MAX_HENS } from "./chicken.mjs";
-import { palletLines, cornerStripes, teleportFor, ccwFence } from "./pasture.mjs";
+import { palletLines, cornerStripes, teleportFor, ccwFence, navContourNodes } from "./pasture.mjs";
+import { insideNav } from "./modinside.mjs";
+import { KEEP } from "../walkarea.mjs";
 import { objectOf, boxOf, iconOf, pastureOf } from "../objects.mjs";
 import { sharedDefaults } from "./gameobjects.mjs";
 
@@ -22,9 +24,18 @@ const rectOf = b => ({x0: b.center[0] - b.size[0] / 2, x1: b.center[0] + b.size[
 function yardOf(p, geo, host) {
   const o = t => objectOf(p, t), pa = pastureOf(p);
   const food = boxOf(o("food")), loading = boxOf(o("loading")), pallets = boxOf(o("pallets")), info = boxOf(o("info"));
-  const feet = (host && host.footprints) || [];
+  const feet = (host && host.footprints) || [], fence = ccwFence(pa.fence);
+  // the hens walk inside the chosen building (host.inside: {settings, place}): its floor and the doorways that face the fence; the answer (or why not) is left in host.insideResult for the warnings
+  let nav = null;
+  if (host && host.inside) {
+    const contour = [...fence, ...navContourNodes(fence, feet).map(([x, z]) => [x, 0, z])];
+    const blockers = feet.map(r => ({center: [(r.x0 + r.x1) / 2, 1, (r.z0 + r.z1) / 2], size: [r.x1 - r.x0, 2, r.z1 - r.z0], keep: KEEP.wall}));
+    host.insideResult = insideNav({settings: host.inside.settings, place: host.inside.place, contour, blockers});
+    nav = host.insideResult.nav;
+  }
   return {
-    fence: ccwFence(pa.fence),
+    nav,
+    fence,
     food: {...food, marker: iconOf(o("food"))},
     pallet: {lines: palletLines(pallets), trigger: pallets, stripes: cornerStripes(rectOf(pallets))},
     loading: {...loading, marker: iconOf(o("loading")), teleport: teleportFor({box: loading}, geo.dims)},

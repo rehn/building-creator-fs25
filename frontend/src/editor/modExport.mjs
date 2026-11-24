@@ -38,8 +38,8 @@ async function propFiles(post, folder, {loadTextures}) {
 /** A plain picture w x w in one colour (when there is no snapshot of the view to use). */
 const plain = (w, [r, g, b]) => ({width: w, height: w, rgba: Uint8ClampedArray.from({length: w * w * 4}, (_, i) => [r, g, b, 255][i % 4])});
 
-/** @param {{name: string, author?: string, description?: string, posts: any[], objects?: any[], hens?: number, loadTextures?: ((ids: string[]) => Promise<Map<string, any>>) | null, encode?: any, pictures?: {icon?: any, store?: any} | null}} mod */
-export async function makeModPackage({name, author = "", description = "", posts, objects = [], hens = 30, loadTextures = null, encode = encodeDds, pictures = null}) {
+/** @param {{name: string, author?: string, description?: string, posts: any[], objects?: any[], hens?: number, inside?: string | null, loadTextures?: ((ids: string[]) => Promise<Map<string, any>>) | null, encode?: any, pictures?: {icon?: any, store?: any} | null}} mod */
+export async function makeModPackage({name, author = "", description = "", posts, objects = [], hens = 30, inside = null, loadTextures = null, encode = encodeDds, pictures = null}) {
   const warnings = [];
   const live = posts.filter(p => p.data);
   for (const p of posts) if (!p.data) warnings.push(`“${p.name || p.id}” could not be read and is left out.`);
@@ -63,7 +63,7 @@ export async function makeModPackage({name, author = "", description = "", posts
 
   // the posts: a building is made into the one i3d document (its nodes with a prefix of their own, its textures in its folder), a prop is files of its own to reference
   const files = new Map(), refs = [], nodes = [], doorXml = [], doc = new I3dDoc();
-  let n = 0;
+  let n = 0, insideInfo = null;
   for (const p of live) {
     n++;
     const folder = `posts/p${n}`, place = [round(p.x - cx), round(p.y || 0), round(p.z - cz)], turn = [0, round(p.rot || 0), 0];
@@ -74,6 +74,7 @@ export async function makeModPackage({name, author = "", description = "", posts
       continue;
     }
     const q = sanitize(p.data), prefix = `b${n}_`;
+    if (inside && p.id === inside) insideInfo = {name: p.name || p.id, settings: q, place: {x: round(p.x - cx), z: round(p.z - cz), y: p.y || 0, rot: p.rot || 0}};
     withTextureDir(folder + "/", () => {
       const {root, doorXml: doors} = buildInMod(q, doc);
       const xml = prefixNames(root, doors, prefix);
@@ -85,7 +86,7 @@ export async function makeModPackage({name, author = "", description = "", posts
 
   // the frame: a building (a shed's settings) with the mod's game objects, drawing nothing, with the areas of the whole
   const shift = r => ({x0: round(r.x0 - cx), x1: round(r.x1 - cx), z0: round(r.z0 - cz), z1: round(r.z1 - cz)});
-  const host = {refs, nodes, doc, xml: mergeContainers(doorXml.join(""), ["animatedObjects"]), rects: [frame], footprints: feet.map(shift), width: round(frame.x1 - frame.x0), depth: round(frame.z1 - frame.z0)};
+  const host = {refs, nodes, doc, xml: mergeContainers(doorXml.join(""), ["animatedObjects"]), rects: [frame], footprints: feet.map(shift), inside: insideInfo, width: round(frame.x1 - frame.x0), depth: round(frame.z1 - frame.z0)};
   // (the fence is stood off the walls it was put against: modPlan.mjs keepClear)
   const placed = objects.map(o => ({...o, x: round((o.x || 0) - cx), z: round((o.z || 0) - cz), ...(o.points ? {points: keepClear(o.points, feet).map(([x, z]) => [round(x - cx), round(z - cz)])} : {})}));
   const p0 = sanitize({kind: "modframe", objects: placed, hens, modDescription: description});
@@ -101,6 +102,14 @@ export async function makeModPackage({name, author = "", description = "", posts
     const n = objects.find(o => o.id === id).points.length;
     for (const i of found.edges) warnings.push(`The fence between post ${i + 1} and ${(i + 1) % n + 1} runs through a building: move the posts to the wall or out from it, or the game cannot make the area the hens walk in.`);
   }
+  // (the hens were to walk inside a building and cannot: why, so the player can fix it; the hens then stay outside, as before)
+  const why = insideInfo && host.insideResult && !host.insideResult.nav ? host.insideResult.reason : null;
+  if (why) warnings.push({
+    turned: `“${insideInfo.name}” is turned at an angle that is not a quarter turn, so the hens cannot walk inside it: turn it a quarter, or take the choice off.`,
+    "no-door": `“${insideInfo.name}” has no open framed doorway on its ground floor (door style “Open doorway, framed”), so the hens stay outside it.`,
+    "no-entrance-faces-fence": `No open doorway of “${insideInfo.name}” faces the hens' fence, so the hens stay outside it: put the fence on the side of the doorway.`,
+    "no-fence": `The hens cannot walk inside “${insideInfo.name}”: the fence is too small.`,
+  }[why] || `The hens cannot walk inside “${insideInfo.name}”.`);
   if (!live.length) warnings.push("The mod holds no buildings or props yet.");
   return {files, warnings, middle: [round(cx), round(cz)], mod: modName(name)};
 }

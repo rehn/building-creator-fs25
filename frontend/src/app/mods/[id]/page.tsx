@@ -61,6 +61,7 @@ export default function ModPage() {
   const [postIx, setPostIx] = useState(0);   // the post of a fence the properties show
   const [postOn, setPostOn] = useState(false);   // a post of the fence is chosen (in the tree or the view), not the fence as a whole
   const hens: number = hensOfData(mod?.data);
+  const insideId: string | null = typeof mod?.data?.inside === "string" ? mod.data.inside : null;   // the building whose floor the hens walk on
 
   useEffect(() => {
     if (!user) return;
@@ -82,14 +83,14 @@ export default function ModPage() {
   }, [mod]);
 
   /** Saves the buildings and props and/or the game objects (the answer has the ids and the names); a change made somewhere else is not overwritten but read again. */
-  async function save(patch: { items?: ModPost[]; objects?: ModObject[]; hens?: number }) {
+  async function save(patch: { items?: ModPost[]; objects?: ModObject[]; hens?: number; inside?: string | null }) {
     const m = modRef.current;
     if (!m) return;
     setBusy(true); setError("");
     try {
       setMod(await api.updateMod(m.id, {
         ...(patch.items ? { items: payload(patch.items) } : {}),
-        ...(patch.objects || patch.hens ? { data: { ...(m.data ?? {}), ...(patch.objects ? { objects: patch.objects } : {}), ...(patch.hens ? { hens: patch.hens } : {}) } } : {}),
+        ...(patch.objects || patch.hens || "inside" in patch ? { data: { ...(m.data ?? {}), ...(patch.objects ? { objects: patch.objects } : {}), ...(patch.hens ? { hens: patch.hens } : {}), ...("inside" in patch ? { inside: patch.inside } : {}) } } : {}),
         version: m.version,
       }));
     } catch (e) { setError((e as Error).message); api.mod(m.id).then(setMod).catch(() => {}); }
@@ -176,7 +177,7 @@ export default function ModPage() {
         posts.push({ id: p.id, kind: p.kind, name: p.name, x: p.x, z: p.z, y: p.y ?? 0, rot: p.rot, data });
       }
       const pkg = await makeModPackage({
-        name: mod.name, author: user?.name ?? "", posts, objects, hens,
+        name: mod.name, author: user?.name ?? "", posts, objects, hens, inside: insideId,
         // the icon and the shop picture: a snapshot of the 3D view (the game does not load a mod without an icon)
         pictures: view.current ? { icon: view.current.picture(256), store: view.current.picture(512) } : null,
         // the user's textures a prop is made of: their diffuse and normal maps from the server
@@ -350,6 +351,11 @@ export default function ModPage() {
                     <option value="">{t("As the building is")}</option>
                     {TYPES.map(k => <option key={k.id} value={k.id}>{k.name}</option>)}
                   </select>
+                </label>
+              )}
+              {post.kind === "building" && !post.missing && objects.some(o => o.type === "pasture") && (
+                <label className="check" title={t("Gives the building a floor the hens can walk on, and a ramp through each open framed doorway (door style Open doorway, framed) that faces the fence, as in the game's own hen barns. One building in a mod. The doorway has to be on the side of the fence.")}>
+                  <input type="checkbox" checked={insideId === post.id} onChange={e => save({ inside: e.target.checked ? post.id : null })} disabled={busy} /> {t("The hens walk inside this building")}
                 </label>
               )}
               <RangeField label={t("Along the width")} value={post.x} {...PLACE} onLive={v => live(post.id, { x: v })} onCommit={v => put(post.id, { x: v })} disabled={busy} />
