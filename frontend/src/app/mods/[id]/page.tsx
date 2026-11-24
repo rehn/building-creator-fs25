@@ -279,8 +279,8 @@ export default function ModPage() {
             <section className="hx-card">
               <h3 className="hx-card-h">{typeName(object.type)}</h3>
               <p className="hint">{typeHint(object.type)}</p>
-              {(["x", "z", "w", "d", "h"] as const).map(k => (
-                <NumField key={k} label={{ x: t("Along the width (m)"), z: t("Along the depth (m)"), w: t("Width (m)"), d: t("Depth (m)"), h: t("Height (m)") }[k]} value={object[k]}
+              {(["x", "z", "y", "w", "d", "h"] as const).map(k => (
+                <NumField key={k} label={{ x: t("Along the width (m)"), z: t("Along the depth (m)"), y: t("Height above the ground (m)"), w: t("Width (m)"), d: t("Depth (m)"), h: t("Height (m)") }[k]} value={object[k] ?? 0}
                   onCommit={v => changeObjects(setObjectOf(objects, object.id, { [k]: Math.min(OBJECT_LIMITS[k][1], Math.max(OBJECT_LIMITS[k][0], v)) }))} disabled={busy} />
               ))}
               <p className="hint">{t("Measured from the middle of the mod, the same ground the buildings stand on. Taking it away takes the objects that go with it too.")}</p>

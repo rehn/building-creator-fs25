@@ -42,10 +42,10 @@ export function shopDefaults(p) {
 export function shopScene(c) {
   const {p} = c, counter = objectOf(p, "counter"), spawn = objectOf(p, "spawn");
   if (!counter || !spawn) return {nodes: [], xml: "", areas: []};
-  const [ix, , iz] = iconOf(counter), alongX = spawn.w >= spawn.d, len = alongX ? spawn.w : spawn.d, wid = alongX ? spawn.d : spawn.w;
+  const [ix, iy, iz] = iconOf(counter), alongX = spawn.w >= spawn.d, len = alongX ? spawn.w : spawn.d, wid = alongX ? spawn.d : spawn.w;
   const a = alongX ? [spawn.x - len / 2, 0, spawn.z] : [spawn.x, 0, spawn.z - len / 2], d = alongX ? [len, 0, 0] : [0, 0, len];
   const nodes = [
-    tg("shop", [0, 0, 0], [c.box("shopTrigger", boxOf(counter), c.trigger("0x20000000", "0x100000")), tg("markerShop", [ix, p.foundation, iz])]),
+    tg("shop", [0, 0, 0], [c.box("shopTrigger", boxOf(counter), c.trigger("0x20000000", "0x100000")), tg("markerShop", [ix, p.foundation + iy, iz])]),
     tg("vehicleSpawnStart01", a, [tg("vehicleSpawnEnd01", d)]),
   ];
   const factor = (+p.sellPrice || 100) / 100, esc = s => String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;");

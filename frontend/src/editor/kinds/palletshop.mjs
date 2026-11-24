@@ -48,11 +48,11 @@ const names = list => list.join(" ");
 export function palletScene(c) {
   const {p} = c, counter = objectOf(p, "palletcounter"), spawn = objectOf(p, "palletspawn"), unload = objectOf(p, "unload");
   if (!counter || !spawn || !unload) return {nodes: [], xml: "", areas: []};
-  const F = +p.foundation, cb = boxOf(counter), [ix, , iz] = iconOf(counter), ub = boxOf(unload), [ux, , uz] = iconOf(unload);
+  const F = +p.foundation, cb = boxOf(counter), [ix, iy, iz] = iconOf(counter), ub = boxOf(unload), [ux, uy, uz] = iconOf(unload);
   // the shop: the trigger at the counter with the shopping icon as its marker node beside it
   const shop = tg("warehouse", [0, 0, 0], [
     c.box("palletBuyingActivationTrigger", cb, c.trigger("0x20000000", "0x100000")),
-    tg("palletBuyingActivationTriggerMarker", [ix, F, iz]),
+    tg("palletBuyingActivationTriggerMarker", [ix, F + iy, iz]),
   ]);
   // the pallets: lines on the delivery area
   const lines = palletLines(p, spawn);
@@ -60,7 +60,7 @@ export function palletScene(c) {
   // the selling: what is tipped in the box, and the pallets put on it
   const selling = tg("sellingStation", [0, 0, 0], [
     c.box("unloadTrigger", ub, {kinematic: true, compound: true, collisionFilterGroup: "0x40000000", collisionFilterMask: "0x20000000"}),
-    tg("unloadTriggerMarker", [ux, F, uz]),
+    tg("unloadTriggerMarker", [ux, F + uy, uz]),
     tg("unloadTriggerAINode", [unload.x, F, unload.z + unload.d / 2]),
     c.box("palletTrigger", {center: [unload.x, F + 2, unload.z], size: [unload.w, 4, unload.d]}, {kinematic: true, compound: true, trigger: true, collisionFilterGroup: "0x20000000", collisionFilterMask: "0x10000"}),
   ]);

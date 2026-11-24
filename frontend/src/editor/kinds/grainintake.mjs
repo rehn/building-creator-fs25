@@ -34,12 +34,12 @@ export function intakeDefaults(p) {
 export function intakeScene(c) {
   const {p} = c, o = objectOf(p, "intake");
   if (!o) return {nodes: [], xml: "", areas: []};
-  const F = +p.foundation, local = ([x, y, z]) => [-z, y, x], b = boxOf(o), [ix, , iz] = iconOf(o);
+  const F = +p.foundation, local = ([x, y, z]) => [-z, y, x], b = boxOf(o), [ix, iy, iz] = iconOf(o);
   const nodes = [tg("unloadStationTrailer", [0, 0, 0], [
     c.box("unloadNodeTrailer", {center: local(b.center), size: [b.size[2], b.size[1], b.size[0]]},
       {kinematic: true, compound: true, collisionFilterGroup: "0x40000000", collisionFilterMask: "0x20000000"}),
-    tg("unloadMarkerTrailer", local([ix, F, iz])),
-    tg("unloadNodeAI", local([o.x, F, o.z + o.d / 2])),
+    tg("unloadMarkerTrailer", local([ix, F + iy, iz])),
+    tg("unloadNodeAI", local([o.x, F + iy, o.z + o.d / 2])),
   ], {rotation: [0, 90, 0]})];
   const price = +((+p.grainPrice || 100) / 100).toFixed(3);
   const xml = `
@@ -52,7 +52,7 @@ export function intakeScene(c) {
     </hotspots>
 ${p.siloHopper === false ? "" : `
     <dynamicallyLoadedParts>
-        <dynamicallyLoadedPart filename="${HOPPER}" node="0" linkNode="unloadNodeTrailer" position="0.05 ${+(-b.center[1] - 0.01).toFixed(3)} 0.3" rotation="0 90 0"/>
+        <dynamicallyLoadedPart filename="${HOPPER}" node="0" linkNode="unloadNodeTrailer" position="0.05 ${+(-b.center[1] + iy - 0.01).toFixed(3)} 0.3" rotation="0 90 0"/>
     </dynamicallyLoadedParts>
 `}
     <sellingStation supportsExtension="false" litersForFullPriceDrop="200000" fullPriceRecoverHours="48">

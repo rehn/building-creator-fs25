@@ -48,6 +48,8 @@ export interface ModObject {
   type: string;
   x: number;
   z: number;
+  /** How high above the ground its bottom is; missing when 0. */
+  y?: number;
   w: number;
   d: number;
   h: number;

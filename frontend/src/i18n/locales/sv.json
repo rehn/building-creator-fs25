@@ -1144,5 +1144,6 @@
   "A mod holds buildings and props, and the player puts the whole of it out in one go. Drag them in the view to place them. The game objects, like where the player sleeps, belong to the whole mod.": "En mod innehåller byggnader och rekvisita, och spelaren sätter ut hela modden i ett svep. Dra dem i vyn för att placera dem. Spelobjekten, som var spelaren sover, hör till hela modden.",
   "Measured from the middle of the mod, the same ground the buildings stand on. Taking it away takes the objects that go with it too.": "Mätt från modens mitt, samma mark som byggnaderna står på. Tar du bort det följer de objekt med som hör ihop med det.",
   "The mod has all of them.": "Modden har alla.",
-  "What the game needs around the mod: where the player sleeps, shops or fills up. The game takes one of each in a mod, so each is added once. Drag them in the view to put them where they belong.": "Det spelet behöver runt modden: var spelaren sover, handlar eller tankar. Spelet tar ett av varje i en mod, så varje läggs till en gång. Dra dem i vyn för att lägga dem där de hör hemma."
+  "What the game needs around the mod: where the player sleeps, shops or fills up. The game takes one of each in a mod, so each is added once. Drag them in the view to put them where they belong.": "Det spelet behöver runt modden: var spelaren sover, handlar eller tankar. Spelet tar ett av varje i en mod, så varje läggs till en gång. Dra dem i vyn för att lägga dem där de hör hemma.",
+  "Height above the ground (m)": "Höjd över marken (m)"
 }
