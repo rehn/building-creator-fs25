@@ -11,7 +11,7 @@ test("the convertible types are the simple walk-in buildings", () => {
   assert.deepEqual(CONVERTIBLE_KINDS.slice().sort(), ["dealership", "defaultdealer", "fuelstation", "grainsilo", "house", "shed", "warehouse"]);
 });
 
-test("a house becomes a shed: the form stays, the furniture and sleep point are listed as lost", () => {
+test("a house becomes a shed: the form stays, the furniture is listed as lost, the sleep point stays (any building may have one)", () => {
   const p = farm(), r = changeKind(p, "shed");
   assert.equal(r.ok, true);
   const q = r.settings;
@@ -20,8 +20,8 @@ test("a house becomes a shed: the form stays, the furniture and sleep point are 
   assert.deepEqual(q.decor, p.decor, "the decorations stay");
   assert.equal(q.wings.length, 1, "so does the part");
   assert.equal(q.windows.length, p.windows.length, "and the windows and doors");
-  assert.ok(r.lost.objects.includes("Sleep point"));
-  assert.ok(!q.objects.some(o => o.type === "sleep"));
+  assert.ok(!r.lost.objects.includes("Sleep point"));
+  assert.ok(q.objects.some(o => o.type === "sleep"));
   assert.ok(r.lost.items.length > 0 && r.lost.items.some(n => /bed/i.test(n)), `lost: ${r.lost.items}`);
   assert.ok(!q.items.some(it => it.type === "bed"));
 });
@@ -29,7 +29,7 @@ test("a house becomes a shed: the form stays, the furniture and sleep point are 
 test("a house becomes a dealership: the counter and the spawn area it needs are added", () => {
   const r = changeKind(farm(), "dealership");
   assert.ok(r.ok);
-  assert.deepEqual(r.settings.objects.map(o => o.type).sort(), ["counter", "spawn"]);
+  assert.deepEqual(r.settings.objects.map(o => o.type).sort(), ["counter", "sleep", "spawn"]);
   assert.deepEqual(r.added.objects.slice().sort(), ["Shop counter", "Vehicle spawn area"]);
   assert.ok(buildGeometry(r.settings), "and it builds");
 });

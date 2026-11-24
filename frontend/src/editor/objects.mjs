@@ -63,19 +63,23 @@ const clamp = (v, [lo, hi]) => Math.min(hi, Math.max(lo, v));
 const round = v => +v.toFixed(3);
 const snap = v => Math.round(v / GRID) * GRID;
 
+/** The object types every kind of building can have, besides its own (kinds/gameobjects.mjs has their export; a test keeps the two lists equal). */
+export const SHARED_TYPES = ["sleep", "workshop"];
 /** The kind's objects spec, or one with nothing. */
 const specOf = kind => kind.objects || {types: [], required: [], defaults: () => []};
+/** The types a building of this kind can have: the kind's own and the shared ones. */
+export const allowedTypes = kind => [...new Set([...specOf(kind).types, ...SHARED_TYPES])];
 
 /**
  * The objects as the building can have them: known types its kind takes, one of each, numbers in range;
  * any it must have and doesn't get the kind's default. p: the building's settings (for its walls).
  */
 export function cleanObjects(list, kind, p) {
-  const spec = specOf(kind), out = [], seen = new Set();
+  const spec = specOf(kind), allowed = allowedTypes(kind), out = [], seen = new Set();
   let id = 0;
   for (const o of Array.isArray(list) ? list : []) {
     const many = o && MANY.includes(o.type);
-    if (!o || !spec.types.includes(o.type) || (many ? out.filter(x => x.type === o.type).length >= MAX_TROUGHS : seen.has(o.type))) continue;
+    if (!o || !allowed.includes(o.type) || (many ? out.filter(x => x.type === o.type).length >= MAX_TROUGHS : seen.has(o.type))) continue;
     const c = o.type === "pasture" ? cleanPasture(o, spec.pasture, p) : cleanBox(o);
     if (!c) continue;
     seen.add(o.type); out.push({id: ++id, ...c});

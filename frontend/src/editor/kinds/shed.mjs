@@ -2,10 +2,10 @@
 // a vehicle workshop is a game object (objects.mjs "workshop"): with one the building becomes a garageWorkshopSolarPanels
 // placeable with the workshop's triggers, as the base game's garages (data/placeables/rudolfHormann/garageBigService).
 // Imports only the i3d writer; the core hands in what it needs (see kinds/index.mjs).
-import { tg } from "../i3d.mjs";
 import { shopFor } from "./shop.mjs";
 const SHEDS = {category: "sheds", type: "placeable", brush: "buildings", tab: "sheds"};   // (the shop place of the kind: shop.mjs lets the player choose another)
-import { objectOf, boxOf, iconOf } from "../objects.mjs";
+import { objectOf } from "../objects.mjs";
+import { sharedDefaults } from "./gameobjects.mjs";
 import { tone, shade } from "./props.mjs";
 import { INNER_WALL } from "./innerwall.mjs";
 
@@ -14,37 +14,6 @@ const COL = {floor: "#8E8C86", wood: "#9C7448", dark: "#3C3F42", steel: "#6C7378
 
 /** The floor: poured concrete over the whole room. */
 function furnish(c) { c.floor(COL.floor, "concrete"); }
-
-/** Where a new vehicle workshop goes: a box over most of the floor, its wrench icon in the middle. */
-function defaultObjects(p) {
-  const w = Math.max(2, Math.min(40, p.width - 1)), d = Math.max(2, Math.min(40, p.depth - 1));
-  return [{type: "workshop", x: 0, z: 0, w, d, h: p.foundation + Math.min(4, Math.max(2.5, p.floorHeight)), ix: 0, iz: 0}];
-}
-
-/** Scene: the workshop's vehicle and player triggers and the wrench icon, when the building has a workshop object. */
-function scene(c) {
-  const {p} = c, o = objectOf(p, "workshop");
-  if (!o) return {nodes: [], xml: "", areas: []};
-  const nodes = [tg("workShop", [0, 0, 0], [
-    c.box("vehicleTrigger", boxOf(o), c.trigger("0x20000000", "0x10000")),
-    c.box("playerTrigger", boxOf(o), c.trigger("0x20000000", "0x100000")),
-    tg("markerWrench", (([x, , z]) => [x, p.foundation, z])(iconOf(o))),
-  ])];
-  const xml = `
-    <triggerMarkers>
-        <triggerMarker node="markerWrench" filename="$data/shared/assets/marker/markerIconWrench.i3d"/>
-    </triggerMarkers>
-
-    <hotspots>
-        <hotspot type="SHOP" linkNode="vehicleTrigger" teleportNode="playerTrigger"/>
-    </hotspots>
-
-    <workshop>
-        <sellingPoint playerTriggerNode="playerTrigger" iconNode="markerWrench" sellTriggerNode="vehicleTrigger" ownWorkshop="true" mobileWorkshop="false"/>
-    </workshop>
-`;
-  return {nodes, xml, areas: []};
-}
 
 /* ---------- Pieces ---------- */
 const CATALOG = {
@@ -166,17 +135,14 @@ export default {
   hides: ["Interior", "Kupor (dormers)"],
   /** Settings as this kind uses them: no sleep point, rooms or dormers. */
   normalize: p => ({...p, interior: false, dormers: []}),
-  placeable: p => objectOf(p, "workshop")
-    ? {type: "garageWorkshopSolarPanels", fn: "$l10n_function_workshop", shop: shopFor(p, SHEDS),
-      note: `Vehicle workshop: use <placeable type="garageWorkshopSolarPanels" ...>, as in the base game's garages with a workshop.`}
-    : {type: "simplePlaceable", fn: "$l10n_function_decoration", shop: shopFor(p, SHEDS)},
+  // (a workshop makes it a garage with one: gameobjects.mjs sharedPlaceable)
+  placeable: p => ({type: "simplePlaceable", fn: "$l10n_function_decoration", shop: shopFor(p, SHEDS)}),
   description: p => `A ${(+p.width).toFixed(1)} x ${(+p.depth).toFixed(1)} m shed made with House to i3d.${objectOf(p, "workshop") ? " Repair and paint your vehicles inside." : ""}`,
   furnish,
   catalog: CATALOG,
   autoFurnish,
-  scene,
   // the game objects: a vehicle workshop is optional
-  objects: {types: ["workshop"], required: [], defaults: defaultObjects},
+  objects: {types: ["workshop"], required: [], defaults: p => sharedDefaults(p, "workshop")},
   presets: [
     {id: "garage", name: "Garage", blurb: "6 × 6 m red garage with a sliding door, room for a car or a tractor.", settings: {
       ...falu, width: 6, depth: 6, floors: 1, floorHeight: 3.2, foundation: 0.2, foundationColor: "#8C8A84", roofType: "gable", ridge: "width", roofPitch: 28, overhang: 0.4,
