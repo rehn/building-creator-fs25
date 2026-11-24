@@ -110,6 +110,13 @@ export function animalNav({fence, blockers = [], rooms = [], items = [], door = 
       for (let n = 0; n < icells.length; n++) if (!reach[n]) icells[n] = 0;
     }
     rects.push(...cellRects({x0: ix0, z0: iz0, nx: inx, nz: inz, cell, cells: icells}, floorY, true));
+    // a bridge from the inner edge of each doorway 40 cm into the floor: the 20 cm cells of the floor do not line up with the wall, so the last one can end short of the ramp (10 cm seen), and the
+    // animals cannot cross a gap between two pieces of the walking mesh (seen in the game: hens could not go between outside and inside)
+    for (const d of doors) {
+      const m = [(d.c[0] + d.d[0]) / 2, (d.c[1] + d.d[1]) / 2], o = [(d.a[0] + d.b[0]) / 2, (d.a[1] + d.b[1]) / 2], len = Math.hypot(o[0] - m[0], o[1] - m[1]) || 1, bx = (o[0] - m[0]) / len * 0.4, bz = (o[1] - m[1]) / len * 0.4;
+      const xsB = [d.c[0], d.d[0], d.c[0] - bx, d.d[0] - bx], zsB = [d.c[1], d.d[1], d.c[1] - bz, d.d[1] - bz];
+      rects.push({x0: Math.min(...xsB), x1: Math.max(...xsB), z0: Math.min(...zsB), z1: Math.max(...zsB), y: floorY, inside: true});
+    }
   }
   const ramps = doors.map(d => ({points: [d.a, d.b, d.c, d.d], y0: 0, y1: floorY}));
   return {rects, ramps, ramp: ramps[0] || null};
