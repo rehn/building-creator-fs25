@@ -9,12 +9,14 @@ import { placeOnWall } from "../places.mjs";
 import { objectOf, boxOf, iconOf, boxFrom } from "../objects.mjs";
 import { shopScene, shopDefaults } from "./vehicleshop.mjs";
 import { intakeScene, intakeDefaults } from "./grainintake.mjs";
+import { pumpScene, pumpDefaults } from "./fuelpump.mjs";
 
 /** The specializations each of the game's placeable types has of its own on top of simplePlaceable (sdk/xmlDoku/placeableTypes.xml). */
 const GAME_TYPES = {
   farmhouse: ["farmhouse", "wardrobe", "cartridgePlayer", "npcSpot"],
   garageWorkshopSolarPanels: ["workshop", "solarPanels", "incomePerHour"],
   sellingStation: ["sellingStation"],
+  buyingStation: ["buyingStation"],
 };
 
 /** Scene nodes and placeable XML for the sleep point (an object outside or the sleep point piece inside). c: {p, geo, box, trigger, sleepPoint}. */
@@ -107,6 +109,10 @@ export const SHARED = {
   intake: {types: ["intake"], has: p => !!objectOf(p, "intake"), scene: intakeScene, defaults: intakeDefaults,
     gameType: "sellingStation", specializations: GAME_TYPES.sellingStation, fn: null, name: "Intake",
     note: `Grain intake: use <placeable type="sellingStation" ...> with canBeSold and showInStore false for a map to place, as the base game's selling points (mapUS/sellingPoints).`},
+  // the fuel area: the game's own gas station is a buyingStation (kinds/fuelpump.mjs)
+  pump: {types: ["pump"], has: p => !!objectOf(p, "pump"), scene: pumpScene, defaults: pumpDefaults,
+    gameType: "buyingStation", specializations: GAME_TYPES.buyingStation, fn: null, name: "FuelPump",
+    note: `Fuel area: use <placeable type="buyingStation" ...> with canBeSold and showInStore false for a map to place, as the base game's gasStation (mapUS/sellingPoints).`},
 };
 /** The shared objects (ids) the building has, except those its kind uses the object types of for its own (kind.handles). */
 export const sharedOf = (p, kind = null) => Object.keys(SHARED).filter(id => !(kind && (kind.handles || []).some(t => SHARED[id].types.includes(t))) && SHARED[id].has(p));

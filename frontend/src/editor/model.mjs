@@ -37,6 +37,8 @@ export const DEFAULTS = {
   ...Object.fromEntries(DEALER_GROUPS.map(g => [g.key, false])), sellPrice:100, sellDelivery:0,
   // (what a grain intake buys, if the building has one: none ticked is wheat)
   ...Object.fromEntries(GRAINS.map(([k]) => [k, false])), grainPrice:100, siloHopper:true,
+  // (what a fuel area gives, if the building has one)
+  fuelPrice:100, fuelRate:20,
   modPrice:75000, modUpkeep:75, shopCategory:"auto", modAuthor:"", modDescription:"", lodDistance:80, binaryShapes:true
 };
 /** Curtain layouts: [id, name]. Windows can pick one or follow the house's choice ("default"). */
@@ -147,6 +149,9 @@ const SHARED_SECTIONS = [
     ...GRAINS.map(([k, , name]) => ({k, label: name, type: "check"})),
     {k:"grainPrice", label:"Price, per cent of the game's own", min:50, max:200, step:5, unit:" %"},
     {k:"siloHopper", label:"The game's tipping hopper at the intake", type:"check"}]},
+  {title:"Fuel", tab:"game", hint:"The fuel a fuel area gives (add one under Game objects): the player drives into it and fills diesel from an endless tank.", fields:[
+    {k:"fuelPrice", label:"Price, per cent of the game's own", min:50, max:200, step:5, unit:" %"},
+    {k:"fuelRate", label:"Speed", min:5, max:100, step:5, unit:" l/s"}]},
   {title:"Game mod", label:"Shop and mod", tab:"game", hint:"Used by \u201CExport game mod\u201D: what the house costs in the shop and who made it. The project name is the name in the shop.", fields:[
     {k:"modPrice", label:"Price", min:0, max:2000000, step:500, money:true},
     {k:"modUpkeep", label:"Daily upkeep", min:0, max:5000, step:5, money:true},
