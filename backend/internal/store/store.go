@@ -120,6 +120,29 @@ CREATE TABLE IF NOT EXISTS parts (
 	updated_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS parts_user ON parts(user_id, updated_at DESC);
+CREATE TABLE IF NOT EXISTS mods (
+	id         TEXT    PRIMARY KEY,
+	user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	name       TEXT    NOT NULL,
+	data       TEXT    NOT NULL DEFAULT '{}',
+	version    INTEGER NOT NULL DEFAULT 1,
+	created_at INTEGER NOT NULL,
+	updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS mods_user ON mods(user_id, updated_at DESC);
+CREATE TABLE IF NOT EXISTS mod_items (
+	mod_id TEXT    NOT NULL REFERENCES mods(id) ON DELETE CASCADE,
+	id     TEXT    NOT NULL,
+	pos    INTEGER NOT NULL,
+	kind   TEXT    NOT NULL,
+	ref_id TEXT    NOT NULL,
+	type   TEXT    NOT NULL DEFAULT '',
+	x      REAL    NOT NULL DEFAULT 0,
+	z      REAL    NOT NULL DEFAULT 0,
+	rot    REAL    NOT NULL DEFAULT 0,
+	PRIMARY KEY (mod_id, id)
+);
+CREATE INDEX IF NOT EXISTS mod_items_ref ON mod_items(kind, ref_id);
 CREATE TABLE IF NOT EXISTS project_models (
 	project_id TEXT    PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
 	version    INTEGER NOT NULL,
@@ -245,6 +268,29 @@ CREATE TABLE IF NOT EXISTS parts (
 	updated_at BIGINT  NOT NULL
 );
 CREATE INDEX IF NOT EXISTS parts_user ON parts(user_id, updated_at DESC);
+CREATE TABLE IF NOT EXISTS mods (
+	id         TEXT    PRIMARY KEY,
+	user_id    BIGINT  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	name       TEXT    NOT NULL,
+	data       TEXT    NOT NULL DEFAULT '{}',
+	version    BIGINT  NOT NULL DEFAULT 1,
+	created_at BIGINT  NOT NULL,
+	updated_at BIGINT  NOT NULL
+);
+CREATE INDEX IF NOT EXISTS mods_user ON mods(user_id, updated_at DESC);
+CREATE TABLE IF NOT EXISTS mod_items (
+	mod_id TEXT             NOT NULL REFERENCES mods(id) ON DELETE CASCADE,
+	id     TEXT             NOT NULL,
+	pos    INTEGER          NOT NULL,
+	kind   TEXT             NOT NULL,
+	ref_id TEXT             NOT NULL,
+	type   TEXT             NOT NULL DEFAULT '',
+	x      DOUBLE PRECISION NOT NULL DEFAULT 0,
+	z      DOUBLE PRECISION NOT NULL DEFAULT 0,
+	rot    DOUBLE PRECISION NOT NULL DEFAULT 0,
+	PRIMARY KEY (mod_id, id)
+);
+CREATE INDEX IF NOT EXISTS mod_items_ref ON mod_items(kind, ref_id);
 CREATE TABLE IF NOT EXISTS project_models (
 	project_id TEXT    PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
 	version    BIGINT  NOT NULL,
@@ -459,6 +505,9 @@ type txx struct {
 
 func (t *txx) exec(ctx context.Context, q string, args ...any) (sql.Result, error) {
 	return t.ExecContext(ctx, rebind(t.dialect, q), args...)
+}
+func (t *txx) query(ctx context.Context, q string, args ...any) (*sql.Rows, error) {
+	return t.QueryContext(ctx, rebind(t.dialect, q), args...)
 }
 func (t *txx) queryRow(ctx context.Context, q string, args ...any) *sql.Row {
 	return t.QueryRowContext(ctx, rebind(t.dialect, q), args...)
