@@ -15,11 +15,12 @@ const GRID = 0.25;
  * place changes), setMap(key, picture) gives the groups drawn with the map called key (modPlan.mjs mapKey) their picture {width, height, rgba} (they are drawn in their colour until it comes), showObjects(list) the mod's game objects (boxes {id, type, x, z, y (the height above the ground, may be missing), w, d, h} in the mod's coordinates) and select(postId, objectId) marks a building or prop
  * or a game object. onSelect(postId | null, objectId | null) is told what was pressed on (both null: the ground), onMove(id, {x, z}) while a post is dragged and onDrop(id, {x, z}) when it
  * is let go where it was moved to, and onObjectMove(objectId, {x, z}) and onObjectDrop(objectId, {x, z}) the same for a game object, onPointMove(objectId, i, {x, z}) and onPointDrop(objectId, i, {x, z}) for post i of a fence (an object
- * with points [[x, z] ...] and no box: drawn as a line round the posts, each post a thin pole to press on). dispose() frees everything.
+ * with points [[x, z] ...] and no box: drawn as a line round the posts, each post a thin pole to press on), onPointSelect(objectId, i) when a pole is pressed, and selectPoint(i) marks post i of the chosen fence (its pole is
+ * bigger and in the accent colour, so it is clear which post the properties are about). dispose() frees everything.
  * @param {HTMLCanvasElement} canvas
- * @param {{onSelect?: (postId: string | null, objectId: number | null) => void, onMove?: (id: string, at: {x: number, z: number}) => void, onDrop?: (id: string, at: {x: number, z: number}) => void, onObjectMove?: (objectId: number, at: {x: number, z: number}) => void, onObjectDrop?: (objectId: number, at: {x: number, z: number}) => void, onPointMove?: (objectId: number, i: number, at: {x: number, z: number}) => void, onPointDrop?: (objectId: number, i: number, at: {x: number, z: number}) => void}} [handlers]
+ * @param {{onSelect?: (postId: string | null, objectId: number | null) => void, onMove?: (id: string, at: {x: number, z: number}) => void, onDrop?: (id: string, at: {x: number, z: number}) => void, onObjectMove?: (objectId: number, at: {x: number, z: number}) => void, onObjectDrop?: (objectId: number, at: {x: number, z: number}) => void, onPointMove?: (objectId: number, i: number, at: {x: number, z: number}) => void, onPointDrop?: (objectId: number, i: number, at: {x: number, z: number}) => void, onPointSelect?: (objectId: number, i: number) => void}} [handlers]
  */
-export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, onDrop = () => {}, onObjectMove = () => {}, onObjectDrop = () => {}, onPointMove = () => {}, onPointDrop = () => {}} = {}) {
+export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, onDrop = () => {}, onObjectMove = () => {}, onObjectDrop = () => {}, onPointMove = () => {}, onPointDrop = () => {}, onPointSelect = () => {}} = {}) {
   const renderer = new THREE.WebGLRenderer({canvas, antialias: true});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   const scene = new THREE.Scene();
@@ -36,7 +37,7 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
   const maps = new Map();   // map key -> THREE.DataTexture
   const things = new THREE.Group(); scene.add(things);   // the game objects: one group for each, with its box and its outline
   let thingList = [];
-  let selected = null, selectedObject = null, raf = 0, fitted = false;
+  let selected = null, selectedObject = null, selectedPoint = -1, raf = 0, fitted = false;
 
   const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
   const aim = e => {
@@ -65,7 +66,14 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
     camera.position.set(target.x + dist * Math.sin(phi) * Math.sin(theta), target.y + dist * Math.cos(phi), target.z + dist * Math.sin(phi) * Math.cos(theta));
     camera.lookAt(target);
     for (const o of objs.values()) { o.box.visible = o.group.userData.postId === selected; if (o.box.visible) o.box.update(); }
-    for (const g of things.children) g.userData.edge.material.color.setHex(g.userData.objectId === selectedObject ? ACCENT : g.userData.color);
+    for (const g of things.children) {
+      g.userData.edge.material.color.setHex(g.userData.objectId === selectedObject ? ACCENT : g.userData.color);
+      // (the chosen post of the chosen fence: bigger and in the accent colour)
+      for (const pole of g.userData.poles || []) {
+        const on = g.userData.objectId === selectedObject && pole.userData.point === selectedPoint;
+        pole.material.color.setHex(on ? ACCENT : g.userData.color); pole.scale.set(on ? 1.8 : 1, on ? 1.5 : 1, on ? 1.8 : 1);
+      }
+    }
     renderer.render(scene, camera);
   }
   const redraw = () => { if (!raf) raf = requestAnimationFrame(render); };
@@ -113,14 +121,14 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
   /** A fence: a line round its posts on the ground and a pole at each (a pole is what a press picks, and what is dragged). */
   function fenceOf(ob) {
     const color = OBJECT_COLOR(ob.type), g = new THREE.Group(), pts = ob.points || [];
-    g.userData = {objectId: ob.id, color};
+    g.userData = {objectId: ob.id, color, poles: []};
     const line = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts.map(([x, z]) => new THREE.Vector3(x, 0.08, z))), new THREE.LineBasicMaterial({color}));
     g.userData.edge = line;
     g.add(line);
     pts.forEach(([x, z], i) => {
       const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 1.4, 8), new THREE.MeshBasicMaterial({color}));
       pole.position.set(x, 0.7, z); pole.userData.point = i;
-      g.add(pole);
+      g.add(pole); g.userData.poles.push(pole);
     });
     return g;
   }
@@ -183,6 +191,8 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
   }
   /** @param {string | null} postId @param {number | null} [objectId] */
   function select(postId, objectId = null) { selected = postId; selectedObject = objectId; redraw(); }
+  /** Marks post i of the chosen fence (-1: none). */
+  function selectPoint(i) { selectedPoint = i; redraw(); }
 
   // pointer: a press on a building or a game object selects it and drags it over the ground; a press on the ground turns the view; right button or Shift pans
   let drag = null;
@@ -194,7 +204,10 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
     if (hit && hit.objectId !== undefined) {
       const ob = thingList.find(q => q.id === hit.objectId);
       selected = null; selectedObject = hit.objectId; onSelect(null, hit.objectId); redraw();
-      if (ob && Array.isArray(ob.points)) drag = hit.point !== undefined && at ? {mode: "point", objectId: ob.id, i: hit.point, moved: false} : null;   // (a fence: a pole is dragged, the rest of it only selected)
+      if (ob && Array.isArray(ob.points)) {
+        if (hit.point !== undefined) { selectedPoint = hit.point; onPointSelect(ob.id, hit.point); redraw(); }
+        drag = hit.point !== undefined && at ? {mode: "point", objectId: ob.id, i: hit.point, moved: false} : null;
+      }   // (a fence: a pole is dragged, the rest of it only selected)
       else drag = at && ob ? {mode: "object", objectId: ob.id, dx: at.x - ob.x, dz: at.z - ob.z, moved: false} : null;
     } else if (hit) {
       const o = objs.get(hit.postId);
@@ -261,7 +274,7 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
   if (ro) ro.observe(canvas);
 
   return {
-    show, showObjects, select, setMap, hasMap, picture, refit: () => { fit(); redraw(); },
+    show, showObjects, select, selectPoint, setMap, hasMap, picture, refit: () => { fit(); redraw(); },
     dispose() {
       if (raf) cancelAnimationFrame(raf);
       canvas.removeEventListener("pointerdown", down); canvas.removeEventListener("pointermove", move); canvas.removeEventListener("pointerup", up); canvas.removeEventListener("pointercancel", up);
