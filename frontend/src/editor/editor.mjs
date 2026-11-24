@@ -1843,7 +1843,7 @@ cleanups.push(() => { window.removeEventListener("keydown", treeKey); window.rem
 // a plan view of the yard to drag them in (ob.on).
 const ob = {on: false, sel: null, drag: null, pan: [0, 0], saved: null, pt: null};
 /** A box object's sliders: [key, label, step]. */
-const BOX_SLIDERS = [["x", "Left / right (+ to the right)", 0.25], ["z", "Back / front (+ to the front)", 0.25], ["w", "Width (left to right)", 0.05],
+const BOX_SLIDERS = [["x", "Left / right (+ to the right)", 0.25], ["z", "Back / front (+ to the front)", 0.25], ["y", "Height above the ground", 0.05], ["w", "Width (left to right)", 0.05],
   ["d", "Depth (back to front)", 0.05], ["h", "Height", 0.05], ["ix", "Icon left / right", 0.05], ["iz", "Icon back / front", 0.05]];
 const objectsNow = () => p.objects || [];
 const selObject = () => objectsNow().find(o => o.id === ob.sel) || null;

@@ -25,10 +25,10 @@ export function pumpDefaults(p) {
 export function pumpScene(c) {
   const {p} = c, o = objectOf(p, "pump");
   if (!o) return {nodes: [], xml: "", areas: []};
-  const b = boxOf(o), [ix, , iz] = iconOf(o);
+  const b = boxOf(o), [ix, iy, iz] = iconOf(o);
   const nodes = [tg("gasStation", [0, 0, 0], [
     c.box("gasStationTrigger", b, c.trigger("0x20000000", "0x40000000")),
-    tg("mapPosition", [ix, +p.foundation, iz]),
+    tg("mapPosition", [ix, +p.foundation + iy, iz]),
   ])];
   const price = +((+p.fuelPrice || 100) / 100).toFixed(3), rate = Math.round(+p.fuelRate || 20);
   const xml = `

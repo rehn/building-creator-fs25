@@ -3,7 +3,7 @@
 // (p.objects) that the player adds, drags and sizes. Each kind of building says which it can have,
 // which it must have, and where they go to start with (kind.objects). Pure; no DOM.
 //
-// A box object: {id, type, x, z (its middle on the ground), w (along x), d (along z), h, ix, iz (its icon,
+// A box object: {id, type, x, z (its middle on the ground), y (how high above the ground its bottom is, left out when 0), w (along x), d (along z), h, ix, iz (its icon,
 // from the middle)}. The pasture: {id, type: "pasture", wall, a (m from the wall's start), b (m from its
 // end: 0 is the far corner, so a pasture snapped to the corners stays there when the building changes
 // size; less than 0 runs past the corner), depth (m out from the wall)}.
@@ -50,7 +50,7 @@ export const OBJECT_TYPES = {
 /** What the kind calls a type of object, and its hint (a sheep barn's pallets are wool): OBJECT_TYPES overridden by kind.objects.labels. */
 export const objectInfo = (kind, type) => ({...OBJECT_TYPES[type], ...((kind.objects && kind.objects.labels && kind.objects.labels[type]) || {})});
 /** Ranges: positions and sizes of box objects, icons, and a pasture's ends along its wall. */
-export const OBJECT_LIMITS = {x: [-80, 80], z: [-80, 80], w: [0.5, 70], d: [0.5, 70], h: [0.2, 8], ix: [-10, 10], iz: [-10, 10], end: [-40, 40]};
+export const OBJECT_LIMITS = {x: [-80, 80], z: [-80, 80], y: [-2, 30], w: [0.5, 70], d: [0.5, 70], h: [0.2, 8], ix: [-10, 10], iz: [-10, 10], end: [-40, 40]};
 /** The opening to the pasture: width and height ranges, and what it is to start with. */
 export const GAP_LIMITS = {w: [0.8, 10], h: [1.2, 8]};
 const GAP_DEFAULT = {w: 1.6, h: 2.2};
@@ -108,7 +108,8 @@ function cleanBox(o) {
   // a trough can look like one of the user's items (its id; assets.mjs, use feedTrough | waterTrough)
   const look = (o.type === "feedTrough" || o.type === "waterTrough") && typeof o.asset === "string" && o.asset
     ? {asset: o.asset.slice(0, 64), ...(turnOf(o.rot) ? {rot: turnOf(o.rot)} : {})} : {};   // (turned any angle; width and depth are the box round the turned model)
-  return {type: o.type, ...look, x: round(clamp(num(o.x, 0), L.x)), z: round(clamp(num(o.z, 0), L.z)),
+  const y = round(clamp(num(o.y, 0), L.y));   // (left out when 0: the object stands on the ground, as every saved one does)
+  return {type: o.type, ...look, x: round(clamp(num(o.x, 0), L.x)), z: round(clamp(num(o.z, 0), L.z)), ...(y ? {y} : {}),
     w: round(clamp(num(o.w, def[0]), L.w)), d: round(clamp(num(o.d, def[1]), L.d)), h: round(clamp(num(o.h, def[2]), L.h)),
     ix: round(clamp(num(o.ix, 0), L.ix)), iz: round(clamp(num(o.iz, 0), L.iz))};
 }
@@ -135,10 +136,10 @@ function cleanPasture(o, ps = {minWidth: 0, depth: [2, 60]}, p) {
 export const objectOf = (p, type) => (p.objects || []).find(o => o.type === type) || null;
 /** All the building's objects of a type, in order. */
 export const objectsOf = (p, type) => (p.objects || []).filter(o => o.type === type);
-/** A box object as a world-axis box {center, size}, standing on the ground. */
-export const boxOf = o => ({center: [o.x, o.h / 2, o.z], size: [o.w, o.h, o.d]});
-/** Where a box object's icon is, on the ground. */
-export const iconOf = o => [o.x + o.ix, 0, o.z + o.iz];
+/** A box object as a world-axis box {center, size}, standing on the ground or o.y above it. */
+export const boxOf = o => ({center: [o.x, (o.y || 0) + o.h / 2, o.z], size: [o.w, o.h, o.d]});
+/** Where a box object's icon is: on the ground, or o.y above it (the box's bottom). */
+export const iconOf = o => [o.x + o.ix, o.y || 0, o.z + o.iz];
 /** A box from a world-axis box {center, size} and an icon point (as the kinds place them to start with). */
 export function boxFrom(type, box, icon = null) {
   const [x, , z] = box.center, [w, h, d] = box.size;

@@ -2874,7 +2874,7 @@ export function sleepPoint(geo, p = {}) {
     const dx = to[0] - from[0], dy = to[1] - from[1], dz = to[2] - from[2], deg = 180 / Math.PI;
     return [Math.atan2(dy, Math.hypot(dx, dz)) * deg, Math.atan2(-dx, -dz) * deg, 0];
   };
-  const trigger = piece ? {center: [o.x, dims.F + o.h / 2, o.z], size: [o.w, o.h, o.d]} : boxOf(o), marker = [o.x + o.ix, dims.F, o.z + o.iz];
+  const trigger = piece ? {center: [o.x, dims.F + (o.y || 0) + o.h / 2, o.z], size: [o.w, o.h, o.d]} : boxOf(o), marker = [o.x + o.ix, dims.F + (o.y || 0), o.z + o.iz];
   // The spawn point: out past the far side of the cleared area, then one metre more.
   const {clear} = placementAreas(geo);
   const reach = Math.max(...[[clear.x0, clear.z0], [clear.x1, clear.z0], [clear.x0, clear.z1], [clear.x1, clear.z1]]
@@ -2895,7 +2895,7 @@ export function gamePlaces(p) {
   const piece = (q.items || []).find(it => it.type === "sleeppoint");
   const list = (q.objects || []).filter(o => o.type !== "pasture" && !(piece && o.type === "sleep")).map(o => {
     const t = objectInfo(kind, o.type), glyph = t.glyph === "animals" ? (kind.glyph || "hen") : t.glyph;
-    return {id: o.id, type: o.type, name: t.name, glyph, box: boxOf(o), icon: t.icon ? [o.x + o.ix, o.type === "sleep" ? q.foundation : 0, o.z + o.iz] : null};
+    return {id: o.id, type: o.type, name: t.name, glyph, box: boxOf(o), icon: t.icon ? [o.x + o.ix, (o.type === "sleep" ? q.foundation : 0) + (o.y || 0), o.z + o.iz] : null};
   });
   // the sleep point placed inside (a piece) is the one the game gets: its trigger and icon in the preview
   if (piece) list.push({id: 1000 + piece.id, type: "sleep", name: "Sleep point", glyph: "sleep", box: {center: [piece.x, q.foundation + 1.1, piece.z], size: [piece.width, 2.2, piece.depth]}, icon: [piece.x, q.foundation, piece.z]});

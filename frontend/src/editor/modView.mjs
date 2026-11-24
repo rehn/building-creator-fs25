@@ -12,7 +12,7 @@ const GRID = 0.25;
 
 /**
  * Mounts a view on canvas. show(posts) draws posts [{id, x, z, rot, groups (modPlan.mjs), bounds}] again (a post whose groups are the same array as before keeps its meshes; only its
- * place changes), showObjects(list) the mod's game objects (boxes {id, type, x, z, w, d, h} on the ground, in the mod's coordinates) and select(postId, objectId) marks a building or prop
+ * place changes), showObjects(list) the mod's game objects (boxes {id, type, x, z, y (the height above the ground, may be missing), w, d, h} in the mod's coordinates) and select(postId, objectId) marks a building or prop
  * or a game object. onSelect(postId | null, objectId | null) is told what was pressed on (both null: the ground), onMove(id, {x, z}) while a post is dragged and onDrop(id, {x, z}) when it
  * is let go where it was moved to, and onObjectMove(objectId, {x, z}) and onObjectDrop(objectId, {x, z}) the same for a game object. dispose() frees everything.
  * @param {HTMLCanvasElement} canvas
@@ -98,7 +98,7 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
     const edge = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({color}));
     const g = new THREE.Group();
     g.userData = {objectId: ob.id, color, edge};
-    g.position.set(ob.x, ob.h / 2, ob.z);
+    g.position.set(ob.x, (ob.y || 0) + ob.h / 2, ob.z);
     g.add(mesh, edge);
     return g;
   }
@@ -160,7 +160,7 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
       if (ob.x === x && ob.z === z) return;
       thingList = thingList.map(q => q.id === ob.id ? {...q, x, z} : q);
       const g = things.children.find(c => c.userData.objectId === ob.id);
-      if (g) g.position.set(x, ob.h / 2, z);
+      if (g) g.position.set(x, (ob.y || 0) + ob.h / 2, z);
       drag.moved = true; onObjectMove(ob.id, {x, z}); redraw();
     } else if (drag.mode === "move") {
       const at = groundAt(e), o = objs.get(drag.id);

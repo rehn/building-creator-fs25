@@ -66,7 +66,7 @@ function workshopScene(c) {
   const nodes = [tg("workShop", [0, 0, 0], [
     c.box("vehicleTrigger", boxOf(o), c.trigger("0x20000000", "0x10000")),
     c.box("playerTrigger", boxOf(o), c.trigger("0x20000000", "0x100000")),
-    tg("markerWrench", (([x, , z]) => [x, p.foundation, z])(iconOf(o))),
+    tg("markerWrench", (([x, y, z]) => [x, p.foundation + y, z])(iconOf(o))),
   ])];
   const xml = `
     <triggerMarkers>
