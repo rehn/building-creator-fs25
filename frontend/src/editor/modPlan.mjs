@@ -91,16 +91,16 @@ export function snapPost(post, others, {grid = 0.5, reach = 0.6, off = false} = 
   return {x: dx !== null ? round(post.x + dx) : onGrid(post.x), z: dz !== null ? round(post.z + dz) : onGrid(post.z)};
 }
 
-/** How far out from a building's wall a fence post stands (the hen house's own posts are 15 cm out), and how near a post or a stretch may come before it is told about (10 cm). */
-export const FENCE_GAP = 0.15, FENCE_CLEAR = 0.1;
+/** How far out from a building's wall a fence post is put (0: on the wall, as in the cow pasture), and how far into a building a post or a stretch may go before it is told about (1 cm: touching a wall is fine). */
+export const FENCE_GAP = 0, FENCE_CLEAR = -0.01;
 const FENCE_CORNER = 0.8, FENCE_WALL = 0.4;
 const cm = v => Math.round(v * 100) / 100 + 0;
 const grown = (r, m) => ({x0: r.x0 - m, x1: r.x1 + m, z0: r.z0 - m, z1: r.z1 + m});
 const inside = (x, z, r) => x > r.x0 + 1e-6 && x < r.x1 - 1e-6 && z > r.z0 + 1e-6 && z < r.z1 - 1e-6;
 
 /**
- * Where a fence post dragged to q = [x, z] goes: out from a corner of a building within 80 cm (a fence starts and stops at a corner), else out from the line of a wall within 40 cm, else the 25 cm
- * grid; always FENCE_GAP (15 cm) clear of every building, as the hen house's own fence stands (the game cannot make the animals' meadow of a fence that touches a building: seen in the game).
+ * Where a fence post dragged to q = [x, z] goes (as editor/objects.mjs snapFencePoint does in a building, and the cow pasture works in the game): a corner of a building within 80 cm (a fence starts and
+ * stops at a corner), else onto the line of a wall within 40 cm, else the 25 cm grid; never inside a building (out through the nearest side).
  * rects: what the buildings and props stand on [{x0, x1, z0, z1}]. off: no snapping (Alt held), only to a centimetre.
  */
 export function snapFencePost(q, rects, {off = false, grid = 0.25} = {}) {
@@ -116,7 +116,7 @@ export function snapFencePost(q, rects, {off = false, grid = 0.25} = {}) {
     if (q[0] > r.x0 - FENCE_WALL && q[0] < r.x1 + FENCE_WALL) { if (Math.abs(q[1] - r.z0) < FENCE_WALL) z = r.z0 - FENCE_GAP; else if (Math.abs(q[1] - r.z1) < FENCE_WALL) z = r.z1 + FENCE_GAP; }
     if (q[1] > r.z0 - FENCE_WALL && q[1] < r.z1 + FENCE_WALL) { if (Math.abs(q[0] - r.x0) < FENCE_WALL) x = r.x0 - FENCE_GAP; else if (Math.abs(q[0] - r.x1) < FENCE_WALL) x = r.x1 + FENCE_GAP; }
   }
-  // not inside a building or closer to it than the gap: out through the nearest side
+  // not inside a building: out through the nearest side
   for (const r of rects.map(r => grown(r, FENCE_GAP))) if (inside(x, z, r)) {
     const moves = [[r.x0 - x, 0], [r.x1 - x, 0], [0, r.z0 - z], [0, r.z1 - z]], [mx, mz] = moves.reduce((m, v) => (Math.hypot(...v) < Math.hypot(...m) ? v : m));
     x += mx; z += mz;
@@ -124,16 +124,16 @@ export function snapFencePost(q, rects, {off = false, grid = 0.25} = {}) {
   return [cm(x), cm(z)];
 }
 
-/** The indexes of the posts [[x, z] ...] that stand inside one of the rects or closer to it than FENCE_CLEAR (10 cm; a post 15 cm out from a wall is fine). */
+/** The indexes of the posts [[x, z] ...] that stand inside one of the rects (on a wall, or a corner, is not inside: the cow pasture has its posts there and it works in the game). */
 export const postsInside = (points, rects) => points.flatMap(([x, z], i) => (rects.some(r => inside(x, z, grown(r, FENCE_CLEAR))) ? [i] : []));
 
 /** What the posts [{x, z, rot, bounds}] stand on seen from above, as rectangles [{x0, x1, z0, z1}] (each turned by its rot, as footprint gives it). */
 export const feetOf = posts => posts.map(p => { const f = footprint(p.bounds, p.rot || 0); return {x0: p.x + f.minX, x1: p.x + f.maxX, z0: p.z + f.minZ, z1: p.z + f.maxZ}; });
 
 /**
- * The stretches of a fence (posts [[x, z] ...], closed: stretch i runs from post i to post i + 1, the last back to the first) that run through a building or closer to it than FENCE_CLEAR (10 cm):
- * into one of the rects [{x0, x1, z0, z1}] grown by that. The game cuts the buildings out of the animals' area, and a stretch that touches or grazes a building leaves a sliver too thin to make a
- * meadow of ("Could not shrink polygon for creation task": a fence that touched a house gave it, the same fence 15 cm out gave grass). A stretch along a wall 15 cm out, as the hen house has it, is fine.
+ * The stretches of a fence (posts [[x, z] ...], closed: stretch i runs from post i to post i + 1, the last back to the first) that run through a building: into one of the rects
+ * [{x0, x1, z0, z1}] by more than 1 cm. A stretch along a wall, or touching a corner, is not through it. The game cuts the buildings out of the animals' area, and a stretch that goes into one leaves a sliver
+ * too thin to make a meadow of (an earlier try in the game: a stretch 3 cm into a house gave "Could not shrink polygon for creation task").
  * closure: the way the game closes the fence from its last post back to the first, [[x, z] ...] between them (the husbandry's additionalNavMeshNodes: along the building, round its corners); the
  * closing stretch is then that way, not the straight line (which would cut through a house the fence goes round two walls of). None given: the straight line.
  */

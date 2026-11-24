@@ -1152,6 +1152,6 @@
   "Add a post after it": "Lägg till en stolpe efter den",
   "Take this post out": "Ta bort den här stolpen",
   "The fence round the hens' yard. Drag its posts in the view, or choose a post here and set where it stands. The hens walk inside it; the buildings are cut out of it.": "Stängslet runt hönsgården. Dra i stolparna i vyn, eller välj en stolpe här och ange var den står. Hönsen går innanför det; byggnaderna skärs bort ur det.",
-  "Post {posts} of the fence stands in or right against a building. Keep it 15 cm out from the wall, or the game cannot make the area the hens walk in.": "Stolpe {posts} i stängslet står i eller precis mot en byggnad. Håll den 15 cm ut från väggen, annars kan spelet inte göra ytan som hönsen går på.",
-  "The fence between {stretches} runs through or right along a building. Keep it 15 cm out from the wall, or the game cannot make the area the hens walk in.": "Stängslet mellan {stretches} går genom eller precis längs en byggnad. Håll det 15 cm ut från väggen, annars kan spelet inte göra ytan som hönsen går på."
+  "Post {posts} of the fence stands inside a building. Move it out, or the game cannot make the area the hens walk in.": "Stolpe {posts} i stängslet står inne i en byggnad. Flytta ut den, annars kan spelet inte göra ytan som hönsen går på.",
+  "The fence between {stretches} runs through a building. Move the posts to the wall or out from it, or the game cannot make the area the hens walk in.": "Stängslet mellan {stretches} går genom en byggnad. Flytta stolparna till väggen eller ut från den, annars kan spelet inte göra ytan som hönsen går på."
 }
