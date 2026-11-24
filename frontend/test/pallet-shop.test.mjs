@@ -83,3 +83,11 @@ test("the warehouse is a building with the three objects required; its counter i
   assert.doesNotMatch(xml, /vehicleBuyingStation/);
   assert.deepEqual(modTypesFor(p, "FS25_Affar"), []);
 });
+
+test("the pallet delivery area is at the back, the grain intake and the vehicle spawn at the front", () => {
+  const base = sanitize({kind: "house", objects: []});
+  const get = (t, type) => sharedDefaults(base, t).find(o => o.type === type);
+  assert.ok(get("unload", "unload").z < 0);
+  assert.ok(get("intake", "intake").z > 0);
+  assert.ok(get("spawn", "spawn").z > 0);
+});

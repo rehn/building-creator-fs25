@@ -25,7 +25,7 @@ export function palletDefaults(p) {
   return [
     {type: "palletcounter", x: -W / 4, z: D / 2 - 1.4, w: 2.4, d: 1.4, h: F + 2.2, ix: 0, iz: 0},
     {type: "palletspawn", x: W / 2 + 2.4, z: 0, w: 2.8, d: Math.max(3, Math.min(D, 9)), h: 0.4, ix: 0, iz: 0},
-    {type: "unload", x: 0, z: D / 2 + 3.2, w: Math.min(6, W), d: 4, h: 3, ix: 0, iz: 0},
+    {type: "unload", x: 0, z: -(D / 2 + 3.2), w: Math.min(6, W), d: 4, h: 3, ix: 0, iz: 0},
   ];
 }
 
