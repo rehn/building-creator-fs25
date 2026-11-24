@@ -13,6 +13,9 @@ import (
 const (
 	maxModItems = 200
 	maxPlan     = 5000
+	// maxPostObjects is the most game objects on one post, and maxObjectsBytes the size of their list.
+	maxPostObjects  = 60
+	maxObjectsBytes = 64 << 10
 )
 
 type modItemInput struct {
@@ -23,6 +26,8 @@ type modItemInput struct {
 	X    float64 `json:"x"`
 	Z    float64 `json:"z"`
 	Rot  float64 `json:"rot"`
+	// Objects: the game objects on the post, a JSON array (the editor checks each).
+	Objects json.RawMessage `json:"objects"`
 }
 
 type modInput struct {
@@ -83,7 +88,16 @@ func checkMod(w http.ResponseWriter, in *modInput) (store.ModUpdate, bool) {
 				writeError(w, http.StatusBadRequest, "invalid_item", "Each item needs a kind (building or prop), the id of the building or prop (a project of yours), a mod type of up to 40 characters and a place in the plan.")
 				return upd, false
 			}
-			items = append(items, store.ModItem{ID: it.ID, Kind: it.Kind, Ref: it.Ref, Type: typ, X: it.X, Z: it.Z, Rot: it.Rot})
+			objects := json.RawMessage(`[]`)
+			if present(it.Objects) {
+				var list []json.RawMessage
+				if len(it.Objects) > maxObjectsBytes || json.Unmarshal(it.Objects, &list) != nil || len(list) > maxPostObjects {
+					writeError(w, http.StatusBadRequest, "invalid_objects", "The game objects on a post must be a list of at most 60 objects.")
+					return upd, false
+				}
+				objects = it.Objects
+			}
+			items = append(items, store.ModItem{ID: it.ID, Kind: it.Kind, Ref: it.Ref, Type: typ, X: it.X, Z: it.Z, Rot: it.Rot, Objects: objects})
 		}
 		upd.Items = &items
 	}

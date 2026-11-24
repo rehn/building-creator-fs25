@@ -50,3 +50,8 @@ Ingen ny stil. Allt här är redan beskrivet i [DESIGN.md](DESIGN.md) och återa
 - Vad ska kartappen läsa via API:et (steg 6)?
 - Ska en rekvisita kunna ligga i moden utan byggnad (ett staket med skyltar som enda innehåll)? Planen antar ja.
 - Namn: "mod" eller "projekt" i gränssnittet? Idag heter spelfilen mod, och My buildings sparar projekt.
+
+## Beslut 2026-11-24 (Lars)
+
+- Hela modden är **en** placeable: alla poster ligger i samma i3d, spelaren sätter ut gården i ett svep. Spelobjekt läggs på en post i modens träd och sparas på posten (`mod_items.objects`), men slås ihop vid generering. Spelet tillåter ett `<farmhouse>`, ett `<workshop>` osv. per placeable, så två sovplatser i en mod ger en varning och bara den första exporteras.
+- Modens sida ska vara en fullstor redigeringssida (DESIGN 5): träd till vänster (modden, byggnader och rekvisita, under varje post dess spelobjekt), den stora 3D-vyn i mitten, detaljer för det valda.
