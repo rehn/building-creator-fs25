@@ -1,15 +1,19 @@
-// A mod as a game mod (docs/PLAN_MOD.md, decided 2026-11-24): the WHOLE mod is ONE placeable. Its i3d is a frame: the areas the placeable needs (clear, level, test ...) covering everything the
-// mod holds, and the mod's game objects (sleep point, workshop ... of kinds/gameobjects.mjs) as the building export makes them; each building and prop is a ReferenceNode to an i3d of its own
-// in posts/pN/, put where the plan puts it (a building as its own game mod's i3d, with the inside, a prop with its atlas). The origin of the placeable is the middle of everything, so the posts and
-// the objects are moved by minus that middle. Not tried in the game: that a placeable's i3d may reference others this way is how the imported items already work (editor/model.mjs refNode).
+// A mod as a game mod (docs/PLAN_MOD.md, decided 2026-11-24): the WHOLE mod is ONE placeable. Its i3d is one document: the areas the placeable needs (clear, level, test ...) covering everything the
+// mod holds, the mod's game objects (sleep point, workshop ... of kinds/gameobjects.mjs) as the building export makes them, each BUILDING with its visuals, collision and doors (its nodes named
+// b1_, b2_ ... so that the placeable XML can name them: the doors are animated by one <animatedObjects> block with all the buildings' doors), put where the plan puts it, and each PROP as a ReferenceNode
+// to an i3d of its own (its atlas). The textures of a building are in posts/pN/textures/. The origin of the placeable is the middle of everything, so the posts and the objects are moved by minus
+// that middle. Not tried in the game: that the game follows a ReferenceNode from a placeable's i3d is how the imported items already work (editor/model.mjs refNode); the doors of several buildings in one
+// placeable are new.
 //
-//   makeModPackage({name, author, description, posts, objects, loadTextures})  ->  {files: Map(path -> text | bytes), warnings: [text], middle: [x, z]}
+//   makeModPackage({name, author, description, posts, objects, loadTextures, pictures})  ->  {files: Map(path -> text | bytes), warnings: [text], middle: [x, z], mod}
 //
 // posts: [{id, kind: "building" | "prop", name, x, z, y, rot (degrees, as three.js turns), data (the project's data)}]; objects: the mod's game objects (lib/modObjects.mjs, in the mod's coordinates).
 // pictures: {icon, store} as {width, height, rgba} (a snapshot of the 3D view; the game needs an icon.dds, else "Missing icon filename" and the mod is not loaded): a plain one is made when there is none.
 // loadTextures(ids) -> Map(id -> {size, diffuse, normal}) gives the user's textures a prop is made of (the page reads them from the server); without it they are plain grey.
-import { sanitize, i3dFiles, placeableXml, modDescXml, modName, MOD_FILES } from "./model.mjs";
-import { makeModFiles } from "./headless.mjs";
+import { sanitize, i3dFiles, placeableXml, modDescXml, modName, buildInMod, withTextureDir, MOD_FILES } from "./model.mjs";
+import { textureMapFor } from "./headless.mjs";
+import { I3dDoc, tg, prefixNames } from "./i3d.mjs";
+import { mergeContainers } from "./kinds/gameobjects.mjs";
 import { projectGroups, boundsOf, footprint } from "./modPlan.mjs";
 import { exportI3dAtlas, atlasDdsFiles } from "../builder/atlas.mjs";
 import { sanitize as sanitizeProp } from "../builder/model.mjs";
@@ -19,22 +23,15 @@ import { encodeDds } from "./dds.mjs";
 const latin1 = text => Uint8Array.from(text, c => c.charCodeAt(0) & 255);
 const round = v => Math.round(v * 1000) / 1000;
 
-/** The files of one post in its folder, and the i3d to reference: a building as its own game mod's i3d (inside, curtains, see-through glass, doors), a prop with its atlas. */
-async function postFiles(post, folder, {loadTextures, encode}) {
-  const out = new Map();
-  if (post.kind === "prop") {
-    const m = sanitizeProp(post.data), atlas = exportI3dAtlas(m, {name: "prop"});
-    out.set(`${folder}/prop.i3d`, latin1(atlas.i3d));
-    if (atlas.shapes) out.set(`${folder}/prop.i3d.shapes`, atlas.shapes);
-    const maps = atlas.textures.length && loadTextures ? await loadTextures(atlas.textures) : new Map();
-    const dds = atlasDdsFiles(atlas.layout, id => maps.get(id) || null);
-    for (const [k, bytes] of Object.entries(dds)) out.set(`${folder}/textures/prop_${k}.dds`, bytes);
-    return {files: out, i3d: `${folder}/prop.i3d`};
-  }
-  // (the whole building: what is behind the windows shows. Its doors stay shut for now: they are animated by the placeable XML, which is the mod's and not the building's.)
-  const f = makeModFiles(post.data, post.name, {encode});
-  for (const [path, bytes] of f.mod) if (path !== "modDesc.xml" && path !== MOD_FILES.xml) out.set(`${folder}/${path}`, bytes);
-  return {files: out, i3d: `${folder}/${MOD_FILES.i3d}`};
+/** A prop's own i3d and atlas in its folder: {files, i3d (the path to reference)}. */
+async function propFiles(post, folder, {loadTextures}) {
+  const out = new Map(), m = sanitizeProp(post.data), atlas = exportI3dAtlas(m, {name: "prop"});
+  out.set(`${folder}/prop.i3d`, latin1(atlas.i3d));
+  if (atlas.shapes) out.set(`${folder}/prop.i3d.shapes`, atlas.shapes);
+  const maps = atlas.textures.length && loadTextures ? await loadTextures(atlas.textures) : new Map();
+  const dds = atlasDdsFiles(atlas.layout, id => maps.get(id) || null);
+  for (const [k, bytes] of Object.entries(dds)) out.set(`${folder}/textures/prop_${k}.dds`, bytes);
+  return {files: out, i3d: `${folder}/prop.i3d`};
 }
 
 /** A plain picture w x w in one colour (when there is no snapshot of the view to use). */
@@ -58,18 +55,30 @@ export async function makeModPackage({name, author = "", description = "", posts
   const cx = (all.x0 + all.x1) / 2, cz = (all.z0 + all.z1) / 2;
   const frame = {x0: round(all.x0 - cx), x1: round(all.x1 - cx), z0: round(all.z0 - cz), z1: round(all.z1 - cz)};
 
-  // the posts' own files, and where each stands
-  const files = new Map(), refs = [];
+  // the posts: a building is made into the one i3d document (its nodes with a prefix of their own, its textures in its folder), a prop is files of its own to reference
+  const files = new Map(), refs = [], nodes = [], doorXml = [], doc = new I3dDoc();
   let n = 0;
   for (const p of live) {
     n++;
-    const folder = `posts/p${n}`, made = await postFiles(p, folder, {loadTextures, encode});
-    for (const [path, bytes] of made.files) files.set(path, bytes);
-    refs.push({name: `post${String(n).padStart(2, "0")}`, translation: [round(p.x - cx), round(p.y || 0), round(p.z - cz)], rotation: [0, round(p.rot || 0), 0], file: made.i3d});
+    const folder = `posts/p${n}`, place = [round(p.x - cx), round(p.y || 0), round(p.z - cz)], turn = [0, round(p.rot || 0), 0];
+    if (p.kind === "prop") {
+      const made = await propFiles(p, folder, {loadTextures});
+      for (const [path, bytes] of made.files) files.set(path, bytes);
+      refs.push({name: `post${String(n).padStart(2, "0")}`, translation: place, rotation: turn, file: made.i3d});
+      continue;
+    }
+    const q = sanitize(p.data), prefix = `b${n}_`;
+    withTextureDir(folder + "/", () => {
+      const {root, doorXml: doors} = buildInMod(q, doc);
+      const xml = prefixNames(root, doors, prefix);
+      if (xml.trim()) doorXml.push(xml);
+      nodes.push(tg(`${prefix}post`, place, [root], {rotation: turn}));
+      for (const [path, bytes] of textureMapFor(q, encode)) files.set(path, bytes);
+    });
   }
 
-  // the frame: a building (a shed's settings) with the mod's game objects, drawn nothing and with the areas of the whole
-  const host = {refs, rects: [frame], width: round(frame.x1 - frame.x0), depth: round(frame.z1 - frame.z0)};
+  // the frame: a building (a shed's settings) with the mod's game objects, drawing nothing, with the areas of the whole
+  const host = {refs, nodes, doc, xml: mergeContainers(doorXml.join(""), ["animatedObjects"]), rects: [frame], width: round(frame.x1 - frame.x0), depth: round(frame.z1 - frame.z0)};
   const placed = objects.map(o => ({...o, x: round(o.x - cx), z: round(o.z - cz)}));
   const p0 = sanitize({kind: "shed", objects: placed, modDescription: description});
   for (const [file, data] of Object.entries(i3dFiles(p0, {host}))) files.set(file, typeof data === "string" ? latin1(data) : data);

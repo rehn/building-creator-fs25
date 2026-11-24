@@ -51,12 +51,18 @@ function dds(key, width, height, pixels, encode) {
   return bytes;
 }
 
-export function makeModFiles(settings, name, { author = "", encode = encodeDds } = {}) {
-  const p = sanitize(settings), { G } = buildGeometry(p), { obj, mtl } = buildObj(p);
-  const textures = new Map();
+/** The texture files of a building (sanitized p) by path: the surfaces, the rooms behind the windows (a plain colour atlas) and the glass. The paths start with the folder given to withTextureDir. */
+export function textureMapFor(p, encode = encodeDds) {
+  const { G } = buildGeometry(p), textures = new Map();
   for (const f of textureFiles(p, G)) textures.set(f.path, dds(f.key, f.width, f.height, f.pixels, encode));
   if (p.interior) textures.set(matTexture("interior").diffuse, dds("interior", 64, 64, () => plainAtlasPixels(64), encode));
   if (seeThroughGlass(p)) textures.set(matTexture("glass").diffuse, dds("glass", 64, 64, () => glassPixels(64), encode));
+  return textures;
+}
+
+export function makeModFiles(settings, name, { author = "", encode = encodeDds } = {}) {
+  const p = sanitize(settings), { obj, mtl } = buildObj(p);
+  const textures = textureMapFor(p, encode);
 
   const i3d = new Map();
   for (const [n, data] of Object.entries(i3dFiles(p, { withTex: true }))) i3d.set(n, typeof data === "string" ? latin1(data) : data);

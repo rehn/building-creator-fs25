@@ -131,6 +131,18 @@ function writeUserAttributes(root) {
   return out.length ? `\n  <UserAttributes>\n${out.join("\n")}\n  </UserAttributes>` : "";
 }
 
+/**
+ * Every node of the tree under root renamed with prefix in front, and the XML that names them (attribute values that are a node's name, and every saveId) the same: what makes the nodes of several
+ * buildings in one i3d unique, so the placeable XML can name each. Returns the XML; the tree is changed.
+ */
+export function prefixNames(root, xml, prefix) {
+  const names = new Set(), collect = n => { names.add(n.name); n.children.forEach(collect); };
+  collect(root);
+  const rename = n => { n.name = prefix + n.name; n.children.forEach(rename); };
+  rename(root);
+  return xml.replace(/(\w+)="([^"]+)"/g, (m, attr, v) => attr === "saveId" || names.has(v) ? `${attr}="${prefix}${v}"` : m);
+}
+
 /** The i3dMapping path of the first node called name ("0>2|1"), or null. The root is component 0. */
 export function pathOf(root, name) {
   const find = (n, path) => {

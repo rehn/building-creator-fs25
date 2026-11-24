@@ -2936,10 +2936,13 @@ const hexOf = rgb01 => "#" + rgb01.map(v => Math.round(v * 255).toString(16).pad
 /** Texture files of an inside part with a surface: its own diffuse (the surface in its colour) and the surface's normal map. */
 function fitTexture(surf, rgb01) {
   const color = hexOf(rgb01);
-  return {surf, color, diffuse: `textures/fit_${surf}_${color.slice(1)}.dds`, normal: `textures/fit_${surf}_normal.dds`};
+  return {surf, color, diffuse: `${texDir}textures/fit_${surf}_${color.slice(1)}.dds`, normal: `${texDir}textures/fit_${surf}_normal.dds`};
 }
 /** Texture files of a material (walls, roof ...) in the export: DDS with mips, as the game wants (the game warns about PNG). */
-export const matTexture = m => ({diffuse: `textures/${m}_diffuse.dds`, normal: `textures/${m}_normal.dds`});
+export const matTexture = m => ({diffuse: `${texDir}textures/${m}_diffuse.dds`, normal: `${texDir}textures/${m}_normal.dds`});
+// The folder the texture paths start with ("" for a building's own mod; "posts/p1/" for one of the buildings of a mod, whose files are all in one i3d): set while a building is made for a mod.
+let texDir = "";
+export function withTextureDir(dir, fn) { const keep = texDir; texDir = dir; try { return fn(); } finally { texDir = keep; } }
 /** Every texture the textured export of the fittings needs, once each: [{surf, color, diffuse, normal}]. */
 export function fittingTextures(p, G = buildGeometry(normalize(p)).G) {
   const out = new Map();
@@ -2968,13 +2971,13 @@ function doorTrigger(geo, wall, o) {
  * Everything the export writes, built once: the i3d document and scene tree, and the placeable XML
  * blocks that name its nodes. The i3dMappings are looked up in the scene by name, so they always match.
  * host (a mod: its things are in files of their own and the building is only its frame): {refs: [{name, translation, rotation, file}] (what the mod holds, each a ReferenceNode to the i3d `file`),
- * rects (ground the mod covers, {x0, x1, z0, z1}), width, depth (of all of it)}: nothing is drawn or collides here, the areas cover the rects and the shared game objects (a sleep point ...) are as usual.
+ * rects (ground the mod covers, {x0, x1, z0, z1}), width, depth (of all of it), doc (the one i3d document the buildings were made in, buildInMod), nodes (their scene nodes, placed), xml (their door XML)}: nothing is drawn or collides here, the areas cover the rects and the shared game objects (a sleep point ...) are as usual.
  * Scene: house > clear/level/test/tipOcclusion areas, visuals, collisions (like the base game's
  * garden sheds), then a walk-in building's doors, the kind's own nodes and the indoor area.
  */
-function exportParts(p, {withTex = false, scenery = false, host = null} = {}) {
+function exportParts(p, {withTex = false, scenery = false, host = null, inMod = null} = {}) {
   p = normalize(p);
-  const kind = kindOf(p), geo = buildGeometry(p), {G} = geo, doc = new I3dDoc();
+  const kind = kindOf(p), geo = buildGeometry(p), {G} = geo, doc = inMod ? inMod.doc : host && host.doc ? host.doc : new I3dDoc();
   if (host) { geo.dims = {...geo.dims, W: host.width, D: host.depth}; geo.hostRects = host.rects; }
   // A walk-in building's door leaves move, so what they carry (door, trim, glass, ironwork) comes
   // out of the building's own parts and goes on the leaves.
@@ -3019,7 +3022,7 @@ function exportParts(p, {withTex = false, scenery = false, host = null} = {}) {
     nonRenderable: true, castsShadows: false, receiveShadows: false, materialIds: cm}, children);
   const trigger = (group, mask) => ({static: true, trigger: true, collisionFilterGroup: group, collisionFilterMask: mask});
   const ctx = {p, kind, geo, doc, box, trigger, sleepPoint};
-  const kindScene = kind.scene && !host ? kind.scene(ctx) : {nodes: [], xml: "", areas: []}, shared = sharedScene(ctx);
+  const kindScene = kind.scene && !host && !inMod ? kind.scene(ctx) : {nodes: [], xml: "", areas: []}, shared = inMod ? {nodes: [], xml: "", areas: []} : sharedScene(ctx);
   // (the kind's own nodes, then those of the objects every kind can have: a sleep point, a workshop)
   const own = {nodes: [...kindScene.nodes, ...shared.nodes], xml: mergeContainers(kindScene.xml + shared.xml), areas: [...kindScene.areas, ...shared.areas]};
 
@@ -3074,7 +3077,7 @@ ${lv.map((leaf, j) => `                <part node="door${i + 1}Leaf${ks[j] + 1}"
   const corner = (group, k, min, max) => tg(group, [0, 0, 0], [tg(`${k}Start01`, min, [tg(`${k}End01`, max.map((v, i) => v - min[i]))])]);
   // Imported items: their own i3d, in items/<name>_<id>/ next to this one, loaded where they're placed.
   const counts = {};
-  const refNodes = host ? host.refs.map(r => refNode(r.name, {translation: r.translation, rotation: r.rotation, referenceId: doc.file(r.file)})) : geo.refs.map(r => {
+  const refNodes = host ? [...host.refs.map(r => refNode(r.name, {translation: r.translation, rotation: r.rotation, referenceId: doc.file(r.file)})), ...(host.nodes || [])] : geo.refs.map(r => {
     const folder = assetFolder(r.asset), stem = folder.slice(6).replace(/_.*$/, "");
     counts[stem] = (counts[stem] || 0) + 1;
     return refNode(stem + String(counts[stem]).padStart(2, "0"), {translation: r.translation, rotation: [0, r.rotY, 0],
@@ -3095,7 +3098,11 @@ ${lv.map((leaf, j) => `                <part node="door${i + 1}Leaf${ks[j] + 1}"
     ...(refNodes.length ? [tg("items", [0, 0, 0], refNodes)] : []),
   ]);
 
-  const blocks = `${own.xml}${doorXml}${indoor ? `
+  if (inMod) {   // (one building of a mod: its visuals, its collision and its doors; the placeable XML, the areas and the game objects are the mod's)
+    root.children = root.children.filter(n => ["visuals", "collisions", "doors"].includes(n.name));
+    return {p, kind, doc, root, blocks: "", doorXml};
+  }
+  const blocks = `${own.xml}${host && host.xml ? host.xml : ""}${doorXml}${indoor ? `
     <!-- Inside the walls: no rain, and the game knows where indoors is. -->
     <indoorAreas>
         <indoorArea startNode="indoorAreaStart01" widthNode="indoorAreaWidth01" heightNode="indoorAreaHeight01"/>
@@ -3134,6 +3141,15 @@ ${lv.map((leaf, j) => `                <part node="door${i + 1}Leaf${ks[j] + 1}"
 ${maps.join("\n")}
     </i3dMappings>
 `};
+}
+
+/**
+ * A building as one part of a mod's i3d (the mod is ONE placeable, so its buildings are in one i3d document, doc): {root (house > visuals, collisions, doors), doorXml (the <animatedObjects> block for its
+ * doors, naming those nodes)}. Call it inside withTextureDir("posts/p1/", ...) so that its textures have a folder of their own.
+ */
+export function buildInMod(p, doc) {
+  const {root, doorXml} = exportParts(p, {withTex: true, inMod: {doc}});
+  return {root, doorXml};
 }
 
 export function buildI3d(p, opts) {
