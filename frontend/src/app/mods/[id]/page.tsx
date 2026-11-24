@@ -1,30 +1,29 @@
 "use client";
 // One mod (docs/PLAN_MOD.md): a full-size page to build it on, laid out as the building editor is (DESIGN 5) and like Giants Editor's scene tree: at the left a tree (the mod, its
-// buildings and props, and under each of them a "Game objects" node with the game objects put on it), right of it the properties of what is chosen, and the 3D view filling the
-// rest, where things are moved by dragging (they snap to the grid and to each other). Each change is saved at once, with the version, so a change made somewhere else is not
-// overwritten. The whole mod is ONE placeable when it is generated (PLAN_MOD, decided 2026-11-24): the game takes one sleep point, one workshop ... in it, so two posts with the
-// same are warned about.
+// buildings and props, and a "Game objects" node with the mod's game objects), right of it the properties of what is chosen, and the 3D view filling the rest, where things are moved
+// by dragging (they snap to the grid and to each other). The whole mod is ONE placeable when it is generated (decided 2026-11-24), so the game objects belong to the mod (one of
+// each, in its plan data) and not to a building. Each change is saved at once, with the version, so a change made somewhere else is not overwritten.
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { api, type Mod, type ModPost, type ProjectSummary } from "@/lib/api";
+import { api, type Mod, type ModObject, type ModPost, type ProjectSummary } from "@/lib/api";
 import { useUser } from "@/lib/useUser";
 import { TopBar } from "@/components/TopBar";
 import { t } from "@/i18n/index.mjs";
 import { KINDS, sanitize } from "@/editor/model.mjs";
 import { OBJECT_TYPES, OBJECT_LIMITS } from "@/editor/objects.mjs";
 import { createModView } from "@/editor/modView.mjs";
-import { projectGroups, boundsOf, turnedBy } from "@/editor/modPlan.mjs";
+import { projectGroups, boundsOf, footprint, turnedBy } from "@/editor/modPlan.mjs";
 import { confirmDialog, promptDialog } from "@/components/dialog.mjs";
 import { addPost, removePost, setPostType, placePost, choices, payload } from "@/lib/mods.mjs";
-import { groupsFree, addGroup, removeGroup, setObjectOf, clashes, settingsFor } from "@/lib/modObjects.mjs";
+import { groupsFree, addGroup, removeGroup, setObjectOf, settingsFor, objectsOfData } from "@/lib/modObjects.mjs";
 
 type Kind = { id: string; name: string };
 type Groups = ReturnType<typeof projectGroups>;
-type Shape = { groups: Groups; bounds: ReturnType<typeof boundsOf>; settings: ReturnType<typeof settingsFor> };
+type Shape = { groups: Groups; bounds: ReturnType<typeof boundsOf>; foundation: number };
 type View = ReturnType<typeof createModView>;
-/** What is chosen in the tree: the mod itself, a post, a post's "Game objects" node, or one game object. */
-type Sel = { kind: "root" } | { kind: "post"; post: string } | { kind: "group"; post: string } | { kind: "object"; post: string; object: number };
+/** What is chosen in the tree: the mod itself, a building or prop, the "Game objects" node, or one game object. */
+type Sel = { kind: "root" } | { kind: "post"; post: string } | { kind: "group" } | { kind: "object"; object: number };
 const TYPES = KINDS as Kind[];
 const LIMIT = 5000;
 const typeName = (type: string) => t((OBJECT_TYPES as Record<string, { name: string }>)[type]?.name ?? type);
@@ -55,6 +54,7 @@ export default function ModPage() {
   const { user, error: userError } = useUser();
   const [mod, setMod] = useState<Mod | null>(null);
   const [draft, setDraft] = useState<ModPost[]>([]);
+  const [objects, setObjects] = useState<ModObject[]>([]);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [shapes, setShapes] = useState<Record<string, Shape | "error">>({});
   const [sel, setSel] = useState<Sel>({ kind: "root" });
@@ -66,6 +66,8 @@ export default function ModPage() {
   const view = useRef<View | null>(null);
   const draftRef = useRef(draft);
   draftRef.current = draft;
+  const objectsRef = useRef(objects);
+  objectsRef.current = objects;
   const modRef = useRef(mod);
   modRef.current = mod;
   const asked = useRef(new Set<string>());
@@ -74,41 +76,46 @@ export default function ModPage() {
     if (!user) return;
     Promise.all([api.mod(id), api.projects()]).then(([m, list]) => { setMod(m); setProjects(list); }).catch(e => setError(e.message));
   }, [user, id]);
-  useEffect(() => { setDraft(mod?.items ?? []); }, [mod]);   // (what the server has now)
+  useEffect(() => { setDraft(mod?.items ?? []); setObjects(objectsOfData(mod?.data)); }, [mod]);   // (what the server has now)
 
-  // what each thing looks like and the settings its game objects start from: its project, read once
+  // what each thing looks like: its project, read once
   useEffect(() => {
     for (const p of mod?.items ?? []) {
       if (p.missing || asked.current.has(p.ref)) continue;
       asked.current.add(p.ref);
       api.project(p.ref).then(pr => {
-        const groups = projectGroups(pr.data), bounds = boundsOf(groups);
-        const settings = pr.data.kind === "prop" ? settingsFor({ width: bounds.max[0] - bounds.min[0], depth: bounds.max[2] - bounds.min[2] }) : sanitize(pr.data);
-        setShapes(s => ({ ...s, [p.ref]: { groups, bounds, settings } }));
+        const groups = projectGroups(pr.data);
+        setShapes(s => ({ ...s, [p.ref]: { groups, bounds: boundsOf(groups), foundation: pr.data.kind === "prop" ? 0 : sanitize(pr.data).foundation } }));
       }).catch(() => setShapes(s => ({ ...s, [p.ref]: "error" })));
     }
   }, [mod]);
 
-  /** Saves the list (the answer has the ids and the names); a change made somewhere else is not overwritten but read again. */
-  async function save(items: ModPost[]) {
+  /** Saves the buildings and props and/or the game objects (the answer has the ids and the names); a change made somewhere else is not overwritten but read again. */
+  async function save(patch: { items?: ModPost[]; objects?: ModObject[] }) {
     const m = modRef.current;
     if (!m) return;
     setBusy(true); setError("");
-    try { setMod(await api.updateMod(m.id, { items: payload(items), version: m.version })); }
-    catch (e) { setError((e as Error).message); api.mod(m.id).then(setMod).catch(() => {}); }
+    try {
+      setMod(await api.updateMod(m.id, {
+        ...(patch.items ? { items: payload(patch.items) } : {}),
+        ...(patch.objects ? { data: { ...(m.data ?? {}), objects: patch.objects } } : {}),
+        version: m.version,
+      }));
+    } catch (e) { setError((e as Error).message); api.mod(m.id).then(setMod).catch(() => {}); }
     finally { setBusy(false); }
   }
-  const change = (next: ModPost[]) => { setDraft(next); save(next); };
+  const change = (next: ModPost[]) => { setDraft(next); save({ items: next }); };
+  const changeObjects = (next: ModObject[]) => { setObjects(next); save({ objects: next }); };
 
   // the 3D view
   useEffect(() => {
     if (!canvas.current) return;
     const v = createModView(canvas.current, {
-      onSelect: (post: string | null, object: number | null) => setSel(post === null ? { kind: "root" } : object === null ? { kind: "post", post } : { kind: "object", post, object }),
+      onSelect: (post: string | null, object: number | null) => setSel(object !== null ? { kind: "object", object } : post !== null ? { kind: "post", post } : { kind: "root" }),
       onMove: (pid: string, at: { x: number; z: number }) => setDraft(placePost(draftRef.current, pid, at)),
       onDrop: (pid: string, at: { x: number; z: number }) => change(placePost(draftRef.current, pid, at)),
-      onObjectMove: (pid: string, oid: number, at: { x: number; z: number }) => setDraft(setObjectOf(draftRef.current, pid, oid, at)),
-      onObjectDrop: (pid: string, oid: number, at: { x: number; z: number }) => change(setObjectOf(draftRef.current, pid, oid, at)),
+      onObjectMove: (oid: number, at: { x: number; z: number }) => setObjects(setObjectOf(objectsRef.current, oid, at)),
+      onObjectDrop: (oid: number, at: { x: number; z: number }) => changeObjects(setObjectOf(objectsRef.current, oid, at)),
     });
     view.current = v;
     return () => { v.dispose(); view.current = null; };
@@ -117,13 +124,14 @@ export default function ModPage() {
     const posts = [];
     for (const p of draft) {
       const s = shapes[p.ref];
-      if (s && s !== "error") posts.push({ id: p.id, x: p.x, z: p.z, rot: p.rot, groups: s.groups, bounds: s.bounds, objects: p.objects ?? [] });
+      if (s && s !== "error") posts.push({ id: p.id, x: p.x, z: p.z, rot: p.rot, groups: s.groups, bounds: s.bounds });
     }
     view.current?.show(posts);
   }, [draft, shapes]);
+  useEffect(() => { view.current?.showObjects(objects); }, [objects]);
   useEffect(() => {
-    view.current?.select(sel.kind === "root" ? null : sel.post, sel.kind === "object" ? sel.object : null);
-  }, [sel, draft, shapes]);
+    view.current?.select(sel.kind === "post" ? sel.post : null, sel.kind === "object" ? sel.object : null);
+  }, [sel, draft, objects]);
 
   async function rename() {
     if (!mod) return;
@@ -141,24 +149,33 @@ export default function ModPage() {
     catch (e) { setError((e as Error).message); setBusy(false); }
   }
 
-  const post = sel.kind === "root" ? null : draft.find(p => p.id === sel.post) ?? null;
-  const object = post && sel.kind === "object" ? (post.objects ?? []).find(o => o.id === sel.object) ?? null : null;
+  const post = sel.kind === "post" ? draft.find(p => p.id === sel.post) ?? null : null;
+  const object = sel.kind === "object" ? objects.find(o => o.id === sel.object) ?? null : null;
   const options: ProjectSummary[] = mod ? choices(projects, draft, adding) : [];
   const loading = draft.some(p => !p.missing && !shapes[p.ref]);
   const failed = draft.filter(p => !p.missing && shapes[p.ref] === "error").length;
-  const clash = clashes(draft) as { group: string; name: string; posts: string[] }[];
   const open = (p: ModPost) => (p.kind === "prop" ? `/builder/${p.ref}` : `/projects/${p.ref}`);
   const put = (pid: string, patch: { x?: number; z?: number; rot?: number }) => change(placePost(draft, pid, patch));
   const fold = (key: string) => setClosed(c => ({ ...c, [key]: !c[key] }));
-  const shapeOf = (p: ModPost) => shapes[p.ref];
 
-  function addObjects(pid: string, group: string) {
-    const s = shapes[draft.find(p => p.id === pid)?.ref ?? ""];
-    if (!s || s === "error") return;
-    const next: ModPost[] = addGroup(draft, pid, group, s.settings);
-    const added = (next.find(p => p.id === pid)?.objects ?? []).slice(-1)[0];
-    change(next);
-    if (added) setSel({ kind: "object", post: pid, object: added.id });
+  /** The size and middle of everything in the mod seen from above (the things as they stand, turned), for where a new game object starts: the middle, as big as the mod. */
+  function around() {
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity, foundation = 0;
+    for (const p of draft) {
+      const s = shapes[p.ref];
+      if (!s || s === "error") continue;
+      const f = footprint(s.bounds, p.rot);
+      minX = Math.min(minX, p.x + f.minX); maxX = Math.max(maxX, p.x + f.maxX); minZ = Math.min(minZ, p.z + f.minZ); maxZ = Math.max(maxZ, p.z + f.maxZ);
+      if (p.kind === "building") foundation = Math.max(foundation, s.foundation);
+    }
+    if (minX === Infinity) return { width: 8, depth: 8, foundation: 0, at: [0, 0] as [number, number] };
+    return { width: maxX - minX, depth: maxZ - minZ, foundation, at: [(minX + maxX) / 2, (minZ + maxZ) / 2] as [number, number] };
+  }
+  function addObjects(group: string) {
+    const a = around(), next: ModObject[] = addGroup(objects, group, settingsFor(a), a.at);
+    changeObjects(next);
+    const added = next.slice(-1)[0];
+    if (added) setSel({ kind: "object", object: added.id });
   }
 
   /** One row of the tree, as the building editor draws it: a caret (when it has children) and a button. */
@@ -172,17 +189,13 @@ export default function ModPage() {
 
   const tree = mod && (
     <ul className="tree" role="tree">
-      {row("root", 0, mod.name, sel.kind === "root", () => setSel({ kind: "root" }), { kids: draft.length > 0, strong: true, add: () => setSel({ kind: "root" }) })}
-      {!closed.root && draft.flatMap(p => {
-        const here = sel.kind !== "root" && sel.post === p.id;
-        const rows = [row(p.id, 1, p.missing ? t("Deleted") : p.name, here && sel.kind === "post", () => setSel({ kind: "post", post: p.id }),
-          { kids: !p.missing, hint: p.kind === "prop" ? t("prop") : p.type ? TYPES.find(k => k.id === p.type)?.name : undefined })];
-        if (!p.missing && !closed[p.id]) {
-          rows.push(row("g:" + p.id, 2, t("Game objects"), here && sel.kind === "group", () => setSel({ kind: "group", post: p.id }), { kids: (p.objects ?? []).length > 0 }));
-          if (!closed["g:" + p.id]) for (const o of p.objects ?? []) rows.push(row(`o:${p.id}:${o.id}`, 3, typeName(o.type), here && sel.kind === "object" && sel.object === o.id, () => setSel({ kind: "object", post: p.id, object: o.id })));
-        }
-        return rows;
-      })}
+      {row("root", 0, mod.name, sel.kind === "root", () => setSel({ kind: "root" }), { kids: true, strong: true, add: () => setSel({ kind: "root" }) })}
+      {!closed.root && [
+        ...draft.map(p => row(p.id, 1, p.missing ? t("Deleted") : p.name, sel.kind === "post" && sel.post === p.id, () => setSel({ kind: "post", post: p.id }),
+          { hint: p.kind === "prop" ? t("prop") : p.type ? TYPES.find(k => k.id === p.type)?.name : undefined })),
+        row("objects", 1, t("Game objects"), sel.kind === "group", () => setSel({ kind: "group" }), { kids: objects.length > 0 }),
+        ...(closed.objects ? [] : objects.map(o => row(`o:${o.id}`, 2, typeName(o.type), sel.kind === "object" && sel.object === o.id, () => setSel({ kind: "object", object: o.id })))),
+      ]}
     </ul>
   );
 
@@ -194,19 +207,17 @@ export default function ModPage() {
           <p className="hint"><Link href="/mods">{t("All mods")}</Link></p>
           {!mod && !error && !userError && <p className="loading">Loading the mod…</p>}
           {tree}
-          {draft.length === 0 && mod && <p className="hint">{t("Add buildings and props first. Then you place them here.")}</p>}
         </aside>
 
         <aside className="hx-details modedit-props" aria-label={t("Properties")}>
           {(error || userError) && <p className="error" role="alert">{error || userError}</p>}
           {failed > 0 && <p className="error">{t("Some of the buildings could not be read, so they are not shown.")}</p>}
-          {clash.map(c => <p className="error" key={c.group}>{t("The game takes one of these in a mod: {name}. Only the first is used. It is on: {posts}.", { name: t(c.name), posts: c.posts.join(", ") })}</p>)}
 
           {mod && sel.kind === "root" && (
             <>
               <section className="hx-card">
                 <h3 className="hx-card-h" translate="no">{mod.name}</h3>
-                <p className="hint">{t("A mod holds buildings and props, and the player puts the whole of it out in one go. Drag them in the view to place them, and put the game objects on the building they belong to.")}</p>
+                <p className="hint">{t("A mod holds buildings and props, and the player puts the whole of it out in one go. Drag them in the view to place them. The game objects, like where the player sleeps, belong to the whole mod.")}</p>
                 <div className="row"><button type="button" onClick={rename} disabled={busy}>Rename</button><button type="button" className="danger" onClick={remove} disabled={busy}>Delete</button></div>
               </section>
               <section className="hx-card">
@@ -225,7 +236,7 @@ export default function ModPage() {
             </>
           )}
 
-          {mod && post && sel.kind === "post" && (
+          {mod && post && (
             <section className="hx-card">
               <h3 className="hx-card-h" translate="no">{post.missing ? t("Deleted") : post.name}</h3>
               {post.missing && <p className="hint">{t("What this was made from is gone. Take it out of the mod.")}</p>}
@@ -251,30 +262,30 @@ export default function ModPage() {
             </section>
           )}
 
-          {mod && post && sel.kind === "group" && (
+          {mod && sel.kind === "group" && (
             <section className="hx-card">
               <h3 className="hx-card-h">{t("Game objects")}</h3>
-              <p className="hint">{t("What the game needs around this building: where the player sleeps, shops or fills up. They are put on the building and move with it.")}</p>
-              {groupsFree(post).length === 0 && <p className="hint">{t("This one has all of them.")}</p>}
+              <p className="hint">{t("What the game needs around the mod: where the player sleeps, shops or fills up. The game takes one of each in a mod, so each is added once. Drag them in the view to put them where they belong.")}</p>
+              {groupsFree(objects).length === 0 && <p className="hint">{t("The mod has all of them.")}</p>}
               <div className="mtree-menu">
-                {groupsFree(post).map((g: { id: string; name: string }) => (
-                  <button type="button" key={g.id} onClick={() => addObjects(post.id, g.id)} disabled={busy || !shapeOf(post) || shapeOf(post) === "error"}>{t("+ Add")} {t(g.name)}</button>
+                {groupsFree(objects).map((g: { id: string; name: string }) => (
+                  <button type="button" key={g.id} onClick={() => addObjects(g.id)} disabled={busy}>{t("+ Add")} {t(g.name)}</button>
                 ))}
               </div>
             </section>
           )}
 
-          {mod && post && object && (
+          {mod && object && (
             <section className="hx-card">
               <h3 className="hx-card-h">{typeName(object.type)}</h3>
               <p className="hint">{typeHint(object.type)}</p>
               {(["x", "z", "w", "d", "h"] as const).map(k => (
                 <NumField key={k} label={{ x: t("Along the width (m)"), z: t("Along the depth (m)"), w: t("Width (m)"), d: t("Depth (m)"), h: t("Height (m)") }[k]} value={object[k]}
-                  onCommit={v => change(setObjectOf(draft, post.id, object.id, { [k]: Math.min(OBJECT_LIMITS[k][1], Math.max(OBJECT_LIMITS[k][0], v)) }))} disabled={busy} />
+                  onCommit={v => changeObjects(setObjectOf(objects, object.id, { [k]: Math.min(OBJECT_LIMITS[k][1], Math.max(OBJECT_LIMITS[k][0], v)) }))} disabled={busy} />
               ))}
-              <p className="hint">{t("Measured from the middle of the building. Taking it away takes the objects that go with it too.")}</p>
+              <p className="hint">{t("Measured from the middle of the mod, the same ground the buildings stand on. Taking it away takes the objects that go with it too.")}</p>
               <div className="row">
-                <button type="button" className="danger" onClick={() => { setSel({ kind: "group", post: post.id }); change(removeGroup(draft, post.id, object.id)); }} disabled={busy}>Remove</button>
+                <button type="button" className="danger" onClick={() => { setSel({ kind: "group" }); changeObjects(removeGroup(objects, object.id)); }} disabled={busy}>Remove</button>
               </div>
             </section>
           )}

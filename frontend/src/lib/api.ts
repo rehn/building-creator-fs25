@@ -42,7 +42,7 @@ export interface Asset {
   updatedAt: string;
 }
 
-/** A game object on a post (editor/objects.mjs): a box in the post's own coordinates, standing on the ground, with its icon's place. */
+/** A game object of a mod (editor/objects.mjs): a box in the mod's coordinates, standing on the ground, with its icon's place. Kept in the mod's plan data (data.objects). */
 export interface ModObject {
   id: number;
   type: string;
@@ -65,8 +65,6 @@ export interface ModPost {
   x: number;
   z: number;
   rot: number;
-  /** The game objects put on it (sleep point, workshop ...). */
-  objects: ModObject[];
   /** The project's name now (the mod follows it); "" and missing when it was deleted. */
   name: string;
   missing: boolean;
@@ -222,7 +220,7 @@ export const api = {
   mods: () => request<Mod[]>("GET", "/mods"),
   mod: (id: string) => request<Mod>("GET", "/mods/" + encodeURIComponent(id)),
   createMod: (name: string) => request<Mod>("POST", "/mods", { name }),
-  updateMod: (id: string, patch: { name?: string; items?: Pick<ModPost, "id" | "kind" | "ref" | "type" | "x" | "z" | "rot" | "objects">[]; version?: number }) =>
+  updateMod: (id: string, patch: { name?: string; items?: Pick<ModPost, "id" | "kind" | "ref" | "type" | "x" | "z" | "rot">[]; data?: Record<string, unknown>; version?: number }) =>
     request<Mod>("PATCH", "/mods/" + encodeURIComponent(id), patch),
   deleteMod: (id: string) => request<void>("DELETE", "/mods/" + encodeURIComponent(id)),
   textures: () => request<Texture[]>("GET", "/textures"),
