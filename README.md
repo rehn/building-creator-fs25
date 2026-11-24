@@ -34,7 +34,7 @@ In the editor you can:
 
 Export one building as `.i3d` with its textures, or as a game mod (the placeable XML, i3d, textures and shop picture). On the start page you can tick several buildings and pack them into one mod.
 
-What has been confirmed in FS25 and what has not is noted in [CLAUDE.md](CLAUDE.md).
+What has been confirmed in FS25 and what has not is noted in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## How it fits together
 
@@ -196,7 +196,7 @@ Put the `web` service behind a reverse proxy with HTTPS (Caddy, Traefik, nginx) 
 
 ## Notes for working on it
 
-[CLAUDE.md](CLAUDE.md) describes the code in detail (how each part works, what has been confirmed in the game) and [docs/PLAN.md](docs/PLAN.md) is the plan, in Swedish. The way of working is test first: write the failing test, then the code.
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) describes the code in detail (how each part works, what has been confirmed in the game) and [docs/PLAN.md](docs/PLAN.md) is the plan, in Swedish. The way of working is test first: write the failing test, then the code.
 
 ## Develop
 

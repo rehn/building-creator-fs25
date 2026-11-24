@@ -47,7 +47,7 @@ Bekräftat i spelet och i redigeraren:
 
 ## 2b. Varuhus (byggt 2026-11-23, oprovat i spelet)
 
-Lars ville ha en affär där man både köper och säljer varor, med val från listor: spelets `warehouse`-typ (se CLAUDE.md "Warehouse kind"). Typen "Varuhus" finns bland byggnadstyperna och en byggnad kan bytas till den.
+Lars ville ha en affär där man både köper och säljer varor, med val från listor: spelets `warehouse`-typ (se ARCHITECTURE.md "Warehouse kind"). Typen "Varuhus" finns bland byggnadstyperna och en byggnad kan bytas till den.
 
 ## 3. Staket som sluten ring och grindar på gårdsstaket
 
