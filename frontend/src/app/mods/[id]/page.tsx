@@ -115,7 +115,7 @@ export default function ModPage() {
                   {p.missing && <small>{t("What this was made from is gone. Take it out of the mod.")}</small>}
                 </div>
                 {p.kind === "building" && !p.missing && (
-                  <label className="stack">{t("Mod type")}
+                  <label className="modtype">{t("Mod type")}
                     <select value={p.type} onChange={e => save(setPostType(items, p.id, e.target.value))} disabled={busy}>
                       <option value="">{t("As the building is")}</option>
                       {TYPES.map(k => <option key={k.id} value={k.id}>{k.name}</option>)}

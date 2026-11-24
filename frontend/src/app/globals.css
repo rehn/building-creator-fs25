@@ -248,6 +248,10 @@ html:has(.editor-page) { overscroll-behavior: none; }
 .item-list li > div:not(.actions) { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 200px; }
 .item-list small { color: var(--muted); }
 .item-list .actions { display: flex; gap: 6px; margin-left: auto; }
+/* a select in a row of a list (a post's mod type): the label above it, the select as an input (DESIGN 4.6) */
+.item-list label.modtype { display: flex; flex-direction: column; gap: 4px; margin: 0; font-size: 13.5px; color: var(--muted); }
+.item-list label.modtype select { font: inherit; font-size: 15px; color: var(--ink); padding: 7px 10px; min-width: 14em; max-width: 100%; border: 1px solid var(--line); border-radius: 6px; background: var(--field); }
+.item-list label.modtype select:hover:not(:disabled) { border-color: var(--muted); }
 #insideEditor .palette-head { margin: 10px 0 0; font-size: 14px; }
 .item-group { margin: 26px 0 0; font-size: 20px; }
 
