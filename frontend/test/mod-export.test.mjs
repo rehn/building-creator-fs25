@@ -18,11 +18,13 @@ test("a mod is one placeable: a modDesc, one placeable XML, one frame i3d, and t
   const sleep = addGroup([], "sleep", settingsFor({width: 30, depth: 12}), [30, 14]);
   const {files, warnings} = await makeModPackage({name: "Gården", author: "Anna", posts, objects: sleep});
   assert.deepEqual(warnings, []);
-  for (const f of ["modDesc.xml", "house.xml", "house.i3d", "posts/p1/house.i3d", "posts/p2/house.i3d", "posts/p3/prop.i3d"]) assert.ok(files.has(f), f);
+  for (const f of ["modDesc.xml", "house.xml", "house.i3d", "icon.dds", "store.dds", "posts/p1/house.i3d", "posts/p2/house.i3d", "posts/p3/prop.i3d"]) assert.ok(files.has(f), f);
   assert.equal([...files.keys()].filter(f => f.endsWith(".xml")).length, 2, "the modDesc and the one placeable");
   assert.ok([...files.keys()].some(f => /^posts\/p3\/textures\/prop_diffuse\.dds$/.test(f)), "a prop's atlas");
   assert.match(text(files.get("modDesc.xml")), /<storeItem xmlFilename="house\.xml"\/>/);
   assert.match(text(files.get("modDesc.xml")), /<author>Anna<\/author>/);
+  assert.match(text(files.get("modDesc.xml")), /<iconFilename>icon\.dds<\/iconFilename>/, "the game does not load a mod without an icon");
+  assert.match(text(files.get("house.xml")), /<image>store\.dds<\/image>/);
 });
 
 test("the frame i3d references each post, moved by minus the middle of everything, turned and lifted as the plan has them", async () => {

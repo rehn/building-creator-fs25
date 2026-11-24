@@ -168,6 +168,8 @@ export default function ModPage() {
       }
       const pkg = await makeModPackage({
         name: mod.name, author: user?.name ?? "", posts, objects,
+        // the icon and the shop picture: a snapshot of the 3D view (the game does not load a mod without an icon)
+        pictures: view.current ? { icon: view.current.picture(256), store: view.current.picture(512) } : null,
         // the user's textures a prop is made of: their diffuse and normal maps from the server
         loadTextures: async (ids: string[]) => {
           const maps = new Map<string, { size: number; diffuse: Uint8ClampedArray; normal: Uint8ClampedArray }>();
