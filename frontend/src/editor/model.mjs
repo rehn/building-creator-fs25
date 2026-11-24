@@ -6,6 +6,7 @@ import { KINDS, KIND, kindOf } from "./kinds/index.mjs";
 import { SHOP_CATEGORIES } from "./kinds/shop.mjs";
 import { sharedScene, sharedPlaceable, mergeContainers, sharedDefaults } from "./kinds/gameobjects.mjs";
 import { DEALER_GROUPS } from "./kinds/vehicleshop.mjs";
+import { GRAINS } from "./kinds/grainintake.mjs";
 import { WALL_T, openSide, wallFrames, wallsOf, liveWings, wingsOf, wingIdOf, eaveWalls, autoPipes, cleanPipes, cleanPapers, WING_PARTS, MAX_WINGS, HARD_MAX_PARTS, setMaxParts, WING_WALLS, wingWallKey, wingSplitKey, WING_SPLIT_WALLS, isSplitWall, openingSpan, splitsOf, sectionsOf, sectionRuns, sectionAtPoint, maxFloors, maxFloorsWithAttic, wallHasFloor, isGableWall, cascadeHeight, dividerAt, splitAtFrom, splitKey, SPLIT_WALLS, MAX_SPLITS, floorsOf, totalHeight, floorBase, floorAt, roomOf, footprint, toWorld, cleanItems, problems } from "./layout.mjs";
 import { withAssets, placement, assetFolder, normalizeMeta, troughAssets } from "./assets.mjs";
 import { SURFACES } from "./surfaces.mjs";
@@ -34,6 +35,8 @@ export const DEFAULTS = {
   interior:true, loftBacking:true, insidePaper:"none", curtainStyle:"sides", curtainColor:"#EFE9DC", ventilators:0, age:0,
   // (what a shop counter sells, if the building has one: none ticked is the tractors)
   ...Object.fromEntries(DEALER_GROUPS.map(g => [g.key, false])), sellPrice:100, sellDelivery:0,
+  // (what a grain intake buys, if the building has one: none ticked is wheat)
+  ...Object.fromEntries(GRAINS.map(([k]) => [k, false])), grainPrice:100, siloHopper:true,
   modPrice:75000, modUpkeep:75, shopCategory:"auto", modAuthor:"", modDescription:"", lodDistance:80, binaryShapes:true
 };
 /** Curtain layouts: [id, name]. Windows can pick one or follow the house's choice ("default"). */
@@ -140,6 +143,10 @@ const SHARED_SECTIONS = [
     ...DEALER_GROUPS.map(g => ({k: g.key, label: g.name, type: "check"})),
     {k:"sellPrice", label:"Prices, per cent of the game's own", min:50, max:200, step:5, unit:" %"},
     {k:"sellDelivery", label:"Delivery fee", min:0, max:20000, step:500, unit:" $"}]},
+  {title:"What it buys", tab:"game", hint:"The grain a grain intake buys (add one under Game objects): the player tips it at the intake and is paid the game's price for it. With none ticked it buys wheat.", fields:[
+    ...GRAINS.map(([k, , name]) => ({k, label: name, type: "check"})),
+    {k:"grainPrice", label:"Price, per cent of the game's own", min:50, max:200, step:5, unit:" %"},
+    {k:"siloHopper", label:"The game's tipping hopper at the intake", type:"check"}]},
   {title:"Game mod", label:"Shop and mod", tab:"game", hint:"Used by \u201CExport game mod\u201D: what the house costs in the shop and who made it. The project name is the name in the shop.", fields:[
     {k:"modPrice", label:"Price", min:0, max:2000000, step:500, money:true},
     {k:"modUpkeep", label:"Daily upkeep", min:0, max:5000, step:5, money:true},

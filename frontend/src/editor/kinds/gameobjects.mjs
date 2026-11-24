@@ -8,11 +8,13 @@ import { wallsOf, openingSpan } from "../layout.mjs";
 import { placeOnWall } from "../places.mjs";
 import { objectOf, boxOf, iconOf, boxFrom } from "../objects.mjs";
 import { shopScene, shopDefaults } from "./vehicleshop.mjs";
+import { intakeScene, intakeDefaults } from "./grainintake.mjs";
 
 /** The specializations each of the game's placeable types has of its own on top of simplePlaceable (sdk/xmlDoku/placeableTypes.xml). */
 const GAME_TYPES = {
   farmhouse: ["farmhouse", "wardrobe", "cartridgePlayer", "npcSpot"],
   garageWorkshopSolarPanels: ["workshop", "solarPanels", "incomePerHour"],
+  sellingStation: ["sellingStation"],
 };
 
 /** Scene nodes and placeable XML for the sleep point (an object outside or the sleep point piece inside). c: {p, geo, box, trigger, sleepPoint}. */
@@ -101,6 +103,10 @@ export const SHARED = {
   vehicleshop: {types: ["counter", "spawn"], has: p => !!objectOf(p, "counter") && !!objectOf(p, "spawn"), scene: shopScene, defaults: shopDefaults,
     gameType: null, specializations: ["vehicleBuyingStation"], fn: null, name: "VehicleShop",
     note: `Vehicle shop: add the placeable type to your modDesc.xml (<placeableTypes>, parent simplePlaceable, specialization vehicleBuyingStation).`},
+  // the game's unload station and the selling station that buys the grain tipped in it (kinds/grainintake.mjs); the game's own type for it is sellingStation
+  intake: {types: ["intake"], has: p => !!objectOf(p, "intake"), scene: intakeScene, defaults: intakeDefaults,
+    gameType: "sellingStation", specializations: GAME_TYPES.sellingStation, fn: null, name: "Intake",
+    note: `Grain intake: use <placeable type="sellingStation" ...> with canBeSold and showInStore false for a map to place, as the base game's selling points (mapUS/sellingPoints).`},
 };
 /** The shared objects (ids) the building has, except those its kind uses the object types of for its own (kind.handles). */
 export const sharedOf = (p, kind = null) => Object.keys(SHARED).filter(id => !(kind && (kind.handles || []).some(t => SHARED[id].types.includes(t))) && SHARED[id].has(p));
