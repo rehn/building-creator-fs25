@@ -86,6 +86,11 @@ function defaultObjects(p) {
   ];
 }
 
+/** The placeable a hen house is (and a mod with a hen yard): the game's chicken barn type. */
+export const HEN_PLACEABLE = {type: "chickenHusbandryPasture", fn: "$l10n_function_animalPenChicken",
+  shop: {category: "animalpens", type: "husbandry", brush: "animals", tab: "chickens"},
+  note: `Chicken barn: use <placeable type="chickenHusbandryPasture" ...>, as in the base game's chicken barns.`};
+
 /** The hen hatch: 40 x 50 cm at floor level in the middle of the pasture wall, kept clear 80 cm inside. */
 function openings(p) {
   if (p.pastureNoGap) return [];
@@ -343,7 +348,15 @@ function autoFurnish(p) {
  * {p, geo, doc, box(name, {center, size}, attrs), trigger(group, mask)}.
  */
 function scene(c) {
-  const {p, geo, doc} = c, y = henYard(geo, p), n = hensOf(p);
+  const {p, geo} = c;
+  return henScene(c, henYard(geo, p), hensOf(p), footprints(p));
+}
+/**
+ * The nodes, placeable XML and ground areas of a hen yard y (henYard's shape: fence, food, pallet, loading, info, blockers, areas) for n hens, the building's footprints
+ * rects ({x0, x1, z0, z1}) the way back along the fence follows. A mod (kinds/modframe.mjs) builds its own yard and uses the same export.
+ */
+export function henScene(c, y, n, rects) {
+  const {doc} = c;
   const stripesMat = doc.material("warningStripes_mat", {}, ["diffuse", "normal", "specular"].map((k, i) =>
     [["Texture", "Normalmap", "Glossmap"][i], `$data/shared/warningStripes_${k}.png`])); // the game finds the .dds
   const nodes = [tg("chickenFeatures", [0, 0, 0], [
@@ -360,7 +373,7 @@ function scene(c) {
     tg("navigationRootNode", [0, 0, 0], y.blockers.map((b, i) => c.box(i ? `navmeshBlocker${i + 1}` : "navmeshBlocker", b, {static: true, collisionFilterGroup: "0x800000", collisionFilterMask: "0x1", buildNavMeshMask: "0xfe"}))),
     tg("fence1", [0, 0, 0], y.fence.map((q, i) => tg(`fence1Node${i + 1}`, q))),
     // the way back from the last post to the first along the building (the game would close the area with a straight line, through the building)
-    tg("navContour", [0, 0, 0], navContourNodes(y.fence, footprints(p)).map(([x, z], i) => tg(`navContourNode${i + 1}`, [x, 0, z]))),
+    tg("navContour", [0, 0, 0], navContourNodes(y.fence, rects).map(([x, z], i) => tg(`navContourNode${i + 1}`, [x, 0, z]))),
     // Hidden until the game's trigger marker setting shows it; projected onto the terrain.
     shape("warningStripes01", {translation: [0, 0.02, 0], shapeId: doc.shape("warningStripes", y.pallet.stripes), castsShadows: false, receiveShadows: true,
       nonRenderable: true, terrainDecal: true, materialIds: stripesMat, clipDistance: 100}),
@@ -407,7 +420,7 @@ ${(pts => pts.length ? `            <!-- the animals' area goes back along the b
             <additionalNavMeshNodes>
 ${pts.map((_, i) => `                <node node="navContourNode${i + 1}"/>`).join("\n")}
             </additionalNavMeshNodes>
-` : "")(navContourNodes(y.fence, footprints(p)))}        </fence>
+` : "")(navContourNodes(y.fence, rects))}        </fence>
         <meadow>
             <createTask weedState="0">
                 <decoFoliage name="grassShort"/>
@@ -443,9 +456,7 @@ export default {
    */
   normalize: p => withPasture({...p, interior: false, dormers: [], hens: Math.min(p.hens, henCap(p))}),
   openings,
-  placeable: () => ({type: "chickenHusbandryPasture", fn: "$l10n_function_animalPenChicken",
-    shop: {category: "animalpens", type: "husbandry", brush: "animals", tab: "chickens"},
-    note: `Chicken barn: use <placeable type="chickenHusbandryPasture" ...>, as in the base game's chicken barns.`}),
+  placeable: () => HEN_PLACEABLE,
   description: p => `A ${(+p.width).toFixed(1)} x ${(+p.depth).toFixed(1)} m chicken barn for ${hensOf(p)} hens, made with House to i3d.`,
   furnish,
   catalog: CATALOG,

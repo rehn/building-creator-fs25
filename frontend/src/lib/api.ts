@@ -55,6 +55,8 @@ export interface ModObject {
   h: number;
   ix: number;
   iz: number;
+  /** A fence has posts [[x, z] ...] instead of a box (its x, z, w, d and h are not there). */
+  points?: [number, number][];
 }
 
 /** One post of a mod: a building or a prop (a project) with its place in the mod's plan and the mod type it is generated with ("" = as the building is). */

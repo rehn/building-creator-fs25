@@ -30,9 +30,11 @@ import defaultdealer from "./defaultdealer.mjs";
 import grainsilo from "./grainsilo.mjs";
 import fuelstation from "./fuelstation.mjs";
 import warehouse from "./warehouse.mjs";
+import modframe from "./modframe.mjs";
 
 export const KINDS = [house, chicken, cow, sheep, shed, dealership, defaultdealer, warehouse, grainsilo, fuelstation];
-export const KIND = Object.fromEntries(KINDS.map(k => [k.id, k]));
+// (the frame of a mod is a kind, but not one that is made new: it is not in KINDS, so no list of kinds shows it)
+export const KIND = {...Object.fromEntries(KINDS.map(k => [k.id, k])), modframe};
 /** The kind of a project's settings; saves without one are farmhouses. */
 export const kindOf = p => KIND[p && p.kind] || house;
 
