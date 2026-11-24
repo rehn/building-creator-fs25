@@ -6,7 +6,7 @@ import { snapPost, mapKey } from "./modPlan.mjs";
 
 const ACCENT = 0xd4553f;
 /** The colour of a game object's box by its type (a type not listed gets the last one). */
-const OBJECT_COLORS = {sleep: 0x3a7bd5, workshop: 0xc98a1a, counter: 0x2f8f6b, spawn: 0x2f8f6b, intake: 0xb8a02a, pump: 0xc4523a, palletcounter: 0x7b5fc9, palletspawn: 0x7b5fc9, unload: 0x7b5fc9};
+const OBJECT_COLORS = {sleep: 0x3a7bd5, workshop: 0xc98a1a, counter: 0x2f8f6b, spawn: 0x2f8f6b, intake: 0xb8a02a, pump: 0xc4523a, palletcounter: 0x7b5fc9, palletspawn: 0x7b5fc9, unload: 0x7b5fc9, food: 0xb8a02a, loading: 0x2f8f6b, pallets: 0xc98a1a, info: 0x8a8f86, pasture: 0x6b8f3a};
 const OBJECT_COLOR = type => OBJECT_COLORS[type] ?? 0x8a8f86;
 const GRID = 0.25;
 
@@ -14,11 +14,12 @@ const GRID = 0.25;
  * Mounts a view on canvas. show(posts) draws posts [{id, x, z, y (the height above the ground, may be missing), rot, groups (modPlan.mjs), bounds}] again (a post whose groups are the same array as before keeps its meshes; only its
  * place changes), setMap(key, picture) gives the groups drawn with the map called key (modPlan.mjs mapKey) their picture {width, height, rgba} (they are drawn in their colour until it comes), showObjects(list) the mod's game objects (boxes {id, type, x, z, y (the height above the ground, may be missing), w, d, h} in the mod's coordinates) and select(postId, objectId) marks a building or prop
  * or a game object. onSelect(postId | null, objectId | null) is told what was pressed on (both null: the ground), onMove(id, {x, z}) while a post is dragged and onDrop(id, {x, z}) when it
- * is let go where it was moved to, and onObjectMove(objectId, {x, z}) and onObjectDrop(objectId, {x, z}) the same for a game object. dispose() frees everything.
+ * is let go where it was moved to, and onObjectMove(objectId, {x, z}) and onObjectDrop(objectId, {x, z}) the same for a game object, onPointMove(objectId, i, {x, z}) and onPointDrop(objectId, i, {x, z}) for post i of a fence (an object
+ * with points [[x, z] ...] and no box: drawn as a line round the posts, each post a thin pole to press on). dispose() frees everything.
  * @param {HTMLCanvasElement} canvas
- * @param {{onSelect?: (postId: string | null, objectId: number | null) => void, onMove?: (id: string, at: {x: number, z: number}) => void, onDrop?: (id: string, at: {x: number, z: number}) => void, onObjectMove?: (objectId: number, at: {x: number, z: number}) => void, onObjectDrop?: (objectId: number, at: {x: number, z: number}) => void}} [handlers]
+ * @param {{onSelect?: (postId: string | null, objectId: number | null) => void, onMove?: (id: string, at: {x: number, z: number}) => void, onDrop?: (id: string, at: {x: number, z: number}) => void, onObjectMove?: (objectId: number, at: {x: number, z: number}) => void, onObjectDrop?: (objectId: number, at: {x: number, z: number}) => void, onPointMove?: (objectId: number, i: number, at: {x: number, z: number}) => void, onPointDrop?: (objectId: number, i: number, at: {x: number, z: number}) => void}} [handlers]
  */
-export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, onDrop = () => {}, onObjectMove = () => {}, onObjectDrop = () => {}} = {}) {
+export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, onDrop = () => {}, onObjectMove = () => {}, onObjectDrop = () => {}, onPointMove = () => {}, onPointDrop = () => {}} = {}) {
   const renderer = new THREE.WebGLRenderer({canvas, antialias: true});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   const scene = new THREE.Scene();
@@ -49,9 +50,9 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
     aim(e);
     const hits = ray.intersectObjects([...[...objs.values()].map(o => o.group), things], true);
     for (const h of hits) {
-      let o = h.object;
-      while (o && o.userData.postId === undefined && o.userData.objectId === undefined) o = o.parent;
-      if (o) return o.userData.objectId !== undefined ? {objectId: o.userData.objectId} : {postId: o.userData.postId};
+      let o = h.object, point;
+      while (o && o.userData.postId === undefined && o.userData.objectId === undefined) { if (point === undefined && o.userData.point !== undefined) point = o.userData.point; o = o.parent; }
+      if (o) return o.userData.objectId !== undefined ? {objectId: o.userData.objectId, ...(point !== undefined ? {point} : {})} : {postId: o.userData.postId};
     }
     return null;
   };
@@ -109,10 +110,24 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
     g.add(mesh, edge);
     return g;
   }
+  /** A fence: a line round its posts on the ground and a pole at each (a pole is what a press picks, and what is dragged). */
+  function fenceOf(ob) {
+    const color = OBJECT_COLOR(ob.type), g = new THREE.Group(), pts = ob.points || [];
+    g.userData = {objectId: ob.id, color};
+    const line = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts.map(([x, z]) => new THREE.Vector3(x, 0.08, z))), new THREE.LineBasicMaterial({color}));
+    g.userData.edge = line;
+    g.add(line);
+    pts.forEach(([x, z], i) => {
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 1.4, 8), new THREE.MeshBasicMaterial({color}));
+      pole.position.set(x, 0.7, z); pole.userData.point = i;
+      g.add(pole);
+    });
+    return g;
+  }
   function showObjects(list) {
     for (const c of [...things.children]) { things.remove(c); disposeTree(c); }
     thingList = list;
-    for (const ob of list) things.add(boxOf(ob));
+    for (const ob of list) things.add(Array.isArray(ob.points) ? fenceOf(ob) : boxOf(ob));
     redraw();
   }
 
@@ -179,7 +194,8 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
     if (hit && hit.objectId !== undefined) {
       const ob = thingList.find(q => q.id === hit.objectId);
       selected = null; selectedObject = hit.objectId; onSelect(null, hit.objectId); redraw();
-      drag = at && ob ? {mode: "object", objectId: ob.id, dx: at.x - ob.x, dz: at.z - ob.z, moved: false} : null;
+      if (ob && Array.isArray(ob.points)) drag = hit.point !== undefined && at ? {mode: "point", objectId: ob.id, i: hit.point, moved: false} : null;   // (a fence: a pole is dragged, the rest of it only selected)
+      else drag = at && ob ? {mode: "object", objectId: ob.id, dx: at.x - ob.x, dz: at.z - ob.z, moved: false} : null;
     } else if (hit) {
       const o = objs.get(hit.postId);
       selected = hit.postId; selectedObject = null; onSelect(hit.postId, null); redraw();
@@ -198,6 +214,18 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
       const g = things.children.find(c => c.userData.objectId === ob.id);
       if (g) g.position.set(x, (ob.y || 0) + ob.h / 2, z);
       drag.moved = true; onObjectMove(ob.id, {x, z}); redraw();
+    } else if (drag.mode === "point") {
+      const at = groundAt(e), ob = thingList.find(q => q.id === drag.objectId);
+      if (!at || !ob || !ob.points[drag.i]) return;
+      const snap = v => (e.altKey ? Math.round(v * 100) / 100 : Math.round(v / GRID) * GRID) + 0;
+      const x = snap(at.x), z = snap(at.z), [px, pz] = ob.points[drag.i];
+      if (px === x && pz === z) return;
+      const points = ob.points.map((q, k) => k === drag.i ? [x, z] : q);
+      thingList = thingList.map(q => q.id === ob.id ? {...q, points} : q);
+      const g = things.children.find(c => c.userData.objectId === ob.id);
+      if (g) { things.remove(g); disposeTree(g); }
+      things.add(fenceOf({...ob, points}));
+      drag.moved = true; drag.at = {x, z}; onPointMove(ob.id, drag.i, {x, z}); redraw();
     } else if (drag.mode === "move") {
       const at = groundAt(e), o = objs.get(drag.id);
       if (!at || !o) return;
@@ -220,6 +248,7 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
     const d = drag; drag = null;
     if (!d) return;
     if (d.mode === "move" && d.moved) { const o = objs.get(d.id); if (o) onDrop(d.id, {x: o.post.x, z: o.post.z}); }
+    if (d.mode === "point" && d.moved && d.at) onPointDrop(d.objectId, d.i, d.at);
     if (d.mode === "object" && d.moved) { const ob = thingList.find(q => q.id === d.objectId); if (ob) onObjectDrop(ob.id, {x: ob.x, z: ob.z}); }
     if (d.mode === "orbit" && d.moved < 4) { selected = null; selectedObject = null; onSelect(null, null); redraw(); }   // (a click on the ground)
   };

@@ -2971,7 +2971,7 @@ function doorTrigger(geo, wall, o) {
  * Everything the export writes, built once: the i3d document and scene tree, and the placeable XML
  * blocks that name its nodes. The i3dMappings are looked up in the scene by name, so they always match.
  * host (a mod: its things are in files of their own and the building is only its frame): {refs: [{name, translation, rotation, file}] (what the mod holds, each a ReferenceNode to the i3d `file`),
- * rects (ground the mod covers, {x0, x1, z0, z1}), width, depth (of all of it), doc (the one i3d document the buildings were made in, buildInMod), nodes (their scene nodes, placed), xml (their door XML)}: nothing is drawn or collides here, the areas cover the rects and the shared game objects (a sleep point ...) are as usual.
+ * rects (ground the mod covers, {x0, x1, z0, z1}), footprints (what the buildings and props stand on, in the same way: a hen yard's walking area goes round them), width, depth (of all of it), doc (the one i3d document the buildings were made in, buildInMod), nodes (their scene nodes, placed), xml (their door XML)}: nothing is drawn or collides here, the areas cover the rects and the shared game objects (a sleep point ...) are as usual.
  * Scene: house > clear/level/test/tipOcclusion areas, visuals, collisions (like the base game's
  * garden sheds), then a walk-in building's doors, the kind's own nodes and the indoor area.
  */
@@ -3021,8 +3021,8 @@ function exportParts(p, {withTex = false, scenery = false, host = null, inMod = 
   const box = (name, b, attrs, children = []) => shape(name, {translation: b.center, shapeId: doc.shape(name, boxMesh(b.size), {cpu: true}), ...attrs,
     nonRenderable: true, castsShadows: false, receiveShadows: false, materialIds: cm}, children);
   const trigger = (group, mask) => ({static: true, trigger: true, collisionFilterGroup: group, collisionFilterMask: mask});
-  const ctx = {p, kind, geo, doc, box, trigger, sleepPoint};
-  const kindScene = kind.scene && !host && !inMod ? kind.scene(ctx) : {nodes: [], xml: "", areas: []}, shared = inMod ? {nodes: [], xml: "", areas: []} : sharedScene(ctx);
+  const ctx = {p, kind, geo, doc, box, trigger, sleepPoint, host};
+  const kindScene = kind.scene && (!host || kind.hosted) && !inMod ? kind.scene(ctx) : {nodes: [], xml: "", areas: []}, shared = inMod ? {nodes: [], xml: "", areas: []} : sharedScene(ctx);
   // (the kind's own nodes, then those of the objects every kind can have: a sleep point, a workshop)
   const own = {nodes: [...kindScene.nodes, ...shared.nodes], xml: mergeContainers(kindScene.xml + shared.xml), areas: [...kindScene.areas, ...shared.areas]};
 

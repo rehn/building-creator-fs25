@@ -1144,5 +1144,12 @@
   "Generate game mod": "Skapa spelmodd",
   "Made {file}.": "Skapade {file}.",
   "Makes the whole mod as one placeable in the game: the buildings and props where you have put them, and the game objects. Put the zip in the game's mods folder.": "Gör hela modden till en placeable i spelet: byggnaderna och rekvisitan där du har lagt dem, och spelobjekten. Lägg zip-filen i spelets mods-mapp.",
-  "Not tried in the game yet.": "Inte provad i spelet än."
+  "Not tried in the game yet.": "Inte provad i spelet än.",
+  "Hen yard": "Hönsgård",
+  "Post {n} of {total}": "Stolpe {n} av {total}",
+  "The post before": "Stolpen före",
+  "The post after": "Stolpen efter",
+  "Add a post after it": "Lägg till en stolpe efter den",
+  "Take this post out": "Ta bort den här stolpen",
+  "The fence round the hens' yard. Drag its posts in the view, or choose a post here and set where it stands. The hens walk inside it; the buildings are cut out of it.": "Stängslet runt hönsgården. Dra i stolparna i vyn, eller välj en stolpe här och ange var den står. Hönsen går innanför det; byggnaderna skärs bort ur det."
 }

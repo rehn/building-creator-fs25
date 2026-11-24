@@ -6,11 +6,12 @@ import { GROUPS, groupsFree, addGroup, removeGroup, setObjectOf, settingsFor, gr
 
 const house = settingsFor({width: 10, depth: 8, foundation: 0.4});
 
-test("the groups the mod can take are the shared ones, named for the player", () => {
-  assert.deepEqual(GROUPS.map(g => g.id), ["sleep", "workshop", "vehicleshop", "intake", "pump", "warehouse"]);
+test("the groups the mod can take are the shared ones and the hen yard, named for the player", () => {
+  assert.deepEqual(GROUPS.map(g => g.id), ["sleep", "workshop", "vehicleshop", "intake", "pump", "warehouse", "hens"]);
   assert.ok(GROUPS.every(g => g.name && g.types.length));
   assert.equal(groupOf("spawn"), "vehicleshop");
-  assert.equal(groupOf("pasture"), null);
+  assert.equal(groupOf("pasture"), "hens", "the fence is part of the hen yard");
+  assert.equal(groupOf("feedTrough"), null, "the other animals' objects are not here yet");
 });
 
 test("adding a group puts all its objects where they go to start with, moved to the middle of the mod, with ids of their own", () => {

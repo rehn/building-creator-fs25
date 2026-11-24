@@ -19,7 +19,7 @@ import { makeModPackage } from "@/editor/modExport.mjs";
 import { confirmDialog, promptDialog } from "@/components/dialog.mjs";
 import { RangeField } from "@/components/RangeField";
 import { addPost, removePost, setPostType, placePost, choices, payload } from "@/lib/mods.mjs";
-import { groupsFree, addGroup, removeGroup, setObjectOf, settingsFor, objectsOfData } from "@/lib/modObjects.mjs";
+import { groupsFree, addGroup, removeGroup, setObjectOf, settingsFor, objectsOfData, setPoint, addPoint, removePoint, hensOfData, groupOf, MIN_POSTS } from "@/lib/modObjects.mjs";
 
 type Kind = { id: string; name: string };
 type Groups = ReturnType<typeof projectGroups>;
@@ -31,7 +31,7 @@ const TYPES = KINDS as Kind[];
 /** The slider of a building's or prop's place: a mod can be big, and a number typed over may go further. */
 const PLACE = { min: -100, max: 100, step: 0.25, hardMin: -5000, hardMax: 5000 };
 const typeName = (type: string) => t((OBJECT_TYPES as Record<string, { name: string }>)[type]?.name ?? type);
-const typeHint = (type: string) => t((OBJECT_TYPES as Record<string, { hint?: string }>)[type]?.hint ?? "");
+const typeHint = (type: string) => t(type === "pasture" ? "The fence round the hens' yard. Drag its posts in the view, or choose a post here and set where it stands. The hens walk inside it; the buildings are cut out of it." : (OBJECT_TYPES as Record<string, { hint?: string }>)[type]?.hint ?? "");
 
 export default function ModPage() {
   const { id } = useParams<{ id: string }>();
@@ -58,6 +58,8 @@ export default function ModPage() {
   const mapsAsked = useRef(new Set<string>());
   const datas = useRef(new Map<string, Record<string, unknown>>());   // the projects' data as read, for the game mod
   const [made, setMade] = useState<{ name: string; warnings: string[] } | null>(null);
+  const [postIx, setPostIx] = useState(0);   // the post of a fence the properties show
+  const hens: number = hensOfData(mod?.data);
 
   useEffect(() => {
     if (!user) return;
@@ -79,14 +81,14 @@ export default function ModPage() {
   }, [mod]);
 
   /** Saves the buildings and props and/or the game objects (the answer has the ids and the names); a change made somewhere else is not overwritten but read again. */
-  async function save(patch: { items?: ModPost[]; objects?: ModObject[] }) {
+  async function save(patch: { items?: ModPost[]; objects?: ModObject[]; hens?: number }) {
     const m = modRef.current;
     if (!m) return;
     setBusy(true); setError("");
     try {
       setMod(await api.updateMod(m.id, {
         ...(patch.items ? { items: payload(patch.items) } : {}),
-        ...(patch.objects ? { data: { ...(m.data ?? {}), objects: patch.objects } } : {}),
+        ...(patch.objects || patch.hens ? { data: { ...(m.data ?? {}), ...(patch.objects ? { objects: patch.objects } : {}), ...(patch.hens ? { hens: patch.hens } : {}) } } : {}),
         version: m.version,
       }));
     } catch (e) { setError((e as Error).message); api.mod(m.id).then(setMod).catch(() => {}); }
@@ -104,6 +106,8 @@ export default function ModPage() {
       onDrop: (pid: string, at: { x: number; z: number }) => change(placePost(draftRef.current, pid, at)),
       onObjectMove: (oid: number, at: { x: number; z: number }) => setObjects(setObjectOf(objectsRef.current, oid, at)),
       onObjectDrop: (oid: number, at: { x: number; z: number }) => changeObjects(setObjectOf(objectsRef.current, oid, at)),
+      onPointMove: (oid: number, i: number, at: { x: number; z: number }) => { setPostIx(i); setObjects(setPoint(objectsRef.current, oid, i, at)); },
+      onPointDrop: (oid: number, i: number, at: { x: number; z: number }) => changeObjects(setPoint(objectsRef.current, oid, i, at)),
     });
     view.current = v;
     return () => { v.dispose(); view.current = null; };
@@ -167,7 +171,7 @@ export default function ModPage() {
         posts.push({ id: p.id, kind: p.kind, name: p.name, x: p.x, z: p.z, y: p.y ?? 0, rot: p.rot, data });
       }
       const pkg = await makeModPackage({
-        name: mod.name, author: user?.name ?? "", posts, objects,
+        name: mod.name, author: user?.name ?? "", posts, objects, hens,
         // the icon and the shop picture: a snapshot of the 3D view (the game does not load a mod without an icon)
         pictures: view.current ? { icon: view.current.picture(256), store: view.current.picture(512) } : null,
         // the user's textures a prop is made of: their diffuse and normal maps from the server
@@ -338,11 +342,29 @@ export default function ModPage() {
             <section className="hx-card">
               <h3 className="hx-card-h">{typeName(object.type)}</h3>
               <p className="hint">{typeHint(object.type)}</p>
-              {(["x", "z", "y", "w", "d", "h"] as const).map(k => (
+              {object.type === "pasture" ? (
+                <>
+                  <div className="row">
+                    <button type="button" onClick={() => setPostIx(Math.max(0, Math.min(object.points?.length ?? 1, postIx) - 1))} disabled={busy || postIx <= 0} aria-label={t("The post before")}>‹</button>
+                    <b>{t("Post {n} of {total}", { n: Math.min(postIx, (object.points?.length ?? 1) - 1) + 1, total: object.points?.length ?? 0 })}</b>
+                    <button type="button" onClick={() => setPostIx(Math.min((object.points?.length ?? 1) - 1, postIx + 1))} disabled={busy || postIx >= (object.points?.length ?? 1) - 1} aria-label={t("The post after")}>›</button>
+                  </div>
+                  {(["x", "z"] as const).map((k, c) => {
+                    const i = Math.min(postIx, (object.points?.length ?? 1) - 1), q = object.points?.[i] ?? [0, 0], to = (v: number) => (c === 0 ? { x: v, z: q[1] } : { x: q[0], z: v });
+                    return <RangeField key={`${object.id}:${i}:${k}`} label={k === "x" ? t("Along the width") : t("Along the depth")} value={q[c]} min={OBJECT_LIMITS[k][0]} max={OBJECT_LIMITS[k][1]} step={0.25}
+                      onLive={v => setObjects(setPoint(objectsRef.current, object.id, i, to(v)))} onCommit={v => changeObjects(setPoint(objectsRef.current, object.id, i, to(v)))} disabled={busy} />;
+                  })}
+                  <div className="row">
+                    <button type="button" onClick={() => { const i = Math.min(postIx, (object.points?.length ?? 1) - 1); changeObjects(addPoint(objects, object.id, i)); setPostIx(i + 1); }} disabled={busy}>{t("Add a post after it")}</button>
+                    <button type="button" onClick={() => changeObjects(removePoint(objects, object.id, Math.min(postIx, (object.points?.length ?? 1) - 1)))} disabled={busy || (object.points?.length ?? 0) <= MIN_POSTS}>{t("Take this post out")}</button>
+                  </div>
+                </>
+              ) : (["x", "z", "y", "w", "d", "h"] as const).map(k => (
                 <RangeField key={`${object.id}:${k}`} label={{ x: t("Along the width"), z: t("Along the depth"), y: t("Height above the ground"), w: t("Width"), d: t("Depth"), h: t("Height") }[k]} value={object[k] ?? 0}
                   min={OBJECT_LIMITS[k][0]} max={OBJECT_LIMITS[k][1]} step={k === "x" || k === "z" ? 0.25 : 0.05}
                   onLive={v => setObjects(setObjectOf(objectsRef.current, object.id, { [k]: v }))} onCommit={v => changeObjects(setObjectOf(objectsRef.current, object.id, { [k]: v }))} disabled={busy} />
               ))}
+              {groupOf(object.type) === "hens" && <RangeField label={t("Hens")} value={hens} min={1} max={360} step={1} unit="" onCommit={v => save({ hens: Math.round(v) })} disabled={busy} />}
               <p className="hint">{t("Measured from the middle of the mod, the same ground the buildings stand on. Taking it away takes the objects that go with it too.")}</p>
               <div className="row">
                 <button type="button" className="danger" onClick={() => { setSel({ kind: "group" }); changeObjects(removeGroup(objects, object.id)); }} disabled={busy}>Remove</button>

@@ -37,8 +37,8 @@ async function propFiles(post, folder, {loadTextures}) {
 /** A plain picture w x w in one colour (when there is no snapshot of the view to use). */
 const plain = (w, [r, g, b]) => ({width: w, height: w, rgba: Uint8ClampedArray.from({length: w * w * 4}, (_, i) => [r, g, b, 255][i % 4])});
 
-/** @param {{name: string, author?: string, description?: string, posts: any[], objects?: any[], loadTextures?: ((ids: string[]) => Promise<Map<string, any>>) | null, encode?: any, pictures?: {icon?: any, store?: any} | null}} mod */
-export async function makeModPackage({name, author = "", description = "", posts, objects = [], loadTextures = null, encode = encodeDds, pictures = null}) {
+/** @param {{name: string, author?: string, description?: string, posts: any[], objects?: any[], hens?: number, loadTextures?: ((ids: string[]) => Promise<Map<string, any>>) | null, encode?: any, pictures?: {icon?: any, store?: any} | null}} mod */
+export async function makeModPackage({name, author = "", description = "", posts, objects = [], hens = 30, loadTextures = null, encode = encodeDds, pictures = null}) {
   const warnings = [];
   const live = posts.filter(p => p.data);
   for (const p of posts) if (!p.data) warnings.push(`“${p.name || p.id}” could not be read and is left out.`);
@@ -49,7 +49,11 @@ export async function makeModPackage({name, author = "", description = "", posts
     const f = footprint(boundsOf(projectGroups(p.data)), p.rot || 0);
     rects.push({x0: p.x + f.minX, x1: p.x + f.maxX, z0: p.z + f.minZ, z1: p.z + f.maxZ});
   }
-  for (const o of objects) rects.push({x0: o.x - o.w / 2, x1: o.x + o.w / 2, z0: o.z - o.d / 2, z1: o.z + o.d / 2});
+  const feet = rects.slice();   // (what the posts stand on)
+  for (const o of objects) {
+    if (o.type === "pasture") { for (const [x, z] of o.points || []) rects.push({x0: x, x1: x, z0: z, z1: z}); continue; }   // (the fence's posts are ground the mod covers, too)
+    rects.push({x0: o.x - o.w / 2, x1: o.x + o.w / 2, z0: o.z - o.d / 2, z1: o.z + o.d / 2});
+  }
   if (!rects.length) rects.push({x0: -2, x1: 2, z0: -2, z1: 2});
   const all = {x0: Math.min(...rects.map(r => r.x0)), x1: Math.max(...rects.map(r => r.x1)), z0: Math.min(...rects.map(r => r.z0)), z1: Math.max(...rects.map(r => r.z1))};
   const cx = (all.x0 + all.x1) / 2, cz = (all.z0 + all.z1) / 2;
@@ -78,9 +82,10 @@ export async function makeModPackage({name, author = "", description = "", posts
   }
 
   // the frame: a building (a shed's settings) with the mod's game objects, drawing nothing, with the areas of the whole
-  const host = {refs, nodes, doc, xml: mergeContainers(doorXml.join(""), ["animatedObjects"]), rects: [frame], width: round(frame.x1 - frame.x0), depth: round(frame.z1 - frame.z0)};
-  const placed = objects.map(o => ({...o, x: round(o.x - cx), z: round(o.z - cz)}));
-  const p0 = sanitize({kind: "shed", objects: placed, modDescription: description});
+  const shift = r => ({x0: round(r.x0 - cx), x1: round(r.x1 - cx), z0: round(r.z0 - cz), z1: round(r.z1 - cz)});
+  const host = {refs, nodes, doc, xml: mergeContainers(doorXml.join(""), ["animatedObjects"]), rects: [frame], footprints: feet.map(shift), width: round(frame.x1 - frame.x0), depth: round(frame.z1 - frame.z0)};
+  const placed = objects.map(o => ({...o, x: round((o.x || 0) - cx), z: round((o.z || 0) - cz), ...(o.points ? {points: o.points.map(([x, z]) => [round(x - cx), round(z - cz)])} : {})}));
+  const p0 = sanitize({kind: "modframe", objects: placed, hens, modDescription: description});
   for (const [file, data] of Object.entries(i3dFiles(p0, {host}))) files.set(file, typeof data === "string" ? latin1(data) : data);
   const icon = (pictures && pictures.icon) || plain(256, [155, 42, 31]), store = (pictures && pictures.store) || plain(512, [155, 42, 31]);
   files.set(MOD_FILES.icon, encode(icon.width, icon.height, icon.rgba));
