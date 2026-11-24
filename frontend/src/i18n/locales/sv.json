@@ -1128,5 +1128,18 @@
   "What this was made from is gone. Take it out of the mod.": "Det här gjordes av något som inte finns längre. Ta ut den ur modden.",
   "Add": "Lägg till",
   "Open": "Öppna",
-  "A mod holds buildings and props. Make one here and add what should be in it. The mod follows them when you change them.": "En mod innehåller byggnader och rekvisita. Skapa en här och lägg till det som ska vara med. Modden följer dem när du ändrar dem."
+  "A mod holds buildings and props. Make one here and add what should be in it. The mod follows them when you change them.": "En mod innehåller byggnader och rekvisita. Skapa en här och lägg till det som ska vara med. Modden följer dem när du ändrar dem.",
+  "Loading the plan…": "Läser in planen …",
+  "Nothing to place yet": "Inget att placera än",
+  "Add buildings and props first. Then you place them here.": "Lägg först till byggnader och rekvisita. Sedan placerar du dem här.",
+  "The buildings and props of the mod in 3D": "Modens byggnader och rekvisita i 3D",
+  "Reading the buildings…": "Läser in byggnaderna …",
+  "Drag a building or a prop to move it. Drag the ground to turn the view, right-drag to pan and scroll to zoom. Hold Alt while you drag to move without snapping.": "Dra en byggnad eller rekvisita för att flytta den. Dra marken för att vrida vyn, högerdra för att panorera och scrolla för att zooma. Håll Alt medan du drar för att flytta utan snappning.",
+  "Some of the buildings could not be read, so they are not shown.": "Några byggnader gick inte att läsa, så de visas inte.",
+  "Along the width (m)": "Längs bredden (m)",
+  "Along the depth (m)": "Längs djupet (m)",
+  "Turn (degrees)": "Vridning (grader)",
+  "Turn left": "Vrid åt vänster",
+  "Turn right": "Vrid åt höger",
+  "Choose a building or a prop to see where it stands.": "Välj en byggnad eller rekvisita för att se var den står."
 }
