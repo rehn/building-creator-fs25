@@ -14,7 +14,7 @@ import { sanitize, i3dFiles, placeableXml, modDescXml, modName, buildInMod, with
 import { textureMapFor } from "./headless.mjs";
 import { I3dDoc, tg, prefixNames } from "./i3d.mjs";
 import { mergeContainers } from "./kinds/gameobjects.mjs";
-import { projectGroups, boundsOf, footprint } from "./modPlan.mjs";
+import { projectGroups, boundsOf, footprint, feetOf, buildingFeet } from "./modPlan.mjs";
 import { fenceProblems } from "../lib/modObjects.mjs";
 import { exportI3dAtlas, atlasDdsFiles } from "../builder/atlas.mjs";
 import { sanitize as sanitizeProp } from "../builder/model.mjs";
@@ -50,7 +50,8 @@ export async function makeModPackage({name, author = "", description = "", posts
     const f = footprint(boundsOf(projectGroups(p.data)), p.rot || 0);
     rects.push({x0: p.x + f.minX, x1: p.x + f.maxX, z0: p.z + f.minZ, z1: p.z + f.maxZ});
   }
-  const feet = rects.slice();   // (what the posts stand on)
+  // (what the posts stand on, for the fence and the animals' blockers: a building's real walls, as the hen house has it, not the roof's edge; a prop's bounds)
+  const feet = feetOf(live.map(p => ({ x: p.x, z: p.z, rot: p.rot || 0, bounds: boundsOf(projectGroups(p.data)), feet: p.kind === "prop" ? null : buildingFeet(p.data) })));
   for (const o of objects) {
     if (o.type === "pasture") { for (const [x, z] of o.points || []) rects.push({x0: x, x1: x, z0: z, z1: z}); continue; }   // (the fence's posts are ground the mod covers, too)
     rects.push({x0: o.x - o.w / 2, x1: o.x + o.w / 2, z0: o.z - o.d / 2, z1: o.z + o.d / 2});

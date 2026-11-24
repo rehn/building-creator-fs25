@@ -106,6 +106,9 @@ function withPosts(objects, objectId, f) {
 /** Post i of the fence moved to {x, z}. */
 export const setPoint = (objects, objectId, i, {x, z}) => withPosts(objects, objectId, pts => (i >= 0 && i < pts.length && Number.isFinite(+x) && Number.isFinite(+z) ? pts.map((q, k) => k === i ? [+x, +z] : q) : null));
 
+/** A new post after post i at {x, z} (the player dragged a dot between two posts out to it). */
+export const insertPoint = (objects, objectId, i, {x, z}) => withPosts(objects, objectId, pts => (i < 0 || i >= pts.length || pts.length >= MAX_FENCE_POINTS || !Number.isFinite(+x) || !Number.isFinite(+z) ? null : [...pts.slice(0, i + 1), [+x, +z], ...pts.slice(i + 1)]));
+
 /** A new post after post i, in the middle of that stretch of the fence (the last stretch runs back to the first post). */
 export const addPoint = (objects, objectId, i) => withPosts(objects, objectId, pts => {
   if (i < 0 || i >= pts.length || pts.length >= MAX_FENCE_POINTS) return null;

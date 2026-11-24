@@ -227,7 +227,7 @@ test("a fence that starts at one corner of a house and ends at another, round tw
   const i3d0 = text(files.get("house.i3d")), blocker = i3d0.match(/name="navmeshBlocker" translation="([^"]+)"/)[1].split(" ").map(Number);
   assert.ok(blocker.length === 3, "the house is a blocker");
   // the house's own rectangle in the mod's coordinates, from the generated blocker's middle and the plan
-  const f = (await import("../src/editor/modPlan.mjs")).feetOf([{x: 20, z: 10, rot: 0, bounds: (await import("../src/editor/modPlan.mjs")).boundsOf((await import("../src/editor/modPlan.mjs")).projectGroups(one[0].data))}])[0];
+  const mp = await import("../src/editor/modPlan.mjs"), f = mp.feetOf([{x: 20, z: 10, rot: 0, bounds: mp.boundsOf(mp.projectGroups(one[0].data)), feet: mp.buildingFeet(one[0].data)}])[0];   // the real walls: x 15 to 25, z 6 to 14
   const g = 0.15, pts = [[f.x1 + g, f.z0 - g], [f.x1 + 8, f.z0 - g], [f.x1 + 8, f.z1 + 8], [f.x0 - g, f.z1 + 8], [f.x0 - g, f.z1 + g]];   // from the NE corner, east, south, west, up to the SW corner
   const objects = yard().map(o => (o.type === "pasture" ? {...o, points: pts} : o));
   const out = await makeModPackage({name: "Hönsgården", posts: one, objects});
@@ -242,10 +242,46 @@ test("a fence that starts at one corner of a house and ends at another, round tw
 
 test("a fence with its end posts on the wall of a house, as the cow pasture has it, gives no warning when the mod is made", async () => {
   const one = [{id: "a", kind: "building", name: "Huset", x: 20, z: 10, y: 0, rot: 0, data: {kind: "house", width: 10, depth: 8}}];
-  const {feetOf, boundsOf, projectGroups} = await import("../src/editor/modPlan.mjs");
-  const f = feetOf([{x: 20, z: 10, rot: 0, bounds: boundsOf(projectGroups(one[0].data))}])[0];
+  const {feetOf, boundsOf, projectGroups, buildingFeet} = await import("../src/editor/modPlan.mjs");
+  const f = feetOf([{x: 20, z: 10, rot: 0, bounds: boundsOf(projectGroups(one[0].data)), feet: buildingFeet(one[0].data)}])[0];
   const pts = [[f.x1, f.z1], [f.x1, f.z1 + 8], [f.x0, f.z1 + 8], [f.x0, f.z1]];   // from corner to corner on the south wall, out 8 m
   const objects = yard().map(o => (o.type === "pasture" ? {...o, points: pts} : o));
   const {warnings} = await makeModPackage({name: "Hönsgården", posts: one, objects});
   assert.deepEqual(warnings, []);
+});
+
+// ---- the fence snaps to the real walls of a building (its footprint: the main building and its wings), as in the cow pasture, not to the roof's edge ----
+import { buildingFeet } from "../src/editor/modPlan.mjs";
+
+test("what a building stands on is its real footprint (walls, wings), put where the post stands and turned; a prop has only its bounds", () => {
+  const bounds = {min: [-5.6, 0, -4.6], max: [5.6, 6, 4.6]};   // the mesh: with the roof's overhang
+  const feet = [{x0: -5, x1: 5, z0: -4, z1: 4}];
+  assert.deepEqual(feetOf([{x: 20, z: 10, rot: 0, bounds, feet}]), [{x0: 15, x1: 25, z0: 6, z1: 14}], "the walls, not the roof");
+  const turned = feetOf([{x: 20, z: 10, rot: 90, bounds, feet}])[0];
+  assert.deepEqual([turned.x0, turned.x1, turned.z0, turned.z1].map(v => Math.round(v * 1000) / 1000), [16, 24, 5, 15], "turned a quarter");
+  assert.deepEqual(feetOf([{x: 0, z: 0, rot: 0, bounds}]), [{x0: -5.6, x1: 5.6, z0: -4.6, z1: 4.6}], "no footprint (a prop): its bounds");
+  const l = buildingFeet({kind: "house", width: 10, depth: 8});
+  assert.deepEqual(l[0], {x0: -5, x1: 5, z0: -4, z1: 4}, "from the building's settings");
+});
+
+test("the animals' blockers are the buildings' real footprints, so they are where the walls are", async () => {
+  const one = [{id: "a", kind: "building", name: "Huset", x: 20, z: 10, y: 0, rot: 0, data: {kind: "house", width: 10, depth: 8}}];
+  const {files, middle} = await makeModPackage({name: "Hönsgården", posts: one, objects: yard()});
+  const at = text(files.get("house.i3d")).match(/name="navmeshBlocker" translation="([^"]+)"/)[1].split(" ").map(Number);
+  assert.ok(Math.abs(at[0] - (20 - middle[0])) < 0.01 && Math.abs(at[2] - (10 - middle[1])) < 0.01, "the blocker's middle is the house's own middle: " + at + " vs " + (20 - middle[0]) + "," + (10 - middle[1]));
+});
+
+// ---- a new post made by dragging a dot between two posts ----
+import { insertPoint } from "../src/lib/modObjects.mjs";
+
+test("a post put in after post i at a place the player gives (the fence has at most 40 posts)", () => {
+  const objects = yard(), f = fenceOf(objects), n = f.points.length;
+  const more = insertPoint(objects, f.id, 1, {x: 33.3333, z: -2});
+  assert.equal(fenceOf(more).points.length, n + 1);
+  assert.deepEqual(fenceOf(more).points[2], [33.333, -2]);
+  assert.deepEqual(fenceOf(more).points[1], f.points[1]);
+  assert.equal(insertPoint(objects, f.id, 99, {x: 1, z: 1}), objects, "no such post");
+  let full = objects;
+  for (let i = 0; i < 60; i++) full = insertPoint(full, f.id, 0, {x: i, z: i});
+  assert.equal(fenceOf(full).points.length, 40);
 });

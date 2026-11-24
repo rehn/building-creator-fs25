@@ -2,7 +2,7 @@
 // ground (it snaps to the grid and to the edges of the others), drag a game object the same way (on the grid), Alt held switches snapping off, drag the ground to turn the view,
 // right-drag or Shift+drag to pan, scroll to zoom. three.js only; what to draw and how to snap come from modPlan.mjs, and the page keeps the posts and the objects (this view only draws them).
 import * as THREE from "three";
-import { snapPost, snapFencePost, footprint, mapKey } from "./modPlan.mjs";
+import { snapPost, snapFencePost, feetOf, mapKey } from "./modPlan.mjs";
 
 const ACCENT = 0xd4553f;
 /** The colour of a game object's box by its type (a type not listed gets the last one). */
@@ -16,11 +16,12 @@ const GRID = 0.25;
  * or a game object. onSelect(postId | null, objectId | null) is told what was pressed on (both null: the ground), onMove(id, {x, z}) while a post is dragged and onDrop(id, {x, z}) when it
  * is let go where it was moved to, and onObjectMove(objectId, {x, z}) and onObjectDrop(objectId, {x, z}) the same for a game object, onPointMove(objectId, i, {x, z}) and onPointDrop(objectId, i, {x, z}) for post i of a fence (an object
  * with points [[x, z] ...] and no box: drawn as a line round the posts, each post a thin pole to press on), onPointSelect(objectId, i) when a pole is pressed, and selectPoint(i) marks post i of the chosen fence (its pole is
- * bigger and in the accent colour, so it is clear which post the properties are about). dispose() frees everything.
+ * bigger and in the accent colour, so it is clear which post the properties are about). A fence is drawn as the cow pasture's is: the first post green (where it starts), the last red (where it stops), and a pale dot
+ * between each two posts that is pressed and dragged out to a new post (onPointInsert(objectId, i, at): after post i). dispose() frees everything.
  * @param {HTMLCanvasElement} canvas
- * @param {{onSelect?: (postId: string | null, objectId: number | null) => void, onMove?: (id: string, at: {x: number, z: number}) => void, onDrop?: (id: string, at: {x: number, z: number}) => void, onObjectMove?: (objectId: number, at: {x: number, z: number}) => void, onObjectDrop?: (objectId: number, at: {x: number, z: number}) => void, onPointMove?: (objectId: number, i: number, at: {x: number, z: number}) => void, onPointDrop?: (objectId: number, i: number, at: {x: number, z: number}) => void, onPointSelect?: (objectId: number, i: number) => void}} [handlers]
+ * @param {{onSelect?: (postId: string | null, objectId: number | null) => void, onMove?: (id: string, at: {x: number, z: number}) => void, onDrop?: (id: string, at: {x: number, z: number}) => void, onObjectMove?: (objectId: number, at: {x: number, z: number}) => void, onObjectDrop?: (objectId: number, at: {x: number, z: number}) => void, onPointMove?: (objectId: number, i: number, at: {x: number, z: number}) => void, onPointDrop?: (objectId: number, i: number, at: {x: number, z: number}) => void, onPointSelect?: (objectId: number, i: number) => void, onPointInsert?: (objectId: number, i: number, at: {x: number, z: number}) => void}} [handlers]
  */
-export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, onDrop = () => {}, onObjectMove = () => {}, onObjectDrop = () => {}, onPointMove = () => {}, onPointDrop = () => {}, onPointSelect = () => {}} = {}) {
+export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, onDrop = () => {}, onObjectMove = () => {}, onObjectDrop = () => {}, onPointMove = () => {}, onPointDrop = () => {}, onPointSelect = () => {}, onPointInsert = () => {}} = {}) {
   const renderer = new THREE.WebGLRenderer({canvas, antialias: true});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   const scene = new THREE.Scene();
@@ -51,9 +52,9 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
     aim(e);
     const hits = ray.intersectObjects([...[...objs.values()].map(o => o.group), things], true);
     for (const h of hits) {
-      let o = h.object, point;
-      while (o && o.userData.postId === undefined && o.userData.objectId === undefined) { if (point === undefined && o.userData.point !== undefined) point = o.userData.point; o = o.parent; }
-      if (o) return o.userData.objectId !== undefined ? {objectId: o.userData.objectId, ...(point !== undefined ? {point} : {})} : {postId: o.userData.postId};
+      let o = h.object, point, mid;
+      while (o && o.userData.postId === undefined && o.userData.objectId === undefined) { if (point === undefined && o.userData.point !== undefined) point = o.userData.point; if (mid === undefined && o.userData.mid !== undefined) mid = o.userData.mid; o = o.parent; }
+      if (o) return o.userData.objectId !== undefined ? {objectId: o.userData.objectId, ...(point !== undefined ? {point} : {}), ...(mid !== undefined ? {mid} : {})} : {postId: o.userData.postId};
     }
     return null;
   };
@@ -71,7 +72,7 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
       // (the chosen post of the chosen fence: bigger and in the accent colour)
       for (const pole of g.userData.poles || []) {
         const on = g.userData.objectId === selectedObject && pole.userData.point === selectedPoint;
-        pole.material.color.setHex(on ? ACCENT : g.userData.color); pole.scale.set(on ? 1.8 : 1, on ? 1.5 : 1, on ? 1.8 : 1);
+        pole.material.color.setHex(on ? ACCENT : pole.userData.base ?? g.userData.color); pole.scale.set(on ? 1.8 : 1, on ? 1.5 : 1, on ? 1.8 : 1);
       }
     }
     renderer.render(scene, camera);
@@ -126,9 +127,16 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
     g.userData.edge = line;
     g.add(line);
     pts.forEach(([x, z], i) => {
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 1.4, 8), new THREE.MeshBasicMaterial({color}));
-      pole.position.set(x, 0.7, z); pole.userData.point = i;
+      const base = i === 0 ? 0x2e9e4a : i === pts.length - 1 ? 0xd03030 : color;   // (where the fence starts and where it stops)
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 1.4, 8), new THREE.MeshBasicMaterial({color: base}));
+      pole.position.set(x, 0.7, z); pole.userData.point = i; pole.userData.base = base;
       g.add(pole); g.userData.poles.push(pole);
+      // a pale dot between this post and the next: pressed and dragged out it makes a new post
+      if (i + 1 < pts.length) {
+        const dot = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 8), new THREE.MeshBasicMaterial({color: 0xf4f1d8, transparent: true, opacity: 0.9}));
+        dot.position.set((x + pts[i + 1][0]) / 2, 0.45, (z + pts[i + 1][1]) / 2); dot.userData.mid = i;
+        g.add(dot);
+      }
     });
     return g;
   }
@@ -204,7 +212,17 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
     if (hit && hit.objectId !== undefined) {
       const ob = thingList.find(q => q.id === hit.objectId);
       selected = null; selectedObject = hit.objectId; onSelect(null, hit.objectId); redraw();
-      if (ob && Array.isArray(ob.points)) {
+      if (ob && Array.isArray(ob.points) && hit.mid !== undefined && at && ob.points.length < 40) {
+        // a dot between two posts: a new post is made there at once and dragged
+        const feet = feetOf([...objs.values()].map(o => o.post)), [x, z] = snapFencePost([at.x, at.z], feet, {grid: GRID});
+        const points = [...ob.points.slice(0, hit.mid + 1), [x, z], ...ob.points.slice(hit.mid + 1)];
+        thingList = thingList.map(q => q.id === ob.id ? {...q, points} : q);
+        const g = things.children.find(c => c.userData.objectId === ob.id);
+        if (g) { things.remove(g); disposeTree(g); }
+        things.add(fenceOf({...ob, points}));
+        selectedPoint = hit.mid + 1; onPointInsert(ob.id, hit.mid, {x, z}); onPointSelect(ob.id, hit.mid + 1);
+        drag = {mode: "point", objectId: ob.id, i: hit.mid + 1, moved: true, at: {x, z}}; redraw();
+      } else if (ob && Array.isArray(ob.points)) {
         if (hit.point !== undefined) { selectedPoint = hit.point; onPointSelect(ob.id, hit.point); redraw(); }
         drag = hit.point !== undefined && at ? {mode: "point", objectId: ob.id, i: hit.point, moved: false} : null;
       }   // (a fence: a pole is dragged, the rest of it only selected)
@@ -231,7 +249,7 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
       const at = groundAt(e), ob = thingList.find(q => q.id === drag.objectId);
       if (!at || !ob || !ob.points[drag.i]) return;
       // (a post goes to a corner or a wall of a building or prop close by, never inside one; Alt: where it is)
-      const feet = [...objs.values()].map(o => { const f = footprint(o.post.bounds, o.post.rot); return {x0: o.post.x + f.minX, x1: o.post.x + f.maxX, z0: o.post.z + f.minZ, z1: o.post.z + f.maxZ}; });
+      const feet = feetOf([...objs.values()].map(o => o.post));   // (the real walls of a building: post.feet)
       const [x, z] = snapFencePost([at.x, at.z], feet, {off: e.altKey, grid: GRID}), [px, pz] = ob.points[drag.i];
       if (px === x && pz === z) return;
       const points = ob.points.map((q, k) => k === drag.i ? [x, z] : q);
