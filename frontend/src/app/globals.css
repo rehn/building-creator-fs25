@@ -159,11 +159,11 @@ html:has(.editor-page) { overscroll-behavior: none; }
 .hx-panel summary::-webkit-details-marker { display: none; }
 .hx-panel summary::after { content: "+"; color: var(--muted); font-family: var(--font-body), sans-serif; font-size: 18px; }
 .hx-panel details[open] summary::after { content: "\2212"; }
-.hx-panel .field { margin: 10px 0; }
-.hx-panel .fl { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-.hx-panel .fl label { font-weight: 500; }
-.hx-panel output { color: var(--muted); font-variant-numeric: tabular-nums; }
-.hx-panel input[type=range] { width: 100%; accent-color: var(--accent); margin: 4px 0 0; }
+.hx-panel .field, .modedit-props .field { margin: 10px 0; }
+.hx-panel .fl, .modedit-props .fl { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.hx-panel .fl label, .modedit-props .fl label { font-weight: 500; }
+.hx-panel output, .modedit-props output { color: var(--muted); font-variant-numeric: tabular-nums; }
+.hx-panel input[type=range], .modedit-props input[type=range] { width: 100%; accent-color: var(--accent); margin: 4px 0 0; }
 .hx-panel select, .hx-panel input[type=number], .hx-panel input[type=text], .hx-panel textarea { font: inherit; width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--field); color: var(--ink); margin-top: 4px; }
 .hx-panel .check { display: flex; align-items: center; gap: 8px; margin: 12px 0; font-weight: 500; }
 .hx-panel .check input { accent-color: var(--accent); width: 18px; height: 18px; }
@@ -323,8 +323,8 @@ html:has(.editor-page) { overscroll-behavior: none; }
 #insideEditor .palette button.pal span { padding: 0 2px; overflow-wrap: anywhere; }
 
 /* A slider's number can be clicked and typed over (10+100 works): a hint on the number, and the little box that replaces it. */
-.hx-panel .fl output { cursor: text; border-bottom: 1px dotted color-mix(in srgb, var(--muted) 60%, transparent); }
-.hx-panel .fl output:hover { color: var(--ink); border-bottom-color: var(--accent); }
+.hx-panel .fl output, .modedit-props .fl output { cursor: text; border-bottom: 1px dotted color-mix(in srgb, var(--muted) 60%, transparent); }
+.hx-panel .fl output:hover, .modedit-props .fl output:hover { color: var(--ink); border-bottom-color: var(--accent); }
 .hx-panel input.numin { width: 8.5em; max-width: 60%; margin: 0; padding: 2px 6px; text-align: right; font-variant-numeric: tabular-nums; }
 
 /* Picking buildings on the start page to pack into one game mod. */
@@ -548,6 +548,7 @@ dialog.dlg input, dialog.dlg textarea { font: inherit; width: 100%; padding: 9px
 .mtree-menu { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
 .mtree-menu button { padding: 4px 10px; font-size: 14px; }
 .modedit-props .hx-card label.stack input, .modedit-props .hx-card label.stack select { width: 100%; font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--field); color: var(--ink); margin-top: 5px; }
+.modedit-props input.rf-type { width: 6em; text-align: right; font: inherit; padding: 1px 6px; border: 1px solid var(--accent); border-radius: 6px; background: var(--field); color: var(--ink); }
 .modedit-props .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 .item-list.compact li { padding: 6px 10px; }
 @media (max-width: 1180px) { .modedit { grid-template-columns: 250px 300px minmax(0, 1fr); } }

@@ -15,6 +15,7 @@ import { OBJECT_TYPES, OBJECT_LIMITS } from "@/editor/objects.mjs";
 import { createModView } from "@/editor/modView.mjs";
 import { projectGroups, boundsOf, footprint, turnedBy } from "@/editor/modPlan.mjs";
 import { confirmDialog, promptDialog } from "@/components/dialog.mjs";
+import { RangeField } from "@/components/RangeField";
 import { addPost, removePost, setPostType, placePost, choices, payload } from "@/lib/mods.mjs";
 import { groupsFree, addGroup, removeGroup, setObjectOf, settingsFor, objectsOfData } from "@/lib/modObjects.mjs";
 
@@ -25,29 +26,10 @@ type View = ReturnType<typeof createModView>;
 /** What is chosen in the tree: the mod itself, a building or prop, the "Game objects" node, or one game object. */
 type Sel = { kind: "root" } | { kind: "post"; post: string } | { kind: "group" } | { kind: "object"; object: number };
 const TYPES = KINDS as Kind[];
-const LIMIT = 5000;
+/** The slider of a building's or prop's place: a mod can be big, and a number typed over may go further. */
+const PLACE = { min: -100, max: 100, step: 0.25, hardMin: -5000, hardMax: 5000 };
 const typeName = (type: string) => t((OBJECT_TYPES as Record<string, { name: string }>)[type]?.name ?? type);
 const typeHint = (type: string) => t((OBJECT_TYPES as Record<string, { hint?: string }>)[type]?.hint ?? "");
-
-/** A number field that keeps what is typed until it is left or Enter is pressed, then gives the number (the caller keeps it within its range). */
-function NumField({ label, value, onCommit, disabled }: { label: string; value: number; onCommit: (v: number) => void; disabled?: boolean }) {
-  const shown = (v: number) => String(Math.round(v * 100) / 100);
-  const [text, setText] = useState(shown(value));
-  const editing = useRef(false);
-  useEffect(() => { if (!editing.current) setText(shown(value)); }, [value]);
-  const commit = () => {
-    editing.current = false;
-    const v = Number(text.replace(",", "."));
-    if (Number.isFinite(v) && Math.abs(v) <= LIMIT && v !== value) onCommit(v); else setText(shown(value));
-  };
-  return (
-    <label className="stack">{label}
-      <input type="text" inputMode="decimal" value={text} disabled={disabled}
-        onFocus={e => { editing.current = true; e.target.select(); }} onChange={e => setText(e.target.value)} onBlur={commit}
-        onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }} />
-    </label>
-  );
-}
 
 export default function ModPage() {
   const { id } = useParams<{ id: string }>();
@@ -155,7 +137,8 @@ export default function ModPage() {
   const loading = draft.some(p => !p.missing && !shapes[p.ref]);
   const failed = draft.filter(p => !p.missing && shapes[p.ref] === "error").length;
   const open = (p: ModPost) => (p.kind === "prop" ? `/builder/${p.ref}` : `/projects/${p.ref}`);
-  const put = (pid: string, patch: { x?: number; z?: number; rot?: number }) => change(placePost(draft, pid, patch));
+  const put = (pid: string, patch: { x?: number; z?: number; rot?: number }) => change(placePost(draftRef.current, pid, patch));
+  const live = (pid: string, patch: { x?: number; z?: number; rot?: number }) => setDraft(placePost(draftRef.current, pid, patch));
   const fold = (key: string) => setClosed(c => ({ ...c, [key]: !c[key] }));
 
   /** The size and middle of everything in the mod seen from above (the things as they stand, turned), for where a new game object starts: the middle, as big as the mod. */
@@ -248,9 +231,9 @@ export default function ModPage() {
                   </select>
                 </label>
               )}
-              <NumField label={t("Along the width (m)")} value={post.x} onCommit={v => put(post.id, { x: v })} disabled={busy} />
-              <NumField label={t("Along the depth (m)")} value={post.z} onCommit={v => put(post.id, { z: v })} disabled={busy} />
-              <NumField label={t("Turn (degrees)")} value={post.rot} onCommit={v => put(post.id, { rot: v })} disabled={busy} />
+              <RangeField label={t("Along the width")} value={post.x} {...PLACE} onLive={v => live(post.id, { x: v })} onCommit={v => put(post.id, { x: v })} disabled={busy} />
+              <RangeField label={t("Along the depth")} value={post.z} {...PLACE} onLive={v => live(post.id, { z: v })} onCommit={v => put(post.id, { z: v })} disabled={busy} />
+              <RangeField label={t("Turn")} value={post.rot} min={0} max={360} step={1} unit="°" hardMin={0} hardMax={360} onLive={v => live(post.id, { rot: v })} onCommit={v => put(post.id, { rot: v % 360 })} disabled={busy} />
               <div className="row">
                 <button type="button" onClick={() => put(post.id, { rot: turnedBy(post.rot, -90) })} disabled={busy}>{t("Turn left")}</button>
                 <button type="button" onClick={() => put(post.id, { rot: turnedBy(post.rot, 90) })} disabled={busy}>{t("Turn right")}</button>
@@ -280,8 +263,9 @@ export default function ModPage() {
               <h3 className="hx-card-h">{typeName(object.type)}</h3>
               <p className="hint">{typeHint(object.type)}</p>
               {(["x", "z", "y", "w", "d", "h"] as const).map(k => (
-                <NumField key={k} label={{ x: t("Along the width (m)"), z: t("Along the depth (m)"), y: t("Height above the ground (m)"), w: t("Width (m)"), d: t("Depth (m)"), h: t("Height (m)") }[k]} value={object[k] ?? 0}
-                  onCommit={v => changeObjects(setObjectOf(objects, object.id, { [k]: Math.min(OBJECT_LIMITS[k][1], Math.max(OBJECT_LIMITS[k][0], v)) }))} disabled={busy} />
+                <RangeField key={`${object.id}:${k}`} label={{ x: t("Along the width"), z: t("Along the depth"), y: t("Height above the ground"), w: t("Width"), d: t("Depth"), h: t("Height") }[k]} value={object[k] ?? 0}
+                  min={OBJECT_LIMITS[k][0]} max={OBJECT_LIMITS[k][1]} step={k === "x" || k === "z" ? 0.25 : 0.05}
+                  onLive={v => setObjects(setObjectOf(objectsRef.current, object.id, { [k]: v }))} onCommit={v => changeObjects(setObjectOf(objectsRef.current, object.id, { [k]: v }))} disabled={busy} />
               ))}
               <p className="hint">{t("Measured from the middle of the mod, the same ground the buildings stand on. Taking it away takes the objects that go with it too.")}</p>
               <div className="row">

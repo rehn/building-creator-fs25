@@ -1123,14 +1123,8 @@
   "Reading the buildings…": "Läser in byggnaderna …",
   "Drag a building or a prop to move it. Drag the ground to turn the view, right-drag to pan and scroll to zoom. Hold Alt while you drag to move without snapping.": "Dra en byggnad eller rekvisita för att flytta den. Dra marken för att vrida vyn, högerdra för att panorera och scrolla för att zooma. Håll Alt medan du drar för att flytta utan snappning.",
   "Some of the buildings could not be read, so they are not shown.": "Några byggnader gick inte att läsa, så de visas inte.",
-  "Along the width (m)": "Längs bredden (m)",
-  "Along the depth (m)": "Längs djupet (m)",
-  "Turn (degrees)": "Vridning (grader)",
   "Turn left": "Vrid åt vänster",
   "Turn right": "Vrid åt höger",
-  "Depth (m)": "Djup (m)",
-  "Height (m)": "Höjd (m)",
-  "Width (m)": "Bredd (m)",
   "Vehicle shop": "Fordonsbutik",
   "Pallet shop": "Pallbutik",
   "Add to the mod": "Lägg till i modden",
@@ -1145,5 +1139,6 @@
   "Measured from the middle of the mod, the same ground the buildings stand on. Taking it away takes the objects that go with it too.": "Mätt från modens mitt, samma mark som byggnaderna står på. Tar du bort det följer de objekt med som hör ihop med det.",
   "The mod has all of them.": "Modden har alla.",
   "What the game needs around the mod: where the player sleeps, shops or fills up. The game takes one of each in a mod, so each is added once. Drag them in the view to put them where they belong.": "Det spelet behöver runt modden: var spelaren sover, handlar eller tankar. Spelet tar ett av varje i en mod, så varje läggs till en gång. Dra dem i vyn för att lägga dem där de hör hemma.",
-  "Height above the ground (m)": "Höjd över marken (m)"
+  "Along the width": "Längs bredden",
+  "Along the depth": "Längs djupet"
 }
