@@ -33,6 +33,7 @@ type ModItem struct {
 	X       float64 `json:"x"`
 	Z       float64 `json:"z"`
 	Rot     float64 `json:"rot"` // degrees
+	Y       float64 `json:"y"`   // how high above the ground it stands (a sign on a roof)
 	Name    string  `json:"name"`
 	Missing bool    `json:"missing"`
 }
@@ -91,7 +92,7 @@ func scanMod(row scanner, withData bool) (Mod, error) {
 const modCols = `m.id, m.name, m.version, m.created_at, m.updated_at, (SELECT COUNT(*) FROM mod_items i WHERE i.mod_id = m.id)`
 
 // modItemsSQL reads a mod's items with the names of the projects they point at.
-const modItemsSQL = `SELECT i.id, i.kind, i.ref_id, i.type, i.x, i.z, i.rot, COALESCE(p.name, ''), CASE WHEN p.id IS NULL THEN 1 ELSE 0 END
+const modItemsSQL = `SELECT i.id, i.kind, i.ref_id, i.type, i.x, i.z, i.rot, i.y, COALESCE(p.name, ''), CASE WHEN p.id IS NULL THEN 1 ELSE 0 END
 	FROM mod_items i
 	JOIN mods m ON m.id = i.mod_id
 	LEFT JOIN projects p ON p.id = i.ref_id AND p.user_id = m.user_id
@@ -109,7 +110,7 @@ func (s *Store) modItems(ctx context.Context, q interface {
 	for rows.Next() {
 		var it ModItem
 		var missing int
-		if err := rows.Scan(&it.ID, &it.Kind, &it.Ref, &it.Type, &it.X, &it.Z, &it.Rot, &it.Name, &missing); err != nil {
+		if err := rows.Scan(&it.ID, &it.Kind, &it.Ref, &it.Type, &it.X, &it.Z, &it.Rot, &it.Y, &it.Name, &missing); err != nil {
 			return nil, err
 		}
 		it.Missing = missing == 1
@@ -195,8 +196,8 @@ func (s *Store) UpdateMod(ctx context.Context, userID int64, id string, u ModUpd
 				it.ID = newID()
 			}
 			seen[it.ID] = true
-			if _, err := tx.exec(ctx, `INSERT INTO mod_items (mod_id, id, pos, kind, ref_id, type, x, z, rot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-				id, it.ID, pos, it.Kind, it.Ref, it.Type, it.X, it.Z, it.Rot); err != nil {
+			if _, err := tx.exec(ctx, `INSERT INTO mod_items (mod_id, id, pos, kind, ref_id, type, x, z, rot, y) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				id, it.ID, pos, it.Kind, it.Ref, it.Type, it.X, it.Z, it.Rot, it.Y); err != nil {
 				return Mod{}, err
 			}
 		}

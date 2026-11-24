@@ -106,7 +106,7 @@ export default function ModPage() {
     const posts = [];
     for (const p of draft) {
       const s = shapes[p.ref];
-      if (s && s !== "error") posts.push({ id: p.id, x: p.x, z: p.z, rot: p.rot, groups: s.groups, bounds: s.bounds });
+      if (s && s !== "error") posts.push({ id: p.id, x: p.x, z: p.z, y: p.y, rot: p.rot, groups: s.groups, bounds: s.bounds });
     }
     view.current?.show(posts);
   }, [draft, shapes]);
@@ -137,8 +137,8 @@ export default function ModPage() {
   const loading = draft.some(p => !p.missing && !shapes[p.ref]);
   const failed = draft.filter(p => !p.missing && shapes[p.ref] === "error").length;
   const open = (p: ModPost) => (p.kind === "prop" ? `/builder/${p.ref}` : `/projects/${p.ref}`);
-  const put = (pid: string, patch: { x?: number; z?: number; rot?: number }) => change(placePost(draftRef.current, pid, patch));
-  const live = (pid: string, patch: { x?: number; z?: number; rot?: number }) => setDraft(placePost(draftRef.current, pid, patch));
+  const put = (pid: string, patch: { x?: number; z?: number; y?: number; rot?: number }) => change(placePost(draftRef.current, pid, patch));
+  const live = (pid: string, patch: { x?: number; z?: number; y?: number; rot?: number }) => setDraft(placePost(draftRef.current, pid, patch));
   const fold = (key: string) => setClosed(c => ({ ...c, [key]: !c[key] }));
 
   /** The size and middle of everything in the mod seen from above (the things as they stand, turned), for where a new game object starts: the middle, as big as the mod. */
@@ -233,6 +233,7 @@ export default function ModPage() {
               )}
               <RangeField label={t("Along the width")} value={post.x} {...PLACE} onLive={v => live(post.id, { x: v })} onCommit={v => put(post.id, { x: v })} disabled={busy} />
               <RangeField label={t("Along the depth")} value={post.z} {...PLACE} onLive={v => live(post.id, { z: v })} onCommit={v => put(post.id, { z: v })} disabled={busy} />
+              <RangeField label={t("Height above the ground")} value={post.y ?? 0} min={0} max={30} step={0.05} hardMin={-50} hardMax={500} onLive={v => live(post.id, { y: v })} onCommit={v => put(post.id, { y: v })} disabled={busy} />
               <RangeField label={t("Turn")} value={post.rot} min={0} max={360} step={1} unit="°" hardMin={0} hardMax={360} onLive={v => live(post.id, { rot: v })} onCommit={v => put(post.id, { rot: v % 360 })} disabled={busy} />
               <div className="row">
                 <button type="button" onClick={() => put(post.id, { rot: turnedBy(post.rot, -90) })} disabled={busy}>{t("Turn left")}</button>

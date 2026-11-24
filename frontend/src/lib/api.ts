@@ -66,6 +66,8 @@ export interface ModPost {
   type: string;
   x: number;
   z: number;
+  /** How high above the ground it stands (a sign on a roof). */
+  y: number;
   rot: number;
   /** The project's name now (the mod follows it); "" and missing when it was deleted. */
   name: string;
@@ -222,7 +224,7 @@ export const api = {
   mods: () => request<Mod[]>("GET", "/mods"),
   mod: (id: string) => request<Mod>("GET", "/mods/" + encodeURIComponent(id)),
   createMod: (name: string) => request<Mod>("POST", "/mods", { name }),
-  updateMod: (id: string, patch: { name?: string; items?: Pick<ModPost, "id" | "kind" | "ref" | "type" | "x" | "z" | "rot">[]; data?: Record<string, unknown>; version?: number }) =>
+  updateMod: (id: string, patch: { name?: string; items?: Pick<ModPost, "id" | "kind" | "ref" | "type" | "x" | "z" | "y" | "rot">[]; data?: Record<string, unknown>; version?: number }) =>
     request<Mod>("PATCH", "/mods/" + encodeURIComponent(id), patch),
   deleteMod: (id: string) => request<void>("DELETE", "/mods/" + encodeURIComponent(id)),
   textures: () => request<Texture[]>("GET", "/textures"),

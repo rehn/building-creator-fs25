@@ -11,7 +11,7 @@ const OBJECT_COLOR = type => OBJECT_COLORS[type] ?? 0x8a8f86;
 const GRID = 0.25;
 
 /**
- * Mounts a view on canvas. show(posts) draws posts [{id, x, z, rot, groups (modPlan.mjs), bounds}] again (a post whose groups are the same array as before keeps its meshes; only its
+ * Mounts a view on canvas. show(posts) draws posts [{id, x, z, y (the height above the ground, may be missing), rot, groups (modPlan.mjs), bounds}] again (a post whose groups are the same array as before keeps its meshes; only its
  * place changes), showObjects(list) the mod's game objects (boxes {id, type, x, z, y (the height above the ground, may be missing), w, d, h} in the mod's coordinates) and select(postId, objectId) marks a building or prop
  * or a game object. onSelect(postId | null, objectId | null) is told what was pressed on (both null: the ground), onMove(id, {x, z}) while a post is dragged and onDrop(id, {x, z}) when it
  * is let go where it was moved to, and onObjectMove(objectId, {x, z}) and onObjectDrop(objectId, {x, z}) the same for a game object. dispose() frees everything.
@@ -89,7 +89,7 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
     disposeTree(o.group);
     o.box.geometry.dispose(); o.box.material.dispose();
   }
-  const place = (o, p) => { o.group.position.set(p.x, 0, p.z); o.group.rotation.y = p.rot * Math.PI / 180; o.group.updateMatrixWorld(true); o.post = {...o.post, ...p}; };
+  const place = (o, p) => { o.group.position.set(p.x, p.y || 0, p.z); o.group.rotation.y = p.rot * Math.PI / 180; o.group.updateMatrixWorld(true); o.post = {...o.post, ...p}; };
 
   /** A game object as a translucent box with an outline, standing on the ground (y from 0 to h). */
   function boxOf(ob) {
@@ -167,7 +167,7 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
       if (!at || !o) return;
       const p = snapPost({x: at.x - drag.dx, z: at.z - drag.dz, rot: o.post.rot, bounds: o.post.bounds}, others(drag.id), {off: e.altKey});
       if (p.x === o.post.x && p.z === o.post.z) return;
-      place(o, {...o.post, ...p}); drag.moved = true; onMove(drag.id, p); redraw();
+      place(o, {...o.post, ...p}); drag.moved = true; onMove(drag.id, p); redraw();   // (it keeps its height: only x and z are dragged)
     } else if (drag.mode === "pan") {
       const k = look.dist * 0.0015, dx = e.clientX - drag.x, dy = e.clientY - drag.y;
       look.target.x -= (Math.cos(look.theta) * dx + Math.sin(look.theta) * dy) * k;
