@@ -13,17 +13,17 @@ import { t } from "@/i18n/index.mjs";
 import { KINDS, sanitize, modName } from "@/editor/model.mjs";
 import { OBJECT_TYPES, OBJECT_LIMITS } from "@/editor/objects.mjs";
 import { createModView } from "@/editor/modView.mjs";
-import { projectGroups, boundsOf, footprint, turnedBy, mapKey, proceduralPicture, feetOf } from "@/editor/modPlan.mjs";
+import { projectGroups, boundsOf, footprint, turnedBy, mapKey, proceduralPicture, feetOf, buildingFeet } from "@/editor/modPlan.mjs";
 import { decodeDds } from "@/editor/dds.mjs";
 import { makeModPackage } from "@/editor/modExport.mjs";
 import { confirmDialog, promptDialog } from "@/components/dialog.mjs";
 import { RangeField } from "@/components/RangeField";
 import { addPost, removePost, setPostType, placePost, choices, payload } from "@/lib/mods.mjs";
-import { groupsFree, addGroup, removeGroup, setObjectOf, settingsFor, objectsOfData, setPoint, addPoint, removePoint, hensOfData, groupOf, entranceBuilding, fenceProblems, fenceProblemList, MIN_POSTS } from "@/lib/modObjects.mjs";
+import { groupsFree, addGroup, removeGroup, setObjectOf, settingsFor, objectsOfData, setPoint, addPoint, removePoint, hensOfData, groupOf, entranceBuilding, fenceProblems, fenceProblemList, insertPoint, MIN_POSTS } from "@/lib/modObjects.mjs";
 
 type Kind = { id: string; name: string };
 type Groups = ReturnType<typeof projectGroups>;
-type Shape = { groups: Groups; bounds: ReturnType<typeof boundsOf>; foundation: number };
+type Shape = { groups: Groups; bounds: ReturnType<typeof boundsOf>; foundation: number; feet?: { x0: number; x1: number; z0: number; z1: number }[] };
 type View = ReturnType<typeof createModView>;
 /** What is chosen in the tree: the mod itself, a building or prop, the "Game objects" node, or one game object. */
 type Sel = { kind: "root" } | { kind: "post"; post: string } | { kind: "group" } | { kind: "object"; object: number };
@@ -31,7 +31,7 @@ const TYPES = KINDS as Kind[];
 /** The slider of a building's or prop's place: a mod can be big, and a number typed over may go further. */
 const PLACE = { min: -100, max: 100, step: 0.25, hardMin: -5000, hardMax: 5000 };
 const typeName = (type: string) => t((OBJECT_TYPES as Record<string, { name: string }>)[type]?.name ?? type);
-const typeHint = (type: string) => t(type === "pasture" ? "The fence round the hens' yard. Drag its posts in the view, or choose a post here and set where it stands. The hens walk inside it; the buildings are cut out of it." : (OBJECT_TYPES as Record<string, { hint?: string }>)[type]?.hint ?? "");
+const typeHint = (type: string) => t(type === "pasture" ? "The fence round the hens' yard. The green post is where it starts, the red where it stops: put them at a corner of a building or against a wall (they snap there, to any building, and can be on different walls). Drag a post to move it, or drag a pale dot between two posts out to a new post." : (OBJECT_TYPES as Record<string, { hint?: string }>)[type]?.hint ?? "");
 
 export default function ModPage() {
   const { id } = useParams<{ id: string }>();
@@ -75,7 +75,7 @@ export default function ModPage() {
       api.project(p.ref).then(pr => {
         datas.current.set(p.ref, pr.data);
         const groups = projectGroups(pr.data);
-        setShapes(s => ({ ...s, [p.ref]: { groups, bounds: boundsOf(groups), foundation: pr.data.kind === "prop" ? 0 : sanitize(pr.data).foundation } }));
+        setShapes(s => ({ ...s, [p.ref]: { groups, bounds: boundsOf(groups), foundation: pr.data.kind === "prop" ? 0 : sanitize(pr.data).foundation, feet: pr.data.kind === "prop" ? undefined : buildingFeet(pr.data) } }));
       }).catch(() => setShapes(s => ({ ...s, [p.ref]: "error" })));
     }
   }, [mod]);
@@ -109,6 +109,7 @@ export default function ModPage() {
       onPointMove: (oid: number, i: number, at: { x: number; z: number }) => { setPostIx(i); setObjects(setPoint(objectsRef.current, oid, i, at)); },
       onPointDrop: (oid: number, i: number, at: { x: number; z: number }) => changeObjects(setPoint(objectsRef.current, oid, i, at)),
       onPointSelect: (_oid: number, i: number) => setPostIx(i),
+      onPointInsert: (oid: number, i: number, at: { x: number; z: number }) => setObjects(insertPoint(objectsRef.current, oid, i, at)),
     });
     view.current = v;
     return () => { v.dispose(); view.current = null; };
@@ -142,7 +143,7 @@ export default function ModPage() {
     const posts = [];
     for (const p of draft) {
       const s = shapes[p.ref];
-      if (s && s !== "error") posts.push({ id: p.id, x: p.x, z: p.z, y: p.y, rot: p.rot, groups: s.groups, bounds: s.bounds });
+      if (s && s !== "error") posts.push({ id: p.id, x: p.x, z: p.z, y: p.y, rot: p.rot, groups: s.groups, bounds: s.bounds, feet: s.feet });
     }
     view.current?.show(posts);
   }, [draft, shapes]);
@@ -209,7 +210,7 @@ export default function ModPage() {
   const post = sel.kind === "post" ? draft.find(p => p.id === sel.post) ?? null : null;
   const object = sel.kind === "object" ? objects.find(o => o.id === sel.object) ?? null : null;
   // a fence with a post inside a building: the game cannot make the animals' area from it, so it is marked (the tree, and its properties)
-  const fenceBad = fenceProblems(objects, feetOf(draft.flatMap(p => { const s = shapes[p.ref]; return s && s !== "error" ? [{ x: p.x, z: p.z, rot: p.rot, bounds: s.bounds }] : []; }))) as Map<number, { posts: number[]; edges: number[] }>;
+  const fenceBad = fenceProblems(objects, feetOf(draft.flatMap(p => { const s = shapes[p.ref]; return s && s !== "error" ? [{ x: p.x, z: p.z, rot: p.rot, bounds: s.bounds, feet: s.feet }] : []; }))) as Map<number, { posts: number[]; edges: number[] }>;
   const fenceWarning = (id: number) => {
     const bad = fenceBad.get(id), n = objects.find(o => o.id === id)?.points?.length ?? 0;
     return bad ? (fenceProblemList(bad, n) as [string, Record<string, string>][]).map(([text, values]) => t(text, values)).join(" ") : "";
@@ -235,6 +236,15 @@ export default function ModPage() {
     }
     if (minX === Infinity) return { width: 8, depth: 8, foundation: 0, at: [0, 0] as [number, number] };
     return { width: maxX - minX, depth: maxZ - minZ, foundation, at: [(minX + maxX) / 2, (minZ + maxZ) / 2] as [number, number] };
+  }
+  /** The fence as a rectangle again, where a new one starts (against the first building with a door): the posts the player moved are put back. */
+  function backToRectangle() {
+    const door = entranceBuilding(draft.map(p => ({ kind: p.kind, rot: p.rot, data: datas.current.get(p.ref) })));
+    const a = door.index >= 0 ? around(draft[door.index].id) : around();
+    const fresh = (addGroup([], "hens", settingsFor(a), a.at, { wall: door.wall }) as ModObject[]).find(o => o.type === "pasture");
+    if (!fresh) return;
+    setPostIx(0);
+    changeObjects(objects.map(o => (o.type === "pasture" ? { ...o, points: fresh.points } : o)));
   }
   function addObjects(group: string) {
     // (a hen yard goes against the first building with a door, on the side the door faces, with its fence 15 cm out from the wall as the hen house has it)
@@ -369,9 +379,11 @@ export default function ModPage() {
                     return <RangeField key={`${object.id}:${i}:${k}`} label={k === "x" ? t("Along the width") : t("Along the depth")} value={q[c]} min={OBJECT_LIMITS[k][0]} max={OBJECT_LIMITS[k][1]} step={0.25}
                       onLive={v => setObjects(setPoint(objectsRef.current, object.id, i, to(v)))} onCommit={v => changeObjects(setPoint(objectsRef.current, object.id, i, to(v)))} disabled={busy} />;
                   })}
+                  {(() => { const pts = object.points ?? [], i = Math.min(postIx, pts.length - 1); return i + 1 < pts.length ? <p className="hint">{t("{d} m to the next post", { d: Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]).toFixed(1) })}</p> : null; })()}
                   <div className="row">
                     <button type="button" onClick={() => { const i = Math.min(postIx, (object.points?.length ?? 1) - 1); changeObjects(addPoint(objects, object.id, i)); setPostIx(i + 1); }} disabled={busy}>{t("Add a post after it")}</button>
                     <button type="button" onClick={() => changeObjects(removePoint(objects, object.id, Math.min(postIx, (object.points?.length ?? 1) - 1)))} disabled={busy || (object.points?.length ?? 0) <= MIN_POSTS}>{t("Take this post out")}</button>
+                    <button type="button" onClick={backToRectangle} disabled={busy}>{t("Back to a rectangle")}</button>
                   </div>
                 </>
               ) : (["x", "z", "y", "w", "d", "h"] as const).map(k => (

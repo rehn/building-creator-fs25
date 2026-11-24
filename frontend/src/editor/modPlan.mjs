@@ -6,6 +6,7 @@
 // give it, made by proceduralPicture) or {textureId} (one of the user's textures, read from the server by the page). A post's place is its origin (x, z) and its turn (rot, degrees about
 // y, as three.js turns: x' = x cos + z sin, z' = -x sin + z cos); the building's own origin is the middle of its footprint, a prop's the origin of its model.
 import { buildLook, sanitize } from "./model.mjs";
+import { footprints } from "./objects.mjs";
 import { sanitize as sanitizeProp, placedMesh, partUv, faceOfTriangle, faceMaterial, faceColor } from "../builder/model.mjs";
 import { baseFor, compose } from "./textures.mjs";
 
@@ -127,8 +128,24 @@ export function snapFencePost(q, rects, {off = false, grid = 0.25} = {}) {
 /** The indexes of the posts [[x, z] ...] that stand inside one of the rects (on a wall, or a corner, is not inside: the cow pasture has its posts there and it works in the game). */
 export const postsInside = (points, rects) => points.flatMap(([x, z], i) => (rects.some(r => inside(x, z, grown(r, FENCE_CLEAR))) ? [i] : []));
 
-/** What the posts [{x, z, rot, bounds}] stand on seen from above, as rectangles [{x0, x1, z0, z1}] (each turned by its rot, as footprint gives it). */
-export const feetOf = posts => posts.map(p => { const f = footprint(p.bounds, p.rot || 0); return {x0: p.x + f.minX, x1: p.x + f.maxX, z0: p.z + f.minZ, z1: p.z + f.maxZ}; });
+/** A building's real footprint: its walls, the main building and its wings, [{x0, x1, z0, z1}] around the building's own middle (the mesh's bounds are bigger: the roof's overhang, steps). data: the project's data. */
+export const buildingFeet = data => footprints(sanitize(data));
+
+/**
+ * What the posts [{x, z, rot, bounds, feet}] stand on seen from above, as rectangles [{x0, x1, z0, z1}], each turned by its rot as footprint gives it: a building's real footprint (feet: its walls and wings,
+ * buildingFeet, so a fence snaps to its walls as the cow pasture's does and not to the roof's edge), else the bounds of what is drawn (a prop). A rect of a turned building is the box round it.
+ */
+export function feetOf(posts) {
+  const out = [];
+  for (const p of posts) {
+    if (!p.feet || !p.feet.length) { const f = footprint(p.bounds, p.rot || 0); out.push({x0: p.x + f.minX, x1: p.x + f.maxX, z0: p.z + f.minZ, z1: p.z + f.maxZ}); continue; }
+    for (const r of p.feet) {
+      const f = footprint({min: [r.x0, 0, r.z0], max: [r.x1, 0, r.z1]}, p.rot || 0);
+      out.push({x0: p.x + f.minX, x1: p.x + f.maxX, z0: p.z + f.minZ, z1: p.z + f.maxZ});
+    }
+  }
+  return out;
+}
 
 /**
  * The stretches of a fence (posts [[x, z] ...], closed: stretch i runs from post i to post i + 1, the last back to the first) that run through a building: into one of the rects
