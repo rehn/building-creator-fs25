@@ -13,7 +13,7 @@ import { t } from "@/i18n/index.mjs";
 import { KINDS, sanitize, modName } from "@/editor/model.mjs";
 import { OBJECT_TYPES, OBJECT_LIMITS } from "@/editor/objects.mjs";
 import { createModView } from "@/editor/modView.mjs";
-import { projectGroups, boundsOf, footprint, turnedBy, mapKey, proceduralPicture, feetOf, buildingFeet } from "@/editor/modPlan.mjs";
+import { projectGroups, boundsOf, footprint, turnedBy, mapKey, proceduralPicture, feetOf, buildingFeet, stretchCuts } from "@/editor/modPlan.mjs";
 import { decodeDds } from "@/editor/dds.mjs";
 import { makeModPackage } from "@/editor/modExport.mjs";
 import { confirmDialog, promptDialog } from "@/components/dialog.mjs";
@@ -214,16 +214,25 @@ export default function ModPage() {
   // a fence with a post inside a building: the game cannot make the animals' area from it, so it is marked (the tree, and its properties)
   const fenceBad = fenceProblems(objects, feetOf(draft.flatMap(p => { const s = shapes[p.ref]; return s && s !== "error" ? [{ x: p.x, z: p.z, rot: p.rot, bounds: s.bounds, feet: s.feet }] : []; }))) as Map<number, { posts: number[]; edges: number[] }>;
   /** The warning for post i of fence id: the problems that are about it (it is inside a building, or a stretch it ends runs through one). */
+  // the stretches the game would cut short and leave a hole in (orange in the view): each says how long it is, what the game cuts off and the whole length the mod is made with
+  const feet = feetOf(draft.flatMap(p => { const s = shapes[p.ref]; return s && s !== "error" ? [{ x: p.x, z: p.z, rot: p.rot, bounds: s.bounds, feet: s.feet }] : []; }));
+  const cutTexts = (id: number, only?: number) => {
+    const pts = objects.find(o => o.id === id)?.points;
+    if (!pts) return [] as string[];
+    return (stretchCuts(pts, feet) as { i: number; length: number; cut: number; to: number }[]).filter(c => only === undefined || c.i === only || c.i + 1 === only)
+      .map(c => t("The stretch between posts {a} and {b} is {len} m long: the game cuts {cut} m off it and leaves a hole. The mod is made with the posts moved a little so that it is whole ({to} m), or move a post yourself.", { a: c.i + 1, b: c.i + 2, len: c.length.toFixed(1), cut: c.cut.toFixed(2), to: c.to.toFixed(2) }));
+  };
   const postWarning = (id: number, i: number) => {
     const bad = fenceBad.get(id), n = objects.find(o => o.id === id)?.points?.length ?? 0;
-    if (!bad) return "";
+    if (!bad) return cutTexts(id, i).join(" ");
     const mine = { posts: bad.posts.filter(k => k === i), edges: bad.edges.filter(k => k === i || (k + 1) % n === i) };
-    if (!mine.posts.length && !mine.edges.length) return "";
-    return (fenceProblemList(mine, n) as [string, Record<string, string>][]).map(([text, values]) => t(text, values)).join(" ");
+    const found = mine.posts.length || mine.edges.length ? (fenceProblemList(mine, n) as [string, Record<string, string>][]).map(([text, values]) => t(text, values)) : [];
+    return [...found, ...cutTexts(id, i)].join(" ");
   };
   const fenceWarning = (id: number) => {
     const bad = fenceBad.get(id), n = objects.find(o => o.id === id)?.points?.length ?? 0;
-    return bad ? (fenceProblemList(bad, n) as [string, Record<string, string>][]).map(([text, values]) => t(text, values)).join(" ") : "";
+    const found = bad ? (fenceProblemList(bad, n) as [string, Record<string, string>][]).map(([text, values]) => t(text, values)) : [];
+    return [...found, ...cutTexts(id)].join(" ");
   };
   const options: ProjectSummary[] = mod ? choices(projects, draft, adding) : [];
   const loading = draft.some(p => !p.missing && !shapes[p.ref]);

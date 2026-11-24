@@ -262,3 +262,18 @@ export function fitPanels(points, pins = []) {
   }
   return q;
 }
+
+/**
+ * The stretches of the fence (posts [[x, z] ...] as the player put them, rects: what the buildings stand on) that the game would cut short and leave a hole in, as the game gets them (the posts at a
+ * building stood 15 cm off, keepClear): [{i (the stretch from post i to post i + 1), length, cut (how much the game cuts off), to (the whole length the mod is made with, fitPanels)}]. The game cuts a
+ * stretch whose rest after the 2 m panels is between 0.6 and about 1.54 m down to 0.6 m (PANEL).
+ */
+export function stretchCuts(points, rects) {
+  const kept = keepClear(points, rects), out = [];
+  for (let i = 0; i + 1 < kept.length; i++) {
+    const L = Math.hypot(kept[i + 1][0] - kept[i][0], kept[i + 1][1] - kept[i][1]), r = panelRest(L);
+    if (L < 0.01 || r <= PANEL.stretch + 0.005 || r >= PANEL.squeeze - 0.005) continue;
+    out.push({i, length: Math.round(L * 1000) / 1000, cut: Math.round((r - PANEL.stretch) * 1000) / 1000, to: Math.round(wholeNear(L) * 1000) / 1000});
+  }
+  return out;
+}
