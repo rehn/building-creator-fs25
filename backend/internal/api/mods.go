@@ -23,6 +23,7 @@ type modItemInput struct {
 	X    float64 `json:"x"`
 	Z    float64 `json:"z"`
 	Rot  float64 `json:"rot"`
+	Y    float64 `json:"y"`
 }
 
 type modInput struct {
@@ -79,11 +80,11 @@ func checkMod(w http.ResponseWriter, in *modInput) (store.ModUpdate, bool) {
 			if it.Type != "" {
 				typ, typOK = cleanText(it.Type, 40)
 			}
-			if !kindOK || it.Ref == "" || len(it.Ref) > 64 || len(it.ID) > 64 || !typOK || !finite(it.X, it.Z) || !finite(it.Rot) {
+			if !kindOK || it.Ref == "" || len(it.Ref) > 64 || len(it.ID) > 64 || !typOK || !finite(it.X, it.Z) || !finite(it.Rot, it.Y) {
 				writeError(w, http.StatusBadRequest, "invalid_item", "Each item needs a kind (building or prop), the id of the building or prop (a project of yours), a mod type of up to 40 characters and a place in the plan.")
 				return upd, false
 			}
-			items = append(items, store.ModItem{ID: it.ID, Kind: it.Kind, Ref: it.Ref, Type: typ, X: it.X, Z: it.Z, Rot: it.Rot})
+			items = append(items, store.ModItem{ID: it.ID, Kind: it.Kind, Ref: it.Ref, Type: typ, X: it.X, Z: it.Z, Rot: it.Rot, Y: it.Y})
 		}
 		upd.Items = &items
 	}

@@ -23,12 +23,12 @@ func TestModLifecycleAPI(t *testing.T) {
 		"version": 1,
 		"data":    map[string]any{"objects": []any{}},
 		"items": []map[string]any{
-			{"id": "a", "kind": "building", "ref": house.ID, "type": "shop", "x": 2.5, "z": -1, "rot": 90},
+			{"id": "a", "kind": "building", "ref": house.ID, "type": "shop", "x": 2.5, "z": -1, "rot": 90, "y": 6},
 		},
 	})
 	expect(t, rec, 200)
 	m = decode[store.Mod](t, rec)
-	if m.Version != 2 || len(m.Items) != 1 || m.Items[0].Name != "Huset" || m.Items[0].Type != "shop" || m.Items[0].X != 2.5 {
+	if m.Version != 2 || len(m.Items) != 1 || m.Items[0].Name != "Huset" || m.Items[0].Type != "shop" || m.Items[0].X != 2.5 || m.Items[0].Y != 6 {
 		t.Fatalf("updated: %+v", m)
 	}
 
@@ -85,6 +85,7 @@ func TestModValidation(t *testing.T) {
 		"unknown kind": {"kind": "tree", "ref": "x"},
 		"no ref":       {"kind": "building", "ref": ""},
 		"far away":     {"kind": "prop", "ref": "x", "x": 1e9},
+		"too high":     {"kind": "prop", "ref": "x", "y": 1e9},
 		"long type":    {"kind": "building", "ref": "x", "type": strings.Repeat("t", 41)},
 	} {
 		rec := c.do("PATCH", "/api/mods/"+m.ID, map[string]any{"items": []map[string]any{it}})

@@ -23,7 +23,7 @@ func TestModLifecycle(t *testing.T) {
 
 	// items: a building with a mod type, a plain building, a prop alone
 	items := []ModItem{
-		{ID: "a", Kind: ModBuilding, Ref: house.ID, Type: "sheepPasture", X: 1, Z: -2, Rot: 90},
+		{ID: "a", Kind: ModBuilding, Ref: house.ID, Type: "sheepPasture", X: 1, Z: -2, Rot: 90, Y: 4.5},
 		{Kind: ModBuilding, Ref: barn.ID},
 		{ID: "c", Kind: ModProp, Ref: prop.ID, X: 5},
 	}
@@ -31,7 +31,7 @@ func TestModLifecycle(t *testing.T) {
 	if err != nil || m.Version != 2 || m.ItemCount != 3 || len(m.Items) != 3 || string(m.Data) != `{"objects":[1]}` {
 		t.Fatalf("updated: %+v %v", m, err)
 	}
-	if a := m.Items[0]; a.ID != "a" || a.Name != "Huset" || a.Type != "sheepPasture" || a.X != 1 || a.Z != -2 || a.Rot != 90 || a.Missing {
+	if a := m.Items[0]; a.ID != "a" || a.Name != "Huset" || a.Type != "sheepPasture" || a.X != 1 || a.Z != -2 || a.Rot != 90 || a.Y != 4.5 || a.Missing {
 		t.Fatalf("the first item keeps its place and takes its name from the building: %+v", a)
 	}
 	if m.Items[1].ID == "" || m.Items[1].Name != "Ladan" || m.Items[2].Name != "Brevlåda" || m.Items[2].Kind != ModProp {

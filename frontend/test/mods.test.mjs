@@ -7,7 +7,7 @@ const post = (id, kind, ref, extra = {}) => ({id, kind, ref, type: "", x: 0, z: 
 
 test("a new post is a plain building or prop, one row further along than the last, and the same thing is not added twice", () => {
   let list = addPost([], "building", "h1");
-  assert.deepEqual(list, [{id: "", kind: "building", ref: "h1", type: "", x: 0, z: 0, rot: 0}]);
+  assert.deepEqual(list, [{id: "", kind: "building", ref: "h1", type: "", x: 0, z: 0, y: 0, rot: 0}]);
   list = addPost(list, "prop", "p1");
   assert.equal(list.length, 2);
   assert.ok(list[1].x > list[0].x, "placed beside the first, not on top of it");
@@ -37,14 +37,14 @@ test("what can be added: the projects of that kind that are not in the mod yet",
 });
 
 test("what is sent to the server has only what it stores", () => {
-  const sent = payload([post("a", "building", "h1", {type: "shop", x: 2, z: -1, rot: 90, missing: true})]);
-  assert.deepEqual(sent, [{id: "a", kind: "building", ref: "h1", type: "shop", x: 2, z: -1, rot: 90}]);
+  const sent = payload([post("a", "building", "h1", {type: "shop", x: 2, z: -1, y: 5, rot: 90, missing: true})]);
+  assert.deepEqual(sent, [{id: "a", kind: "building", ref: "h1", type: "shop", x: 2, z: -1, y: 5, rot: 90}]);
 });
 
 test("placing a post changes its place only, and keeps the turn within 0 to 360", () => {
   const list = [post("a", "building", "h1", {x: 1}), post("b", "prop", "p1")];
-  const moved = placePost(list, "a", {x: 5.5, z: -2});
-  assert.deepEqual([moved[0].x, moved[0].z, moved[0].rot], [5.5, -2, 0]);
+  const moved = placePost(list, "a", {x: 5.5, z: -2, y: 7.5});
+  assert.deepEqual([moved[0].x, moved[0].z, moved[0].y, moved[0].rot], [5.5, -2, 7.5, 0]);
   assert.equal(moved[1], list[1]);
   assert.equal(placePost(list, "a", {rot: -90})[0].rot, 270);
   assert.equal(placePost(list, "a", {rot: 450})[0].rot, 90);
