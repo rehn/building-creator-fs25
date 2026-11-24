@@ -122,3 +122,6 @@ export function snapFencePost(q, rects, {off = false, grid = 0.25} = {}) {
 
 /** The indexes of the posts [[x, z] ...] that stand inside one of the rects (on a wall is not inside). */
 export const postsInside = (points, rects) => points.flatMap(([x, z], i) => (rects.some(r => inside(x, z, r)) ? [i] : []));
+
+/** What the posts [{x, z, rot, bounds}] stand on seen from above, as rectangles [{x0, x1, z0, z1}] (each turned by its rot, as footprint gives it). */
+export const feetOf = posts => posts.map(p => { const f = footprint(p.bounds, p.rot || 0); return {x0: p.x + f.minX, x1: p.x + f.maxX, z0: p.z + f.minZ, z1: p.z + f.maxZ}; });

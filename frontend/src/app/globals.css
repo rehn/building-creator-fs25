@@ -542,6 +542,7 @@ dialog.dlg input, dialog.dlg textarea { font: inherit; width: 100%; padding: 9px
 .modedit-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 .modedit-keys { position: absolute; left: 12px; right: 12px; bottom: 6px; margin: 0; pointer-events: none; text-shadow: 0 0 4px var(--stage); }
 .modplan-note { position: absolute; left: 12px; top: 8px; margin: 0; }
+.modedit .tree .twarn { margin-left: 4px; flex: none; cursor: help; color: var(--accent); font-size: 15px; line-height: 1; }
 .modedit .tree .tadd { margin-left: 4px; padding: 2px 8px; font-size: 13px; flex: none; }
 .modedit .tree .tbtn small { color: var(--muted); font-weight: 400; }
 .modedit .tree .caret[aria-hidden] { display: inline-block; height: 1px; }

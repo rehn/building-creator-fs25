@@ -6,6 +6,7 @@ import { SHARED } from "../editor/kinds/gameobjects.mjs";
 import { SHARED_GROUPS, OBJECT_LIMITS, fencePoints, MAX_FENCE_POINTS } from "../editor/objects.mjs";
 import { HEN_TYPES } from "../editor/kinds/modframe.mjs";
 import { MAX_HENS } from "../editor/kinds/chicken.mjs";
+import { postsInside } from "../editor/modPlan.mjs";
 import { wallsOf } from "../editor/layout.mjs";
 import { sanitize } from "../editor/model.mjs";
 
@@ -120,3 +121,17 @@ export const hensOfData = data => {
 
 /** The mod's objects out of its plan data (a list of boxes; anything else is no objects). */
 export const objectsOfData = data => (data && Array.isArray(data.objects) ? data.objects.filter(o => o && typeof o.type === "string" && Number.isFinite(+o.id)) : []);
+
+/**
+ * The fences of the mod with posts inside a building or prop (rects: what they stand on, modPlan.mjs feetOf): Map fence id -> the posts that are inside (0-based). The game cannot
+ * make the animals' area then ("Could not shrink polygon"), so the page marks the fence and generating the mod says so.
+ */
+export function fenceProblems(objects, rects) {
+  const out = new Map();
+  for (const o of objects) {
+    if (o.type !== "pasture" || !Array.isArray(o.points)) continue;
+    const bad = postsInside(o.points, rects);
+    if (bad.length) out.set(o.id, bad);
+  }
+  return out;
+}
