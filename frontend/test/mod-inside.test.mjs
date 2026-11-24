@@ -108,8 +108,8 @@ test("hens can walk into a carport from a fence on its open side: the floor, a r
   assert.equal(across.length, 0, "no wall slab across the open front: " + JSON.stringify(across));
 });
 
-// ---- the fence stays where the player put it when the hens walk inside (the walking shape pipeline takes a fence on the wall), and is stood 15 cm off the walls otherwise ----
-test("with the hens walking inside the carport the end posts stay on its corners; without, they are stood 15 cm off", async () => {
+// ---- the fence is stood 15 cm off the walls with and without the hens walking inside (a game test: with the walking shape too, a fence on the wall gave the meadow warning) ----
+test("the end posts are stood 15 cm off the carport corners both with the hens walking inside and without", async () => {
   const cp = [{id: "c", kind: "building", name: "Carporten", x: 20, z: 10, y: 0, rot: 0, data: {kind: "shed", width: 8, depth: 6, foundation: 0.1, openFront: true, doorWall: "back"}}];
   const mp = await import("../src/editor/modPlan.mjs"), f = mp.feetOf([{x: 20, z: 10, rot: 0, bounds: mp.boundsOf(mp.projectGroups(cp[0].data)), feet: mp.buildingFeet(cp[0].data)}])[0];
   const pts = [[f.x1, f.z1], [f.x1, f.z1 + 8], [f.x0, f.z1 + 8], [f.x0, f.z1]];   // from the right front corner out and back to the left front corner, on the open side (south)
@@ -123,6 +123,6 @@ test("with the hens walking inside the carport the end posts stay on its corners
   };
   const inn = await dist("c"), out = await dist(null);
   assert.match(inn.xml, /shape="navigationMeshShape"/, "the hens can walk in: " + JSON.stringify(inn.warnings));
-  assert.ok(inn.ends.every(d => d < 0.01), `on the corners: ${inn.ends}`);
+  assert.ok(inn.ends.every(d => d > 0.14), `15 cm off with the hens inside: ${inn.ends}`);
   assert.ok(out.ends.every(d => d > 0.14), `15 cm off: ${out.ends}`);
 });
