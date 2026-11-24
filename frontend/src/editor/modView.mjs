@@ -130,6 +130,21 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
   }
   const hasMap = key => maps.has(key);
 
+  /** A square picture (size px) of the middle of the view without the marks of what is chosen, as {width, height, rgba}: the icon and the shop picture of the game mod. Null if it cannot be had. */
+  function picture(size) {
+    try {
+      const keep = [selected, selectedObject];
+      fit(); selected = null; selectedObject = null;
+      render();
+      const c = document.createElement("canvas"); c.width = c.height = size;
+      const side = Math.min(canvas.width, canvas.height), x = c.getContext("2d");
+      x.fillStyle = "#e9ece4"; x.fillRect(0, 0, size, size);
+      x.drawImage(canvas, (canvas.width - side) / 2, (canvas.height - side) / 2, side, side, 0, 0, size, size);
+      [selected, selectedObject] = keep; redraw();
+      return {width: size, height: size, rgba: x.getImageData(0, 0, size, size).data};
+    } catch { return null; }
+  }
+
   function fit() {
     const b = new THREE.Box3();
     for (const o of objs.values()) b.expandByObject(o.group);
@@ -216,7 +231,7 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
   if (ro) ro.observe(canvas);
 
   return {
-    show, showObjects, select, setMap, hasMap, refit: () => { fit(); redraw(); },
+    show, showObjects, select, setMap, hasMap, picture, refit: () => { fit(); redraw(); },
     dispose() {
       if (raf) cancelAnimationFrame(raf);
       canvas.removeEventListener("pointerdown", down); canvas.removeEventListener("pointermove", move); canvas.removeEventListener("pointerup", up); canvas.removeEventListener("pointercancel", up);

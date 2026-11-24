@@ -6,6 +6,7 @@
 //   makeModPackage({name, author, description, posts, objects, loadTextures})  ->  {files: Map(path -> text | bytes), warnings: [text], middle: [x, z]}
 //
 // posts: [{id, kind: "building" | "prop", name, x, z, y, rot (degrees, as three.js turns), data (the project's data)}]; objects: the mod's game objects (lib/modObjects.mjs, in the mod's coordinates).
+// pictures: {icon, store} as {width, height, rgba} (a snapshot of the 3D view; the game needs an icon.dds, else "Missing icon filename" and the mod is not loaded): a plain one is made when there is none.
 // loadTextures(ids) -> Map(id -> {size, diffuse, normal}) gives the user's textures a prop is made of (the page reads them from the server); without it they are plain grey.
 import { sanitize, i3dFiles, placeableXml, modDescXml, modName, MOD_FILES } from "./model.mjs";
 import { makeSceneryFiles } from "./headless.mjs";
@@ -35,8 +36,11 @@ async function postFiles(post, folder, {loadTextures, encode}) {
   return {files: out, i3d: `${folder}/${MOD_FILES.i3d}`};
 }
 
-/** @param {{name: string, author?: string, description?: string, posts: any[], objects?: any[], loadTextures?: ((ids: string[]) => Promise<Map<string, any>>) | null, encode?: any}} mod */
-export async function makeModPackage({name, author = "", description = "", posts, objects = [], loadTextures = null, encode = encodeDds}) {
+/** A plain picture w x w in one colour (when there is no snapshot of the view to use). */
+const plain = (w, [r, g, b]) => ({width: w, height: w, rgba: Uint8ClampedArray.from({length: w * w * 4}, (_, i) => [r, g, b, 255][i % 4])});
+
+/** @param {{name: string, author?: string, description?: string, posts: any[], objects?: any[], loadTextures?: ((ids: string[]) => Promise<Map<string, any>>) | null, encode?: any, pictures?: {icon?: any, store?: any} | null}} mod */
+export async function makeModPackage({name, author = "", description = "", posts, objects = [], loadTextures = null, encode = encodeDds, pictures = null}) {
   const warnings = [];
   const live = posts.filter(p => p.data);
   for (const p of posts) if (!p.data) warnings.push(`“${p.name || p.id}” could not be read and is left out.`);
@@ -68,8 +72,11 @@ export async function makeModPackage({name, author = "", description = "", posts
   const placed = objects.map(o => ({...o, x: round(o.x - cx), z: round(o.z - cz)}));
   const p0 = sanitize({kind: "shed", objects: placed, modDescription: description});
   for (const [file, data] of Object.entries(i3dFiles(p0, {host}))) files.set(file, typeof data === "string" ? latin1(data) : data);
-  files.set(MOD_FILES.xml, placeableXml(p0, name, {image: false, host}));
-  files.set("modDesc.xml", modDescXml(p0, name, {author, icon: false}));
+  const icon = (pictures && pictures.icon) || plain(256, [155, 42, 31]), store = (pictures && pictures.store) || plain(512, [155, 42, 31]);
+  files.set(MOD_FILES.icon, encode(icon.width, icon.height, icon.rgba));
+  files.set(MOD_FILES.store, encode(store.width, store.height, store.rgba));
+  files.set(MOD_FILES.xml, placeableXml(p0, name, {host}));
+  files.set("modDesc.xml", modDescXml(p0, name, {author}));
   if (!live.length) warnings.push("The mod holds no buildings or props yet.");
   return {files, warnings, middle: [round(cx), round(cz)], mod: modName(name)};
 }
