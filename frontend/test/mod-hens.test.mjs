@@ -285,3 +285,31 @@ test("a post put in after post i at a place the player gives (the fence has at m
   for (let i = 0; i < 60; i++) full = insertPoint(full, f.id, 0, {x: i, z: i});
   assert.equal(fenceOf(full).points.length, 40);
 });
+
+// ---- the fence is stood 15 cm off the walls when the mod is made (the hen type has no walking shape, so a fence that touches a building gave the meadow warning in the game) ----
+import { keepClear } from "../src/editor/modPlan.mjs";
+
+test("a fence post on a wall or at a corner of a building is moved 15 cm out from it, the other posts stay", () => {
+  const r = [{x0: -2, x1: 2, z0: -1.5, z1: 1.5}];
+  const out = keepClear([[-2, -1.5], [-5.5, -2.75], [-5.5, -7.5], [3.5, -7.5], [3.5, -3], [2, -1.5]], r);
+  assert.deepEqual(out[0], [-2.15, -1.65], "a corner: out from both walls");
+  assert.deepEqual(out[5], [2.15, -1.65]);
+  assert.deepEqual(out.slice(1, 5), [[-5.5, -2.75], [-5.5, -7.5], [3.5, -7.5], [3.5, -3]], "the others are not touched");
+  assert.deepEqual(keepClear([[0, -1.5], [0, -9]], r)[0], [0, -1.65], "on a wall: out from it");
+  assert.deepEqual(keepClear([[0, -1.6]], r), [[0, -1.6]], "already clear of it by 10 cm: stays");
+  assert.deepEqual(keepClear([[0, 0]], r), [[0, 0]], "inside: left to the warning");
+});
+
+test("the generated fence stands 15 cm off the house when its posts were put on the wall", async () => {
+  const one = [{id: "a", kind: "building", name: "Huset", x: 20, z: 10, y: 0, rot: 0, data: {kind: "house", width: 10, depth: 8}}];
+  const mp = await import("../src/editor/modPlan.mjs"), f = mp.feetOf([{x: 20, z: 10, rot: 0, bounds: mp.boundsOf(mp.projectGroups(one[0].data)), feet: mp.buildingFeet(one[0].data)}])[0];
+  const pts = [[f.x1, f.z1], [f.x1, f.z1 + 8], [f.x0, f.z1 + 8], [f.x0, f.z1]];
+  const objects = yard().map(o => (o.type === "pasture" ? {...o, points: pts} : o));
+  const {files, middle, warnings} = await makeModPackage({name: "Hönsgården", posts: one, objects});
+  assert.deepEqual(warnings, []);
+  const nodes = [...text(files.get("house.i3d")).matchAll(/name="fence1Node\d+" translation="([^"]+)"/g)].map(m => m[1].split(" ").map(Number));
+  const r = {x0: f.x0 - middle[0], x1: f.x1 - middle[0], z0: f.z0 - middle[1], z1: f.z1 - middle[1]};
+  const away = ([x, , z]) => Math.hypot(Math.max(r.x0 - x, 0, x - r.x1), Math.max(r.z0 - z, 0, z - r.z1));
+  assert.equal(nodes.length, 4);
+  for (const n of nodes) assert.ok(away(n) > 0.14, `post ${n} is ${away(n)} from the house`);
+});

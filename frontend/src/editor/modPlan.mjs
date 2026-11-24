@@ -175,3 +175,25 @@ function clipsRect(a, b, r) {
   }
   return (t1 - t0) * Math.hypot(dx, dz) > 0.001;
 }
+
+/** How far off a building's wall a fence post is stood when the mod is made (the hen house has its posts 15 cm out from the wall). */
+export const FENCE_STAND_OFF = 0.15;
+
+/**
+ * The fence's posts [[x, z] ...] with those that stand ON a wall or a corner of a building (rects [{x0, x1, z0, z1}], within 1 cm) moved FENCE_STAND_OFF out from it, a corner from both of its walls;
+ * the others as they were (a post inside a building is the warning's business). Made for the game: the hen type has no walking shape of its own, and a fence that touched a building gave "Could not
+ * shrink polygon for creation task", where the hen house's own, 15 cm out from the wall, does not. The player still puts a post against the wall in the editor, as in the cow pasture.
+ */
+export function keepClear(points, rects, gap = FENCE_STAND_OFF, eps = 0.01) {
+  return points.map(([x, z]) => {
+    let nx = x, nz = z;
+    for (const r of rects) {
+      if (x < r.x0 - eps || x > r.x1 + eps || z < r.z0 - eps || z > r.z1 + eps) continue;   // not at this building
+      const inner = x > r.x0 + eps && x < r.x1 - eps && z > r.z0 + eps && z < r.z1 - eps;
+      if (inner) continue;
+      if (Math.abs(z - r.z0) <= eps) nz = r.z0 - gap; else if (Math.abs(z - r.z1) <= eps) nz = r.z1 + gap;
+      if (Math.abs(x - r.x0) <= eps) nx = r.x0 - gap; else if (Math.abs(x - r.x1) <= eps) nx = r.x1 + gap;
+    }
+    return [Math.round(nx * 1000) / 1000, Math.round(nz * 1000) / 1000];
+  });
+}

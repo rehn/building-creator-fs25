@@ -14,7 +14,7 @@ import { sanitize, i3dFiles, placeableXml, modDescXml, modName, buildInMod, with
 import { textureMapFor } from "./headless.mjs";
 import { I3dDoc, tg, prefixNames } from "./i3d.mjs";
 import { mergeContainers } from "./kinds/gameobjects.mjs";
-import { projectGroups, boundsOf, footprint, feetOf, buildingFeet } from "./modPlan.mjs";
+import { projectGroups, boundsOf, footprint, feetOf, buildingFeet, keepClear } from "./modPlan.mjs";
 import { fenceProblems } from "../lib/modObjects.mjs";
 import { exportI3dAtlas, atlasDdsFiles } from "../builder/atlas.mjs";
 import { sanitize as sanitizeProp } from "../builder/model.mjs";
@@ -86,7 +86,8 @@ export async function makeModPackage({name, author = "", description = "", posts
   // the frame: a building (a shed's settings) with the mod's game objects, drawing nothing, with the areas of the whole
   const shift = r => ({x0: round(r.x0 - cx), x1: round(r.x1 - cx), z0: round(r.z0 - cz), z1: round(r.z1 - cz)});
   const host = {refs, nodes, doc, xml: mergeContainers(doorXml.join(""), ["animatedObjects"]), rects: [frame], footprints: feet.map(shift), width: round(frame.x1 - frame.x0), depth: round(frame.z1 - frame.z0)};
-  const placed = objects.map(o => ({...o, x: round((o.x || 0) - cx), z: round((o.z || 0) - cz), ...(o.points ? {points: o.points.map(([x, z]) => [round(x - cx), round(z - cz)])} : {})}));
+  // (the fence is stood off the walls it was put against: modPlan.mjs keepClear)
+  const placed = objects.map(o => ({...o, x: round((o.x || 0) - cx), z: round((o.z || 0) - cz), ...(o.points ? {points: keepClear(o.points, feet).map(([x, z]) => [round(x - cx), round(z - cz)])} : {})}));
   const p0 = sanitize({kind: "modframe", objects: placed, hens, modDescription: description});
   for (const [file, data] of Object.entries(i3dFiles(p0, {host}))) files.set(file, typeof data === "string" ? latin1(data) : data);
   const icon = (pictures && pictures.icon) || plain(256, [155, 42, 31]), store = (pictures && pictures.store) || plain(512, [155, 42, 31]);
