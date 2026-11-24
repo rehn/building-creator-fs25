@@ -108,6 +108,7 @@ export default function ModPage() {
       onObjectDrop: (oid: number, at: { x: number; z: number }) => changeObjects(setObjectOf(objectsRef.current, oid, at)),
       onPointMove: (oid: number, i: number, at: { x: number; z: number }) => { setPostIx(i); setObjects(setPoint(objectsRef.current, oid, i, at)); },
       onPointDrop: (oid: number, i: number, at: { x: number; z: number }) => changeObjects(setPoint(objectsRef.current, oid, i, at)),
+      onPointSelect: (_oid: number, i: number) => setPostIx(i),
     });
     view.current = v;
     return () => { v.dispose(); view.current = null; };
@@ -146,6 +147,8 @@ export default function ModPage() {
     view.current?.show(posts);
   }, [draft, shapes]);
   useEffect(() => { view.current?.showObjects(objects); }, [objects]);
+  // the post of a fence the properties are about is marked in the view
+  useEffect(() => { view.current?.selectPoint(sel.kind === "object" ? postIx : -1); }, [sel, postIx, objects]);
   useEffect(() => {
     view.current?.select(sel.kind === "post" ? sel.post : null, sel.kind === "object" ? sel.object : null);
   }, [sel, draft, objects]);
