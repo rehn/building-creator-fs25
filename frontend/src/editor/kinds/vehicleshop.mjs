@@ -61,7 +61,7 @@ export function shopScene(c) {
 
     <!-- The vehicles for sale: ${vehiclesFor(p).length} from the base game. They appear on the spawn line (vehicleSpawnStart01 to vehicleSpawnEnd01). -->
     <vehicleBuyingStation>
-        <trigger node="shopTrigger"/>
+        <trigger node="shopTrigger" text="Buy vehicles"/>
         <spawnPlaces>
             <spawnPlace startNode="vehicleSpawnStart01" endNode="vehicleSpawnEnd01" width="${wid.toFixed(2)}" maxWidth="${wid.toFixed(2)}" maxLength="${Math.min(len, 14).toFixed(2)}" maxHeight="${spawn.h.toFixed(2)}"/>
         </spawnPlaces>
