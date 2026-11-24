@@ -2,7 +2,7 @@
 // placeable type with the game's vehicleBuyingStation specialization.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { sanitize, buildGeometry, buildI3d, placeableXml, modDescXml, modDescXmlMulti, PRESETS, catalogFor, modName } from "../src/editor/model.mjs";
+import { sanitize, buildGeometry, buildI3d, placeableXml, modDescXml, modDescXmlMulti, modTypesFor, PRESETS, catalogFor, modName } from "../src/editor/model.mjs";
 import { kindOf, CATEGORIES } from "../src/editor/kinds/index.mjs";
 import { DEALER_GROUPS, vehiclesFor } from "../src/editor/kinds/dealership.mjs";
 import VEHICLES from "../src/editor/vehicles.mjs";
@@ -44,7 +44,7 @@ test("the counter and the spawn area are needed, and the counter may stand insid
 
 test("the placeable is the mod's own type with a vehicle buying station", () => {
   const p = shop({sellTractors: true, sellLoaders: false, sellTransport: false}), xml = placeableXml(p, "Stora Affären"), i3d = buildI3d(p);
-  assert.match(xml, /<placeable type="FS25_StoraAffaren\.dealership">/);
+  assert.match(xml, /<placeable type="FS25_StoraAffaren\.simplePlaceableWithVehicleShop">/);
   assert.match(xml, /<vehicleBuyingStation>\s*<trigger node="shopTrigger"\/>/);
   assert.match(xml, /<spawnPlace startNode="vehicleSpawnStart01" endNode="vehicleSpawnEnd01"/);
   assert.match(xml, /markerIconShopping\.i3d/);
@@ -72,10 +72,10 @@ test("the groups ticked decide what is sold; with none ticked it sells tractors;
 
 test("modDesc defines the placeable type; other buildings have none; a mod of several buildings gets it once", () => {
   const p = shop(), desc = modDescXml(p, "Affär");
-  assert.match(desc, /<placeableTypes>\s*<type name="dealership" parent="simplePlaceable" className="Placeable" filename="\$dataS\/scripts\/placeables\/Placeable\.lua">\s*<specialization name="vehicleBuyingStation"\/>/);
+  assert.match(desc, /<placeableTypes>\s*<type name="simplePlaceableWithVehicleShop" parent="simplePlaceable" className="Placeable" filename="\$dataS\/scripts\/placeables\/Placeable\.lua">\s*<specialization name="vehicleBuyingStation"\/>/);
   assert.doesNotMatch(modDescXml(sanitize({kind: "shed"}), "Skjul"), /placeableTypes/);
-  const kind = kindOf(p), multi = modDescXmlMulti([{xml: "a/house.xml"}], {title: "Mod", types: kind.modTypes});
-  assert.equal(multi.match(/<type name="dealership"/g).length, 1);
+  const multi = modDescXmlMulti([{xml: "a/house.xml"}], {title: "Mod", types: modTypesFor(p, "FS25_Affar")});
+  assert.equal(multi.match(/<type name="simplePlaceableWithVehicleShop"/g).length, 1);
   assert.equal(modName("Affär"), "FS25_Affar");
 });
 

@@ -13,6 +13,7 @@ import { WINDOW_STYLES, DOOR_STYLES, PORCH_OPTIONS, PORCH_W, PORCH_D, WING_FIELD
 import { pieceSheet, pieceMeshes, buildingTree, matList, matTable, slotOf, partStyle, splitAtOf, wallLabel, partName, wallItems, addOpening, addPartOn, addSplit, addPartSplit, duplicateOpening, duplicateSplit, moveBeside, moveToWall, openingProblem, setSectionFloorHeight, setTotalHeight, addPartDoor } from "./model.mjs";
 import { lodKeeps, matTexture, i3dFiles, modTypesFor } from "./model.mjs";
 import { sharedDefaults } from "./kinds/gameobjects.mjs";
+import { DEALER_GROUPS } from "./kinds/vehicleshop.mjs";
 import { encodeDds, decodeDds } from "./dds.mjs";
 import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, henYard, henCap, seeThroughGlass, kindOf } from "./model.mjs";
 import { cowYard } from "./kinds/cow.mjs";
@@ -23,7 +24,7 @@ import { cleanPapers, wallBreaks, pieceGroups, roomOf, problems, footprint, snap
 import { makeWalker } from "./walk.mjs";
 import { exportPart, importPart } from "./partfile.mjs";
 import { modelBundle } from "./bundle.mjs";
-import { OBJECT_TYPES, objectInfo, OBJECT_LIMITS, GAP_LIMITS, objectOf, pastureOf, snapBox, snapPasture, objectProblems, objectWarnings, fencePoints, snapFencePoint, MAX_FENCE_POINTS, MANY, MAX_TROUGHS, nextTroughSpot, TROUGH_KINDS, allowedTypes } from "./objects.mjs";
+import { OBJECT_TYPES, objectInfo, OBJECT_LIMITS, GAP_LIMITS, objectOf, pastureOf, snapBox, snapPasture, objectProblems, objectWarnings, fencePoints, snapFencePoint, MAX_FENCE_POINTS, MANY, MAX_TROUGHS, nextTroughSpot, TROUGH_KINDS, allowedTypes, SHARED_GROUPS } from "./objects.mjs";
 import { setAssets, catalogFor, usedAssets, troughLooks, changeKind, CONVERTIBLE_KINDS } from "./model.mjs";
 import { KINDS } from "./kinds/index.mjs";
 import FILL_TYPES from "./filltypes.mjs";
@@ -418,6 +419,7 @@ function syncOutputs() {
   { const low = zonesUsed() || p.innerCladding === "sameLow"; off("lowerCladding", !low); off("lowerColor", !low); }
   for (const k of ["studSpacing", "studWidth", "studIrregular", "insidePanel"]) off(k, !p.insideSame);
   off("roofMaterial", false);
+  { const shop = !!objectOf(p, "counter") && !!objectOf(p, "spawn") && !(kindOf(p).handles || []).includes("counter"); for (const k of [...DEALER_GROUPS.map(g => g.key), "sellPrice", "sellDelivery"]) off(k, !shop); }   // (the vehicle shop: a counter and its delivery place)
   off("shopCategory", !SHOP_KINDS.includes(p.kind));   // (animal buildings and stations keep their own place in the shop)
   for (const w of ["Front", "Back", "Left", "Right"]) off("post" + w, !p["open" + w]);
   off("roofPitch", p.roofType === "flat"); off("ridge", p.roofType === "flat");
@@ -1845,7 +1847,7 @@ const objName = o => { const name = objectInfo(kindOf(p), o.type).name, same = o
 /** An edit to the objects: snapped, saved and built. */
 function setObjects(list, sel = ob.sel) {
   p.objects = list; ob.sel = sel;
-  const ruled = applyKindRules(); if (ruled) syncControls();
+  const ruled = applyKindRules(); if (ruled) syncControls(); else syncOutputs();
   persist(); rebuild(false); renderObjectsUI();
 }
 const snapObj = o => o.type === "pasture" ? snapPasture(o, kindOf(p), p) : snapBox(o, p);
@@ -2006,7 +2008,8 @@ function removeObject(id) {
   if (!o) return false;
   if (spec.required.includes(o.type)) { toast(`The ${kindOf(p).name.toLowerCase()} needs its ${objName(o).toLowerCase()}`); return false; }
   treeKind = "game";
-  setObjects(objectsNow().filter(x => x.id !== id), null);
+  const group = Object.values(SHARED_GROUPS).find(ts => ts.includes(o.type) && !(kindOf(p).handles || []).some(t => ts.includes(t))) || [o.type];
+  setObjects(objectsNow().filter(x => !group.includes(x.type)), null);
   return true;
 }
 

@@ -4,7 +4,8 @@
 import { I3dDoc, tg, shape, refNode, boxMesh, splitByColor, mappingsFor, num, v3 } from "./i3d.mjs";
 import { KINDS, KIND, kindOf } from "./kinds/index.mjs";
 import { SHOP_CATEGORIES } from "./kinds/shop.mjs";
-import { sharedScene, sharedPlaceable, mergeContainers } from "./kinds/gameobjects.mjs";
+import { sharedScene, sharedPlaceable, mergeContainers, sharedDefaults } from "./kinds/gameobjects.mjs";
+import { DEALER_GROUPS } from "./kinds/vehicleshop.mjs";
 import { WALL_T, openSide, wallFrames, wallsOf, liveWings, wingsOf, wingIdOf, eaveWalls, autoPipes, cleanPipes, cleanPapers, WING_PARTS, MAX_WINGS, HARD_MAX_PARTS, setMaxParts, WING_WALLS, wingWallKey, wingSplitKey, WING_SPLIT_WALLS, isSplitWall, openingSpan, splitsOf, sectionsOf, sectionRuns, sectionAtPoint, maxFloors, maxFloorsWithAttic, wallHasFloor, isGableWall, cascadeHeight, dividerAt, splitAtFrom, splitKey, SPLIT_WALLS, MAX_SPLITS, floorsOf, totalHeight, floorBase, floorAt, roomOf, footprint, toWorld, cleanItems, problems } from "./layout.mjs";
 import { withAssets, placement, assetFolder, normalizeMeta, troughAssets } from "./assets.mjs";
 import { SURFACES } from "./surfaces.mjs";
@@ -31,6 +32,8 @@ export const DEFAULTS = {
   gutters:true, downpipes:2, gutterColor:"#3B3F42",
   wallColor:"#8E2A1E", trimColor:"#F2EFE8", roofColor:"#2B2D2F", doorColor:"#3E5A4A", innerDoorColor:"#E9E3D3", foundationColor:"#6E6E6A",
   interior:true, loftBacking:true, insidePaper:"none", curtainStyle:"sides", curtainColor:"#EFE9DC", ventilators:0, age:0,
+  // (what a shop counter sells, if the building has one: none ticked is the tractors)
+  ...Object.fromEntries(DEALER_GROUPS.map(g => [g.key, false])), sellPrice:100, sellDelivery:0,
   modPrice:75000, modUpkeep:75, shopCategory:"auto", modAuthor:"", modDescription:"", lodDistance:80, binaryShapes:true
 };
 /** Curtain layouts: [id, name]. Windows can pick one or follow the house's choice ("default"). */
@@ -133,6 +136,10 @@ const SHARED_SECTIONS = [
     {k:"studWidth", label:"Studs: width of each (older barns: heavier)", min:0.045, max:0.12, step:0.005, cm:true},
     {k:"studIrregular", label:"Studs: how uneven (older barns: more)", min:0, max:1, step:0.05},
     {k:"insidePaper", label:"Wallpaper on every inside wall", type:"select", options:[["none", "None (plaster as it is)"], ...WALLPAPERS.map((w, i) => [String(i), w[0]])]}]},
+  {title:"Vehicles for sale", tab:"game", hint:"What a shop counter sells (add one and its delivery place under Game objects): pick the groups of the base game's vehicles. The player walks into the counter to open the shop; a bought vehicle appears in the delivery place. Nothing ticked: tractors.", fields:[
+    ...DEALER_GROUPS.map(g => ({k: g.key, label: g.name, type: "check"})),
+    {k:"sellPrice", label:"Prices, per cent of the game's own", min:50, max:200, step:5, unit:" %"},
+    {k:"sellDelivery", label:"Delivery fee", min:0, max:20000, step:500, unit:" $"}]},
   {title:"Game mod", label:"Shop and mod", tab:"game", hint:"Used by \u201CExport game mod\u201D: what the house costs in the shop and who made it. The project name is the name in the shop.", fields:[
     {k:"modPrice", label:"Price", min:0, max:2000000, step:500, money:true},
     {k:"modUpkeep", label:"Daily upkeep", min:0, max:5000, step:5, money:true},
@@ -812,7 +819,7 @@ export function sanitize(obj) {
   // (from the settings of before they were objects: the pasture's wall and depth, the sleep point on or off)
   const legacy = {...out, pastureWall: WALLS.includes(obj.pastureWall) ? obj.pastureWall : out.pastureWall,
     fenceDepth: Number.isFinite(+obj.fenceDepth) && obj.fenceDepth !== null ? +obj.fenceDepth : out.fenceDepth, sleepPoint: obj.sleepPoint !== false};
-  out.objects = cleanObjects(Array.isArray(obj.objects) ? obj.objects : kind.objects ? kind.objects.defaults(legacy) : [], kind, legacy);
+  out.objects = cleanObjects(Array.isArray(obj.objects) ? obj.objects : kind.objects ? kind.objects.defaults(legacy) : [], kind, legacy, sharedDefaults);
   out.decor = cleanDecor(obj.decor);   // (items of the user's placed round the building: decor.mjs)
   const q = kind.normalize(out);
   // The inside of a walk-in building: the saved pieces, or filled automatically for a new one.
@@ -2988,7 +2995,7 @@ function exportParts(p, {withTex = false, scenery = false} = {}) {
   const box = (name, b, attrs, children = []) => shape(name, {translation: b.center, shapeId: doc.shape(name, boxMesh(b.size), {cpu: true}), ...attrs,
     nonRenderable: true, castsShadows: false, receiveShadows: false, materialIds: cm}, children);
   const trigger = (group, mask) => ({static: true, trigger: true, collisionFilterGroup: group, collisionFilterMask: mask});
-  const ctx = {p, geo, doc, box, trigger, sleepPoint};
+  const ctx = {p, kind, geo, doc, box, trigger, sleepPoint};
   const kindScene = kind.scene ? kind.scene(ctx) : {nodes: [], xml: "", areas: []}, shared = sharedScene(ctx);
   // (the kind's own nodes, then those of the objects every kind can have: a sleep point, a workshop)
   const own = {nodes: [...kindScene.nodes, ...shared.nodes], xml: mergeContainers(kindScene.xml + shared.xml), areas: [...kindScene.areas, ...shared.areas]};
@@ -3155,7 +3162,7 @@ export function buildObj(p) {
  * The placeable the building exports: what its kind says, with the objects every kind can have (a sleep point, a workshop) added. {type, fn, shop, note, modType}:
  * modType is a placeable type the mod's modDesc.xml must define for it, or null (kinds/gameobjects.mjs sharedPlaceable). mod: the mod's name, left out in the snippet.
  */
-export function placeableFor(q, kind, mod = "") { return sharedPlaceable(q, kind.placeable(q, mod ? {mod} : undefined), mod); }
+export function placeableFor(q, kind, mod = "") { return sharedPlaceable(q, kind.placeable(q, mod ? {mod} : undefined), mod, kind); }
 /** The placeable types the building's mod must define in its modDesc.xml: the kind's own (kind.modTypes) and one made for the objects it has besides. mod: the mod's name. */
 export function modTypesFor(p, mod = "") {
   const q = sanitize(p), kind = kindOf(q), extra = placeableFor(q, kind, mod).modType;
