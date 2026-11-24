@@ -150,26 +150,28 @@ import { snapFencePost, postsInside } from "../src/editor/modPlan.mjs";
 
 const rects = [{x0: 0, x1: 10, z0: 0, z1: 6}];
 
-test("a fence post near a corner of a building goes to the corner, near a wall onto the line of the wall, else to the grid", () => {
-  assert.deepEqual(snapFencePost([10.4, 6.3], rects), [10, 6], "a corner within 80 cm");
-  assert.deepEqual(snapFencePost([4.1, 6.3], rects), [4, 6], "onto the line of the wall (40 cm), along it to the grid");
+test("a fence post near a corner of a building goes 15 cm out from the corner, near a wall 15 cm out from the wall (as the hen house has its posts), else to the grid", () => {
+  assert.deepEqual(snapFencePost([10.4, 6.3], rects), [10.15, 6.15], "a corner within 80 cm");
+  assert.deepEqual(snapFencePost([-0.3, -0.2], rects), [-0.15, -0.15], "out from the other corners the other way");
+  assert.deepEqual(snapFencePost([4.1, 6.3], rects), [4, 6.15], "15 cm out from the wall (40 cm), along it to the grid");
   assert.deepEqual(snapFencePost([20.1, 14.9], rects), [20, 15], "the 25 cm grid");
   assert.deepEqual(snapFencePost([20.1, 14.9], rects, {off: true}), [20.1, 14.9], "Alt: where it is, to a centimetre");
 });
 
-test("a fence post is never inside a building: it is put out through the nearest side", () => {
-  assert.deepEqual(snapFencePost([5, 5], rects), [5, 6]);
-  assert.deepEqual(snapFencePost([1.5, 3], rects), [0, 3]);
+test("a fence post is never inside a building or against it: it is put 15 cm out through the nearest side", () => {
+  assert.deepEqual(snapFencePost([5, 5], rects), [5, 6.15]);
+  assert.deepEqual(snapFencePost([1.5, 3], rects), [-0.15, 3]);
+  assert.deepEqual(snapFencePost([5, 6.05], rects, {off: true}), [5, 6.05], "Alt: where it is");
 });
 
 test("the posts that stand inside a building are found, and the mod says so when it is made", async () => {
-  assert.deepEqual(postsInside([[5, 3], [11, 3], [0, 0], [5, 6.001]], rects), [0], "on a wall is not inside");
+  assert.deepEqual(postsInside([[5, 3], [11, 3], [0, 0], [5, 6.2], [5, 6.05]], rects), [0, 2, 4], "inside, or closer than 10 cm to a wall (a corner is), is told; 15 cm out is fine");
   const bad = [{id: "a", kind: "building", name: "Huset", x: 20, z: 10, y: 0, rot: 0, data: {kind: "house", width: 10, depth: 8}}];
   const objects = yard().map(o => (o.type === "pasture" ? {...o, points: [[20, 10], [20, -5], [45, -5], [45, 10]]} : o));
   const {warnings} = await makeModPackage({name: "Hönsgården", posts: bad, objects});
-  assert.ok(warnings.some(w => /post/i.test(w) && /inside/i.test(w)), JSON.stringify(warnings));
+  assert.ok(warnings.some(w => /post/i.test(w) && /in or right against/i.test(w)), JSON.stringify(warnings));
   const fine = await makeModPackage({name: "Hönsgården", posts: bad, objects: yard()});
-  assert.ok(!fine.warnings.some(w => /inside/i.test(w)), JSON.stringify(fine.warnings));
+  assert.ok(!fine.warnings.some(w => /in or right against|runs through/i.test(w)), JSON.stringify(fine.warnings));
 });
 
 // ---- the warning in the editor ----
@@ -196,16 +198,48 @@ test("the fences with a post inside a building: Map fence id -> the posts (0-bas
 // ---- a stretch of fence through a building (seen in the game: the stretch from post 5 to 6 ran 3 cm into the house) ----
 import { edgesThrough } from "../src/editor/modPlan.mjs";
 
-test("the stretches of fence that run through a building are found, one that only touches or follows a wall is not", () => {
+test("the stretches of fence that run through a building or touch it are found, one 15 cm out from a wall is not", () => {
   const house = [{x0: 0, x1: 10, z0: 0, z1: 6}];
   // posts all outside, a stretch (post 1 to 2) across the corner of the house
   assert.deepEqual(edgesThrough([[-2, 3], [3, -2], [12, -2], [12, 8], [-2, 8]], house), [0], "the first stretch cuts across the corner of the house");
   assert.deepEqual(edgesThrough([[-1, -1], [11, -1], [11, 7], [-1, 7]], house), [], "a fence round the house");
-  assert.deepEqual(edgesThrough([[0, 6], [10, 6], [10, 12], [0, 12]], house), [], "the first stretch runs along the wall: touching is not through");
-  // the case from the game: the stretch rises 15 cm over 3 m and ends on the wall line, so it is inside the house for 68 cm, 3 cm deep at most
+  assert.deepEqual(edgesThrough([[0, 6.15], [10, 6.15], [10, 12], [0, 12]], house), [], "the first stretch runs along the wall 15 cm out, as the hen house has it");
+  assert.deepEqual(edgesThrough([[0, 6], [10, 6], [10, 12], [0, 12]], house), [0, 1, 3], "on the wall itself, and the stretches that start there, touch it: the game could not make a meadow of that");
+  // the game: a fence that touched the house (posts on the wall line z 1.525) gave the warning, a fence that did not touch it gave grass
   const wall = [{x0: -6.005, x1: 0.855, z0: -4.367, z1: 1.525}];
-  const game = [[0.855, 1.525], [4.425, 1.375], [4.425, 8.625], [-8.575, 8.625], [-8.575, 1.375], [-5.325, 1.525]];
-  assert.deepEqual(edgesThrough(game, wall), [4], "post 5 to 6");
-  // snapped onto the wall line the same fence is clear
-  assert.deepEqual(edgesThrough(game.map(([x, z]) => [x, z === 1.375 ? 1.525 : z]), wall), []);
+  const touching = [[0.175, 1.525], [4.425, 1.625], [4.425, 8.625], [-9.575, 8.625], [-9.575, 1.625], [-5.325, 1.525]];
+  assert.ok(edgesThrough(touching, wall).includes(5) && postsInside(touching, wall).length === 2, "the stretch back along the wall, and the two posts on it");
+  const clear = [[0.175, 1.675], [4.425, 1.675], [4.425, 8.625], [-9.575, 8.625], [-9.575, 1.675], [-5.325, 1.675]];
+  assert.deepEqual(edgesThrough(clear, wall), []);
+  assert.deepEqual(postsInside(clear, wall), []);
+});
+
+// ---- the hen yard starts against the house the door belongs to ----
+import { entranceBuilding } from "../src/lib/modObjects.mjs";
+
+test("the entrance building is the first building with a ground floor door on a main wall, and its wall", () => {
+  const b = (doorWall, rot = 0) => ({kind: "building", x: 0, z: 0, rot, data: {kind: "house", width: 10, depth: 8, doorWall}});
+  assert.deepEqual(entranceBuilding([{kind: "prop", rot: 0, data: {}}, b("left"), b("front")]), {wall: "left", index: 1});
+  assert.deepEqual(entranceBuilding([b("front", 90)]), {wall: "right", index: 0});
+  assert.deepEqual(entranceBuilding([]), {wall: "back", index: -1});
+});
+
+// ---- a fence round two walls of a house (as the cow barn's pasture can go), the way back round the corner ----
+test("a fence that starts at one corner of a house and ends at another, round two walls, gets the way back along the house round the corner, outside the house", async () => {
+  const one = [{id: "a", kind: "building", name: "Huset", x: 20, z: 10, y: 0, rot: 0, data: {kind: "house", width: 10, depth: 8}}];   // x 15 to 25, z 6 to 14 (a little more: the roof)
+  const {files, middle} = await makeModPackage({name: "Hönsgården", posts: one, objects: yard()});
+  const i3d0 = text(files.get("house.i3d")), blocker = i3d0.match(/name="navmeshBlocker" translation="([^"]+)"/)[1].split(" ").map(Number);
+  assert.ok(blocker.length === 3, "the house is a blocker");
+  // the house's own rectangle in the mod's coordinates, from the generated blocker's middle and the plan
+  const f = (await import("../src/editor/modPlan.mjs")).feetOf([{x: 20, z: 10, rot: 0, bounds: (await import("../src/editor/modPlan.mjs")).boundsOf((await import("../src/editor/modPlan.mjs")).projectGroups(one[0].data))}])[0];
+  const g = 0.15, pts = [[f.x1 + g, f.z0 - g], [f.x1 + 8, f.z0 - g], [f.x1 + 8, f.z1 + 8], [f.x0 - g, f.z1 + 8], [f.x0 - g, f.z1 + g]];   // from the NE corner, east, south, west, up to the SW corner
+  const objects = yard().map(o => (o.type === "pasture" ? {...o, points: pts} : o));
+  const out = await makeModPackage({name: "Hönsgården", posts: one, objects});
+  assert.deepEqual(out.warnings, [], "nothing touches the house");
+  const i3d = text(out.files.get("house.i3d")), xml = text(out.files.get("house.xml"));
+  const contour = [...i3d.matchAll(/name="navContourNode\d+" translation="([^"]+)"/g)].map(m => m[1].split(" ").map(Number));
+  assert.ok(contour.length >= 2, "the way back from the last post to the first runs round the corners of the house: " + JSON.stringify(contour));
+  assert.match(xml, /<additionalNavMeshNodes>/);
+  const m = out.middle, r = {x0: f.x0 - m[0], x1: f.x1 - m[0], z0: f.z0 - m[1], z1: f.z1 - m[1]};
+  for (const [x, , z] of contour) assert.ok(!(x > r.x0 + 1e-6 && x < r.x1 - 1e-6 && z > r.z0 + 1e-6 && z < r.z1 - 1e-6), `${x},${z} is outside the house`);
 });

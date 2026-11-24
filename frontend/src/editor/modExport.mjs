@@ -95,9 +95,9 @@ export async function makeModPackage({name, author = "", description = "", posts
   files.set("modDesc.xml", modDescXml(p0, name, {author}));
   // (a fence post inside a building: the game cannot make the animals area from it, "Could not shrink polygon")
   for (const [id, found] of fenceProblems(objects, feet)) {
-    for (const i of found.posts) warnings.push(`Post ${i + 1} of the fence stands inside a building: move it out, or the game cannot make the area the hens walk in.`);
+    for (const i of found.posts) warnings.push(`Post ${i + 1} of the fence stands in or right against a building: keep it 15 cm out from the wall, or the game cannot make the area the hens walk in.`);
     const n = objects.find(o => o.id === id).points.length;
-    for (const i of found.edges) warnings.push(`The fence between post ${i + 1} and ${(i + 1) % n + 1} runs through a building: move the posts to the wall or out from it, or the game cannot make the area the hens walk in.`);
+    for (const i of found.edges) warnings.push(`The fence between post ${i + 1} and ${(i + 1) % n + 1} runs through or right along a building: keep it 15 cm out from the wall, or the game cannot make the area the hens walk in.`);
   }
   if (!live.length) warnings.push("The mod holds no buildings or props yet.");
   return {files, warnings, middle: [round(cx), round(cz)], mod: modName(name)};
