@@ -422,6 +422,7 @@ function syncOutputs() {
   off("roofMaterial", false);
   { const shop = !!objectOf(p, "counter") && !!objectOf(p, "spawn") && !(kindOf(p).handles || []).includes("counter"); for (const k of [...DEALER_GROUPS.map(g => g.key), "sellPrice", "sellDelivery"]) off(k, !shop); }   // (the vehicle shop: a counter and its delivery place)
   { const on = !!objectOf(p, "intake"); for (const k of [...GRAINS.map(g => g[0]), "grainPrice", "siloHopper"]) off(k, !on); }   // (the grain intake)
+  { const on = !!objectOf(p, "pump"); off("fuelPrice", !on); off("fuelRate", !on); }   // (the fuel area)
   off("shopCategory", !SHOP_KINDS.includes(p.kind));   // (animal buildings and stations keep their own place in the shop)
   for (const w of ["Front", "Back", "Left", "Right"]) off("post" + w, !p["open" + w]);
   off("roofPitch", p.roofType === "flat"); off("ridge", p.roofType === "flat");

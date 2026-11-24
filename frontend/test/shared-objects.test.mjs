@@ -31,7 +31,7 @@ test("a cow barn keeps a sleep point and a workshop (one of each) when cleaned",
 test("the shared types have a default place, for the editor's add button", () => {
   const p = sanitize(preset("ladugard"));
   for (const t of ["sleep", "workshop"]) { const d = sharedDefaults(p, t); assert.equal(d.length, 1, t); assert.equal(d[0].type, t); }
-  assert.deepEqual(Object.keys(SHARED).sort(), ["intake", "sleep", "vehicleshop", "workshop"]);
+  assert.deepEqual(Object.keys(SHARED).sort(), ["intake", "pump", "sleep", "vehicleshop", "workshop"]);
 });
 
 test("a house with only a sleep point is a farmhouse; a shed with only a workshop is a garage with a workshop (as before)", () => {
