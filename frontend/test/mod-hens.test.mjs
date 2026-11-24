@@ -171,3 +171,22 @@ test("the posts that stand inside a building are found, and the mod says so when
   const fine = await makeModPackage({name: "Hönsgården", posts: bad, objects: yard()});
   assert.ok(!fine.warnings.some(w => /inside/i.test(w)), JSON.stringify(fine.warnings));
 });
+
+// ---- the warning in the editor ----
+import { feetOf } from "../src/editor/modPlan.mjs";
+import { fenceProblems } from "../src/lib/modObjects.mjs";
+
+test("what the posts stand on seen from above: each post's footprint at its place (turned)", () => {
+  const b = {min: [-5, 0, -4], max: [5, 3, 4]};
+  assert.deepEqual(feetOf([{x: 20, z: 10, rot: 0, bounds: b}]), [{x0: 15, x1: 25, z0: 6, z1: 14}]);
+  assert.deepEqual(feetOf([{x: 0, z: 0, rot: 90, bounds: b}]), [{x0: -4, x1: 4, z0: -5, z1: 5}], "turned a quarter, the sides change places");
+});
+
+test("the fences with a post inside a building: Map fence id -> the posts (0-based), none for a fence that is clear", () => {
+  const objects = yard(), f = objects.find(o => o.type === "pasture");
+  assert.equal(fenceProblems(objects, [{x0: 0, x1: 1, z0: 0, z1: 1}]).size, 0);
+  const wrecked = objects.map(o => (o === f ? {...o, points: [[20, 10], [20, -5], [45, -5], [45, 10]]} : o));
+  const got = fenceProblems(wrecked, [{x0: 15, x1: 25, z0: 6, z1: 14}]);
+  assert.deepEqual([...got], [[f.id, [0]]]);
+  assert.equal(fenceProblems([], []).size, 0);
+});

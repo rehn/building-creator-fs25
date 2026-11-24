@@ -13,13 +13,13 @@ import { t } from "@/i18n/index.mjs";
 import { KINDS, sanitize, modName } from "@/editor/model.mjs";
 import { OBJECT_TYPES, OBJECT_LIMITS } from "@/editor/objects.mjs";
 import { createModView } from "@/editor/modView.mjs";
-import { projectGroups, boundsOf, footprint, turnedBy, mapKey, proceduralPicture } from "@/editor/modPlan.mjs";
+import { projectGroups, boundsOf, footprint, turnedBy, mapKey, proceduralPicture, feetOf } from "@/editor/modPlan.mjs";
 import { decodeDds } from "@/editor/dds.mjs";
 import { makeModPackage } from "@/editor/modExport.mjs";
 import { confirmDialog, promptDialog } from "@/components/dialog.mjs";
 import { RangeField } from "@/components/RangeField";
 import { addPost, removePost, setPostType, placePost, choices, payload } from "@/lib/mods.mjs";
-import { groupsFree, addGroup, removeGroup, setObjectOf, settingsFor, objectsOfData, setPoint, addPoint, removePoint, hensOfData, groupOf, entranceWall, MIN_POSTS } from "@/lib/modObjects.mjs";
+import { groupsFree, addGroup, removeGroup, setObjectOf, settingsFor, objectsOfData, setPoint, addPoint, removePoint, hensOfData, groupOf, entranceWall, fenceProblems, MIN_POSTS } from "@/lib/modObjects.mjs";
 
 type Kind = { id: string; name: string };
 type Groups = ReturnType<typeof projectGroups>;
@@ -205,6 +205,9 @@ export default function ModPage() {
 
   const post = sel.kind === "post" ? draft.find(p => p.id === sel.post) ?? null : null;
   const object = sel.kind === "object" ? objects.find(o => o.id === sel.object) ?? null : null;
+  // a fence with a post inside a building: the game cannot make the animals' area from it, so it is marked (the tree, and its properties)
+  const fenceBad = fenceProblems(objects, feetOf(draft.flatMap(p => { const s = shapes[p.ref]; return s && s !== "error" ? [{ x: p.x, z: p.z, rot: p.rot, bounds: s.bounds }] : []; }))) as Map<number, number[]>;
+  const fenceWarning = (id: number) => { const bad = fenceBad.get(id); return bad ? t("Post {posts} of the fence stands inside a building. Move it out, or the game cannot make the area the hens walk in.", { posts: bad.map(i => i + 1).join(", ") }) : ""; };
   const options: ProjectSummary[] = mod ? choices(projects, draft, adding) : [];
   const loading = draft.some(p => !p.missing && !shapes[p.ref]);
   const failed = draft.filter(p => !p.missing && shapes[p.ref] === "error").length;
@@ -236,10 +239,11 @@ export default function ModPage() {
   }
 
   /** One row of the tree, as the building editor draws it: a caret (when it has children) and a button. */
-  const row = (key: string, depth: number, label: string, on: boolean, choose: () => void, opts: { kids?: boolean; hint?: string; strong?: boolean; add?: () => void } = {}) => (
+  const row = (key: string, depth: number, label: string, on: boolean, choose: () => void, opts: { kids?: boolean; hint?: string; strong?: boolean; add?: () => void; warn?: string } = {}) => (
     <li className={"tnode" + (opts.strong ? " t-main" : "")} style={{ ["--d" as string]: depth }} key={key}>
       {opts.kids ? <button type="button" className="caret" aria-label={closed[key] ? t("Unfold") : t("Fold")} aria-expanded={!closed[key]} onClick={() => fold(key)}>{closed[key] ? "▸" : "▾"}</button> : <span className="caret" aria-hidden="true" />}
       <button type="button" className="tbtn" aria-pressed={on} onClick={choose}><span translate="no">{label}</span>{opts.hint && <small> {opts.hint}</small>}</button>
+      {opts.warn && <span className="twarn" role="img" tabIndex={0} title={opts.warn} aria-label={opts.warn}>⚠</span>}
       {opts.add && <button type="button" className="linklike tadd" onClick={opts.add} disabled={busy}>{t("+ Add")}</button>}
     </li>
   );
@@ -251,7 +255,7 @@ export default function ModPage() {
         ...draft.map(p => row(p.id, 1, p.missing ? t("Deleted") : p.name, sel.kind === "post" && sel.post === p.id, () => setSel({ kind: "post", post: p.id }),
           { hint: p.kind === "prop" ? t("prop") : p.type ? TYPES.find(k => k.id === p.type)?.name : undefined })),
         row("objects", 1, t("Game objects"), sel.kind === "group", () => setSel({ kind: "group" }), { kids: objects.length > 0 }),
-        ...(closed.objects ? [] : objects.map(o => row(`o:${o.id}`, 2, typeName(o.type), sel.kind === "object" && sel.object === o.id, () => setSel({ kind: "object", object: o.id })))),
+        ...(closed.objects ? [] : objects.map(o => row(`o:${o.id}`, 2, typeName(o.type), sel.kind === "object" && sel.object === o.id, () => setSel({ kind: "object", object: o.id }), { warn: fenceWarning(o.id) }))),
       ]}
     </ul>
   );
@@ -344,6 +348,7 @@ export default function ModPage() {
             <section className="hx-card">
               <h3 className="hx-card-h">{typeName(object.type)}</h3>
               <p className="hint">{typeHint(object.type)}</p>
+              {fenceWarning(object.id) && <p className="error" role="alert">{fenceWarning(object.id)}</p>}
               {object.type === "pasture" ? (
                 <>
                   <div className="row">

@@ -14,7 +14,8 @@ import { sanitize, i3dFiles, placeableXml, modDescXml, modName, buildInMod, with
 import { textureMapFor } from "./headless.mjs";
 import { I3dDoc, tg, prefixNames } from "./i3d.mjs";
 import { mergeContainers } from "./kinds/gameobjects.mjs";
-import { projectGroups, boundsOf, footprint, postsInside } from "./modPlan.mjs";
+import { projectGroups, boundsOf, footprint } from "./modPlan.mjs";
+import { fenceProblems } from "../lib/modObjects.mjs";
 import { exportI3dAtlas, atlasDdsFiles } from "../builder/atlas.mjs";
 import { sanitize as sanitizeProp } from "../builder/model.mjs";
 import { encodeDds } from "./dds.mjs";
@@ -93,7 +94,7 @@ export async function makeModPackage({name, author = "", description = "", posts
   files.set(MOD_FILES.xml, placeableXml(p0, name, {host}));
   files.set("modDesc.xml", modDescXml(p0, name, {author}));
   // (a fence post inside a building: the game cannot make the animals area from it, "Could not shrink polygon")
-  for (const o of objects) if (o.type === "pasture") for (const i of postsInside(o.points || [], feet)) warnings.push(`Post ${i + 1} of the fence stands inside a building: move it out, or the game cannot make the area the hens walk in.`);
+  for (const [, posts] of fenceProblems(objects, feet)) for (const i of posts) warnings.push(`Post ${i + 1} of the fence stands inside a building: move it out, or the game cannot make the area the hens walk in.`);
   if (!live.length) warnings.push("The mod holds no buildings or props yet.");
   return {files, warnings, middle: [round(cx), round(cz)], mod: modName(name)};
 }
