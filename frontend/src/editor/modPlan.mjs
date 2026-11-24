@@ -125,3 +125,29 @@ export const postsInside = (points, rects) => points.flatMap(([x, z], i) => (rec
 
 /** What the posts [{x, z, rot, bounds}] stand on seen from above, as rectangles [{x0, x1, z0, z1}] (each turned by its rot, as footprint gives it). */
 export const feetOf = posts => posts.map(p => { const f = footprint(p.bounds, p.rot || 0); return {x0: p.x + f.minX, x1: p.x + f.maxX, z0: p.z + f.minZ, z1: p.z + f.maxZ}; });
+
+/**
+ * The stretches of a fence (posts [[x, z] ...], closed: stretch i runs from post i to post i + 1, the last back to the first) that run through a building: into one of the rects
+ * [{x0, x1, z0, z1}] by more than 1 cm. A stretch along a wall or touching a corner is not through it. The game cuts the buildings out of the animals' area, and a stretch that grazes a building
+ * leaves a sliver too thin to make a meadow of ("Could not shrink polygon for creation task").
+ */
+export function edgesThrough(points, rects, tol = 0.01) {
+  const out = [];
+  points.forEach((a, i) => {
+    const b = points[(i + 1) % points.length];
+    if (rects.some(r => clipsRect(a, b, {x0: r.x0 + tol, x1: r.x1 - tol, z0: r.z0 + tol, z1: r.z1 - tol}))) out.push(i);
+  });
+  return out;
+}
+/** Whether the segment a to b has a piece of more than a millimetre inside the rect (Liang-Barsky). */
+function clipsRect(a, b, r) {
+  if (r.x0 >= r.x1 || r.z0 >= r.z1) return false;
+  const dx = b[0] - a[0], dz = b[1] - a[1];
+  let t0 = 0, t1 = 1;
+  for (const [p, q] of [[-dx, a[0] - r.x0], [dx, r.x1 - a[0]], [-dz, a[1] - r.z0], [dz, r.z1 - a[1]]]) {
+    if (p === 0) { if (q < 0) return false; continue; }
+    const t = q / p;
+    if (p < 0) { if (t > t1) return false; t0 = Math.max(t0, t); } else { if (t < t0) return false; t1 = Math.min(t1, t); }
+  }
+  return (t1 - t0) * Math.hypot(dx, dz) > 0.001;
+}
