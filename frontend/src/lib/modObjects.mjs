@@ -7,6 +7,7 @@ import { SHARED_GROUPS, OBJECT_LIMITS, fencePoints, MAX_FENCE_POINTS } from "../
 import { HEN_TYPES } from "../editor/kinds/modframe.mjs";
 import { MAX_HENS } from "../editor/kinds/chicken.mjs";
 import { postsInside, edgesThrough } from "../editor/modPlan.mjs";
+import { navContourNodes, ccwFence } from "../editor/kinds/pasture.mjs";
 import { wallsOf } from "../editor/layout.mjs";
 import { sanitize } from "../editor/model.mjs";
 
@@ -52,20 +53,22 @@ function henDefaults({width, depth, foundation = 0}, wall = "back") {
 const OPPOSITE = {front: "back", back: "front", left: "right", right: "left"};
 
 /**
- * The side of the mod (a wall of a stand-in building as big as the mod: front, back, left or right) that the first building's ground floor door faces, as the building stands (turned by its rot):
- * where a hen yard's fence goes to start with, on the side people come in. posts: [{kind, rot, data}]; "back" when no building has a door on a main wall.
+ * The first building with a ground floor door on a main wall, and the side of it (front, back, left or right of the building as it stands, turned by its rot) that door faces: {wall, index (in posts)},
+ * where a hen yard goes to start with, against the house on the side people come in. posts: [{kind, rot, data}]; {wall: "back", index: -1} when no building has one.
  */
-export function entranceWall(posts) {
-  for (const p of posts) {
+export function entranceBuilding(posts) {
+  for (const [index, p] of posts.entries()) {
     if (p.kind !== "building" || !p.data) continue;
     const q = sanitize(p.data), walls = wallsOf(q), door = (q.windows || []).find(w => w.type === "door" && w.floor === 0 && walls[w.wall] && OPPOSITE[w.wall]);
     if (!door) continue;
     const [nx, , nz] = walls[door.wall].n, a = (p.rot || 0) * Math.PI / 180;
     const x = nx * Math.cos(a) + nz * Math.sin(a), z = -nx * Math.sin(a) + nz * Math.cos(a);
-    return Math.abs(x) > Math.abs(z) ? (x > 0 ? "right" : "left") : (z > 0 ? "front" : "back");
+    return {wall: Math.abs(x) > Math.abs(z) ? (x > 0 ? "right" : "left") : (z > 0 ? "front" : "back"), index};
   }
-  return "back";
+  return {wall: "back", index: -1};
 }
+/** The side of the mod the first building's door faces (entranceBuilding), "back" when none does. */
+export const entranceWall = posts => entranceBuilding(posts).wall;
 
 /** The objects without the group of the object `objectId`: its objects come and go together (a shop counter and its delivery place). */
 export function removeGroup(objects, objectId) {
@@ -129,8 +132,8 @@ export const objectsOfData = data => (data && Array.isArray(data.objects) ? data
  */
 /** The sentence about a fence's problems found by fenceProblems ({posts, edges}), as numbers for the player (from 1): [text key, values] for each, in the order to say them. */
 export const fenceProblemList = ({posts, edges}, n) => [
-  ...(posts.length ? [["Post {posts} of the fence stands inside a building. Move it out, or the game cannot make the area the hens walk in.", {posts: posts.map(i => i + 1).join(", ")}]] : []),
-  ...(edges.length ? [["The fence between {stretches} runs through a building. Move the posts to the wall or out from it, or the game cannot make the area the hens walk in.", {stretches: edges.map(i => `${i + 1} and ${(i + 1) % n + 1}`).join("; ")}]] : []),
+  ...(posts.length ? [["Post {posts} of the fence stands in or right against a building. Keep it 15 cm out from the wall, or the game cannot make the area the hens walk in.", {posts: posts.map(i => i + 1).join(", ")}]] : []),
+  ...(edges.length ? [["The fence between {stretches} runs through or right along a building. Keep it 15 cm out from the wall, or the game cannot make the area the hens walk in.", {stretches: edges.map(i => `${i + 1} and ${(i + 1) % n + 1}`).join("; ")}]] : []),
 ];
 
 export function fenceProblems(objects, rects) {
@@ -138,7 +141,8 @@ export function fenceProblems(objects, rects) {
   for (const o of objects) {
     if (o.type !== "pasture" || !Array.isArray(o.points)) continue;
     const posts = postsInside(o.points, rects), n = o.points.length;
-    const edges = edgesThrough(o.points, rects).filter(i => !posts.includes(i) && !posts.includes((i + 1) % n));
+    // (the game closes the fence from its last post to its first along the building when the ends are at one: the way the export gives it, navContourNodes)
+    const edges = edgesThrough(o.points, rects, undefined, navContourNodes(ccwFence(o.points.map(([x, z]) => [x, 0, z])), rects)).filter(i => !posts.includes(i) && !posts.includes((i + 1) % n));
     if (posts.length || edges.length) out.set(o.id, {posts, edges});
   }
   return out;

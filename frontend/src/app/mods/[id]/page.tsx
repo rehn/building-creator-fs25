@@ -19,7 +19,7 @@ import { makeModPackage } from "@/editor/modExport.mjs";
 import { confirmDialog, promptDialog } from "@/components/dialog.mjs";
 import { RangeField } from "@/components/RangeField";
 import { addPost, removePost, setPostType, placePost, choices, payload } from "@/lib/mods.mjs";
-import { groupsFree, addGroup, removeGroup, setObjectOf, settingsFor, objectsOfData, setPoint, addPoint, removePoint, hensOfData, groupOf, entranceWall, fenceProblems, fenceProblemList, MIN_POSTS } from "@/lib/modObjects.mjs";
+import { groupsFree, addGroup, removeGroup, setObjectOf, settingsFor, objectsOfData, setPoint, addPoint, removePoint, hensOfData, groupOf, entranceBuilding, fenceProblems, fenceProblemList, MIN_POSTS } from "@/lib/modObjects.mjs";
 
 type Kind = { id: string; name: string };
 type Groups = ReturnType<typeof projectGroups>;
@@ -223,9 +223,10 @@ export default function ModPage() {
   const fold = (key: string) => setClosed(c => ({ ...c, [key]: !c[key] }));
 
   /** The size and middle of everything in the mod seen from above (the things as they stand, turned), for where a new game object starts: the middle, as big as the mod. */
-  function around() {
+  function around(only?: string) {
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity, foundation = 0;
     for (const p of draft) {
+      if (only && p.id !== only) continue;
       const s = shapes[p.ref];
       if (!s || s === "error") continue;
       const f = footprint(s.bounds, p.rot);
@@ -236,8 +237,9 @@ export default function ModPage() {
     return { width: maxX - minX, depth: maxZ - minZ, foundation, at: [(minX + maxX) / 2, (minZ + maxZ) / 2] as [number, number] };
   }
   function addObjects(group: string) {
-    // (a hen yard's fence starts on the side the first building's door faces)
-    const a = around(), wall = entranceWall(draft.map(p => ({ kind: p.kind, rot: p.rot, data: datas.current.get(p.ref) })));
+    // (a hen yard goes against the first building with a door, on the side the door faces, with its fence 15 cm out from the wall as the hen house has it)
+    const door = entranceBuilding(draft.map(p => ({ kind: p.kind, rot: p.rot, data: datas.current.get(p.ref) }))), wall: string = door.wall;
+    const a = group === "hens" && door.index >= 0 ? around(draft[door.index].id) : around();
     const next: ModObject[] = addGroup(objects, group, settingsFor(a), a.at, { wall });
     changeObjects(next);
     const added = next.slice(-1)[0];
