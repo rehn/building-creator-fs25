@@ -735,12 +735,10 @@ test("interior: turning rooms or curtains off removes them", () => {
 });
 
 /* ---------- Interior: choices per window ---------- */
-test("sanitize: curtain style defaults, falls back, and reads old saves", () => {
+test("sanitize: curtain style defaults and falls back", () => {
   assert.equal(sanitize({}).curtainStyle, "sides");
   assert.equal(sanitize({ curtainStyle: "lace" }).curtainStyle, "sides");
   assert.equal(sanitize({ curtainStyle: "cafe" }).curtainStyle, "cafe");
-  assert.equal(sanitize({ curtains: false }).curtainStyle, "none", "old saves with curtains off");
-  assert.equal("curtains" in sanitize({ curtains: false }), false);
   for (const s of CURTAIN_STYLES) assert.equal(sanitize({ curtainStyle: s }).curtainStyle, s);
 });
 

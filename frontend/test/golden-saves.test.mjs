@@ -22,7 +22,6 @@ const SAVES = {
   "house, wings, flat roof": {width: 12, depth: 8, roofType: "flat", wings: [wing({pos: 0.3})]},
   "house, wing with its own floor height and pitch": {width: 14, depth: 8, floors: 2, wings: [wing({floors: 1, floorHeight: 3.4, pitch: 25})]},
   "house, hip roof": {width: 12, depth: 9, roofType: "hip"},
-  "old save: one wing in the old settings": {wing: true, wingWall: "left", wingPos: 0.4, wingWidth: 5, wingDepth: 4},
   "old save: the main door in the old settings": {doorWall: "left", doorPos: -0.5, doorW: 1.6, doorH: 2.2, entrance: "gable"},
   "barn, with a ceiling and the inside like the outside": {kind: "cow", ceiling: true, insideSame: true},
   "hen house with wings": {kind: "chicken", wings: [wing({pos: 0.2, width: 3, depth: 3})]},

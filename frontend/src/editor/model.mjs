@@ -22,7 +22,6 @@ export { henYard, henCap, HENS_PER_M2, MAX_HENS } from "./kinds/chicken.mjs";
 export const DEFAULTS = {
   kind:"house",
   width:10, depth:7, floors:2, floorHeight:2.7, floor2Height:0, floor3Height:0, foundation:0.4, groundUnder:"auto", halfStorey:false, ceiling:true, insideSame:false, insidePanel:"painted", studSpacing:0.6, studWidth:0.045, studIrregular:0, kneeWall:0.9,
-  wing:false, wingWall:"back", wingPos:0.15, wingWidth:6, wingDepth:5,
   roofType:"gable", roofTilt:0, tiltHigh:"front", ridge:"width", roofPitch:38, overhang:0.5, chimney:true,
   winFront:2, winBack:3, winLeft:1, winRight:1, winW:1.0, winH:1.25, sill:0.85, winStyle:"casement",
   doorStyle:"panel",
@@ -181,7 +180,7 @@ export const WING_FIELDS = [
   {k:"depth", label:"Length, out from the wall", min:2, max:50, step:0.1, unit:" m"}];
 /**
  * The wings, cleaned: up to MAX_WINGS, each with a number 1..MAX_WINGS (its walls' names, kept as saved) and its
- * settings in range. A save from when a house had one wing (wing, wingWall ...) makes wing 1.
+ * settings in range.
  */
 /** The dividers of a save: up to MAX_SPLITS, each [2 m, 2 m from the far end] along the ridge, kept in order along the building (ids kept where they are fine, else the lowest free). None under a hip roof. */
 function cleanSplits(obj, out) {
@@ -350,7 +349,7 @@ export function addSplit(P) {
   return P.roofType === "hip" ? null : nextSplit(P.splits || [], P.ridge === "width" ? P.width : P.depth);
 }
 function cleanWings(obj) {
-  const list = Array.isArray(obj.wings) ? obj.wings : obj.wing === true ? [{id: 1, wall: obj.wingWall, pos: obj.wingPos, width: obj.wingWidth, depth: obj.wingDepth}] : [];
+  const list = Array.isArray(obj.wings) ? obj.wings : [];
   const used = new Set(), out = [];
   for (const w of list.filter(x => x && typeof x === "object").slice(0, MAX_WINGS)) {
     // a part stands on a wall of the house or of a part before it in the list (its parent); one whose parent is missing goes too
@@ -682,13 +681,13 @@ export const PORCH_W = [1.2, 5, 2.2], PORCH_D = [0.6, 3, 1.6];
 const cleanPorch = (type, w, d) => ({porch: PORCH_TYPES.includes(type) ? type : "none", porchW: clampN(w, PORCH_W[0], PORCH_W[1], PORCH_W[2]), porchD: clampN(d, PORCH_D[0], PORCH_D[1], PORCH_D[2])});
 /**
  * The window list, cleaned. Doors stand on the ground floor, can be taller than windows and have a
- * porch or canopy. legacy: the building's entrance settings of when one door was the main one.
+ * porch or canopy.
  */
-function cleanWindows(arr, legacy = {}) {
+function cleanWindows(arr) {
   return arr.filter(w => w && (WALLS.includes(w.wall) || WING_WALLS.includes(w.wall) || SPLIT_WALLS.includes(w.wall) || WING_SPLIT_WALLS.includes(w.wall))).slice(0, 80).map((w, i) => {
     const k = openingKind(w), door = k.type === "door";
     const porch = !door ? {} : w.porch !== undefined ? cleanPorch(w.porch, w.porchW, w.porchD)
-      : cleanPorch(w.main ? legacy.entrance : "none", legacy.entranceWidth, legacy.entranceDepth);
+      : cleanPorch("none");
     return {
       id: i + 1, wall: w.wall, floor: Math.round(clampN(w.floor, 0, 2, 0)), pos: clampN(w.pos, 0, 1, 0.5),
       w: clampN(w.w, 0.3, door ? 20 : 3, 1), h: clampN(w.h, 0.3, door ? 12 : 2.4, 1.25), sill: clampN(w.sill, 0, 6, 0.85),
@@ -782,17 +781,14 @@ export function sanitize(obj) {
   }
   // (a height below 2.3 m on an upper floor means "as the ground floor")
   for (const k of ["floor2Height", "floor3Height"]) if (!(out[k] >= 2.3)) out[k] = 0;
-  // Saves from before curtain styles had a curtains on/off switch.
-  if (obj.curtainStyle === undefined && obj.curtains === false) out.curtainStyle = "none";
   // the windows and doors: a building always has a door (a save or preset without one gets it from
   // its old door settings)
-  // the wings (houses only: a barn's inside is one room); a save from when a house had one wing names its walls wingEnd ...
+  // the wings (houses only: a barn's inside is one room)
   out.wings = kind.hides.includes("Wings") ? [] : cleanWings(obj);
   out.splits = cleanSplits(obj, out);
-  const walls = wallsOf(out), oldWing = {wingEnd: "End", wingLeft: "Left", wingRight: "Right"};
-  const src = Array.isArray(obj.windows) ? obj.windows.map(w => w && oldWing[w.wall] ? {...w, wall: wingWallKey(1, oldWing[w.wall])} : w) : obj.windows;
+  const walls = wallsOf(out), src = obj.windows;
   // (a door on a wing only counts while there is one)
-  let ws = Array.isArray(src) ? cleanWindows(src, obj) : [];
+  let ws = Array.isArray(src) ? cleanWindows(src) : [];
   // (the windows and doors of a part that is gone go with it; a part that is only left out for now keeps them)
   { const ids = new Set(out.wings.map(w => w.id)); ws = ws.filter(w => !wingIdOf(w.wall) || ids.has(wingIdOf(w.wall))); }
   { const keys = new Set([...out.splits.map(s => splitKey(s.id)), ...out.wings.flatMap(g => g.splits.map(s => wingSplitKey(g.id, s.id)))]); ws = ws.filter(w => !(SPLIT_WALLS.includes(w.wall) || WING_SPLIT_WALLS.includes(w.wall)) || keys.has(w.wall)); }

@@ -1390,65 +1390,6 @@
   "i3dBytes": true,
   "xml": true
  },
- "old save: one wing in the old settings": {
-  "parts": [
-   {
-    "id": 1,
-    "type": "gable",
-    "wall": "left",
-    "floors": 2,
-    "H": 5.4,
-    "rect": [
-     -9,
-     -5,
-     -3.2,
-     1.8
-    ]
-   }
-  ],
-  "windows": 22,
-  "doors": 1,
-  "hidden": 0,
-  "ops": {
-   "front": 5,
-   "back": 6,
-   "right": 2,
-   "left": 3,
-   "w1End": 0,
-   "w1Left": 0,
-   "w1Right": 0
-  },
-  "triangles": {
-   "walls": 282,
-   "trim": 1650,
-   "roof": 220,
-   "glass": 68,
-   "door": 220,
-   "foundation": 48,
-   "chimney": 24,
-   "gutter": 5544,
-   "iron": 40,
-   "interior": 70,
-   "curtain": 1122,
-   "fittings": 2668
-  },
-  "box": [
-   [
-    -9.51,
-    5.52
-   ],
-   [
-    0,
-    9.33
-   ],
-   [
-    -4.12,
-    5.38
-   ]
-  ],
-  "i3dBytes": true,
-  "xml": true
- },
  "old save: the main door in the old settings": {
   "parts": [],
   "windows": 22,

@@ -24,13 +24,6 @@ test("wings: none by default, a list kept and clamped", () => {
   assert.equal(wingIdOf("front"), 0);
 });
 
-test("wings: a save from when a house had one wing becomes wing 1, its windows moved onto it", () => {
-  const p = sanitize({wing: true, wingWall: "left", wingPos: 0.4, wingWidth: 5, wingDepth: 4,
-    windows: [{wall: "wingEnd", floor: 0, pos: 0.5, w: 1, h: 1.2, sill: 0.9}, {wall: "wingLeft", floor: 0, pos: 0.5, w: 1, h: 1.2, sill: 0.9}, {wall: "front", floor: 0, pos: 0.5, w: 1, h: 2.1, type: "door"}]});
-  assert.deepEqual(p.wings.map(w => [w.id, w.wall, w.pos, w.width, w.depth]), [[1, "left", 0.4, 5, 4]]);
-  assert.deepEqual(p.windows.map(w => w.wall).sort(), ["front", "w1End", "w1Left"]);
-});
-
 test("wings: on a long side a valley, no wider than the house is deep; on a gable end an annex", () => {
   const p = house({width: 12, depth: 8, wings: [{...W1, width: 20}]}), w = wingsOf(p)[0];
   assert.equal(w.type, "valley");
