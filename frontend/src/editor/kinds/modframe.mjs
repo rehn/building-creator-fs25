@@ -5,7 +5,7 @@
 // Not tried in the game: that the game takes a chicken barn whose buildings are several, and a fence round them all.
 import shed from "./shed.mjs";
 import { henScene, HEN_PLACEABLE, MAX_HENS } from "./chicken.mjs";
-import { palletLines, cornerStripes, teleportFor, ccwFence, navContourNodes } from "./pasture.mjs";
+import { palletLines, cornerStripes, teleportFor, ccwFence, navContourNodes, buildingOutline } from "./pasture.mjs";
 import { insideNav } from "./modinside.mjs";
 import { KEEP } from "../walkarea.mjs";
 import { objectOf, boxOf, iconOf, pastureOf } from "../objects.mjs";
@@ -17,6 +17,25 @@ export const HEN_TYPES = ["food", "loading", "pallets", "info", "pasture"];
 const PASTURE = {minWidth: 12, depth: [6, 40]};
 const hasYard = p => !!objectOf(p, "food") && !!objectOf(p, "pasture");
 export const hensOf = p => Math.max(1, Math.min(MAX_HENS, Math.round(p.hens)));
+
+/** How far outside the walls the grass is cleared round the building at the fence (the cow barn has 50 cm). */
+export const CLEAR_MARGIN = 0.5;
+/** The distance from a point to a rectangle {x0, x1, z0, z1} (0 inside it). */
+const distTo = (r, x, z) => Math.hypot(Math.max(r.x0 - x, 0, x - r.x1), Math.max(r.z0 - z, 0, z - r.z1));
+/** The polygon [[x, z] ...] to clear the grass in: the outline of the real footprint of the building nearest the fence (host.postFeet: [{kind, rects}] in the frame's coordinates), grown CLEAR_MARGIN; [] when there is none. */
+function clearOf(host, fence) {
+  const along = [];   // (points along the fence, every 50 cm)
+  for (let i = 0; i + 1 < fence.length; i++) {
+    const [ax, , az] = fence[i], [bx, , bz] = fence[i + 1], k = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 0.5));
+    for (let s = 0; s <= k; s++) along.push([ax + (bx - ax) * s / k, az + (bz - az) * s / k]);
+  }
+  let best = null;
+  for (const b of ((host && host.postFeet) || []).filter(q => q.kind === "building" && q.rects.length)) {
+    const d = Math.min(...b.rects.flatMap(r => along.map(([x, z]) => distTo(r, x, z))));
+    if (!best || d < best.d) best = {d, rects: b.rects};
+  }
+  return best ? buildingOutline(best.rects, CLEAR_MARGIN) : [];
+}
 
 const rectOf = b => ({x0: b.center[0] - b.size[0] / 2, x1: b.center[0] + b.size[0] / 2, z0: b.center[2] - b.size[2] / 2, z1: b.center[2] + b.size[2] / 2});
 
@@ -35,6 +54,7 @@ function yardOf(p, geo, host) {
   }
   return {
     nav,
+    clear: clearOf(host, fence),
     fence,
     food: {...food, marker: iconOf(o("food"))},
     pallet: {lines: palletLines(pallets), trigger: pallets, stripes: cornerStripes(rectOf(pallets))},
