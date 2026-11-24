@@ -119,3 +119,28 @@ test("the number of hens is kept in the mod's data, between 1 and the barn's mos
   assert.equal(hensOfData({hens: 99999}), 360);
   assert.equal(hensOfData({hens: "x"}), 30);
 });
+
+// ---- the fence starts on the side the door faces ----
+import { entranceWall } from "../src/lib/modObjects.mjs";
+
+const centre = pts => [pts.reduce((s, q) => s + q[0], 0) / pts.length, pts.reduce((s, q) => s + q[1], 0) / pts.length];
+
+test("the entrance wall is the side of the mod the first building's ground floor door faces, turned with the building", () => {
+  const b = (doorWall, rot = 0) => ({kind: "building", x: 0, z: 0, rot, data: {kind: "house", width: 10, depth: 8, doorWall}});
+  assert.equal(entranceWall([b("front")]), "front");
+  assert.equal(entranceWall([b("back")]), "back");
+  assert.equal(entranceWall([b("left")]), "left");
+  assert.equal(entranceWall([b("front", 90)]), "right", "turned a quarter, the front faces +x (three.js turns x' = x cos + z sin)");
+  assert.equal(entranceWall([b("front", 180)]), "back");
+  assert.equal(entranceWall([{kind: "prop", rot: 0, data: {}}, b("left")]), "left", "a prop has no door");
+  assert.equal(entranceWall([]), "back", "nothing to go by: the back, as before");
+});
+
+test("a hen yard goes on the wall asked for: its fence stands out on that side of the mod, not on the opposite one", () => {
+  const p = settingsFor({width: 30, depth: 12}), mid = [0, 0];
+  for (const [wall, axis, sign] of [["front", 1, 1], ["back", 1, -1], ["right", 0, 1], ["left", 0, -1]]) {
+    const objects = addGroup([], "hens", p, mid, {wall}), f = objects.find(o => o.type === "pasture");
+    assert.equal(f.wall, wall);
+    assert.ok(sign * centre(f.points)[axis] > 0, `${wall}: the fence is on its side ${JSON.stringify(f.points)}`);
+  }
+});

@@ -19,7 +19,7 @@ import { makeModPackage } from "@/editor/modExport.mjs";
 import { confirmDialog, promptDialog } from "@/components/dialog.mjs";
 import { RangeField } from "@/components/RangeField";
 import { addPost, removePost, setPostType, placePost, choices, payload } from "@/lib/mods.mjs";
-import { groupsFree, addGroup, removeGroup, setObjectOf, settingsFor, objectsOfData, setPoint, addPoint, removePoint, hensOfData, groupOf, MIN_POSTS } from "@/lib/modObjects.mjs";
+import { groupsFree, addGroup, removeGroup, setObjectOf, settingsFor, objectsOfData, setPoint, addPoint, removePoint, hensOfData, groupOf, entranceWall, MIN_POSTS } from "@/lib/modObjects.mjs";
 
 type Kind = { id: string; name: string };
 type Groups = ReturnType<typeof projectGroups>;
@@ -227,7 +227,9 @@ export default function ModPage() {
     return { width: maxX - minX, depth: maxZ - minZ, foundation, at: [(minX + maxX) / 2, (minZ + maxZ) / 2] as [number, number] };
   }
   function addObjects(group: string) {
-    const a = around(), next: ModObject[] = addGroup(objects, group, settingsFor(a), a.at);
+    // (a hen yard's fence starts on the side the first building's door faces)
+    const a = around(), wall = entranceWall(draft.map(p => ({ kind: p.kind, rot: p.rot, data: datas.current.get(p.ref) })));
+    const next: ModObject[] = addGroup(objects, group, settingsFor(a), a.at, { wall });
     changeObjects(next);
     const added = next.slice(-1)[0];
     if (added) setSel({ kind: "object", object: added.id });
