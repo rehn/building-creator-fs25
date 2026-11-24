@@ -90,9 +90,9 @@ const box = r => ({center: [(r.x0 + r.x1) / 2, 1, (r.z0 + r.z1) / 2], size: [r.x
  * The walls round the building (every part, with the passages between parts open) as thin blocker boxes, with a gap at each entrance: the game cuts these out of
  * the ground the animals walk on, so they can't go through a wall, in or out. Each box covers the wall (its thickness and a little more inside).
  */
-function wallSlabs(p, entrances) {
+export function wallSlabs(p, entrances, ops = openings(p)) {
   const out = [], frames = wallsOf(p), t = WALL_T + 0.1, inward = 0.05;
-  for (const w of roomOf(p, openings(p)).walls) {
+  for (const w of roomOf(p, ops).walls) {
     const horizontal = w.z0 === w.z1, lo = horizontal ? Math.min(w.x0, w.x1) : Math.min(w.z0, w.z1), hi = horizontal ? Math.max(w.x0, w.x1) : Math.max(w.z0, w.z1);
     let parts = [[lo - WALL_T, hi + WALL_T]];
     for (const e of entrances.filter(q => q.wall === w.name)) {

@@ -1157,5 +1157,7 @@
   "{d} m to the next post": "{d} m till nästa stolpe",
   "Post {n}": "Stolpe {n}",
   "Post {n} (start)": "Stolpe {n} (start)",
-  "Post {n} (stop)": "Stolpe {n} (stopp)"
+  "Post {n} (stop)": "Stolpe {n} (stopp)",
+  "The hens walk inside this building": "Hönsen går inne i den här byggnaden",
+  "Gives the building a floor the hens can walk on, and a ramp through each open framed doorway (door style Open doorway, framed) that faces the fence, as in the game's own hen barns. One building in a mod. The doorway has to be on the side of the fence.": "Ger byggnaden ett golv som hönsen kan gå på, och en ramp genom varje öppen inramad dörröppning (dörrstil Öppen dörröppning, inramad) som vetter mot stängslet, som i spelets egna hönshus. En byggnad i en mod. Dörröppningen måste ligga åt stängslets sida."
 }

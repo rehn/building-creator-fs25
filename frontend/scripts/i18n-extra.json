@@ -95,5 +95,7 @@
   "{d} m to the next post",
   "Post {n}",
   "Post {n} (start)",
-  "Post {n} (stop)"
+  "Post {n} (stop)",
+  "The hens walk inside this building",
+  "Gives the building a floor the hens can walk on, and a ramp through each open framed doorway (door style Open doorway, framed) that faces the fence, as in the game's own hen barns. One building in a mod. The doorway has to be on the side of the fence."
 ]
