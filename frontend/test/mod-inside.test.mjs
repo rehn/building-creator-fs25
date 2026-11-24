@@ -126,3 +126,24 @@ test("the end posts are stood 15 cm off the carport corners both with the hens w
   assert.ok(inn.ends.every(d => d > 0.14), `15 cm off with the hens inside: ${inn.ends}`);
   assert.ok(out.ends.every(d => d > 0.14), `15 cm off: ${out.ends}`);
 });
+
+// ---- the ramp and the floor meet (seen in the game: the hens could not go between outside and inside; the floor cells ended 10 cm short of the ramp) ----
+test("the ramp and the floor always meet: the floor covers the ramp inner edge, whatever the size and the foundation of the building (the 20 cm cells of the floor do not line up with the wall)", () => {
+  const covered = (rects, [x, z]) => rects.some(r => x >= r.x0 - 1e-6 && x <= r.x1 + 1e-6 && z >= r.z0 - 1e-6 && z <= r.z1 + 1e-6);
+  let tried = 0;
+  for (const variant of ["hole door in the back wall", "carport, open front"]) for (const foundation of [0, 0.2]) {
+    for (let w = 6; w <= 16; w += 0.7) for (let d = 5; d <= 10; d += 0.55) for (const x of [20, 20.13]) {
+      const front = variant.startsWith("carport");
+      const q = sanitize(front ? {kind: "shed", width: +w.toFixed(2), depth: +d.toFixed(2), foundation, openFront: true, doorWall: "back"} : {kind: "house", width: +w.toFixed(2), depth: +d.toFixed(2), foundation, doorWall: "back", doorStyle: "hole"});
+      const feet = {x0: x - w / 2, x1: x + w / 2, z0: 10 - d / 2, z1: 10 + d / 2}, g = 0.15, far = front ? feet.z1 + 12 : feet.z0 - 12, near = front ? feet.z1 + g : feet.z0 - g;
+      const contour = [[feet.x0 - g, near], [feet.x0 - g, far], [feet.x1 + g, far], [feet.x1 + g, near]].map(([p, o]) => [p, 0, o]);
+      const r = insideNav({settings: q, place: {x, z: 10, y: 0, rot: 0}, contour, blockers: [rectBlock(feet)]});
+      if (!r.nav) continue;
+      tried++;
+      const floor = r.nav.rects.filter(f => f.inside), [, , c, dd] = r.nav.ramps[0].points, mid = [(c[0] + dd[0]) / 2, (c[1] + dd[1]) / 2];
+      assert.ok(covered(floor, mid), variant + " " + foundation + ": " + w + " x " + d + " at " + x + ": the floor does not reach the inner edge of the ramp " + mid.map(v => v.toFixed(3)));
+      for (const k of [0.25, 0.75]) assert.ok(covered(floor, [c[0] + (dd[0] - c[0]) * k, mid[1]]), variant + ": " + w + " x " + d + ": a quarter along the inner edge");
+    }
+  }
+  assert.ok(tried > 150, "many sizes were tried: " + tried);
+});
