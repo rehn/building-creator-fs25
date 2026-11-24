@@ -2,7 +2,7 @@
 // ground (it snaps to the grid and to the edges of the others), drag a game object the same way (on the grid), Alt held switches snapping off, drag the ground to turn the view,
 // right-drag or Shift+drag to pan, scroll to zoom. three.js only; what to draw and how to snap come from modPlan.mjs, and the page keeps the posts and the objects (this view only draws them).
 import * as THREE from "three";
-import { snapPost, snapFencePost, feetOf, mapKey } from "./modPlan.mjs";
+import { snapPost, snapFencePost, feetOf, stretchCuts, mapKey } from "./modPlan.mjs";
 
 const ACCENT = 0xd4553f;
 /** The colour of a game object's box by its type (a type not listed gets the last one). */
@@ -15,7 +15,7 @@ const GRID = 0.25;
  * place changes), setMap(key, picture) gives the groups drawn with the map called key (modPlan.mjs mapKey) their picture {width, height, rgba} (they are drawn in their colour until it comes), showObjects(list) the mod's game objects (boxes {id, type, x, z, y (the height above the ground, may be missing), w, d, h} in the mod's coordinates) and select(postId, objectId) marks a building or prop
  * or a game object. onSelect(postId | null, objectId | null) is told what was pressed on (both null: the ground), onMove(id, {x, z}) while a post is dragged and onDrop(id, {x, z}) when it
  * is let go where it was moved to, and onObjectMove(objectId, {x, z}) and onObjectDrop(objectId, {x, z}) the same for a game object, onPointMove(objectId, i, {x, z}) and onPointDrop(objectId, i, {x, z}) for post i of a fence (an object
- * with points [[x, z] ...] and no box: drawn as a line round the posts, each post a thin pole to press on), onPointSelect(objectId, i) when a pole is pressed, and selectPoint(i) marks post i of the chosen fence (its pole is
+ * with points [[x, z] ...] and no box (a stretch the game would cut short and leave a hole in, modPlan.mjs stretchCuts, is drawn as an orange strip while it is dragged): drawn as a line round the posts, each post a thin pole to press on), onPointSelect(objectId, i) when a pole is pressed, and selectPoint(i) marks post i of the chosen fence (its pole is
  * bigger and in the accent colour, so it is clear which post the properties are about). A fence is drawn as the cow pasture's is: the first post green (where it starts), the last red (where it stops), and a pale dot
  * between each two posts that is pressed and dragged out to a new post (onPointInsert(objectId, i, at): after post i). dispose() frees everything.
  * @param {HTMLCanvasElement} canvas
@@ -126,6 +126,13 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
     const line = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts.map(([x, z]) => new THREE.Vector3(x, 0.08, z))), new THREE.LineBasicMaterial({color}));
     g.userData.edge = line;
     g.add(line);
+    // the stretches the game would cut short (a hole before the next post): an orange strip over each, worked out from the buildings as they stand now
+    for (const {i} of pts.length > 1 ? stretchCuts(pts, feetOf([...objs.values()].map(o => o.post))) : []) {
+      const [ax, az] = pts[i], [bx, bz] = pts[i + 1], len = Math.hypot(bx - ax, bz - az);
+      const strip = new THREE.Mesh(new THREE.BoxGeometry(len, 0.06, 0.4), new THREE.MeshBasicMaterial({color: 0xf08a1c, transparent: true, opacity: 0.85}));
+      strip.position.set((ax + bx) / 2, 0.1, (az + bz) / 2); strip.rotation.y = -Math.atan2(bz - az, bx - ax);
+      g.add(strip);
+    }
     pts.forEach(([x, z], i) => {
       const base = i === 0 ? 0x2e9e4a : i === pts.length - 1 ? 0xd03030 : color;   // (where the fence starts and where it stops)
       const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 1.4, 8), new THREE.MeshBasicMaterial({color: base}));
@@ -195,6 +202,7 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
       o.post = p;
     }
     if (!fitted && objs.size) { fit(); fitted = true; }
+    if (thingList.some(q => Array.isArray(q.points))) showObjects(thingList);   // (the fence's orange strips depend on where the buildings stand)
     redraw();
   }
   /** @param {string | null} postId @param {number | null} [objectId] */

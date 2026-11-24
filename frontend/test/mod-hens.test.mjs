@@ -367,3 +367,18 @@ test("posts on a wall line only slide along it: the free corner takes the fittin
   for (const i of [0, 1, 4, 5]) assert.equal(out[i][1], 4.65, `post ${i + 1} stays on the wall line`);
   out.forEach((q, i) => assert.ok(Math.hypot(q[0] - pts[i][0], q[1] - pts[i][1]) < 1.3, `post ${i + 1} moved ${Math.hypot(q[0] - pts[i][0], q[1] - pts[i][1]).toFixed(2)}`));
 });
+
+// ---- the editor tells which stretches the game would cut (a hole) ----
+import { stretchCuts } from "../src/editor/modPlan.mjs";
+
+test("the stretches the game would cut, as it gets them (the posts at the building stood 15 cm off): where, how long, how much it cuts, and the whole length the mod is made with", () => {
+  const house = [{x0: -7.5, x1: 7.5, z0: -4.5, z1: 4.5}];
+  const fence = [[7.35, 4.5], [11.5, 4.5], [11.5, 14.75], [-13.25, 13.75], [-13.25, 4.5], [-7.35, 4.5]];   // the fence of hentest_fencechanged, as the player put it
+  const cuts = stretchCuts(fence, house);
+  assert.deepEqual(cuts.map(c => c.i), [2, 3], "post 3 to 4 and post 4 to 5");
+  assert.ok(Math.abs(cuts[0].length - 24.77) < 0.01 && Math.abs(cuts[0].cut - 0.17) < 0.01, JSON.stringify(cuts[0]));
+  assert.ok(Math.abs(cuts[1].length - 9.1) < 0.01 && Math.abs(cuts[1].cut - 0.5) < 0.01, JSON.stringify(cuts[1]));
+  assert.ok(cuts.every(c => fits(c.to)), "the length it is made with is whole");
+  assert.deepEqual(stretchCuts([[0, 0], [9.6, 0], [9.6, 14.5], [-4, 14.5]], house), [], "a whole fence has none");
+  assert.deepEqual(stretchCuts([], house), []);
+});
