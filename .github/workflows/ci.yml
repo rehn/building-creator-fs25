@@ -10,8 +10,8 @@ on:
 permissions:
   contents: read
 
-# Tests (backend, chart, frontend) run only when a release is made (a tag vX.Y.Z). A pull request only gets the Docker build check and a push to
-# main runs nothing (there is no edge image: only releases are used). Run the tests locally before a release (see CLAUDE.md "How we work").
+# Tests (backend, chart, frontend) run on every pull request to main and when a release is made (a tag vX.Y.Z); a pull request is merged when they pass
+# (Lars, 2026-11-24). A push to main runs nothing (there is no edge image: only releases are used); the images, chart and release are made on a tag only.
 
 # A new push to the same pull request stops the older run. Branch and tag runs always finish (they publish).
 concurrency:
@@ -21,7 +21,6 @@ concurrency:
 jobs:
   backend:
     name: Backend tests
-    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -59,7 +58,6 @@ jobs:
 
   chart:
     name: Helm chart
-    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -71,7 +69,6 @@ jobs:
 
   frontend:
     name: Frontend tests and build
-    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     defaults:
       run:
