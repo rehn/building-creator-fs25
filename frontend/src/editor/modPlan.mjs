@@ -1,39 +1,15 @@
 // The mod's 3D plan (docs/PLAN_MOD.md step 3): what the view (modView.mjs) needs from a building or a prop, and how a post is placed beside the others.
 // Pure functions, no DOM and no three.js, so they are tested in node (test/mod-plan.test.mjs).
 //
-// A group is {name, color: [r, g, b] (0 to 1), alpha, positions}: the triangles of one material as a flat list of numbers (three corners of three
-// numbers each, metres, y up). A post's place is its origin (x, z) and its turn (rot, degrees about y, as three.js turns: x' = x cos + z sin,
-// z' = -x sin + z cos); the building's own origin is the middle of its footprint, a prop's the origin of its model.
-import { sanitize, buildObj } from "./model.mjs";
-import { sanitize as sanitizeProp, placedMesh } from "../builder/model.mjs";
+// A group is {name, color: [r, g, b] (0 to 1), alpha, rough, metal, positions, uvs | null, colors | null, map | null}: the triangles of one material as a flat list of numbers (three corners
+// of three numbers each, metres, y up) with the uvs of the corners (in repeats), and the picture it is drawn with, if it has one: map {spec, hex} (a surface texture the building's settings
+// give it, made by proceduralPicture) or {textureId} (one of the user's textures, read from the server by the page). A post's place is its origin (x, z) and its turn (rot, degrees about
+// y, as three.js turns: x' = x cos + z sin, z' = -x sin + z cos); the building's own origin is the middle of its footprint, a prop's the origin of its model.
+import { buildLook, sanitize } from "./model.mjs";
+import { sanitize as sanitizeProp, placedMesh, partUv, faceOfTriangle, faceMaterial, faceColor } from "../builder/model.mjs";
+import { baseFor, compose } from "./textures.mjs";
 
 const hexColor = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
-
-/** The groups of an .obj text (buildObj's: one group and material per part, faces v/vt/vn) with the colours and see-through of its .mtl. */
-export function parseObj(obj, mtl) {
-  const mats = {};
-  let cur = null;
-  for (const line of mtl.split("\n")) {
-    const w = line.trim().split(/\s+/);
-    if (w[0] === "newmtl") cur = mats[w[1]] = {color: [0.7, 0.7, 0.7], alpha: 1};
-    else if (cur && w[0] === "Kd") cur.color = w.slice(1, 4).map(Number);
-    else if (cur && w[0] === "d") cur.alpha = Number(w[1]);
-  }
-  const verts = [], groups = new Map();
-  let group = null;
-  for (const line of obj.split("\n")) {
-    const w = line.trim().split(/\s+/);
-    if (w[0] === "v") verts.push([Number(w[1]), Number(w[2]), Number(w[3])]);
-    else if (w[0] === "usemtl") {
-      if (!groups.has(w[1])) groups.set(w[1], {name: w[1], color: (mats[w[1]] || {color: [0.7, 0.7, 0.7]}).color, alpha: (mats[w[1]] || {alpha: 1}).alpha, positions: []});
-      group = groups.get(w[1]);
-    } else if (w[0] === "f" && group) {
-      const c = w.slice(1).map(t => verts[parseInt(t, 10) - 1]);
-      for (let k = 1; k + 1 < c.length; k++) for (const v of [c[0], c[k], c[k + 1]]) group.positions.push(...v);
-    }
-  }
-  return [...groups.values()].filter(g => g.positions.length);
-}
 
 /** The box round the groups: {min: [x, y, z], max: [x, y, z]} (a box of nothing at the origin when there are none). */
 export function boundsOf(groups) {
@@ -44,20 +20,40 @@ export function boundsOf(groups) {
   return min[0] === Infinity ? {min: [0, 0, 0], max: [0, 0, 0]} : {min, max};
 }
 
-/** The groups of a saved project's data: a prop's parts (one group for each colour; a part's collision shape is a node of its own in the i3d, not drawn here) or a building as buildObj draws it. */
+/** The groups of a saved project's data: a building as the editor draws it (buildLook), or a prop's parts with the material each face has. */
 export function projectGroups(data) {
-  if (data && data.kind === "prop") {
-    const m = sanitizeProp(data), byColor = new Map();
-    for (const part of m.parts) {
-      const g = placedMesh(part), hex = /^#[0-9a-f]{6}$/i.test(part.color) ? part.color.toLowerCase() : "#9aa3a8";
-      if (!byColor.has(hex)) byColor.set(hex, {name: hex, color: hexColor(hex), alpha: 1, positions: []});
-      const out = byColor.get(hex).positions;
-      for (const i of g.i) out.push(g.p[i * 3] + part.x, g.p[i * 3 + 1] + part.y, g.p[i * 3 + 2] + part.z);
+  if (data && data.kind === "prop") return propGroups(sanitizeProp(data));
+  return buildLook(sanitize(data || {}));
+}
+
+/** A prop's parts as groups: each face in its colour or with its texture (one group for each colour and for each texture). */
+function propGroups(model) {
+  const byKey = new Map();
+  for (const part of model.parts) {
+    const g = placedMesh(part), uv = partUv(model, part), face = faceOfTriangle(part);
+    for (let t = 0; t < face.length; t++) {
+      const row = faceMaterial(model, part, face[t]), tex = row && row.texture ? String(row.texture.id) : null;
+      const color = faceColor(model, part, face[t]), hex = /^#[0-9a-f]{6}$/i.test(color) ? color.toLowerCase() : "#9aa3a8";
+      const rough = 1 - (row ? row.smoothness : 0.3), metal = row ? row.metalness : 0, key = (tex ? "t:" + tex : hex) + "|" + rough + "|" + metal;
+      if (!byKey.has(key)) byKey.set(key, {name: tex || hex, color: tex ? [1, 1, 1] : hexColor(hex), alpha: 1, rough, metal, positions: [], uvs: [], colors: null, map: tex ? {textureId: tex} : null});
+      const out = byKey.get(key);
+      for (let c = 0; c < 3; c++) {
+        const i = g.i[t * 3 + c];
+        out.positions.push(g.p[i * 3] + part.x, g.p[i * 3 + 1] + part.y, g.p[i * 3 + 2] + part.z);
+        out.uvs.push(uv[i * 2], uv[i * 2 + 1]);
+      }
     }
-    return [...byColor.values()].filter(g => g.positions.length);
   }
-  const {obj, mtl} = buildObj(sanitize(data || {}));
-  return parseObj(obj, mtl);
+  return [...byKey.values()].filter(g => g.positions.length);
+}
+
+/** What a map is called (equal maps, equal keys). */
+export const mapKey = map => (map.textureId ? "t:" + map.textureId : "p:" + JSON.stringify(map.spec) + map.hex);
+
+/** The picture of a surface texture of a building (map.spec and map.hex) as {width, height, rgba} (the top row first). Heavy: what does not depend on the colour is kept (textures.mjs baseFor). */
+export function proceduralPicture(map) {
+  const b = baseFor(map.spec);
+  return {width: b.N, height: b.N, rgba: compose(b.S, map.hex, b.Mk, b.N)};
 }
 
 /** The box as it stands from above after a turn of rot degrees about its origin: {minX, maxX, minZ, maxZ}, relative to the post's place. */

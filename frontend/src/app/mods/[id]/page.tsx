@@ -13,7 +13,8 @@ import { t } from "@/i18n/index.mjs";
 import { KINDS, sanitize } from "@/editor/model.mjs";
 import { OBJECT_TYPES, OBJECT_LIMITS } from "@/editor/objects.mjs";
 import { createModView } from "@/editor/modView.mjs";
-import { projectGroups, boundsOf, footprint, turnedBy } from "@/editor/modPlan.mjs";
+import { projectGroups, boundsOf, footprint, turnedBy, mapKey, proceduralPicture } from "@/editor/modPlan.mjs";
+import { decodeDds } from "@/editor/dds.mjs";
 import { confirmDialog, promptDialog } from "@/components/dialog.mjs";
 import { RangeField } from "@/components/RangeField";
 import { addPost, removePost, setPostType, placePost, choices, payload } from "@/lib/mods.mjs";
@@ -53,6 +54,7 @@ export default function ModPage() {
   const modRef = useRef(mod);
   modRef.current = mod;
   const asked = useRef(new Set<string>());
+  const mapsAsked = useRef(new Set<string>());
 
   useEffect(() => {
     if (!user) return;
@@ -102,6 +104,31 @@ export default function ModPage() {
     view.current = v;
     return () => { v.dispose(); view.current = null; };
   }, []);   // eslint-disable-line react-hooks/exhaustive-deps
+  // the textures: drawn in their colours first, then each picture as it is made (a surface of a building) or read (one of the user's textures), one at a time
+  useEffect(() => {
+    const todo: { key: string; map: { spec?: unknown; hex?: string; textureId?: string } }[] = [];
+    for (const s of Object.values(shapes)) {
+      if (s === "error") continue;
+      for (const g of s.groups as { map: { spec?: unknown; hex?: string; textureId?: string } | null }[]) {
+        if (!g.map) continue;
+        const key = mapKey(g.map);
+        if (!mapsAsked.current.has(key)) { mapsAsked.current.add(key); todo.push({ key, map: g.map }); }
+      }
+    }
+    if (!todo.length) return;
+    let live = true;
+    (async () => {
+      for (const { key, map } of todo) {
+        if (!live) { mapsAsked.current.delete(key); continue; }
+        await new Promise(r => setTimeout(r, 30));   // (let the page draw between two heavy ones)
+        try {
+          if (map.textureId) { const d = decodeDds(new Uint8Array(await api.textureFile(map.textureId, "diffuse"))); view.current?.setMap(key, { width: d.width, height: d.height, rgba: d.data }); }
+          else view.current?.setMap(key, proceduralPicture(map));
+        } catch { /* the group stays in its colour */ }
+      }
+    })();
+    return () => { live = false; };
+  }, [shapes]);
   useEffect(() => {
     const posts = [];
     for (const p of draft) {

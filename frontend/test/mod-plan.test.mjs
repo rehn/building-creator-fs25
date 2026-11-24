@@ -2,21 +2,14 @@
 // placed beside the others. Pure functions: the three.js view itself (editor/modView.mjs) is not tested here.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseObj, boundsOf, projectGroups, footprint, snapPost, turnedBy } from "../src/editor/modPlan.mjs";
+import { boundsOf, projectGroups, footprint, snapPost, turnedBy, mapKey, proceduralPicture } from "../src/editor/modPlan.mjs";
 import { sanitize as sanitizeProp } from "../src/builder/model.mjs";
 import { sanitize } from "../src/editor/model.mjs";
 
-const OBJ = "g wall\nusemtl wall\nv 0 0 0\nv 4 0 0\nv 4 3 0\nv 0 3 0\nf 1/1/1 2/2/2 3/3/3\nf 1/1/1 3/3/3 4/4/4\ng roof\nusemtl roof\nv 0 3 0\nv 4 3 0\nv 2 5 2\nf 5/5/5 6/6/6 7/7/7\n";
-const MTL = "newmtl wall\nKd 1 0 0\nd 1\n\nnewmtl roof\nKd 0 0.5 0\nd 0.5\n";
-
-test("an obj becomes one group per material: its colour, its see-through and its triangles as plain numbers", () => {
-  const groups = parseObj(OBJ, MTL);
-  assert.deepEqual(groups.map(g => g.name), ["wall", "roof"]);
-  assert.deepEqual(groups[0].color, [1, 0, 0]);
-  assert.equal(groups[0].positions.length, 2 * 3 * 3, "two triangles of three corners with three numbers each");
-  assert.deepEqual(groups[0].positions.slice(0, 6), [0, 0, 0, 4, 0, 0]);
-  assert.equal(groups[1].alpha, 0.5);
+test("the box round some groups, and a box of nothing at the origin when there are none", () => {
+  const groups = [{positions: [0, 0, 0, 4, 0, 0, 4, 3, 0]}, {positions: [0, 3, 0, 4, 3, 0, 2, 5, 2]}];
   assert.deepEqual(boundsOf(groups), {min: [0, 0, 0], max: [4, 5, 2]});
+  assert.deepEqual(boundsOf([]), {min: [0, 0, 0], max: [0, 0, 0]});
 });
 
 test("a building's groups are as wide and deep as the building and stand on the ground", () => {
@@ -27,6 +20,29 @@ test("a building's groups are as wide and deep as the building and stand on the 
   assert.ok(Math.abs(b.min[1]) < 1 && b.max[1] > 3, "on the ground, and a roof");
 });
 
+test("a building is drawn with its textures: the uvs are there and the walls, the roof and the trim name the surface they have", () => {
+  const groups = projectGroups(sanitize({kind: "house", wallCladding: "vertical", roofMaterial: "tiles", wallColor: "#aa3322"}));
+  for (const g of groups) assert.ok(g.uvs === null || g.uvs.length === g.positions.length / 3 * 2, `${g.name}: a uv pair for each corner`);
+  const walls = groups.find(g => g.name === "walls"), roof = groups.find(g => g.name === "roof");
+  assert.equal(walls.map.spec.kind, "vertical");
+  assert.equal(walls.map.hex.length, 7, "the colour is a hex string (aged by the building's years)");
+  assert.equal(roof.map.spec.kind, "tiles");
+  assert.ok(groups.every(g => g.positions.length % 9 === 0), "whole triangles");
+  assert.ok(!groups.some(g => g.name === "interior"), "the room behind the glass is left out");
+  const glass = groups.find(g => g.name === "glass");
+  assert.ok(!glass || glass.alpha <= 1);
+});
+
+test("a map has a name that says what it is made of, and a picture is as big as its base", () => {
+  const one = {spec: {kind: "brick", w: 1, h: 0.6, age: 0}, hex: "#aa3322"};
+  assert.equal(mapKey(one), mapKey({...one}));
+  assert.notEqual(mapKey(one), mapKey({...one, hex: "#223344"}));
+  assert.equal(mapKey({textureId: "abc"}), "t:abc");
+  const pic = proceduralPicture(one);
+  assert.equal(pic.rgba.length, pic.width * pic.height * 4);
+  assert.ok(pic.width >= 64 && pic.width === pic.height);
+});
+
 test("a prop's groups are its parts where they stand, one group for each colour", () => {
   const prop = sanitizeProp({kind: "prop", parts: [{name: "a", shape: "box", x: 0, y: 0, z: 0, w: 2, h: 1, d: 1, color: "#ff0000"}, {name: "b", shape: "box", x: 3, y: 0, z: 0, w: 1, h: 1, d: 1, color: "#00ff00"}]});
   const groups = projectGroups(prop);
@@ -34,6 +50,7 @@ test("a prop's groups are its parts where they stand, one group for each colour"
   assert.ok(groups.every(g => g.positions.length > 0));
   const b = boundsOf(groups);
   assert.ok(b.max[0] - b.min[0] > 3.5, "the two parts side by side");
+  assert.ok(groups.every(g => g.uvs && g.uvs.length === g.positions.length / 3 * 2 && g.map === null), "a part with only a colour has no map");
 });
 
 test("the footprint is the box as it stands after turning, seen from above (three's turn about y: x' = x cos + z sin, z' = -x sin + z cos)", () => {

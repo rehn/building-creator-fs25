@@ -3179,6 +3179,36 @@ export function buildObj(p) {
 }
 
 /**
+ * The building as the mod's 3D view draws it (editor/modView.mjs): [{name, color: [r, g, b] (0 to 1), alpha, rough, metal, positions (triangles as plain numbers), uvs (in repeats, as the
+ * preview draws them), colors (a colour for each corner, or null), map: {spec, hex} | null}]. map says which surface texture the group is drawn with (surfaceSpec: textures.mjs makes the
+ * pixels when asked, in that colour); the room behind the glass is left out.
+ */
+export function buildLook(p) {
+  p = normalize(p);
+  const {G} = buildGeometry(p), out = [], hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
+  for (const m of matList(p)) {
+    const whole = G[m], slot = slotOf(m);
+    if (!whole || !whole.i.length || slot === "interior") continue;
+    const split = m === "curtain" || m === "fittings";
+    const uv = whole.uv && !split ? scaledUV(p, m, whole) : whole.uv;
+    const pieces = split ? splitByColor(whole).map(g => ({g, uv: g.uv})) : [{g: whole, uv}];
+    const surface = split ? null : surfaceSpec(p, m), hex = colorFor(p, m);
+    const rough = slot === "glass" ? 0.05 : slot === "gutter" || slot === "iron" ? 0.45 : split ? 0.95 : 0.85, metal = slot === "glass" ? 0.1 : slot === "gutter" || slot === "iron" ? 0.35 : 0;
+    for (const {g, uv: u} of pieces) {
+      const positions = [], uvs = [], colors = g.c ? [] : null;
+      for (const i of g.i) {
+        positions.push(g.p[i * 3], g.p[i * 3 + 1], g.p[i * 3 + 2]);
+        if (u) uvs.push(u[i * 2], u[i * 2 + 1]);
+        if (colors) colors.push(g.c[i * 3], g.c[i * 3 + 1], g.c[i * 3 + 2]);
+      }
+      out.push({name: m, color: g.color ? [...g.color] : hexRgb(hex), alpha: slot === "glass" && seeThroughGlass(p) ? GLASS_ALPHA : 1, rough, metal,
+        positions, uvs: u ? uvs : null, colors, map: surface ? {spec: surface, hex} : null});
+    }
+  }
+  return out;
+}
+
+/**
  * The placeable the building exports: what its kind says, with the objects every kind can have (a sleep point, a workshop) added. {type, fn, shop, note, modType}:
  * modType is a placeable type the mod's modDesc.xml must define for it, or null (kinds/gameobjects.mjs sharedPlaceable). mod: the mod's name, left out in the snippet.
  */
