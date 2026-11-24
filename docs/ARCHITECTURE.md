@@ -4,6 +4,12 @@ Moved here from CLAUDE.md (2026-11-24) so that CLAUDE.md stays short: this is wh
 Nothing was changed in the move. When you change an area, update its paragraph here. Search it by keyword (a kind, a setting, a file name) before working on that area.
 Sentences like "Not tried in-game" are as of when they were written. The plans are in docs/PLAN*.md.
 
+## The recipe fields (not old saves: do not remove)
+`sanitize` accepts a short "recipe" besides the full format, and expands it: window counts per wall (`winFront`, `winBack`, `winLeft`, `winRight` with `winW`, `winH`, `sill` -> `genAll` makes the window list), a main door
+(`doorWall`, `doorPos`, `doorW`, `doorH`, `entrance*` -> `legacyDoor`), the pasture (`pastureWall`, `fenceDepth`, `sleepPoint` -> `kind.objects.defaults`) and `downpipes` (-> `autoPipes`). They apply only where the full
+list is missing (`windows`, `objects`, `pipes`). The presets of every kind, the OSM generator (`osmVariety`), the photo guide (`applyAnswer`) and most tests are written this way, because it is short and readable. They are
+named "legacy" in a few places in model.mjs, but they are a second input format, not a migration. The real old-save migrations (one wing, `wingEnd`, `curtains: false`, a door's `main`) were removed 2026-11-24.
+
 ## Layout and how it works
 - backend/  Go 1.25 API, stdlib net/http + SQLite (modernc.org/sqlite, no cgo) by default,
   Postgres (pgx) when DATABASE_URL is set.
@@ -33,8 +39,8 @@ Sentences like "Not tried in-game" are as of when they were written. The plans a
   Same pitch/overhang as the house, own floors: a wing whose ridge reaches the house's eaves meets the slope in a
   valley (45 deg triangle cut by notch(); eave/gutter/dormers stop at WG.cut), a lower one ("eave") runs up to the
   wall under the eaves (width clamped to stay under their overhang), on a gable end an annex. model.mjs build():
-  WINGS = [{wing, WG, topW}], buildWingBody/Roof per wing, wing walls built with their own height. Old saves (wing,
-  wingWall ...; walls wingEnd...) migrate to wing 1 in sanitize. Windows under a wing are hidden (layoutWall cover).
+  WINGS = [{wing, WG, topW}], buildWingBody/Roof per wing, wing walls built with their own height. (Saves from when a house had one wing,
+  with settings wing/wingWall ... and walls wingEnd ..., no longer load as a wing: dropped 2026-11-24, as were curtains: false and a door's `main`.) Windows under a wing are hidden (layoutWall cover).
   Per wing also pitch (0 = the house's; the valley is b = k + |a| tanW/tanP) and half (1½-plan, own setting once floors != 0).
   Downpipes: p.pipes = [{id, wall, pos 0..1 along the wall}] on walls with a gutter (layout.mjs eaveWalls: a gable roof's two
   eave walls, all four under hip, each wing's sides); autoPipes(p) from the downpipes count when a save has none; skipped where
