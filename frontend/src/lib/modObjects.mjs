@@ -6,7 +6,7 @@ import { SHARED } from "../editor/kinds/gameobjects.mjs";
 import { SHARED_GROUPS, OBJECT_LIMITS, fencePoints, MAX_FENCE_POINTS } from "../editor/objects.mjs";
 import { HEN_TYPES } from "../editor/kinds/modframe.mjs";
 import { MAX_HENS } from "../editor/kinds/chicken.mjs";
-import { postsInside } from "../editor/modPlan.mjs";
+import { postsInside, edgesThrough } from "../editor/modPlan.mjs";
 import { wallsOf } from "../editor/layout.mjs";
 import { sanitize } from "../editor/model.mjs";
 
@@ -123,15 +123,23 @@ export const hensOfData = data => {
 export const objectsOfData = data => (data && Array.isArray(data.objects) ? data.objects.filter(o => o && typeof o.type === "string" && Number.isFinite(+o.id)) : []);
 
 /**
- * The fences of the mod with posts inside a building or prop (rects: what they stand on, modPlan.mjs feetOf): Map fence id -> the posts that are inside (0-based). The game cannot
- * make the animals' area then ("Could not shrink polygon"), so the page marks the fence and generating the mod says so.
+ * The fences of the mod with a post inside a building or prop, or a stretch through one (rects: what they stand on, modPlan.mjs feetOf): Map fence id -> {posts: the posts that are inside
+ * (0-based), edges: the stretches (i = from post i to post i + 1, the last back to the first) that run through a building without a post of theirs inside it}. The game cannot make the
+ * animals' area then ("Could not shrink polygon"), so the page marks the fence and generating the mod says so.
  */
+/** The sentence about a fence's problems found by fenceProblems ({posts, edges}), as numbers for the player (from 1): [text key, values] for each, in the order to say them. */
+export const fenceProblemList = ({posts, edges}, n) => [
+  ...(posts.length ? [["Post {posts} of the fence stands inside a building. Move it out, or the game cannot make the area the hens walk in.", {posts: posts.map(i => i + 1).join(", ")}]] : []),
+  ...(edges.length ? [["The fence between {stretches} runs through a building. Move the posts to the wall or out from it, or the game cannot make the area the hens walk in.", {stretches: edges.map(i => `${i + 1} and ${(i + 1) % n + 1}`).join("; ")}]] : []),
+];
+
 export function fenceProblems(objects, rects) {
   const out = new Map();
   for (const o of objects) {
     if (o.type !== "pasture" || !Array.isArray(o.points)) continue;
-    const bad = postsInside(o.points, rects);
-    if (bad.length) out.set(o.id, bad);
+    const posts = postsInside(o.points, rects), n = o.points.length;
+    const edges = edgesThrough(o.points, rects).filter(i => !posts.includes(i) && !posts.includes((i + 1) % n));
+    if (posts.length || edges.length) out.set(o.id, {posts, edges});
   }
   return out;
 }

@@ -19,7 +19,7 @@ import { makeModPackage } from "@/editor/modExport.mjs";
 import { confirmDialog, promptDialog } from "@/components/dialog.mjs";
 import { RangeField } from "@/components/RangeField";
 import { addPost, removePost, setPostType, placePost, choices, payload } from "@/lib/mods.mjs";
-import { groupsFree, addGroup, removeGroup, setObjectOf, settingsFor, objectsOfData, setPoint, addPoint, removePoint, hensOfData, groupOf, entranceWall, fenceProblems, MIN_POSTS } from "@/lib/modObjects.mjs";
+import { groupsFree, addGroup, removeGroup, setObjectOf, settingsFor, objectsOfData, setPoint, addPoint, removePoint, hensOfData, groupOf, entranceWall, fenceProblems, fenceProblemList, MIN_POSTS } from "@/lib/modObjects.mjs";
 
 type Kind = { id: string; name: string };
 type Groups = ReturnType<typeof projectGroups>;
@@ -206,8 +206,11 @@ export default function ModPage() {
   const post = sel.kind === "post" ? draft.find(p => p.id === sel.post) ?? null : null;
   const object = sel.kind === "object" ? objects.find(o => o.id === sel.object) ?? null : null;
   // a fence with a post inside a building: the game cannot make the animals' area from it, so it is marked (the tree, and its properties)
-  const fenceBad = fenceProblems(objects, feetOf(draft.flatMap(p => { const s = shapes[p.ref]; return s && s !== "error" ? [{ x: p.x, z: p.z, rot: p.rot, bounds: s.bounds }] : []; }))) as Map<number, number[]>;
-  const fenceWarning = (id: number) => { const bad = fenceBad.get(id); return bad ? t("Post {posts} of the fence stands inside a building. Move it out, or the game cannot make the area the hens walk in.", { posts: bad.map(i => i + 1).join(", ") }) : ""; };
+  const fenceBad = fenceProblems(objects, feetOf(draft.flatMap(p => { const s = shapes[p.ref]; return s && s !== "error" ? [{ x: p.x, z: p.z, rot: p.rot, bounds: s.bounds }] : []; }))) as Map<number, { posts: number[]; edges: number[] }>;
+  const fenceWarning = (id: number) => {
+    const bad = fenceBad.get(id), n = objects.find(o => o.id === id)?.points?.length ?? 0;
+    return bad ? (fenceProblemList(bad, n) as [string, Record<string, string>][]).map(([text, values]) => t(text, values)).join(" ") : "";
+  };
   const options: ProjectSummary[] = mod ? choices(projects, draft, adding) : [];
   const loading = draft.some(p => !p.missing && !shapes[p.ref]);
   const failed = draft.filter(p => !p.missing && shapes[p.ref] === "error").length;

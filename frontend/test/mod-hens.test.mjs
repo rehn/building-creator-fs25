@@ -187,6 +187,25 @@ test("the fences with a post inside a building: Map fence id -> the posts (0-bas
   assert.equal(fenceProblems(objects, [{x0: 0, x1: 1, z0: 0, z1: 1}]).size, 0);
   const wrecked = objects.map(o => (o === f ? {...o, points: [[20, 10], [20, -5], [45, -5], [45, 10]]} : o));
   const got = fenceProblems(wrecked, [{x0: 15, x1: 25, z0: 6, z1: 14}]);
-  assert.deepEqual([...got], [[f.id, [0]]]);
+  assert.deepEqual([...got.keys()], [f.id]);
+  assert.deepEqual(got.get(f.id).posts, [0]);
+  assert.deepEqual(got.get(f.id).edges, [], "the stretches that end in that post are not told again");
   assert.equal(fenceProblems([], []).size, 0);
+});
+
+// ---- a stretch of fence through a building (seen in the game: the stretch from post 5 to 6 ran 3 cm into the house) ----
+import { edgesThrough } from "../src/editor/modPlan.mjs";
+
+test("the stretches of fence that run through a building are found, one that only touches or follows a wall is not", () => {
+  const house = [{x0: 0, x1: 10, z0: 0, z1: 6}];
+  // posts all outside, a stretch (post 1 to 2) across the corner of the house
+  assert.deepEqual(edgesThrough([[-2, 3], [3, -2], [12, -2], [12, 8], [-2, 8]], house), [0], "the first stretch cuts across the corner of the house");
+  assert.deepEqual(edgesThrough([[-1, -1], [11, -1], [11, 7], [-1, 7]], house), [], "a fence round the house");
+  assert.deepEqual(edgesThrough([[0, 6], [10, 6], [10, 12], [0, 12]], house), [], "the first stretch runs along the wall: touching is not through");
+  // the case from the game: the stretch rises 15 cm over 3 m and ends on the wall line, so it is inside the house for 68 cm, 3 cm deep at most
+  const wall = [{x0: -6.005, x1: 0.855, z0: -4.367, z1: 1.525}];
+  const game = [[0.855, 1.525], [4.425, 1.375], [4.425, 8.625], [-8.575, 8.625], [-8.575, 1.375], [-5.325, 1.525]];
+  assert.deepEqual(edgesThrough(game, wall), [4], "post 5 to 6");
+  // snapped onto the wall line the same fence is clear
+  assert.deepEqual(edgesThrough(game.map(([x, z]) => [x, z === 1.375 ? 1.525 : z]), wall), []);
 });
