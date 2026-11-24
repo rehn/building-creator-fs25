@@ -80,3 +80,14 @@ test("a building without them has no extra type and no sleep nodes", () => {
   assert.ok(!buildI3d(p).includes('name="sleepingTrigger"'));
   assert.match(placeableXml(p, "H"), /<placeable type="simplePlaceable">/);
 });
+
+test("with both a sleep point and a workshop the XML has one <triggerMarkers> and one <hotspots> (the game reads only the first of each), with both entries", () => {
+  const xml = placeableXml(sanitize({kind: "house", objects: [sleepObj, workObj]}), "Mixed", {mod: "FS25_Mixed"});
+  for (const tag of ["triggerMarkers", "hotspots"]) assert.equal((xml.match(new RegExp(`<${tag}>`, "g")) || []).length, 1, tag);
+  assert.match(xml, /markerIconSleep/);
+  assert.match(xml, /markerIconWrench/);
+  assert.match(xml, /<hotspot type="FARM"/);
+  assert.match(xml, /<hotspot type="SHOP"/);
+  assert.equal((xml.match(/<farmhouse /g) || []).length, 1);
+  assert.equal((xml.match(/<workshop>/g) || []).length, 1);
+});

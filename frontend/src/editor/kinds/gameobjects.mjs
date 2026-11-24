@@ -100,6 +100,21 @@ export const sharedOf = p => Object.keys(SHARED).filter(t => SHARED[t].has(p));
 /** Where a new shared object of a type goes (a list with one box, or none). */
 export const sharedDefaults = (p, type) => (SHARED[type] ? SHARED[type].defaults(p) : []);
 
+/**
+ * One <triggerMarkers> and one <hotspots> in the placeable XML: the game reads only the first of each, so the ones that several objects (or a kind and an object) each write
+ * are merged into the first, with every entry in order.
+ */
+export function mergeContainers(xml, tags = ["triggerMarkers", "hotspots"]) {
+  for (const tag of tags) {
+    const re = new RegExp(`[ \\t]*<${tag}>([\\s\\S]*?)</${tag}>[ \\t]*\\n?`, "g"), found = [...xml.matchAll(re)];
+    if (found.length < 2) continue;
+    const entries = found.map(m => m[1].replace(/^\s*\n/, "").replace(/\s+$/, "")).filter(Boolean).join("\n");
+    let first = true;
+    xml = xml.replace(re, () => { if (!first) return ""; first = false; return `    <${tag}>\n${entries}\n    </${tag}>\n`; });
+  }
+  return xml;
+}
+
 /** The nodes and XML of the shared objects the building has, merged. c: the export context. */
 export function sharedScene(c) {
   const out = {nodes: [], xml: "", areas: []};

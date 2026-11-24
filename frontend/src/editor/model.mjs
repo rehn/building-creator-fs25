@@ -4,7 +4,7 @@
 import { I3dDoc, tg, shape, refNode, boxMesh, splitByColor, mappingsFor, num, v3 } from "./i3d.mjs";
 import { KINDS, KIND, kindOf } from "./kinds/index.mjs";
 import { SHOP_CATEGORIES } from "./kinds/shop.mjs";
-import { sharedScene, sharedPlaceable } from "./kinds/gameobjects.mjs";
+import { sharedScene, sharedPlaceable, mergeContainers } from "./kinds/gameobjects.mjs";
 import { WALL_T, openSide, wallFrames, wallsOf, liveWings, wingsOf, wingIdOf, eaveWalls, autoPipes, cleanPipes, cleanPapers, WING_PARTS, MAX_WINGS, HARD_MAX_PARTS, setMaxParts, WING_WALLS, wingWallKey, wingSplitKey, WING_SPLIT_WALLS, isSplitWall, openingSpan, splitsOf, sectionsOf, sectionRuns, sectionAtPoint, maxFloors, maxFloorsWithAttic, wallHasFloor, isGableWall, cascadeHeight, dividerAt, splitAtFrom, splitKey, SPLIT_WALLS, MAX_SPLITS, floorsOf, totalHeight, floorBase, floorAt, roomOf, footprint, toWorld, cleanItems, problems } from "./layout.mjs";
 import { withAssets, placement, assetFolder, normalizeMeta, troughAssets } from "./assets.mjs";
 import { SURFACES } from "./surfaces.mjs";
@@ -2991,7 +2991,7 @@ function exportParts(p, {withTex = false, scenery = false} = {}) {
   const ctx = {p, geo, doc, box, trigger, sleepPoint};
   const kindScene = kind.scene ? kind.scene(ctx) : {nodes: [], xml: "", areas: []}, shared = sharedScene(ctx);
   // (the kind's own nodes, then those of the objects every kind can have: a sleep point, a workshop)
-  const own = {nodes: [...kindScene.nodes, ...shared.nodes], xml: kindScene.xml + shared.xml, areas: [...kindScene.areas, ...shared.areas]};
+  const own = {nodes: [...kindScene.nodes, ...shared.nodes], xml: mergeContainers(kindScene.xml + shared.xml), areas: [...kindScene.areas, ...shared.areas]};
 
   let doorNodes = [], doorXml = "";
   if (doors.length) {
