@@ -17,11 +17,10 @@ test("the shared groups in objects.mjs are the shared exporters' types", () => {
   for (const [id, types] of Object.entries(SHARED_GROUPS)) assert.deepEqual(SHARED[id].types, types, id);
 });
 
-test("every kind can have a shop counter and a delivery place, except the two that use those names for their own shop", () => {
-  for (const id of ["house", "shed", "chicken", "cow", "sheep", "grainsilo", "fuelstation", "dealership"]) for (const t of ["counter", "spawn"]) assert.ok(allowedTypes(kindOf({kind: id})).includes(t), `${id} takes ${t}`);
-  // the warehouse's counter is for pallets; it has no delivery place for vehicles
-  assert.ok(allowedTypes(kindOf({kind: "warehouse"})).includes("counter"));
-  assert.ok(!allowedTypes(kindOf({kind: "warehouse"})).includes("spawn"));
+test("every kind can have a shop counter and a delivery place, except the map shop, which uses those names for its own", () => {
+  for (const id of ["house", "shed", "chicken", "cow", "sheep", "grainsilo", "fuelstation", "dealership", "warehouse"]) for (const t of ["counter", "spawn"]) assert.ok(allowedTypes(kindOf({kind: id})).includes(t), `${id} takes ${t}`);
+  // the map shop's counter and delivery place are the map's shop nodes, not a vehicle shop
+  for (const t of ["counter", "spawn"]) assert.ok(allowedTypes(kindOf({kind: "defaultdealer"})).includes(t), "its own " + t);
 });
 
 test("a counter comes with a delivery place and the other way round (the shop needs both)", () => {

@@ -24,7 +24,7 @@ test("the kind is there: a shop with a list of what it sells and a list of what 
   assert.ok(Array.isArray(p.buyList) && p.buyList.length > 0);
   assert.ok(Array.isArray(p.sellList) && p.sellList.length > 0);
   assert.ok(PRESETS.some(x => x.kind === "warehouse"), "a preset to start from");
-  assert.deepEqual(p.objects.map(o => o.type).sort(), ["counter", "palletspawn", "unload"], "the three game objects it needs");
+  assert.deepEqual(p.objects.map(o => o.type).sort(), ["palletcounter", "palletspawn", "unload"], "the three game objects it needs");
 });
 
 test("the lists keep what the game has, once, in the game's order: anything else goes", () => {
@@ -37,7 +37,7 @@ test("the lists keep what the game has, once, in the game's order: anything else
 });
 
 test("the placeable: type warehouse, the pallets to buy with a price each, spawn places, and what it buys", () => {
-  const p = make({buyList: ["BREAD", "FLOUR"], sellList: ["EGG", "HONEY", "WHEAT"], buyPrice: 150, sellPrice: 90, palletLines: 2});
+  const p = make({buyList: ["BREAD", "FLOUR"], sellList: ["EGG", "HONEY", "WHEAT"], buyPrice: 150, goodsPrice: 90, palletLines: 2});
   const xml = placeableXml(p, "Affär");
   assert.match(xml, /<placeable type="warehouse">/);
   assert.equal(count(xml, /<fillType name="[A-Z_]+" priceScale="1.5"\/>/g), 2);
@@ -78,7 +78,7 @@ test("it is not for sale unless it is asked to be (a map places it, as in the ga
 test("a house can be changed into a warehouse: the form stays, the three game objects are added", () => {
   const r = changeKind(sanitize({kind: "house", width: 12, depth: 8}), "warehouse");
   assert.ok(r.ok);
-  assert.deepEqual(r.settings.objects.map(o => o.type).sort(), ["counter", "palletspawn", "sleep", "unload"]);
+  assert.deepEqual(r.settings.objects.map(o => o.type).sort(), ["palletcounter", "palletspawn", "sleep", "unload"]);
   assert.equal(r.settings.width, 12);
   assert.ok(r.settings.buyList.length > 0);
 });
