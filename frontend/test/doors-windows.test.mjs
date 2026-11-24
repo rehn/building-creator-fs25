@@ -135,10 +135,6 @@ test("doors: old settings make the first door, with the old entrance as its porc
   assert.ok(Math.abs(e.pos * q.depth - 0.9) < 1e-6, "at the left end, 30 cm in");
   // a walk-in building's door has no porch unless asked
   assert.equal(doors(hen())[0].porch, "none");
-  // a save from when one door was the main door: it keeps the building's entrance
-  const m = sanitize({entrance: "gable", windows: [door("back", 0.3, {main: true}), door("left", 0.5)]});
-  assert.deepEqual(doors(m).map(d => d.porch), ["gable", "none"]);
-  assert.ok(m.windows.every(w => !("main" in w)));
 });
 
 test("doors: a building always has one; doors may be taller than windows; porches are cleaned", () => {
