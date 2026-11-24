@@ -3,7 +3,7 @@
 // {id, type, x, z, w, d, h, ix, iz}, as the editor keeps them, editor/objects.mjs). The shared groups only (kinds/gameobjects.mjs): they are never filtered by what the buildings are.
 // Pure functions; none of them changes the list it is given.
 import { SHARED } from "../editor/kinds/gameobjects.mjs";
-import { SHARED_GROUPS, OBJECT_LIMITS, fencePoints, MAX_FENCE_POINTS } from "../editor/objects.mjs";
+import { SHARED_GROUPS, OBJECT_LIMITS, fencePoints, MAX_FENCE_POINTS, nextTroughSpot } from "../editor/objects.mjs";
 import { HEN_TYPES } from "../editor/kinds/modframe.mjs";
 import { MAX_HENS } from "../editor/kinds/chicken.mjs";
 import { postsInside, edgesThrough } from "../editor/modPlan.mjs";
@@ -47,7 +47,10 @@ export function addGroup(objects, group, p, at = [0, 0], {wall = "back"} = {}) {
 function henDefaults({width, depth, foundation = 0}, wall = "back") {
   // (the pasture goes on a wall without a door, so the door of the stand-in building is put on the opposite one)
   const q = sanitize({kind: "chicken", width, depth, foundation, pastureWall: wall, doorWall: OPPOSITE[wall] || "front"}), pa = q.objects.find(o => o.type === "pasture");
-  return [...q.objects.filter(o => o.type !== "pasture"), {type: "pasture", wall: pa.wall, a: 0, b: 0, depth: pa.depth, points: fencePoints(q).slice(0, MAX_FENCE_POINTS)}];
+  // a feed trough and a water trough inside the fence, where the pasture of the stand-in hen house has room (not on each other)
+  const feed = nextTroughSpot(q, "feedTrough"), withFeed = {...q, objects: [...q.objects, {id: 99, type: "feedTrough", ix: 0, iz: 0, ...feed}]}, water = nextTroughSpot(withFeed, "waterTrough");
+  const trough = o => { const {x, z, w, d, h} = o; return {type: o.type, x, z, w, d, h, ix: 0, iz: 0}; };
+  return [...q.objects.filter(o => o.type !== "pasture"), trough(feed), trough(water), {type: "pasture", wall: pa.wall, a: 0, b: 0, depth: pa.depth, points: fencePoints(q).slice(0, MAX_FENCE_POINTS)}];
 }
 
 const OPPOSITE = {front: "back", back: "front", left: "right", right: "left"};

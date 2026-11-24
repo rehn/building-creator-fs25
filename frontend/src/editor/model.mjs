@@ -3021,7 +3021,9 @@ function exportParts(p, {withTex = false, scenery = false, host = null, inMod = 
   const box = (name, b, attrs, children = []) => shape(name, {translation: b.center, shapeId: doc.shape(name, boxMesh(b.size), {cpu: true}), ...attrs,
     nonRenderable: true, castsShadows: false, receiveShadows: false, materialIds: cm}, children);
   const trigger = (group, mask) => ({static: true, trigger: true, collisionFilterGroup: group, collisionFilterMask: mask});
-  const ctx = {p, kind, geo, doc, box, trigger, sleepPoint, host};
+  // a box you can see, in one colour (a trough's planks): {center, size}, hex colour
+  const solid = (name, b, color) => shape(name, {translation: b.center, shapeId: doc.shape(name, boxMesh(b.size), {}), castsShadows: true, receiveShadows: true, materialIds: doc.material(`solid_${color.slice(1)}_mat`, {diffuseColor: rgb(color)})});
+  const ctx = {p, kind, geo, doc, box, solid, trigger, sleepPoint, host};
   const kindScene = kind.scene && (!host || kind.hosted) && !inMod ? kind.scene(ctx) : {nodes: [], xml: "", areas: []}, shared = inMod ? {nodes: [], xml: "", areas: []} : sharedScene(ctx);
   // (the kind's own nodes, then those of the objects every kind can have: a sleep point, a workshop)
   const own = {nodes: [...kindScene.nodes, ...shared.nodes], xml: mergeContainers(kindScene.xml + shared.xml), areas: [...kindScene.areas, ...shared.areas]};

@@ -8,11 +8,12 @@ import { henScene, HEN_PLACEABLE, MAX_HENS } from "./chicken.mjs";
 import { palletLines, cornerStripes, teleportFor, ccwFence, navContourNodes, buildingOutline } from "./pasture.mjs";
 import { insideNav } from "./modinside.mjs";
 import { KEEP } from "../walkarea.mjs";
-import { objectOf, boxOf, iconOf, pastureOf } from "../objects.mjs";
+import { objectOf, objectsOf, boxOf, iconOf, pastureOf } from "../objects.mjs";
+import { troughFrom } from "./cow.mjs";
 import { sharedDefaults } from "./gameobjects.mjs";
 
 /** The object types of a hen yard (objects.mjs OBJECT_TYPES): the feed pad, trailer spot, egg pallets, info area and the fence. */
-export const HEN_TYPES = ["food", "loading", "pallets", "info", "pasture"];
+export const HEN_TYPES = ["food", "loading", "pallets", "info", "pasture", "feedTrough", "waterTrough"];
 /** The smallest fence the game makes a walking area for (the hen house's own limit). */
 const PASTURE = {minWidth: 12, depth: [6, 40]};
 const hasYard = p => !!objectOf(p, "food") && !!objectOf(p, "pasture");
@@ -44,11 +45,14 @@ function yardOf(p, geo, host) {
   const o = t => objectOf(p, t), pa = pastureOf(p);
   const food = boxOf(o("food")), loading = boxOf(o("loading")), pallets = boxOf(o("pallets")), info = boxOf(o("info"));
   const feet = (host && host.footprints) || [], fence = ccwFence(pa.fence);
+  // the troughs (cow.mjs troughFrom: where the hens stand to eat, the food plane): drawn, and obstacles in the hens' area
+  const asTrough = o => troughFrom({x: o.x, z: o.z, w: o.w, d: o.d, h: o.h}, fence, feet);
+  const feedTroughs = objectsOf(p, "feedTrough").map(asTrough), waterTroughs = objectsOf(p, "waterTrough").map(asTrough), troughBoxes = [...feedTroughs, ...waterTroughs].map(t => t.box);
   // the hens walk inside the chosen building (host.inside: {settings, place}): its floor and the doorways that face the fence; the answer (or why not) is left in host.insideResult for the warnings
   let nav = null;
   if (host && host.inside) {
     const contour = [...fence, ...navContourNodes(fence, feet).map(([x, z]) => [x, 0, z])];
-    const blockers = feet.map(r => ({center: [(r.x0 + r.x1) / 2, 1, (r.z0 + r.z1) / 2], size: [r.x1 - r.x0, 2, r.z1 - r.z0], keep: KEEP.wall}));
+    const blockers = [...feet.map(r => ({center: [(r.x0 + r.x1) / 2, 1, (r.z0 + r.z1) / 2], size: [r.x1 - r.x0, 2, r.z1 - r.z0], keep: KEEP.wall})), ...troughBoxes.map(b => ({...b, keep: KEEP.trough}))];
     host.insideResult = insideNav({settings: host.inside.settings, place: host.inside.place, contour, blockers});
     nav = host.insideResult.nav;
   }
@@ -60,8 +64,9 @@ function yardOf(p, geo, host) {
     pallet: {lines: palletLines(pallets), trigger: pallets, stripes: cornerStripes(rectOf(pallets))},
     loading: {...loading, marker: iconOf(o("loading")), teleport: teleportFor({box: loading}, geo.dims)},
     info,
-    blockers: feet.map(r => ({center: [(r.x0 + r.x1) / 2, 1, (r.z0 + r.z1) / 2], size: [r.x1 - r.x0, 2, r.z1 - r.z0]})),
-    areas: [food, pallets].map(rectOf),
+    feedTroughs, waterTroughs,
+    blockers: [...feet.map(r => ({center: [(r.x0 + r.x1) / 2, 1, (r.z0 + r.z1) / 2], size: [r.x1 - r.x0, 2, r.z1 - r.z0]})), ...troughBoxes],
+    areas: [food, pallets, ...troughBoxes].map(rectOf),
   };
 }
 

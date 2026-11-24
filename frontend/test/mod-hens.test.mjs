@@ -14,7 +14,7 @@ const yard = () => addGroup([], "hens", settingsFor({width: 30, depth: 12}), [30
 
 test("the hen group is the feed pad, trailer spot, egg pallets, info area and a fence of posts, put round where the mod is", () => {
   const objects = yard();
-  assert.deepEqual(objects.map(o => o.type).sort(), ["food", "info", "loading", "pallets", "pasture"]);
+  assert.deepEqual(objects.map(o => o.type).sort(), ["feedTrough", "food", "info", "loading", "pallets", "pasture", "waterTrough"]);
   assert.ok(GROUPS.some(g => g.id === "hens"), "the page offers it");
   assert.ok(objects.every(o => groupOf(o.type) === "hens"));
   const fence = objects.find(o => o.type === "pasture");
@@ -54,11 +54,11 @@ test("a mod with hens is a chicken barn placeable with the yard's husbandry, as 
   assert.ok(want.some(w => Math.abs(got[0] - w[0]) < 0.01 && Math.abs(got[2] - w[1]) < 0.01), "the first node is a post of the fence: " + got + " vs " + JSON.stringify(want));
 });
 
-test("the buildings are cut out of the animals' walking area, one blocker for each", async () => {
+test("the buildings are cut out of the animals' walking area, one blocker for each (and one for each trough)", async () => {
   const {files} = await makeModPackage({name: "Hönsgården", posts, objects: yard()});
   const i3d = text(files.get("house.i3d"));
   assert.ok(i3d.includes('name="navmeshBlocker"') && i3d.includes('name="navmeshBlocker2"'), "a blocker for the house and one for the barn");
-  assert.ok(!i3d.includes('name="navmeshBlocker3"'));
+  assert.equal((i3d.match(/name="navmeshBlocker\d*"/g) || []).length, 4, "the house, the barn, the feed trough and the water trough");
 });
 
 test("with a sleep point too, the placeable is the mod's own type built on the chicken barn", async () => {
