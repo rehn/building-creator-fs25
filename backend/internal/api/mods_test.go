@@ -45,6 +45,13 @@ func TestModLifecycleAPI(t *testing.T) {
 	rec = c.do("PATCH", "/api/mods/"+m.ID, map[string]any{"name": "Annat", "version": 1})
 	expectError(t, rec, 409, "version_conflict")
 
+	// the game objects of a post are stored with it
+	rec = c.do("PATCH", "/api/mods/"+m.ID, map[string]any{"items": []map[string]any{{"id": "a", "kind": "building", "ref": house.ID, "objects": []any{map[string]any{"type": "sleep", "x": 1}}}}})
+	expect(t, rec, 200)
+	if q := decode[store.Mod](t, rec); !strings.Contains(string(q.Items[0].Objects), `"sleep"`) {
+		t.Fatalf("objects: %s", q.Items[0].Objects)
+	}
+
 	// a new name alone leaves the items
 	rec = c.do("PATCH", "/api/mods/"+m.ID, map[string]any{"name": "Annat"})
 	expect(t, rec, 200)
@@ -88,6 +95,12 @@ func TestModValidation(t *testing.T) {
 		"long type":    {"kind": "building", "ref": "x", "type": strings.Repeat("t", 41)},
 	} {
 		rec := c.do("PATCH", "/api/mods/"+m.ID, map[string]any{"items": []map[string]any{it}})
+		if rec.Code != 400 {
+			t.Fatalf("%s: %d %s", name, rec.Code, rec.Body)
+		}
+	}
+	for name, objs := range map[string]any{"not a list": map[string]any{"type": "sleep"}, "too many": make([]any, maxPostObjects+1)} {
+		rec := c.do("PATCH", "/api/mods/"+m.ID, map[string]any{"items": []map[string]any{{"kind": "building", "ref": "x", "objects": objs}}})
 		if rec.Code != 400 {
 			t.Fatalf("%s: %d %s", name, rec.Code, rec.Body)
 		}
