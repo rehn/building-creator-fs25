@@ -45,7 +45,7 @@ test("the counter and the spawn area are needed, and the counter may stand insid
 test("the placeable is the mod's own type with a vehicle buying station", () => {
   const p = shop({sellTractors: true, sellLoaders: false, sellTransport: false}), xml = placeableXml(p, "Stora Affären"), i3d = buildI3d(p);
   assert.match(xml, /<placeable type="FS25_StoraAffaren\.simplePlaceableWithVehicleShop">/);
-  assert.match(xml, /<vehicleBuyingStation>\s*<trigger node="shopTrigger"\/>/);
+  assert.match(xml, /<vehicleBuyingStation>\s*<trigger node="shopTrigger" text="Buy vehicles"\/>/);
   assert.match(xml, /<spawnPlace startNode="vehicleSpawnStart01" endNode="vehicleSpawnEnd01"/);
   assert.match(xml, /markerIconShopping\.i3d/);
   const items = [...xml.matchAll(/<storeItem xmlFilename="([^"]+)" price="(\d+)" transportCosts="0"\/>/g)];

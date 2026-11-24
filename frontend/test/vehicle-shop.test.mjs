@@ -40,7 +40,7 @@ test("a house with a shop counter and a delivery place is a vehicle shop: a type
   assert.equal(types.length, 1);
   assert.deepEqual([types[0].parent, types[0].specializations], ["simplePlaceable", ["vehicleBuyingStation"]]);
   assert.ok(xml.includes(`<placeable type="FS25_Shop.${types[0].name}">`));
-  assert.match(xml, /<vehicleBuyingStation>[\s\S]*<trigger node="shopTrigger"\/>/);
+  assert.match(xml, /<vehicleBuyingStation>[\s\S]*<trigger node="shopTrigger" text="Buy vehicles"\/>/);   // (without a text the game asks the mod's l10n for vehicleShop_open: "MISSING 'VEHICLESHOP_OPEN'")
   assert.match(xml, /transportCosts="1000"/);
   const items = xml.match(/<storeItem xmlFilename=/g) || [];
   assert.ok(items.length > 10, "tractors from the base game: " + items.length);
