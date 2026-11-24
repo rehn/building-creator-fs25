@@ -4,11 +4,12 @@
 import { I3dDoc, tg, shape, refNode, boxMesh, splitByColor, mappingsFor, num, v3 } from "./i3d.mjs";
 import { KINDS, KIND, kindOf } from "./kinds/index.mjs";
 import { SHOP_CATEGORIES } from "./kinds/shop.mjs";
+import { sharedScene, sharedPlaceable } from "./kinds/gameobjects.mjs";
 import { WALL_T, openSide, wallFrames, wallsOf, liveWings, wingsOf, wingIdOf, eaveWalls, autoPipes, cleanPipes, cleanPapers, WING_PARTS, MAX_WINGS, HARD_MAX_PARTS, setMaxParts, WING_WALLS, wingWallKey, wingSplitKey, WING_SPLIT_WALLS, isSplitWall, openingSpan, splitsOf, sectionsOf, sectionRuns, sectionAtPoint, maxFloors, maxFloorsWithAttic, wallHasFloor, isGableWall, cascadeHeight, dividerAt, splitAtFrom, splitKey, SPLIT_WALLS, MAX_SPLITS, floorsOf, totalHeight, floorBase, floorAt, roomOf, footprint, toWorld, cleanItems, problems } from "./layout.mjs";
 import { withAssets, placement, assetFolder, normalizeMeta, troughAssets } from "./assets.mjs";
 import { SURFACES } from "./surfaces.mjs";
 import { agedColor } from "./age.mjs";
-import { cleanObjects, objectOf, boxOf, objectInfo } from "./objects.mjs";
+import { cleanObjects, objectOf, boxOf, objectInfo, allowedTypes } from "./objects.mjs";
 import { cleanDecor, decorRects } from "./decor.mjs";
 import { WALLPAPERS } from "./kinds/innerwall.mjs";
 import { WINDOW_STYLES, DOOR_STYLES, WINDOW_STYLE_IDS, DOOR_STYLE_IDS, DOUBLE_DOOR_FROM, isPair, styleOf, drawSash, drawLeaf } from "./openings.mjs";
@@ -580,8 +581,8 @@ export function buildingTree(p) {
   };
   const children = sectionNodes(0, ["front", "back", "left", "right", ...splitsOf(p).map(s => s.key)]);
   const lost = (p.wings || []).filter(w => !seen.has(w.id)).map(w => ({type: "part", id: w.id, off: "It is left out: the extension it stands on is.", children: []}));
-  // the game objects (the sleep point, feed places, the pasture ...): a node of their own after the building, when the kind has any
-  const ko = kindOf(p).objects, game = ko && ko.types && ko.types.length ? {type: "game", children: groupTroughs(p, (p.objects || []).map(o => ({type: "object", id: o.id, otype: o.type, name: objectName(p, o),
+  // the game objects (the sleep point, feed places, the pasture ...): a node of their own after the building (every kind can have some: allowedTypes)
+  const game = allowedTypes(kindOf(p)).length ? {type: "game", children: groupTroughs(p, (p.objects || []).map(o => ({type: "object", id: o.id, otype: o.type, name: objectName(p, o),
     // a fence drawn by hand is a folder of its posts
     ...(o.type === "pasture" && o.points ? {children: o.points.map((_, i) => ({type: "post", id: o.id, index: i, name: `Post ${i + 1}`, role: i === 0 ? "start" : i === o.points.length - 1 ? "stop" : ""}))} : {})})))} : null;
   // the decorations (decor.mjs): a node of their own after the game objects, always there (it is where they are added)
@@ -2987,7 +2988,10 @@ function exportParts(p, {withTex = false, scenery = false} = {}) {
   const box = (name, b, attrs, children = []) => shape(name, {translation: b.center, shapeId: doc.shape(name, boxMesh(b.size), {cpu: true}), ...attrs,
     nonRenderable: true, castsShadows: false, receiveShadows: false, materialIds: cm}, children);
   const trigger = (group, mask) => ({static: true, trigger: true, collisionFilterGroup: group, collisionFilterMask: mask});
-  const own = kind.scene ? kind.scene({p, geo, doc, box, trigger, sleepPoint}) : {nodes: [], xml: "", areas: []};
+  const ctx = {p, geo, doc, box, trigger, sleepPoint};
+  const kindScene = kind.scene ? kind.scene(ctx) : {nodes: [], xml: "", areas: []}, shared = sharedScene(ctx);
+  // (the kind's own nodes, then those of the objects every kind can have: a sleep point, a workshop)
+  const own = {nodes: [...kindScene.nodes, ...shared.nodes], xml: kindScene.xml + shared.xml, areas: [...kindScene.areas, ...shared.areas]};
 
   let doorNodes = [], doorXml = "";
   if (doors.length) {
@@ -3147,9 +3151,20 @@ export function buildObj(p) {
   return {obj: obj.join("\n") + "\n", mtl: mtl.join("\n")};
 }
 
+/**
+ * The placeable the building exports: what its kind says, with the objects every kind can have (a sleep point, a workshop) added. {type, fn, shop, note, modType}:
+ * modType is a placeable type the mod's modDesc.xml must define for it, or null (kinds/gameobjects.mjs sharedPlaceable). mod: the mod's name, left out in the snippet.
+ */
+export function placeableFor(q, kind, mod = "") { return sharedPlaceable(q, kind.placeable(q, mod ? {mod} : undefined), mod); }
+/** The placeable types the building's mod must define in its modDesc.xml: the kind's own (kind.modTypes) and one made for the objects it has besides. mod: the mod's name. */
+export function modTypesFor(p, mod = "") {
+  const q = sanitize(p), kind = kindOf(q), extra = placeableFor(q, kind, mod).modType;
+  return [...(kind.modTypes || []), ...(extra ? [extra] : [])];
+}
+
 /** Blocks to paste into a placeable XML, with i3dMappings that match the i3d buildI3d writes. */
 export function placeableSnippet(p = DEFAULTS) {
-  const {kind, blocks, p: q} = exportParts(p), note = kind.placeable(q).note;
+  const {kind, blocks, p: q} = exportParts(p), note = placeableFor(q, kind).note;
   return `<!-- Paste these into your placeable XML (inside <placeable>). Generated by House to i3d. -->
 ${note ? `
     <!-- ${note} -->` : ""}${blocks}`;
@@ -3180,7 +3195,7 @@ ${t.specializations.map(s => `            <specialization name="${s}"/>`).join("
  * relative to the mod's root, not to the XML: in a mod of several buildings each is in a folder, so dir ("farmhouse/") goes in front of them.
  */
 export function placeableXml(p, name, {dir = "", image = true, mod = modName(name)} = {}) {
-  const {kind, blocks, p: q} = exportParts(p), {type, fn, shop, sellable = true} = kind.placeable(q, {mod});
+  const {kind, blocks, p: q} = exportParts(p), {type, fn, shop, sellable = true} = placeableFor(q, kind, mod);
   return `<?xml version="1.0" encoding="utf-8" standalone="no" ?>
 <placeable type="${type}">
     <!-- Generated by House to i3d. -->
@@ -3263,7 +3278,7 @@ export function modDescXml(p, name, {author = "", icon = true} = {}) {
         <en>${cdata(desc)}</en>
     </description>
 ${icon ? `    <iconFilename>${MOD_FILES.icon}</iconFilename>
-` : ""}    <multiplayer supported="true"/>${placeableTypesXml(kindOf(p).modTypes)}
+` : ""}    <multiplayer supported="true"/>${placeableTypesXml(modTypesFor(p, modName(name)))}
     <storeItems>
         <storeItem xmlFilename="${MOD_FILES.xml}"/>
     </storeItems>

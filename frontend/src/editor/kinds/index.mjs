@@ -15,7 +15,7 @@
 //   modTypes              optional: placeable types the mod's modDesc.xml defines [{name, parent, specializations}]
 //   description(p)        default text for the mod list
 //   furnish(c)            walk-in kinds: builds the inside (c: drawing context from the core)
-//   scene(c)              extra i3d nodes, placeable XML and ground areas (c: export context)
+//   scene(c)              optional: extra i3d nodes, placeable XML and ground areas (c: export context)
 //   presets               starting points for "New"
 // Kinds import only the i3d writer and the core's pure helpers (layout.mjs, places.mjs), never model.mjs,
 // so there are no import cycles.

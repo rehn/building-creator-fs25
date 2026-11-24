@@ -11,7 +11,8 @@ import {
 } from "./model.mjs";
 import { WINDOW_STYLES, DOOR_STYLES, PORCH_OPTIONS, PORCH_W, PORCH_D, WING_FIELDS, MAX_WINGS } from "./model.mjs";
 import { pieceSheet, pieceMeshes, buildingTree, matList, matTable, slotOf, partStyle, splitAtOf, wallLabel, partName, wallItems, addOpening, addPartOn, addSplit, addPartSplit, duplicateOpening, duplicateSplit, moveBeside, moveToWall, openingProblem, setSectionFloorHeight, setTotalHeight, addPartDoor } from "./model.mjs";
-import { lodKeeps, matTexture, i3dFiles } from "./model.mjs";
+import { lodKeeps, matTexture, i3dFiles, modTypesFor } from "./model.mjs";
+import { sharedDefaults } from "./kinds/gameobjects.mjs";
 import { encodeDds, decodeDds } from "./dds.mjs";
 import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, henYard, henCap, seeThroughGlass, kindOf } from "./model.mjs";
 import { cowYard } from "./kinds/cow.mjs";
@@ -22,7 +23,7 @@ import { cleanPapers, wallBreaks, pieceGroups, roomOf, problems, footprint, snap
 import { makeWalker } from "./walk.mjs";
 import { exportPart, importPart } from "./partfile.mjs";
 import { modelBundle } from "./bundle.mjs";
-import { OBJECT_TYPES, objectInfo, OBJECT_LIMITS, GAP_LIMITS, objectOf, pastureOf, snapBox, snapPasture, objectProblems, objectWarnings, fencePoints, snapFencePoint, MAX_FENCE_POINTS, MANY, MAX_TROUGHS, nextTroughSpot, TROUGH_KINDS } from "./objects.mjs";
+import { OBJECT_TYPES, objectInfo, OBJECT_LIMITS, GAP_LIMITS, objectOf, pastureOf, snapBox, snapPasture, objectProblems, objectWarnings, fencePoints, snapFencePoint, MAX_FENCE_POINTS, MANY, MAX_TROUGHS, nextTroughSpot, TROUGH_KINDS, allowedTypes } from "./objects.mjs";
 import { setAssets, catalogFor, usedAssets, troughLooks, changeKind, CONVERTIBLE_KINDS } from "./model.mjs";
 import { KINDS } from "./kinds/index.mjs";
 import FILL_TYPES from "./filltypes.mjs";
@@ -1584,7 +1585,7 @@ function renderTreeNav() {
   if (treeKind === "part" && !(p.wings || []).some(w => w.id === wSel)) treeKind = "main";
   if (treeKind === "wall" && !wallsOf(p)[wvWall]) treeKind = "main";
   if (treeKind === "object" && !objectsNow().some(o => o.id === ob.sel)) treeKind = "game";
-  if (treeKind === "game" && !(kindOf(p).objects || {types: []}).types.length) treeKind = "main";
+  if (treeKind === "game" && !allowedTypes(kindOf(p)).length) treeKind = "main";
   if (treeKind === "deco" && !selDecor()) treeKind = "decor";
   if ((treeKind === "floor" || treeKind === "section") && wvPart && !(p.wings || []).some(w => w.id === wvPart)) treeKind = "main";
   { const n = sectionsOf(p, treeKind === "wall" ? wingIdOf(wvWall) : wvPart).length; if (wvSec >= n) wvSec = 0; }
@@ -1684,7 +1685,7 @@ function ctxAdds(kind, v, f) {
   if (kind === "part") { const w = (p.wings || []).find(x => x.id === +v); return [{act: "add-section", label: "Add section", on: !!w && (w.splits || []).length < MAX_SPLITS}]; }
   if (kind === "decor") return decorNow().length >= MAX_DECOR ? [] : itemList.map(a => ({act: "add-deco:" + a.id, label: "Add " + a.name, on: true}));
   if (kind === "group") return objectsNow().filter(o => o.type === v).length < MAX_TROUGHS ? [{act: "add-obj:" + v, label: "Add " + objectInfo(kindOf(p), v).name.toLowerCase(), on: true}] : [];
-  if (kind === "game") { const have = new Set(objectsNow().map(o => o.type)); return ((kindOf(p).objects || {types: []}).types).filter(t => MANY.includes(t) ? objectsNow().filter(o => o.type === t).length < MAX_TROUGHS : !have.has(t)).map(t => ({act: "add-obj:" + t, label: "Add " + objectInfo(kindOf(p), t).name.toLowerCase(), on: true})); }
+  if (kind === "game") { const have = new Set(objectsNow().map(o => o.type)); return allowedTypes(kindOf(p)).filter(t => MANY.includes(t) ? objectsNow().filter(o => o.type === t).length < MAX_TROUGHS : !have.has(t)).map(t => ({act: "add-obj:" + t, label: "Add " + objectInfo(kindOf(p), t).name.toLowerCase(), on: true})); }
   return [];
 }
 /* ---------- Duplicating and deleting what is chosen in the tree: the context menu, Ctrl+D and Delete ---------- */
@@ -1850,8 +1851,8 @@ function setObjects(list, sel = ob.sel) {
 const snapObj = o => o.type === "pasture" ? snapPasture(o, kindOf(p), p) : snapBox(o, p);
 /** The details of the game objects chosen in the tree: the group (the plan view, the objects that can be added, place them all) or one object (its sliders), in host. */
 function renderObjectsCard(ed) {
-  const kind = kindOf(p), spec = kind.objects || {types: [], required: []}, list = objectsNow(), pr = objectProblems(p);
-  if (!spec.types.length) { ed.innerHTML = `<p class="hint">This building has no game objects.</p>`; return; }
+  const kind = kindOf(p), spec = kind.objects || {types: [], required: [], defaults: () => []}, list = objectsNow(), pr = objectProblems(p);
+  if (!allowedTypes(kind).length) { ed.innerHTML = `<p class="hint">This building has no game objects.</p>`; return; }
   const group = treeKind === "game";
   if (!list.some(o => o.id === ob.sel)) ob.sel = null;
   const opt = (v, label, cur) => `<option value="${v}" ${v === cur ? "selected" : ""}>${esc(label)}</option>`;
@@ -1994,14 +1995,14 @@ function renderObjectsCard(ed) {
 function renderObjectsUI() { if (treeKind === "game" || treeKind === "object") renderTreeUI(); else renderTreeNav(); }
 /** A new object of a type the building lacks, where the kind puts it to start with. */
 function addObject(type) {
-  const kind = kindOf(p), spec = kind.objects, list = objectsNow(), def = MANY.includes(type) && (list.some(o => o.type === type) || !spec.defaults({...p}).some(x => x.type === type)) ? nextTroughSpot(p, type) : spec.defaults({...p}).find(x => x.type === type), id = list.reduce((m, x) => Math.max(m, x.id), 0) + 1;
+  const kind = kindOf(p), spec = kind.objects || {defaults: () => []}, list = objectsNow(), def = MANY.includes(type) && (list.some(o => o.type === type) || !spec.defaults({...p}).some(x => x.type === type)) ? nextTroughSpot(p, type) : spec.defaults({...p}).find(x => x.type === type) || sharedDefaults(p, type)[0], id = list.reduce((m, x) => Math.max(m, x.id), 0) + 1;
   setObjects(sanitize({...p, objects: [...list, {...(def || {type, x: p.width / 2 + 3, z: 0}), id}]}).objects, id);
   toast(`${objectInfo(kind, type).name} added`);
   selectNode("object", id);
 }
 /** Takes an object away, unless the building needs it. */
 function removeObject(id) {
-  const o = objectsNow().find(x => x.id === id), spec = kindOf(p).objects;
+  const o = objectsNow().find(x => x.id === id), spec = kindOf(p).objects || {required: []};
   if (!o) return false;
   if (spec.required.includes(o.type)) { toast(`The ${kindOf(p).name.toLowerCase()} needs its ${objName(o).toLowerCase()}`); return false; }
   treeKind = "game";
@@ -3084,7 +3085,7 @@ async function fillMod(dir, name, prefix = "", mod = modName(name)) {
 /** For a mod of several buildings: this one's files into folder dir (named prefix, "folder/": the game reads the XML's paths from the mod's root); {icon, description, author} for the modDesc. */
 async function exportInto(dir, name, prefix = "", mod = modName(name)) {
   const icon = await fillMod(dir, name, prefix, mod);
-  return {icon, description: p.modDescription || defaultModDescription(p), author: p.modAuthor || author, types: kindOf(p).modTypes || []};
+  return {icon, description: p.modDescription || defaultModDescription(p), author: p.modAuthor || author, types: modTypesFor(p, mod)};
 }
 /** The house as a game mod: FS25_Name.zip with modDesc, store XML, i3d, textures, icon and shop picture. */
 async function exportMod(name) {

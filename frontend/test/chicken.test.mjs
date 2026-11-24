@@ -40,9 +40,9 @@ test("sanitize: old saves without a kind are houses", () => {
   assert.equal(sanitize({ kind: "chicken" }).kind, "chicken");
 });
 
-test("sanitize: a chicken barn has no sleep point, rooms or dormers", () => {
+test("sanitize: a chicken barn has no rooms or dormers (it may have a sleep point)", () => {
   const p = sanitize({ kind: "chicken", sleepPoint: true, interior: true, dormers: [{ type: "gable", side: 1, pos: 0.5 }], objects: [{ type: "sleep" }] });
-  assert.ok(!p.objects.some(o => o.type === "sleep"));
+  assert.ok(p.objects.some(o => o.type === "sleep"));
   assert.equal(p.interior, false);
   assert.deepEqual(p.dormers, []);
 });
@@ -220,12 +220,12 @@ test("mod: the hen count is capped by floor area even if the editor set more", (
   assert.match(placeableXml(p, "x"), /maxNumAnimals="30"/);
 });
 
-test("mod: a house switched to a chicken barn in the editor exports without a sleep point", () => {
+test("mod: a house switched to a chicken barn in the editor keeps its sleep point: the type is the hen house's with the farmhouse added", () => {
   const p = { ...sanitize({ sleepPoint: true }), kind: "chicken" };
   const xml = placeableXml(p, "x");
-  assert.match(xml, /chickenHusbandryPasture/);
-  assert.doesNotMatch(xml, /sleeping|farmhouse/);
-  assert.doesNotMatch(buildI3d(p), /sleepingTrigger/);
+  assert.match(xml, /type="[^"]*chickenHusbandryPastureWithSleepPoint"/);
+  assert.match(xml, /<farmhouse spawnNode="spawnPoint">/);
+  assert.match(buildI3d(p), /sleepingTrigger/);
 });
 
 test("defaultModDescription: says how many hens", () => {

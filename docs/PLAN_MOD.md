@@ -23,7 +23,7 @@ Befintligt som återanvänds: `modDescXmlMulti` (flera byggnader i en mod), bete
 
 ## 3. Steg
 
-1. **Ta bort filtret** på objekttyper: alla typer får läggas på alla byggnader; modtypen varnar. Går att göra utan någon ny sak och ger redan det Lars vill ha.
+1. **Objekt som inte hör till en typ** (pilot gjord 2026-11-24: `sleep` och `workshop`). Exporten av dem ligger i `kinds/gameobjects.mjs`, utanför kinderna, och de får läggas på alla byggnader. Placeable-typen blir spelets egen (`farmhouse`, `garageWorkshopSolarPanels`) när byggnaden bara har en av dem på en vanlig `simplePlaceable`, annars en typ i modens egen modDesc med kindens typ som förälder och de specialiseringar som saknas. Kvar: `counter` (betyder olika saker i bilhandlare och varuhus, så den behöver delas i två typer), `intake`, `pump`, `palletspawn`, `unload`, och djurens `food`, `bales`, `loading`, `info`, `pasture`, `feedTrough`, `waterTrough`. Inte provat i spelet.
 2. **Dela `kind`** i byggnadens form och en modtyp (exporten, objekttyperna). Testet `kinds.test.mjs` kontrollerar båda delarna.
 3. **Mods som egen tabell** (`mods`, poster med läge och modtyp, spelobjekt per post), sidan `/mods` och modens plan med flera saker (flytta, vrida, snappa).
 4. **Staketet** som eget objekt med förankrade punkter, portar och djurens ingång.

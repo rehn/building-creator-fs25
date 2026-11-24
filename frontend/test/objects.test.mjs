@@ -16,10 +16,11 @@ test("objects: a new building gets its kind's, and old saves keep their pasture 
   const old = barn({pastureWall: "front", fenceDepth: 22});
   assert.deepEqual(({...objectOf(old, "pasture"), id: 0}), {id: 0, type: "pasture", wall: "front", a: 0, b: 0, depth: 22});
   assert.equal(old.pastureWall, "front", "the rest of the barn reads the pasture's wall from it");
-  // ids, one of each, unknown types and other kinds' types dropped
+  // ids, one of each, unknown types dropped (a sleep point is allowed on any kind)
   const p = barn({objects: [{type: "food", x: 0, z: 9}, {type: "food", x: 1}, {type: "sleep"}, {type: "rocket"}]});
   assert.equal(p.objects.filter(o => o.type === "food").length, 1);
-  assert.ok(!objectOf(p, "sleep"));
+  assert.ok(objectOf(p, "sleep"));
+  assert.ok(!p.objects.some(o => o.type === "rocket"));
   assert.deepEqual(p.objects.map(o => o.id), p.objects.map((_, i) => i + 1));
 });
 

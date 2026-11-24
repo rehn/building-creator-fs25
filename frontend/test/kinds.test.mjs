@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { KINDS, CATEGORIES, kindOf, groupByKind } from "../src/editor/kinds/index.mjs";
-import { PRESETS, SCHEMA, sanitize, buildI3d, placeableXml, placeableSnippet, defaultModDescription, modName } from "../src/editor/model.mjs";
+import { PRESETS, SCHEMA, sanitize, buildI3d, placeableXml, placeableSnippet, defaultModDescription, modName, placeableFor } from "../src/editor/model.mjs";
 
 // Every kind of building is a module with the same shape (see src/editor/kinds/index.mjs).
 test("kinds: every kind has the whole interface", () => {
@@ -11,7 +11,8 @@ test("kinds: every kind has the whole interface", () => {
     assert.ok(k.name, `${k.id}: name`);
     assert.ok(CATEGORIES.some(c => c.id === k.category), `${k.id}: category ${k.category}`);
     assert.equal(typeof k.walkIn, "boolean", `${k.id}: walkIn`);
-    for (const f of ["normalize", "placeable", "description", "scene"]) assert.equal(typeof k[f], "function", `${k.id}: ${f}`);
+    for (const f of ["normalize", "placeable", "description"]) assert.equal(typeof k[f], "function", `${k.id}: ${f}`);
+    assert.ok(k.scene === undefined || typeof k.scene === "function", `${k.id}: scene is optional (a sleep point and a workshop are exported by kinds/gameobjects.mjs)`);
     if (k.walkIn) {
       assert.equal(typeof k.furnish, "function", `${k.id}: a walk-in kind finishes its floor`);
       assert.ok(k.catalog && Object.keys(k.catalog).length, `${k.id}: a walk-in kind has pieces to place`);
@@ -41,7 +42,7 @@ test("presets: every preset of every kind makes a valid project and exports", ()
     const p = sanitize(x.settings);
     assert.equal(p.kind, x.kind, `${x.id}: kind`);
     assert.ok(CATEGORIES.some(c => c.id === x.category), `${x.id}: category`);
-    const { type } = kindOf(p).placeable(p, { mod: modName(x.name) });
+    const { type } = placeableFor(p, kindOf(p), modName(x.name));
     assert.match(placeableXml(p, x.name), new RegExp(`<placeable type="${type}">`), x.id);
     assert.match(placeableSnippet(p), /<i3dMappings>/, x.id);
     assert.match(buildI3d(p), /<\/i3D>/, x.id);

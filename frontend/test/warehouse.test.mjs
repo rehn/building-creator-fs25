@@ -78,7 +78,7 @@ test("it is not for sale unless it is asked to be (a map places it, as in the ga
 test("a house can be changed into a warehouse: the form stays, the three game objects are added", () => {
   const r = changeKind(sanitize({kind: "house", width: 12, depth: 8}), "warehouse");
   assert.ok(r.ok);
-  assert.deepEqual(r.settings.objects.map(o => o.type).sort(), ["counter", "palletspawn", "unload"]);
+  assert.deepEqual(r.settings.objects.map(o => o.type).sort(), ["counter", "palletspawn", "sleep", "unload"]);
   assert.equal(r.settings.width, 12);
   assert.ok(r.settings.buyList.length > 0);
 });
