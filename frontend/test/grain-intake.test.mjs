@@ -32,6 +32,16 @@ test("a house with an intake is a selling station: the game's own type, the unlo
   assert.match(xml, /<hotspot type="UNLOADING"/);
 });
 
+test("the station is turned 0 90 0, so its icon lands where the editor shows the box (x -> -z, z -> x: a point at local (a, b) is at world (b, -a))", () => {
+  for (const [x, z] of [[3, -2], [-4, 1.5], [0, 5]]) {
+    const p = sanitize({kind: "house", objects: [{...intake, x, z}]});
+    const i3d = buildI3d(p);
+    assert.match(i3d, /name="unloadStationTrailer"[^>]*rotation="0 90 0"/);
+    const t = i3d.match(/name="unloadMarkerTrailer"[^>]*translation="([^"]+)"/)[1].split(" ").map(Number);
+    assert.ok(Math.abs(t[2] - x) < 0.01 && Math.abs(-t[0] - z) < 0.01, `box at (${x}, ${z}): its marker is at world (${t[2]}, ${-t[0]})`);
+  }
+});
+
 test("with no grain ticked it buys wheat; the hopper can be left out", () => {
   const p = sanitize({kind: "house", objects: [intake]});
   assert.equal(fills(placeableXml(p, "S")), "WHEAT");
