@@ -1140,5 +1140,9 @@
   "The mod has all of them.": "Modden har alla.",
   "What the game needs around the mod: where the player sleeps, shops or fills up. The game takes one of each in a mod, so each is added once. Drag them in the view to put them where they belong.": "Det spelet behöver runt modden: var spelaren sover, handlar eller tankar. Spelet tar ett av varje i en mod, så varje läggs till en gång. Dra dem i vyn för att lägga dem där de hör hemma.",
   "Along the width": "Längs bredden",
-  "Along the depth": "Längs djupet"
+  "Along the depth": "Längs djupet",
+  "Generate game mod": "Skapa spelmodd",
+  "Made {file}.": "Skapade {file}.",
+  "Makes the whole mod as one placeable in the game: the buildings and props where you have put them, and the game objects. Put the zip in the game's mods folder.": "Gör hela modden till en placeable i spelet: byggnaderna och rekvisitan där du har lagt dem, och spelobjekten. Lägg zip-filen i spelets mods-mapp.",
+  "Not tried in the game yet.": "Inte provad i spelet än."
 }

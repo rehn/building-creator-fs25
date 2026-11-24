@@ -10,11 +10,12 @@ import { api, type Mod, type ModObject, type ModPost, type ProjectSummary } from
 import { useUser } from "@/lib/useUser";
 import { TopBar } from "@/components/TopBar";
 import { t } from "@/i18n/index.mjs";
-import { KINDS, sanitize } from "@/editor/model.mjs";
+import { KINDS, sanitize, modName } from "@/editor/model.mjs";
 import { OBJECT_TYPES, OBJECT_LIMITS } from "@/editor/objects.mjs";
 import { createModView } from "@/editor/modView.mjs";
 import { projectGroups, boundsOf, footprint, turnedBy, mapKey, proceduralPicture } from "@/editor/modPlan.mjs";
 import { decodeDds } from "@/editor/dds.mjs";
+import { makeModPackage } from "@/editor/modExport.mjs";
 import { confirmDialog, promptDialog } from "@/components/dialog.mjs";
 import { RangeField } from "@/components/RangeField";
 import { addPost, removePost, setPostType, placePost, choices, payload } from "@/lib/mods.mjs";
@@ -55,6 +56,8 @@ export default function ModPage() {
   modRef.current = mod;
   const asked = useRef(new Set<string>());
   const mapsAsked = useRef(new Set<string>());
+  const datas = useRef(new Map<string, Record<string, unknown>>());   // the projects' data as read, for the game mod
+  const [made, setMade] = useState<{ name: string; warnings: string[] } | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -68,6 +71,7 @@ export default function ModPage() {
       if (p.missing || asked.current.has(p.ref)) continue;
       asked.current.add(p.ref);
       api.project(p.ref).then(pr => {
+        datas.current.set(p.ref, pr.data);
         const groups = projectGroups(pr.data);
         setShapes(s => ({ ...s, [p.ref]: { groups, bounds: boundsOf(groups), foundation: pr.data.kind === "prop" ? 0 : sanitize(pr.data).foundation } }));
       }).catch(() => setShapes(s => ({ ...s, [p.ref]: "error" })));
@@ -150,6 +154,41 @@ export default function ModPage() {
     try { setMod(await api.updateMod(mod.id, { name: name.trim(), version: mod.version })); }
     catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
+  /** The game mod as a zip: the whole mod is one placeable (editor/modExport.mjs), made here in the browser from what the posts are now, and downloaded. */
+  async function generate() {
+    if (!mod) return;
+    setBusy(true); setError(""); setMade(null);
+    try {
+      const posts = [];
+      for (const p of draft) {
+        if (p.missing) continue;
+        let data = datas.current.get(p.ref);
+        if (!data) { try { data = (await api.project(p.ref)).data; } catch { data = undefined; } }
+        posts.push({ id: p.id, kind: p.kind, name: p.name, x: p.x, z: p.z, y: p.y ?? 0, rot: p.rot, data });
+      }
+      const pkg = await makeModPackage({
+        name: mod.name, author: user?.name ?? "", posts, objects,
+        // the user's textures a prop is made of: their diffuse and normal maps from the server
+        loadTextures: async (ids: string[]) => {
+          const maps = new Map<string, { size: number; diffuse: Uint8ClampedArray; normal: Uint8ClampedArray }>();
+          for (const id of ids) {
+            try {
+              const [d, n] = await Promise.all((["diffuse", "normal"] as const).map(async k => decodeDds(new Uint8Array(await api.textureFile(id, k)))));
+              maps.set(id, { size: d.width, diffuse: new Uint8ClampedArray(d.data), normal: new Uint8ClampedArray(n.data) });
+            } catch { /* grey */ }
+          }
+          return maps;
+        },
+      });
+      const JSZip = (await import("jszip")).default, zip = new JSZip();
+      for (const [path, content] of pkg.files as Map<string, string | Uint8Array>) zip.file(path, content);
+      const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" }), file = modName(mod.name) + ".zip";
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob); a.download = file; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+      setMade({ name: file, warnings: pkg.warnings as string[] });
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
   async function remove() {
     if (!mod) return;
     if (!await confirmDialog(t("Delete the mod “{name}”? The buildings and props in it stay.", { name: mod.name }), { title: t("Delete"), confirm: t("Delete"), danger: true })) return;
@@ -229,6 +268,13 @@ export default function ModPage() {
                 <h3 className="hx-card-h" translate="no">{mod.name}</h3>
                 <p className="hint">{t("A mod holds buildings and props, and the player puts the whole of it out in one go. Drag them in the view to place them. The game objects, like where the player sleeps, belong to the whole mod.")}</p>
                 <div className="row"><button type="button" onClick={rename} disabled={busy}>Rename</button><button type="button" className="danger" onClick={remove} disabled={busy}>Delete</button></div>
+              </section>
+              <section className="hx-card">
+                <h3 className="hx-card-h">{t("Game mod")}</h3>
+                <p className="hint">{t("Makes the whole mod as one placeable in the game: the buildings and props where you have put them, and the game objects. Put the zip in the game's mods folder.")}</p>
+                <div className="row"><button type="button" className="primary" onClick={generate} disabled={busy || draft.length === 0}>{t("Generate game mod")}</button></div>
+                {made && <p className="hint">{t("Made {file}.", { file: made.name })} {t("Not tried in the game yet.")}</p>}
+                {made && made.warnings.map(w => <p className="error" key={w}>{w}</p>)}
               </section>
               <section className="hx-card">
                 <h3 className="hx-card-h">{t("Add to the mod")}</h3>
