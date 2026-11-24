@@ -86,7 +86,8 @@ export async function makeModPackage({name, author = "", description = "", posts
 
   // the frame: a building (a shed's settings) with the mod's game objects, drawing nothing, with the areas of the whole
   const shift = r => ({x0: round(r.x0 - cx), x1: round(r.x1 - cx), z0: round(r.z0 - cz), z1: round(r.z1 - cz)});
-  const host = {refs, nodes, doc, xml: mergeContainers(doorXml.join(""), ["animatedObjects"]), rects: [frame], footprints: feet.map(shift), inside: insideInfo, width: round(frame.x1 - frame.x0), depth: round(frame.z1 - frame.z0)};
+  const postFeet = live.map(p => ({kind: p.kind, rects: feetOf([{x: p.x, z: p.z, rot: p.rot || 0, bounds: boundsOf(projectGroups(p.data)), feet: p.kind === "prop" ? null : buildingFeet(p.data)}]).map(shift)}));
+  const host = {refs, nodes, doc, postFeet, xml: mergeContainers(doorXml.join(""), ["animatedObjects"]), rects: [frame], footprints: feet.map(shift), inside: insideInfo, width: round(frame.x1 - frame.x0), depth: round(frame.z1 - frame.z0)};
   // The fence is stood 15 cm off the walls it was put against, all the posts along a wall line together (modPlan.mjs keepClear): in the game a fence that touched a building gave "Could not shrink polygon for
   // creation task" with and without the walking shape of the building, and one with a jog (the ends off the wall, their neighbours on its line) did too; the cow barn's own fence, 15 cm out in a line, gave none
   // in both modes.

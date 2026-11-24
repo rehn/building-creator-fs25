@@ -353,7 +353,7 @@ function scene(c) {
   return henScene(c, henYard(geo, p), hensOf(p), footprints(p));
 }
 /**
- * The nodes, placeable XML and ground areas of a hen yard y (henYard's shape: fence, food, pallet, loading, info, blockers, areas) for n hens, the building's footprints
+ * The nodes, placeable XML and ground areas of a hen yard y (henYard's shape: fence, food, pallet, loading, info, blockers, areas; clear: a polygon [[x, z] ...] where the grass is cleared, a clear task as the cow barn has) for n hens, the building's footprints
  * rects ({x0, x1, z0, z1}) the way back along the fence follows. A mod (kinds/modframe.mjs) builds its own yard and uses the same export.
  */
 export function henScene(c, y, n, rects) {
@@ -379,6 +379,8 @@ export function henScene(c, y, n, rects) {
         ...y.nav.blockers.map(blocker)]
       : y.blockers.map(blocker)),
     tg("fence1", [0, 0, 0], y.fence.map((q, i) => tg(`fence1Node${i + 1}`, q))),
+    // the ground under and round the building: the meadow's clear task takes the grass away there (and paints dirt), so the grass ends a little outside the walls
+    ...(y.clear && y.clear.length >= 3 ? [tg("meadowClear", [0, 0, 0], y.clear.map(([x, z], i) => tg(`clearAreaPoint${i + 1}`, [x, 0, z])))] : []),
     // the way back from the last post to the first along the building (the game would close the area with a straight line, through the building)
     tg("navContour", [0, 0, 0], navContourNodes(y.fence, rects).map(([x, z], i) => tg(`navContourNode${i + 1}`, [x, 0, z]))),
     // Hidden until the game's trigger marker setting shows it; projected onto the terrain.
@@ -433,7 +435,15 @@ ${pts.map((_, i) => `                <node node="navContourNode${i + 1}"/>`).joi
                 <decoFoliage name="grassShort"/>
                 <ground type="NONE"/>
                 <terrainGroundType name="grass"/>
-            </createTask>
+            </createTask>${y.clear && y.clear.length >= 3 ? `
+            <clearTask>
+                <fruit type="UNKNOWN" growthState="0"/>
+                <ground type="NONE"/>
+                <terrainGroundType name="dirt"/>
+                <polygon>
+${y.clear.map((_, i) => `                    <node node="clearAreaPoint${i + 1}"/>`).join("\n")}
+                </polygon>
+            </clearTask>` : ""}
         </meadow>
     </husbandry>
 `;
