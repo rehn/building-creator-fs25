@@ -367,9 +367,9 @@ export default function ModPage() {
                   <input type="checkbox" checked={insideId === post.id} onChange={e => save({ inside: e.target.checked ? post.id : null })} disabled={busy} /> {t("The hens walk inside this building")}
                 </label>
               )}
-              <RangeField label={t("Along the width")} value={post.x} {...PLACE} onLive={v => live(post.id, { x: v })} onCommit={v => put(post.id, { x: v })} disabled={busy} />
-              <RangeField label={t("Along the depth")} value={post.z} {...PLACE} onLive={v => live(post.id, { z: v })} onCommit={v => put(post.id, { z: v })} disabled={busy} />
-              <RangeField label={t("Height above the ground")} value={post.y ?? 0} min={0} max={30} step={0.05} hardMin={-50} hardMax={500} onLive={v => live(post.id, { y: v })} onCommit={v => put(post.id, { y: v })} disabled={busy} />
+              <RangeField label="X" value={post.x} {...PLACE} onLive={v => live(post.id, { x: v })} onCommit={v => put(post.id, { x: v })} disabled={busy} />
+              <RangeField label="Y" value={post.y ?? 0} min={0} max={30} step={0.05} hardMin={-50} hardMax={500} onLive={v => live(post.id, { y: v })} onCommit={v => put(post.id, { y: v })} disabled={busy} />
+              <RangeField label="Z" value={post.z} {...PLACE} onLive={v => live(post.id, { z: v })} onCommit={v => put(post.id, { z: v })} disabled={busy} />
               <RangeField label={t("Turn")} value={post.rot} min={0} max={360} step={1} unit="°" hardMin={0} hardMax={360} onLive={v => live(post.id, { rot: v })} onCommit={v => put(post.id, { rot: v % 360 })} disabled={busy} />
               <div className="row">
                 <button type="button" onClick={() => put(post.id, { rot: turnedBy(post.rot, -90) })} disabled={busy}>{t("Turn left")}</button>
@@ -409,7 +409,7 @@ export default function ModPage() {
                   </div>
                   {(["x", "z"] as const).map((k, c) => {
                     const i = Math.min(postIx, (object.points?.length ?? 1) - 1), q = object.points?.[i] ?? [0, 0], to = (v: number) => (c === 0 ? { x: v, z: q[1] } : { x: q[0], z: v });
-                    return <RangeField key={`${object.id}:${i}:${k}`} label={k === "x" ? t("Along the width") : t("Along the depth")} value={q[c]} min={OBJECT_LIMITS[k][0]} max={OBJECT_LIMITS[k][1]} step={0.25}
+                    return <RangeField key={`${object.id}:${i}:${k}`} label={k === "x" ? "X" : "Z"} value={q[c]} min={OBJECT_LIMITS[k][0]} max={OBJECT_LIMITS[k][1]} step={0.25}
                       onLive={v => setObjects(setPoint(objectsRef.current, object.id, i, to(v)))} onCommit={v => changeObjects(setPoint(objectsRef.current, object.id, i, to(v)))} disabled={busy} />;
                   })}
                   {(() => { const pts = object.points ?? [], i = Math.min(postIx, pts.length - 1); return i + 1 < pts.length ? <p className="hint">{t("{d} m to the next post", { d: Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]).toFixed(1) })}</p> : null; })()}
@@ -419,13 +419,13 @@ export default function ModPage() {
                     <button type="button" onClick={backToRectangle} disabled={busy}>{t("Back to a rectangle")}</button>
                   </div>
                 </>
-              ) : (["x", "z", "y", "w", "d", "h"] as const).map(k => (
-                <RangeField key={`${object.id}:${k}`} label={{ x: t("Along the width"), z: t("Along the depth"), y: t("Height above the ground"), w: t("Width"), d: t("Depth"), h: t("Height") }[k]} value={object[k] ?? 0}
+              ) : (["x", "y", "z", "w", "d", "h"] as const).map(k => (
+                <RangeField key={`${object.id}:${k}`} label={{ x: "X", y: "Y", z: "Z", w: t("Width"), d: t("Depth"), h: t("Height") }[k]} value={object[k] ?? 0}
                   min={OBJECT_LIMITS[k][0]} max={OBJECT_LIMITS[k][1]} step={k === "x" || k === "z" ? 0.25 : 0.05}
                   onLive={v => setObjects(setObjectOf(objectsRef.current, object.id, { [k]: v }))} onCommit={v => changeObjects(setObjectOf(objectsRef.current, object.id, { [k]: v }))} disabled={busy} />
               ))}
               {groupOf(object.type) === "hens" && <RangeField label={t("Hens")} value={hens} min={1} max={360} step={1} unit="" onCommit={v => save({ hens: Math.round(v) })} disabled={busy} />}
-              <p className="hint">{t("Measured from the middle of the mod, the same ground the buildings stand on. Taking it away takes the objects that go with it too.")}</p>
+              <p className="hint">{t("Measured from the middle of the mod, the same ground the buildings stand on: X to the right, Y up and Z towards you, as the axes in the view show. Taking it away takes the objects that go with it too.")}</p>
               <div className="row">
                 <button type="button" className="danger" onClick={() => { setSel({ kind: "group" }); changeObjects(removeGroup(objects, object.id)); }} disabled={busy}>Remove</button>
               </div>
