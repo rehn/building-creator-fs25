@@ -2,12 +2,15 @@
 // chickenBarnBig, brandless/animalHusbandries/chickenBarnSmall) have a navigation shape: the walking mesh of the floor inside, and the area outside is the fence minus that shape. The cow barn here builds the
 // same (kinds/cow.mjs animalsInside, walkarea.mjs animalNav); this module builds it for one building of a mod: the floor of the building as the mod stands it (put, lifted and turned), a ramp through each open
 // framed doorway (door style "hole", ground floor) that faces the fence, and the walls as blockers with a gap at each doorway. Pure; imports only the layout and walk helpers. Not tried in the game.
-import { wallsOf, roomOf, openingSpan, WALL_T } from "../layout.mjs";
+import { wallsOf, roomOf, openingSpan, openSide, WALL_T } from "../layout.mjs";
 import { animalNav, KEEP } from "../walkarea.mjs";
 import { insidePoly } from "../objects.mjs";
 import { wallSlabs } from "./cow.mjs";
 
-/** The doorways the animals can use in a building (its sanitized settings): ground floor doors that are an open framed doorway (door style "hole"), as {wall, s0, s1} along the wall. */
+/**
+ * The ways in for the animals in a building (its sanitized settings), as {wall, s0, s1} along the wall: ground floor doors that are an open framed doorway (door style "hole"), and an open side (a carport:
+ * posts and a beam instead of a wall) along its whole length less the posts at the corners.
+ */
 export function entrancesOf(q) {
   const frames = wallsOf(q), out = [];
   for (const d of q.windows || []) {
@@ -16,6 +19,7 @@ export function entrancesOf(q) {
     const [s0, s1] = openingSpan(d, frames[d.wall].L);
     out.push({wall: d.wall, s0, s1});
   }
+  for (const key of ["front", "back", "left", "right"]) if (openSide(q, key) && frames[key]) out.push({wall: key, s0: 0.4, s1: frames[key].L - 0.4});
   return out;
 }
 
