@@ -55,3 +55,4 @@ Ingen ny stil. Allt här är redan beskrivet i [DESIGN.md](DESIGN.md) och återa
 
 - Hela modden är **en** placeable: alla poster ligger i samma i3d, spelaren sätter ut gården i ett svep. Spelobjekt läggs på en post i modens träd och sparas på posten (`mod_items.objects`), men slås ihop vid generering. Spelet tillåter ett `<farmhouse>`, ett `<workshop>` osv. per placeable, så två sovplatser i en mod ger en varning och bara den första exporteras.
 - Modens sida ska vara en fullstor redigeringssida (DESIGN 5): träd till vänster (modden, byggnader och rekvisita, under varje post dess spelobjekt), den stora 3D-vyn i mitten, detaljer för det valda.
+- Gjort 2026-11-24: `/mods/[id]` är en fullstor sida med träd (poster, under dem spelobjekt), stor 3D-vy och detaljer. Spelobjekten är bara de delade grupperna (sovplats, verkstad, fordonsbutik, inlastning, tankstation, pallbutik). Kvar: djurens objekt, staketet, och genereringen som slår ihop posterna till en placeable.
