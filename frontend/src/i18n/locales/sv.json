@@ -1136,11 +1136,8 @@
   "prop": "rekvisita",
   "+ Add": "+ Lägg till",
   "A mod holds buildings and props, and the player puts the whole of it out in one go. Drag them in the view to place them. The game objects, like where the player sleeps, belong to the whole mod.": "En mod innehåller byggnader och rekvisita, och spelaren sätter ut hela modden i ett svep. Dra dem i vyn för att placera dem. Spelobjekten, som var spelaren sover, hör till hela modden.",
-  "Measured from the middle of the mod, the same ground the buildings stand on. Taking it away takes the objects that go with it too.": "Mätt från modens mitt, samma mark som byggnaderna står på. Tar du bort det följer de objekt med som hör ihop med det.",
   "The mod has all of them.": "Modden har alla.",
   "What the game needs around the mod: where the player sleeps, shops or fills up. The game takes one of each in a mod, so each is added once. Drag them in the view to put them where they belong.": "Det spelet behöver runt modden: var spelaren sover, handlar eller tankar. Spelet tar ett av varje i en mod, så varje läggs till en gång. Dra dem i vyn för att lägga dem där de hör hemma.",
-  "Along the width": "Längs bredden",
-  "Along the depth": "Längs djupet",
   "Generate game mod": "Skapa spelmodd",
   "Made {file}.": "Skapade {file}.",
   "Makes the whole mod as one placeable in the game: the buildings and props where you have put them, and the game objects. Put the zip in the game's mods folder.": "Gör hela modden till en placeable i spelet: byggnaderna och rekvisitan där du har lagt dem, och spelobjekten. Lägg zip-filen i spelets mods-mapp.",
@@ -1160,5 +1157,6 @@
   "Post {n} (stop)": "Stolpe {n} (stopp)",
   "The hens walk inside this building": "Hönsen går inne i den här byggnaden",
   "Gives the building a floor the hens can walk on, and a ramp through each open framed doorway (door style Open doorway, framed) or open side (a carport) that faces the fence, as in the game's own hen barns. One building in a mod. The way in has to be on the side of the fence.": "Ger byggnaden ett golv som hönsen kan gå på, och en ramp genom varje öppen inramad dörröppning (dörrstil Öppen dörröppning, inramad) eller öppen sida (en carport) som vetter mot stängslet, som i spelets egna hönshus. En byggnad i en mod. Vägen in måste ligga åt stängslets sida.",
-  "The stretch between posts {a} and {b} is {len} m long: the game cuts {cut} m off it and leaves a hole. The mod is made with the posts moved a little so that it is whole ({to} m), or move a post yourself.": "Sträckan mellan stolpe {a} och {b} är {len} m lång: spelet kapar {cut} m av den och lämnar ett hål. Modden görs med stolparna flyttade lite så att den blir hel ({to} m), eller flytta en stolpe själv."
+  "The stretch between posts {a} and {b} is {len} m long: the game cuts {cut} m off it and leaves a hole. The mod is made with the posts moved a little so that it is whole ({to} m), or move a post yourself.": "Sträckan mellan stolpe {a} och {b} är {len} m lång: spelet kapar {cut} m av den och lämnar ett hål. Modden görs med stolparna flyttade lite så att den blir hel ({to} m), eller flytta en stolpe själv.",
+  "Measured from the middle of the mod, the same ground the buildings stand on: X to the right, Y up and Z towards you, as the axes in the view show. Taking it away takes the objects that go with it too.": "Mäts från modens mitt, samma mark som byggnaderna står på: X åt höger, Y uppåt och Z mot dig, som axlarna i vyn visar. Tar du bort den försvinner de objekt som hör ihop med den också."
 }

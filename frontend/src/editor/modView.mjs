@@ -36,6 +36,32 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
   const look = {theta: 0.6, phi: 0.95, dist: 40, target: new THREE.Vector3()};
   const objs = new Map();   // post id -> {group, src (the groups array it was made from), post, box}
   const maps = new Map();   // map key -> THREE.DataTexture
+  // the axes: X red (to the right), Y green (up), Z blue (towards the viewer, as the view starts) at the origin of the mod's ground, and a small orientation gizmo in the corner of the view
+  const AXES = [["X", 0xd04040, [1, 0, 0]], ["Y", 0x3aa05a, [0, 1, 0]], ["Z", 0x3a6fd0, [0, 0, 1]]];
+  const axisLabel = (text, color) => {
+    const c = document.createElement("canvas"); c.width = c.height = 64;
+    const g = c.getContext("2d"); g.font = "bold 44px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.lineWidth = 7; g.strokeStyle = "#fff"; g.strokeText(text, 32, 34); g.fillStyle = "#" + color.toString(16).padStart(6, "0"); g.fillText(text, 32, 34);
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: new THREE.CanvasTexture(c), depthTest: false, transparent: true}));
+    sp.renderOrder = 20; return sp;
+  };
+  const axesOf = (len, thick) => {
+    const g = new THREE.Group();
+    for (const [name, color, d] of AXES) {
+      const bar = new THREE.Mesh(new THREE.CylinderGeometry(thick, thick, len, 8), new THREE.MeshBasicMaterial({color, depthTest: false}));
+      bar.renderOrder = 19; bar.position.set(d[0] * len / 2, d[1] * len / 2, d[2] * len / 2);
+      if (d[0]) bar.rotation.z = -Math.PI / 2; else if (d[2]) bar.rotation.x = Math.PI / 2;
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(thick * 2.6, thick * 7, 10), new THREE.MeshBasicMaterial({color, depthTest: false}));
+      tip.renderOrder = 19; tip.position.set(d[0] * len, d[1] * len, d[2] * len); tip.rotation.copy(bar.rotation);
+      if (d[0]) tip.rotation.z = -Math.PI / 2; if (d[2]) tip.rotation.x = Math.PI / 2;
+      const label = axisLabel(name, color); label.position.set(d[0] * (len + thick * 12), d[1] * (len + thick * 12), d[2] * (len + thick * 12)); label.scale.set(len * 0.45, len * 0.45, 1);
+      g.add(bar, tip, label);
+    }
+    return g;
+  };
+  const worldAxes = axesOf(3, 0.05); worldAxes.position.y = 0.04; scene.add(worldAxes);
+  const gizmoScene = new THREE.Scene(), gizmoCam = new THREE.PerspectiveCamera(32, 1, 0.1, 20);
+  gizmoScene.add(axesOf(1, 0.045));
+  let showAxes = true;
   const things = new THREE.Group(); scene.add(things);   // the game objects: one group for each, with its box and its outline
   let thingList = [];
   let selected = null, selectedObject = null, selectedPoint = -1, raf = 0, fitted = false;
@@ -75,7 +101,16 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
         pole.material.color.setHex(on ? ACCENT : pole.userData.base ?? g.userData.color); pole.scale.set(on ? 1.8 : 1, on ? 1.5 : 1, on ? 1.8 : 1);
       }
     }
+    worldAxes.visible = showAxes;
     renderer.render(scene, camera);
+    if (showAxes) {   // the orientation gizmo: the axes seen from the same side as the view, in the corner
+      const size = 92, pad = 10;
+      gizmoCam.position.copy(camera.position).sub(target).setLength(4.2); gizmoCam.up.copy(camera.up); gizmoCam.lookAt(0, 0, 0);
+      renderer.autoClear = false; renderer.clearDepth(); renderer.setScissorTest(true);
+      renderer.setViewport(pad, pad, size, size); renderer.setScissor(pad, pad, size, size);
+      renderer.render(gizmoScene, gizmoCam);
+      renderer.setScissorTest(false); renderer.setViewport(0, 0, w, h); renderer.autoClear = true;
+    }
   }
   const redraw = () => { if (!raf) raf = requestAnimationFrame(render); };
 
@@ -171,14 +206,14 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
   /** A square picture (size px) of the middle of the view without the marks of what is chosen, as {width, height, rgba}: the icon and the shop picture of the game mod. Null if it cannot be had. */
   function picture(size) {
     try {
-      const keep = [selected, selectedObject];
-      fit(); selected = null; selectedObject = null;
+      const keep = [selected, selectedObject], keepAxes = showAxes;
+      fit(); selected = null; selectedObject = null; showAxes = false;   // (a picture for the shop shows no axes)
       render();
       const c = document.createElement("canvas"); c.width = c.height = size;
       const side = Math.min(canvas.width, canvas.height), x = c.getContext("2d");
       x.fillStyle = "#e9ece4"; x.fillRect(0, 0, size, size);
       x.drawImage(canvas, (canvas.width - side) / 2, (canvas.height - side) / 2, side, side, 0, 0, size, size);
-      [selected, selectedObject] = keep; redraw();
+      [selected, selectedObject] = keep; showAxes = keepAxes; redraw();
       return {width: size, height: size, rgba: x.getImageData(0, 0, size, size).data};
     } catch { return null; }
   }
