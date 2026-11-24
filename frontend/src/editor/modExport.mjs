@@ -14,7 +14,7 @@ import { sanitize, i3dFiles, placeableXml, modDescXml, modName, buildInMod, with
 import { textureMapFor } from "./headless.mjs";
 import { I3dDoc, tg, prefixNames } from "./i3d.mjs";
 import { mergeContainers } from "./kinds/gameobjects.mjs";
-import { projectGroups, boundsOf, footprint, feetOf, buildingFeet, keepClear } from "./modPlan.mjs";
+import { projectGroups, boundsOf, footprint, feetOf, buildingFeet, keepClear, fitPanels } from "./modPlan.mjs";
 import { fenceProblems } from "../lib/modObjects.mjs";
 import { exportI3dAtlas, atlasDdsFiles } from "../builder/atlas.mjs";
 import { sanitize as sanitizeProp } from "../builder/model.mjs";
@@ -90,8 +90,9 @@ export async function makeModPackage({name, author = "", description = "", posts
   // The fence is stood 15 cm off the walls it was put against, all the posts along a wall line together (modPlan.mjs keepClear): in the game a fence that touched a building gave "Could not shrink polygon for
   // creation task" with and without the walking shape of the building, and one with a jog (the ends off the wall, their neighbours on its line) did too; the cow barn's own fence, 15 cm out in a line, gave none
   // in both modes.
+  // (and fitted to the 2 m panels of the game fence, modPlan.mjs fitPanels: a stretch with a rest of 0.6 to 1.5 m is cut short in the game and leaves a hole)
   const asPut = pts => pts.map(([x, z]) => [round(x - cx), round(z - cz)]);
-  const placed = objects.map(o => ({...o, x: round((o.x || 0) - cx), z: round((o.z || 0) - cz), ...(o.points ? {points: asPut(keepClear(o.points, feet))} : {})}));
+  const placed = objects.map(o => ({...o, x: round((o.x || 0) - cx), z: round((o.z || 0) - cz), ...(o.points ? {points: (kept => fitPanels(asPut(kept), kept.map((q, i) => ({x: Math.abs(q[0] - o.points[i][0]) > 0.05, z: Math.abs(q[1] - o.points[i][1]) > 0.05}))))(keepClear(o.points, feet))} : {})}));
   const p0 = sanitize({kind: "modframe", objects: placed, hens, modDescription: description});
   for (const [file, data] of Object.entries(i3dFiles(p0, {host}))) files.set(file, typeof data === "string" ? latin1(data) : data);
   const icon = (pictures && pictures.icon) || plain(256, [155, 42, 31]), store = (pictures && pictures.store) || plain(512, [155, 42, 31]);
