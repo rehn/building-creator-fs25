@@ -132,8 +132,8 @@ export const objectsOfData = data => (data && Array.isArray(data.objects) ? data
  */
 /** The sentence about a fence's problems found by fenceProblems ({posts, edges}), as numbers for the player (from 1): [text key, values] for each, in the order to say them. */
 export const fenceProblemList = ({posts, edges}, n) => [
-  ...(posts.length ? [["Post {posts} of the fence stands in or right against a building. Keep it 15 cm out from the wall, or the game cannot make the area the hens walk in.", {posts: posts.map(i => i + 1).join(", ")}]] : []),
-  ...(edges.length ? [["The fence between {stretches} runs through or right along a building. Keep it 15 cm out from the wall, or the game cannot make the area the hens walk in.", {stretches: edges.map(i => `${i + 1} and ${(i + 1) % n + 1}`).join("; ")}]] : []),
+  ...(posts.length ? [["Post {posts} of the fence stands inside a building. Move it out, or the game cannot make the area the hens walk in.", {posts: posts.map(i => i + 1).join(", ")}]] : []),
+  ...(edges.length ? [["The fence between {stretches} runs through a building. Move the posts to the wall or out from it, or the game cannot make the area the hens walk in.", {stretches: edges.map(i => `${i + 1} and ${(i + 1) % n + 1}`).join("; ")}]] : []),
 ];
 
 export function fenceProblems(objects, rects) {
