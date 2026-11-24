@@ -2,7 +2,7 @@
 // ground (it snaps to the grid and to the edges of the others), drag a game object the same way (on the grid), Alt held switches snapping off, drag the ground to turn the view,
 // right-drag or Shift+drag to pan, scroll to zoom. three.js only; what to draw and how to snap come from modPlan.mjs, and the page keeps the posts and the objects (this view only draws them).
 import * as THREE from "three";
-import { snapPost, mapKey } from "./modPlan.mjs";
+import { snapPost, snapFencePost, footprint, mapKey } from "./modPlan.mjs";
 
 const ACCENT = 0xd4553f;
 /** The colour of a game object's box by its type (a type not listed gets the last one). */
@@ -217,8 +217,9 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
     } else if (drag.mode === "point") {
       const at = groundAt(e), ob = thingList.find(q => q.id === drag.objectId);
       if (!at || !ob || !ob.points[drag.i]) return;
-      const snap = v => (e.altKey ? Math.round(v * 100) / 100 : Math.round(v / GRID) * GRID) + 0;
-      const x = snap(at.x), z = snap(at.z), [px, pz] = ob.points[drag.i];
+      // (a post goes to a corner or a wall of a building or prop close by, never inside one; Alt: where it is)
+      const feet = [...objs.values()].map(o => { const f = footprint(o.post.bounds, o.post.rot); return {x0: o.post.x + f.minX, x1: o.post.x + f.maxX, z0: o.post.z + f.minZ, z1: o.post.z + f.maxZ}; });
+      const [x, z] = snapFencePost([at.x, at.z], feet, {off: e.altKey, grid: GRID}), [px, pz] = ob.points[drag.i];
       if (px === x && pz === z) return;
       const points = ob.points.map((q, k) => k === drag.i ? [x, z] : q);
       thingList = thingList.map(q => q.id === ob.id ? {...q, points} : q);

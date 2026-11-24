@@ -90,3 +90,35 @@ export function snapPost(post, others, {grid = 0.5, reach = 0.6, off = false} = 
   const round = v => Math.round(v * 1e6) / 1e6 + 0;
   return {x: dx !== null ? round(post.x + dx) : onGrid(post.x), z: dz !== null ? round(post.z + dz) : onGrid(post.z)};
 }
+
+const FENCE_CORNER = 0.8, FENCE_WALL = 0.4;
+const cm = v => Math.round(v * 100) / 100 + 0;
+const inside = (x, z, r) => x > r.x0 + 1e-6 && x < r.x1 - 1e-6 && z > r.z0 + 1e-6 && z < r.z1 - 1e-6;
+
+/**
+ * Where a fence post dragged to q = [x, z] goes (as editor/objects.mjs snapFencePoint does in a building): a corner of a building within 80 cm (a fence starts and stops at a corner),
+ * else onto the line of a wall within 40 cm, else the 25 cm grid; never inside a building (put out through the nearest side). rects: what the buildings and props stand on
+ * [{x0, x1, z0, z1}]. off: no snapping (Alt held), only to a centimetre.
+ */
+export function snapFencePost(q, rects, {off = false, grid = 0.25} = {}) {
+  if (off) return [cm(q[0]), cm(q[1])];
+  let best = null;
+  for (const r of rects) for (const c of [[r.x0, r.z0], [r.x1, r.z0], [r.x0, r.z1], [r.x1, r.z1]]) {
+    const d = Math.hypot(c[0] - q[0], c[1] - q[1]);
+    if (d < FENCE_CORNER && (!best || d < best.d)) best = {d, at: c};
+  }
+  if (best) return [cm(best.at[0]), cm(best.at[1])];
+  let x = Math.round(q[0] / grid) * grid, z = Math.round(q[1] / grid) * grid;
+  for (const r of rects) {
+    if (q[0] > r.x0 - FENCE_WALL && q[0] < r.x1 + FENCE_WALL) { if (Math.abs(q[1] - r.z0) < FENCE_WALL) z = r.z0; else if (Math.abs(q[1] - r.z1) < FENCE_WALL) z = r.z1; }
+    if (q[1] > r.z0 - FENCE_WALL && q[1] < r.z1 + FENCE_WALL) { if (Math.abs(q[0] - r.x0) < FENCE_WALL) x = r.x0; else if (Math.abs(q[0] - r.x1) < FENCE_WALL) x = r.x1; }
+  }
+  for (const r of rects) if (inside(x, z, r)) {
+    const moves = [[r.x0 - x, 0], [r.x1 - x, 0], [0, r.z0 - z], [0, r.z1 - z]], [mx, mz] = moves.reduce((m, v) => (Math.hypot(...v) < Math.hypot(...m) ? v : m));
+    x += mx; z += mz;
+  }
+  return [cm(x), cm(z)];
+}
+
+/** The indexes of the posts [[x, z] ...] that stand inside one of the rects (on a wall is not inside). */
+export const postsInside = (points, rects) => points.flatMap(([x, z], i) => (rects.some(r => inside(x, z, r)) ? [i] : []));

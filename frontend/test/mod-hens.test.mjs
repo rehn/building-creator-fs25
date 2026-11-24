@@ -144,3 +144,30 @@ test("a hen yard goes on the wall asked for: its fence stands out on that side o
     assert.ok(sign * centre(f.points)[axis] > 0, `${wall}: the fence is on its side ${JSON.stringify(f.points)}`);
   }
 });
+
+// ---- a fence post snaps to the buildings, and one inside a building is told ----
+import { snapFencePost, postsInside } from "../src/editor/modPlan.mjs";
+
+const rects = [{x0: 0, x1: 10, z0: 0, z1: 6}];
+
+test("a fence post near a corner of a building goes to the corner, near a wall onto the line of the wall, else to the grid", () => {
+  assert.deepEqual(snapFencePost([10.4, 6.3], rects), [10, 6], "a corner within 80 cm");
+  assert.deepEqual(snapFencePost([4.1, 6.3], rects), [4, 6], "onto the line of the wall (40 cm), along it to the grid");
+  assert.deepEqual(snapFencePost([20.1, 14.9], rects), [20, 15], "the 25 cm grid");
+  assert.deepEqual(snapFencePost([20.1, 14.9], rects, {off: true}), [20.1, 14.9], "Alt: where it is, to a centimetre");
+});
+
+test("a fence post is never inside a building: it is put out through the nearest side", () => {
+  assert.deepEqual(snapFencePost([5, 5], rects), [5, 6]);
+  assert.deepEqual(snapFencePost([1.5, 3], rects), [0, 3]);
+});
+
+test("the posts that stand inside a building are found, and the mod says so when it is made", async () => {
+  assert.deepEqual(postsInside([[5, 3], [11, 3], [0, 0], [5, 6.001]], rects), [0], "on a wall is not inside");
+  const bad = [{id: "a", kind: "building", name: "Huset", x: 20, z: 10, y: 0, rot: 0, data: {kind: "house", width: 10, depth: 8}}];
+  const objects = yard().map(o => (o.type === "pasture" ? {...o, points: [[20, 10], [20, -5], [45, -5], [45, 10]]} : o));
+  const {warnings} = await makeModPackage({name: "Hönsgården", posts: bad, objects});
+  assert.ok(warnings.some(w => /post/i.test(w) && /inside/i.test(w)), JSON.stringify(warnings));
+  const fine = await makeModPackage({name: "Hönsgården", posts: bad, objects: yard()});
+  assert.ok(!fine.warnings.some(w => /inside/i.test(w)), JSON.stringify(fine.warnings));
+});
