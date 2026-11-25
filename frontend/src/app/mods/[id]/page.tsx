@@ -19,7 +19,7 @@ import { makeModPackage } from "@/editor/modExport.mjs";
 import { confirmDialog, promptDialog } from "@/components/dialog.mjs";
 import { RangeField } from "@/components/RangeField";
 import { addPost, removePost, setPostType, placePost, choices, payload } from "@/lib/mods.mjs";
-import { groupsFree, addGroup, removeGroup, setObjectOf, settingsFor, objectsOfData, setPoint, addPoint, removePoint, hensOfData, groupOf, GROUPS, entranceBuilding, fenceProblems, fenceProblemList, insertPoint, MIN_POSTS } from "@/lib/modObjects.mjs";
+import { groupsFree, addGroup, removeGroup, setObjectOf, settingsFor, objectsOfData, setPoint, addPoint, removePoint, animalOfData, countOfData, ANIMALS, groupOf, GROUPS, entranceBuilding, fenceProblems, fenceProblemList, insertPoint, MIN_POSTS } from "@/lib/modObjects.mjs";
 
 type Kind = { id: string; name: string };
 type Groups = ReturnType<typeof projectGroups>;
@@ -60,7 +60,8 @@ export default function ModPage() {
   const [made, setMade] = useState<{ name: string; warnings: string[] } | null>(null);
   const [postIx, setPostIx] = useState(0);   // the post of a fence the properties show
   const [postOn, setPostOn] = useState(false);   // a post of the fence is chosen (in the tree or the view), not the fence as a whole
-  const hens: number = hensOfData(mod?.data);
+  const animal: string = animalOfData(mod?.data), count: number = countOfData(mod?.data);   // the animals of the mod (hens, cows or sheep) and how many of them
+  const counts = { hens: countOfData({ ...mod?.data, animal: "hens" }), cows: countOfData({ ...mod?.data, animal: "cows" }), sheep: countOfData({ ...mod?.data, animal: "sheep" }) };
   const insideId: string | null = typeof mod?.data?.inside === "string" ? mod.data.inside : null;   // the building whose floor the hens walk on
 
   useEffect(() => {
@@ -83,14 +84,14 @@ export default function ModPage() {
   }, [mod]);
 
   /** Saves the buildings and props and/or the game objects (the answer has the ids and the names); a change made somewhere else is not overwritten but read again. */
-  async function save(patch: { items?: ModPost[]; objects?: ModObject[]; hens?: number; inside?: string | null }) {
+  async function save(patch: { items?: ModPost[]; objects?: ModObject[]; count?: number; animal?: string; inside?: string | null }) {
     const m = modRef.current;
     if (!m) return;
     setBusy(true); setError("");
     try {
       setMod(await api.updateMod(m.id, {
         ...(patch.items ? { items: payload(patch.items) } : {}),
-        ...(patch.objects || patch.hens || "inside" in patch ? { data: { ...(m.data ?? {}), ...(patch.objects ? { objects: patch.objects } : {}), ...(patch.hens ? { hens: patch.hens } : {}), ...("inside" in patch ? { inside: patch.inside } : {}) } } : {}),
+        ...(patch.objects || patch.count || patch.animal || "inside" in patch ? { data: { ...(m.data ?? {}), ...(patch.objects ? { objects: patch.objects } : {}), ...(patch.animal ? { animal: patch.animal } : {}), ...(patch.count ? { [patch.animal ?? animalOfData(m.data)]: patch.count } : {}), ...("inside" in patch ? { inside: patch.inside } : {}) } } : {}),
         version: m.version,
       }));
     } catch (e) { setError((e as Error).message); api.mod(m.id).then(setMod).catch(() => {}); }
@@ -177,7 +178,7 @@ export default function ModPage() {
         posts.push({ id: p.id, kind: p.kind, name: p.name, x: p.x, z: p.z, y: p.y ?? 0, rot: p.rot, data });
       }
       const pkg = await makeModPackage({
-        name: mod.name, author: user?.name ?? "", posts, objects, hens, inside: insideId,
+        name: mod.name, author: user?.name ?? "", posts, objects, animal, ...counts, inside: insideId,
         // the icon and the shop picture: a snapshot of the 3D view (the game does not load a mod without an icon)
         pictures: view.current ? { icon: view.current.picture(256), store: view.current.picture(512) } : null,
         // the user's textures a prop is made of: their diffuse and normal maps from the server
@@ -260,7 +261,7 @@ export default function ModPage() {
   function backToRectangle() {
     const door = entranceBuilding(draft.map(p => ({ kind: p.kind, rot: p.rot, data: datas.current.get(p.ref) })));
     const a = door.index >= 0 ? around(draft[door.index].id) : around();
-    const fresh = (addGroup([], "hens", settingsFor(a), a.at, { wall: door.wall }) as ModObject[]).find(o => o.type === "pasture");
+    const fresh = (addGroup([], animal, settingsFor(a), a.at, { wall: door.wall }) as ModObject[]).find(o => o.type === "pasture");
     if (!fresh) return;
     setPostIx(0);
     changeObjects(objects.map(o => (o.type === "pasture" ? { ...o, points: fresh.points } : o)));
@@ -268,9 +269,10 @@ export default function ModPage() {
   function addObjects(group: string) {
     // (a hen yard goes against the first building with a door, on the side the door faces, with its fence 15 cm out from the wall as the hen house has it)
     const door = entranceBuilding(draft.map(p => ({ kind: p.kind, rot: p.rot, data: datas.current.get(p.ref) }))), wall: string = door.wall;
-    const a = group === "hens" && door.index >= 0 ? around(draft[door.index].id) : around();
+    const a = group in ANIMALS && door.index >= 0 ? around(draft[door.index].id) : around();
     const next: ModObject[] = addGroup(objects, group, settingsFor(a), a.at, { wall });
-    changeObjects(next);
+    setObjects(next);
+    save(group in ANIMALS ? { objects: next, animal: group } : { objects: next });   // (a mod has one kind of animals: the yard that is added says which)
     const added = next.slice(-1)[0];
     if (added) setSel({ kind: "object", object: added.id });
   }
@@ -304,8 +306,8 @@ export default function ModPage() {
           { hint: p.kind === "prop" ? t("prop") : p.type ? TYPES.find(k => k.id === p.type)?.name : undefined })),
         row("objects", 1, t("Game objects"), sel.kind === "group", () => setSel({ kind: "group" }), { kids: objects.length > 0 }),
         // (the objects that belong together, such as the hen yard's, are under a node of their group; the nodes come in the order the objects were added in)
-        ...(closed.objects ? [] : [...new Set(objects.map(o => groupOf(o.type) ?? ""))].flatMap(g => {
-          const inGroup = objects.filter(o => (groupOf(o.type) ?? "") === g), gKey = `g:${g}`;
+        ...(closed.objects ? [] : [...new Set(objects.map(o => groupOf(o.type, animal) ?? ""))].flatMap(g => {
+          const inGroup = objects.filter(o => (groupOf(o.type, animal) ?? "") === g), gKey = `g:${g}`;
           return [
             ...(g ? [row(gKey, 2, t(GROUPS.find(x => x.id === g)?.name ?? g), false, () => fold(gKey), { kids: true, hint: String(inGroup.length) })] : []),
             ...(g && closed[gKey] ? [] : inGroup.flatMap(o => objectRows(o, g ? 3 : 2))),
@@ -373,7 +375,7 @@ export default function ModPage() {
               )}
               {post.kind === "building" && !post.missing && objects.some(o => o.type === "pasture") && (
                 <label className="check" title={t("Gives the building a floor the hens can walk on, and a ramp through each open framed doorway (door style Open doorway, framed) or open side (a carport) that faces the fence, as in the game's own hen barns. One building in a mod. The way in has to be on the side of the fence.")}>
-                  <input type="checkbox" checked={insideId === post.id} onChange={e => save({ inside: e.target.checked ? post.id : null })} disabled={busy} /> {t("The hens walk inside this building")}
+                  <input type="checkbox" checked={insideId === post.id} onChange={e => save({ inside: e.target.checked ? post.id : null })} disabled={busy} /> {t(animal === "cows" ? "The cows walk inside this building" : animal === "sheep" ? "The sheep walk inside this building" : "The hens walk inside this building")}
                 </label>
               )}
               <RangeField label="X" value={post.x} {...PLACE} onLive={v => live(post.id, { x: v })} onCommit={v => put(post.id, { x: v })} disabled={busy} />
@@ -443,10 +445,10 @@ export default function ModPage() {
                   </div>
                 </>
               )}
-              {groupOf(object.type) === "hens" && <RangeField label={t("Hens")} value={hens} min={1} max={360} step={1} unit="" onCommit={v => save({ hens: Math.round(v) })} disabled={busy} />}
+              {groupOf(object.type, animal) === animal && animal in ANIMALS && <RangeField label={t(animal === "hens" ? "Hens" : animal === "cows" ? "Cows" : "Sheep")} value={count} min={1} max={ANIMALS[animal as keyof typeof ANIMALS].max} step={1} unit="" onCommit={v => save({ count: Math.round(v) })} disabled={busy} />}
               <p className="hint">{t("Measured from the middle of the mod, the same ground the buildings stand on: X to the right, Y up and Z towards you, as the axes in the view show. Taking it away takes the objects that go with it too.")}</p>
               <div className="row">
-                <button type="button" className="danger" onClick={() => { setSel({ kind: "group" }); changeObjects(removeGroup(objects, object.id)); }} disabled={busy}>Remove</button>
+                <button type="button" className="danger" onClick={() => { setSel({ kind: "group" }); changeObjects(removeGroup(objects, object.id, animal)); }} disabled={busy}>Remove</button>
               </div>
             </section>
           )}

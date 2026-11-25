@@ -4,27 +4,43 @@
 // Pure functions; none of them changes the list it is given.
 import { SHARED } from "../editor/kinds/gameobjects.mjs";
 import { SHARED_GROUPS, OBJECT_LIMITS, fencePoints, MAX_FENCE_POINTS, nextTroughSpot } from "../editor/objects.mjs";
-import { HEN_TYPES } from "../editor/kinds/modframe.mjs";
+import { HEN_TYPES, COW_TYPES, SHEEP_TYPES } from "../editor/kinds/modframe.mjs";
 import { MAX_HENS } from "../editor/kinds/chicken.mjs";
+import { MAX_COWS } from "../editor/kinds/cow.mjs";
+import { MAX_SHEEP } from "../editor/kinds/sheep.mjs";
 import { postsInside, edgesThrough } from "../editor/modPlan.mjs";
 import { navContourNodes, ccwFence } from "../editor/kinds/pasture.mjs";
 import { wallsOf } from "../editor/layout.mjs";
 import { sanitize } from "../editor/model.mjs";
 
-// The groups a mod can take: the shared ones (every one is a few boxes) and the hen yard (boxes and a fence of posts, kinds/modframe.mjs).
-const NAMES = {sleep: "Sleep point", workshop: "Vehicle workshop", vehicleshop: "Vehicle shop", intake: "Grain intake", pump: "Fuel area", warehouse: "Pallet shop", hens: "Hen yard"};
-const MOD_GROUPS = {...SHARED_GROUPS, hens: HEN_TYPES};
+// The groups a mod can take: the shared ones (every one is a few boxes) and the yard of the animals (boxes and a fence of posts, kinds/modframe.mjs): the hens', the cows' or the sheep's. A mod has ONE of
+// them (Lars): their objects are of the same types, so the animals of the mod (mod.data.animal) say which yard the objects are.
+const NAMES = {sleep: "Sleep point", workshop: "Vehicle workshop", vehicleshop: "Vehicle shop", intake: "Grain intake", pump: "Fuel area", warehouse: "Pallet shop", hens: "Hen yard", cows: "Cow yard", sheep: "Sheep yard"};
+const MOD_GROUPS = {...SHARED_GROUPS, hens: HEN_TYPES, cows: COW_TYPES, sheep: SHEEP_TYPES};
+/** The animals a mod can have, with the most of them, how many to start with, and what the count is called in the plan data. */
+export const ANIMALS = {hens: {max: MAX_HENS, start: 30}, cows: {max: MAX_COWS, start: 12}, sheep: {max: MAX_SHEEP, start: 20}};
+const ANIMAL_TYPES = [...new Set(Object.keys(ANIMALS).flatMap(id => MOD_GROUPS[id]))];
+const isAnimal = type => ANIMAL_TYPES.includes(type);
 
 /** The groups the mod can take: {id, name (for the player), types (the object types that go together)}. */
 export const GROUPS = Object.keys(MOD_GROUPS).map(id => ({id, name: NAMES[id], types: MOD_GROUPS[id]}));
 
-/** The group an object type belongs to, or null (the other animals' objects are not here yet). */
-export const groupOf = type => Object.keys(MOD_GROUPS).find(id => MOD_GROUPS[id].includes(type)) || null;
+/** The group an object type belongs to, or null. An animal's object belongs to the yard of the mod's animals (hens when not said). */
+export const groupOf = (type, animal = "hens") => (isAnimal(type) ? (animal in ANIMALS ? animal : "hens") : Object.keys(MOD_GROUPS).find(id => !(id in ANIMALS) && MOD_GROUPS[id].includes(type)) || null);
+
+/** The animals of a mod's plan data: "hens" (the first mods had only those), "cows" or "sheep". */
+export const animalOfData = data => (data && data.animal in ANIMALS && typeof data.animal === "string" ? data.animal : "hens");
+/** How many animals the mod is made for: 1 to the most the game's biggest barn holds, to start with 30 hens, 12 cows or 20 sheep (the plan data's hens, cows or sheep). */
+export const countOfData = data => {
+  const a = animalOfData(data), v = data && data[a] !== undefined && data[a] !== null && data[a] !== "" ? Math.round(+data[a]) : NaN;
+  return Number.isFinite(v) ? Math.max(1, Math.min(ANIMALS[a].max, v)) : ANIMALS[a].start;
+};
 
 /** The building settings the defaults are worked out from: a building as wide and deep as the mod's things are. */
 export const settingsFor = ({width, depth, foundation = 0}) => sanitize({kind: "house", width, depth, foundation});
 
-const has = (objects, group) => objects.some(o => MOD_GROUPS[group].includes(o.type));
+// (a mod has one kind of animals: any animal object means it has its yard)
+const has = (objects, group) => (group in ANIMALS ? objects.some(o => isAnimal(o.type)) : objects.some(o => MOD_GROUPS[group].includes(o.type)));
 
 /** The groups the mod does not have yet (the game takes one of each in a placeable). */
 export const groupsFree = objects => GROUPS.filter(g => !has(objects, g.id));
@@ -38,7 +54,7 @@ const round = v => Math.round(v * 1000) / 1000;
 export function addGroup(objects, group, p, at = [0, 0], {wall = "back"} = {}) {
   if (!MOD_GROUPS[group] || has(objects, group)) return objects;
   let id = objects.reduce((m, o) => Math.max(m, o.id), 0);
-  const made = group === "hens" ? henDefaults(p, wall) : SHARED[group].defaults(p);
+  const made = group === "hens" ? henDefaults(p, wall) : group in ANIMALS ? barnDefaults(p, wall, group) : SHARED[group].defaults(p);
   // (a fence has no middle: its posts are moved)
   return [...objects, ...made.map(o => ({...o, id: ++id, ...(o.type === "pasture" ? {points: o.points.map(([x, z]) => [round(x + at[0]), round(z + at[1])])} : {x: round(o.x + at[0]), z: round(o.z + at[1])})}))];
 }
@@ -51,6 +67,12 @@ function henDefaults({width, depth, foundation = 0}, wall = "back") {
   const feed = nextTroughSpot(q, "feedTrough"), withFeed = {...q, objects: [...q.objects, {id: 99, type: "feedTrough", ix: 0, iz: 0, ...feed}]}, water = nextTroughSpot(withFeed, "waterTrough");
   const trough = o => { const {x, z, w, d, h} = o; return {type: o.type, x, z, w, d, h, ix: 0, iz: 0}; };
   return [...q.objects.filter(o => o.type !== "pasture"), trough(feed), trough(water), {type: "pasture", wall: pa.wall, a: 0, b: 0, depth: pa.depth, points: fencePoints(q).slice(0, MAX_FENCE_POINTS)}];
+}
+
+/** Where a cow yard or sheep yard goes to start with: what a cow or sheep barn as wide and deep as p has (the feed pad, bale drop, trailer spot, info area, a feed and a water trough, wool pallets for sheep), and its fence as posts. */
+function barnDefaults({width, depth, foundation = 0}, wall, animal) {
+  const q = sanitize({kind: animal === "cows" ? "cow" : "sheep", width, depth, foundation, pastureWall: wall, doorWall: OPPOSITE[wall] || "front"}), pa = q.objects.find(o => o.type === "pasture");
+  return [...q.objects.filter(o => o.type !== "pasture").map(({type, x, z, w, d, h, ix = 0, iz = 0}) => ({type, x, z, w, d, h, ix, iz})), {type: "pasture", wall: pa.wall, a: 0, b: 0, depth: pa.depth, points: fencePoints(q).slice(0, MAX_FENCE_POINTS)}];
 }
 
 const OPPOSITE = {front: "back", back: "front", left: "right", right: "left"};
@@ -73,11 +95,11 @@ export function entranceBuilding(posts) {
 /** The side of the mod the first building's door faces (entranceBuilding), "back" when none does. */
 export const entranceWall = posts => entranceBuilding(posts).wall;
 
-/** The objects without the group of the object `objectId`: its objects come and go together (a shop counter and its delivery place). */
-export function removeGroup(objects, objectId) {
-  const o = objects.find(x => x.id === objectId), g = o && groupOf(o.type);
+/** The objects without the group of the object `objectId`: its objects come and go together (a shop counter and its delivery place). animal: the mod's animals (animalOfData). */
+export function removeGroup(objects, objectId, animal = "hens") {
+  const o = objects.find(x => x.id === objectId), g = o && groupOf(o.type, animal);
   if (!o) return objects;
-  const types = g ? MOD_GROUPS[g] : [o.type];
+  const types = g ? (g in ANIMALS ? ANIMAL_TYPES : MOD_GROUPS[g]) : [o.type];
   return objects.filter(x => !types.includes(x.type));
 }
 

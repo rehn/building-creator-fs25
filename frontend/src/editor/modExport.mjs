@@ -38,8 +38,8 @@ async function propFiles(post, folder, {loadTextures}) {
 /** A plain picture w x w in one colour (when there is no snapshot of the view to use). */
 const plain = (w, [r, g, b]) => ({width: w, height: w, rgba: Uint8ClampedArray.from({length: w * w * 4}, (_, i) => [r, g, b, 255][i % 4])});
 
-/** @param {{name: string, author?: string, description?: string, posts: any[], objects?: any[], hens?: number, inside?: string | null, loadTextures?: ((ids: string[]) => Promise<Map<string, any>>) | null, encode?: any, pictures?: {icon?: any, store?: any} | null}} mod */
-export async function makeModPackage({name, author = "", description = "", posts, objects = [], hens = 30, inside = null, loadTextures = null, encode = encodeDds, pictures = null}) {
+/** @param {{name: string, author?: string, description?: string, posts: any[], objects?: any[], hens?: number, cows?: number, sheep?: number, animal?: string, ground?: string, inside?: string | null, loadTextures?: ((ids: string[]) => Promise<Map<string, any>>) | null, encode?: any, pictures?: {icon?: any, store?: any} | null}} mod */
+export async function makeModPackage({name, author = "", description = "", posts, objects = [], hens = 30, cows = 12, sheep = 20, animal = "hens", ground = "grass", inside = null, loadTextures = null, encode = encodeDds, pictures = null}) {
   const warnings = [];
   const live = posts.filter(p => p.data);
   for (const p of posts) if (!p.data) warnings.push(`“${p.name || p.id}” could not be read and is left out.`);
@@ -94,7 +94,8 @@ export async function makeModPackage({name, author = "", description = "", posts
   // (and fitted to the 2 m panels of the game fence, modPlan.mjs fitPanels: a stretch with a rest of 0.6 to 1.5 m is cut short in the game and leaves a hole)
   const asPut = pts => pts.map(([x, z]) => [round(x - cx), round(z - cz)]);
   const placed = objects.map(o => ({...o, x: round((o.x || 0) - cx), z: round((o.z || 0) - cz), ...(o.points ? {points: (kept => fitPanels(asPut(kept), kept.map((q, i) => ({x: Math.abs(q[0] - o.points[i][0]) > 0.05, z: Math.abs(q[1] - o.points[i][1]) > 0.05}))))(keepClear(o.points, feet))} : {})}));
-  const p0 = sanitize({kind: "modframe", objects: placed, hens, modDescription: description});
+  const p0 = sanitize({kind: "modframe", objects: placed, hens, cows, sheep, animal, pastureGround: ground, modDescription: description});
+  const who = {hens: "hens", cows: "cows", sheep: "sheep"}[p0.animal];   // (the animals of the mod, for what the warnings say)
   for (const [file, data] of Object.entries(i3dFiles(p0, {host}))) files.set(file, typeof data === "string" ? latin1(data) : data);
   const icon = (pictures && pictures.icon) || plain(256, [155, 42, 31]), store = (pictures && pictures.store) || plain(512, [155, 42, 31]);
   files.set(MOD_FILES.icon, encode(icon.width, icon.height, icon.rgba));
@@ -116,5 +117,6 @@ export async function makeModPackage({name, author = "", description = "", posts
     "no-fence": `The hens cannot walk inside “${insideInfo.name}”: the fence is too small.`,
   }[why] || `The hens cannot walk inside “${insideInfo.name}”.`);
   if (!live.length) warnings.push("The mod holds no buildings or props yet.");
+  if (who !== "hens") for (let i = 0; i < warnings.length; i++) warnings[i] = String(warnings[i]).replace(/\bhens\b/g, who);   // (the warnings are written about the hens)
   return {files, warnings, middle: [round(cx), round(cz)], mod: modName(name)};
 }
