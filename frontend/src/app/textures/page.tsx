@@ -8,15 +8,16 @@ import { useUser } from "@/lib/useUser";
 import { TopBar } from "@/components/TopBar";
 import { t } from "@/i18n/index.mjs";
 import { makePhotoTexture, photoTextureDds, squareCrop, nearestPow2 } from "@/editor/photoTexture.mjs";
+import { prepareSource, COLOR_LIMITS } from "@/editor/photoEdit.mjs";
 import { confirmDialog } from "@/components/dialog.mjs";
 
 type Picture = { width: number; height: number; rgba: Uint8ClampedArray };
-type Draft = { file: File; picture: Picture; name: string; zoom: number; cx: number; cy: number; rotate: number; flatten: number; size: number; meters: number; seamless: boolean; bump: number; mine: boolean; whole: boolean; background: string; margin: number };
+type Draft = { file: File; original: Picture; picture: Picture; flipX: boolean; flipY: boolean; turn: number; brightness: number; contrast: number; saturation: number; hue: number; name: string; zoom: number; cx: number; cy: number; rotate: number; flatten: number; size: number; meters: number; seamless: boolean; bump: number; mine: boolean; whole: boolean; background: string; margin: number };
 
 /** The part of the picture that is used: all of it for a logo or a sign (stretched to the square), else the square frame. */
 const cropOf = (d: Draft) => d.whole ? { x: 0, y: 0, w: 1, h: 1 } : squareCrop(d.picture.width, d.picture.height, d);
 /** What makePhotoTexture is given for a draft: the whole picture is not straightened, evened out or blended at its edges. */
-const optsOf = (d: Draft, size: number, bump = d.bump) => ({ size, crop: cropOf(d), rotate: d.whole ? 0 : d.rotate, flatten: d.whole ? 0 : d.flatten, seamless: d.seamless && !d.whole, bump, meters: d.meters, background: d.background, margin: d.whole ? d.margin / 100 : 0 });
+const optsOf = (d: Draft, size: number, bump = d.bump) => ({ size, crop: cropOf(d), rotate: d.whole ? 0 : d.rotate, flatten: d.whole ? 0 : d.flatten, seamless: d.seamless && !d.whole, bump, meters: d.meters, background: d.background, margin: d.whole ? d.margin / 100 : 0, brightness: d.brightness, contrast: d.contrast, saturation: d.saturation, hue: d.hue });
 
 // (kept as string literals so that npm run i18n finds them)
 const TEXT = {
@@ -62,7 +63,7 @@ function Preview({ d }: { d: Draft }) {
     const tex = makePhotoTexture(d.picture, optsOf(d, PREVIEW));
     const one = canvasOf(tex.diffuse, PREVIEW), g = c.getContext("2d")!;
     for (let y = 0; y < 2; y++) for (let x = 0; x < 2; x++) g.drawImage(one, x * PREVIEW, y * PREVIEW);
-  }, [d.picture, d.zoom, d.cx, d.cy, d.rotate, d.flatten, d.seamless, d.bump, d.meters, d.whole, d.background, d.margin]);
+  }, [d.picture, d.zoom, d.cx, d.cy, d.rotate, d.flatten, d.seamless, d.bump, d.meters, d.whole, d.background, d.margin, d.brightness, d.contrast, d.saturation, d.hue]);
   return <canvas ref={canvas} className="tex-preview" width={PREVIEW * 2} height={PREVIEW * 2} aria-label="Preview of the texture, repeated twice across and down" />;
 }
 
@@ -101,7 +102,7 @@ export default function TexturesPage() {
     setError(""); setEditing(null);
     try {
       const picture = await readPicture(file);
-      setDraft({ file, picture, name: file.name.replace(/\.[^.]+$/, "").slice(0, 100), zoom: 1, cx: 0.5, cy: 0.5, rotate: 0, flatten: 0, size: 1024, meters: 1, seamless: false, bump: 2, mine: false, whole: false, background: "#ffffff", margin: 0 });
+      setDraft({ file, original: picture, picture, flipX: false, flipY: false, turn: 0, brightness: 0, contrast: 0, saturation: 0, hue: 0, name: file.name.replace(/\.[^.]+$/, "").slice(0, 100), zoom: 1, cx: 0.5, cy: 0.5, rotate: 0, flatten: 0, size: 1024, meters: 1, seamless: false, bump: 2, mine: false, whole: false, background: "#ffffff", margin: 0 });
     } catch { setError(t("That file isn’t a picture the browser can read (use a JPEG, PNG or WebP).")); }
   }
 
@@ -148,6 +149,18 @@ export default function TexturesPage() {
   }
 
   const change = (patch: Partial<Draft>) => setDraft(d => d && { ...d, ...patch });
+  /** A flip or a turn of the photo: the picture the rest works on is made again from the photo as it was read, and the frame goes back to the middle. */
+  const flipTurn = (f: (d: Draft) => Partial<Pick<Draft, "flipX" | "flipY" | "turn">>) => setDraft(d => {
+    if (!d) return d;
+    const n = { ...d, ...f(d) };
+    return { ...n, picture: prepareSource(n.original, { flipX: n.flipX, flipY: n.flipY, turn: n.turn }), cx: 0.5, cy: 0.5 };
+  });
+  const edited = (d: Draft) => d.flipX || d.flipY || d.turn !== 0 || d.brightness !== 0 || d.contrast !== 0 || d.saturation !== 0 || d.hue !== 0;
+  const colorSlider = (k: "brightness" | "contrast" | "saturation" | "hue", label: string, d: Draft) => (
+    <label>{label} <small>{k === "hue" ? `${d[k]}°` : `${Math.round(d[k] * 100)} %`}</small>
+      <input type="range" min={COLOR_LIMITS[k][0]} max={COLOR_LIMITS[k][1]} step={k === "hue" ? 1 : 0.01} value={d[k]} onChange={e => change({ [k]: Number(e.target.value) })} />
+    </label>
+  );
   const num = (v: string, fallback: number) => { const n = Number(v.replace(",", ".")); return Number.isFinite(n) ? n : fallback; };
 
   const form = draft && (
@@ -164,6 +177,21 @@ export default function TexturesPage() {
         <p className="hint">The whole picture is stretched to the square, nothing is cut off. On a face set to “Fit to face” it comes back at its own proportions. Zoom, straighten and the seamless option are not used.</p>
         {draft.whole && <label>Margin round the picture <small>{draft.margin} %</small> <input type="range" min={0} max={40} step={1} value={draft.margin} onChange={e => change({ margin: Number(e.target.value) })} /></label>}
         {draft.whole && <p className="hint">A sign with a border: the picture is made smaller and the margin gets the colour below. The margin is a share of the face, so a wide sign gets a wider margin along its length.</p>}
+        <fieldset>
+          <legend>Turn and colour</legend>
+          <div className="seg wrap">
+            <button type="button" onClick={() => flipTurn(d => ({ flipX: !d.flipX }))} aria-pressed={draft.flipX}>{t("Flip left to right")}</button>
+            <button type="button" onClick={() => flipTurn(d => ({ flipY: !d.flipY }))} aria-pressed={draft.flipY}>{t("Flip up and down")}</button>
+            <button type="button" onClick={() => flipTurn(d => ({ turn: (d.turn + 3) % 4 }))}>{t("Turn left")}</button>
+            <button type="button" onClick={() => flipTurn(d => ({ turn: (d.turn + 1) % 4 }))}>{t("Turn right")}</button>
+          </div>
+          {colorSlider("brightness", t("Brightness"), draft)}
+          {colorSlider("contrast", t("Contrast"), draft)}
+          {colorSlider("saturation", t("Saturation"), draft)}
+          {colorSlider("hue", t("Colour shift"), draft)}
+          <p className="hint">{t("The colour is the picture's only: the relief and the shine are worked out from the photo as it is.")}</p>
+          {edited(draft) && <div className="row"><button type="button" onClick={() => { flipTurn(() => ({ flipX: false, flipY: false, turn: 0 })); change({ brightness: 0, contrast: 0, saturation: 0, hue: 0 }); }}>{t("Reset the edits")}</button></div>}
+        </fieldset>
         <label>Fill see-through parts with <input type="color" value={draft.background} onChange={e => change({ background: e.target.value })} /></label>
         <p className="hint">A picture with a see-through background (a logo) is put on this colour, so it is not black round the edges.</p>
         <label>Zoom <small>{Math.round(draft.zoom * 100)} %</small> <input type="range" min={0.05} max={1} step={0.01} value={draft.zoom} onChange={e => change({ zoom: Number(e.target.value) })} /></label>

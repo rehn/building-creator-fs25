@@ -1102,5 +1102,14 @@
   "Delete the folder “{name}”? What is in it stays, in no folder.": "Ta bort mappen “{name}”? Det som ligger i den blir kvar, utan mapp.",
   "Animals": "Djur",
   "How many animals the yard of the mod holds. The yard takes at most as many as it has room for.": "Hur många djur modens gård rymmer. Gården tar som mest så många som det finns plats för.",
-  "A prop has no shop or game settings of its own. Put it in a mod (Mods): the mod is what the game gets, with its price and the rest.": "En rekvisita har inga egna butiks- eller spelinställningar. Lägg den i en mod (Mods): det är modden spelet får, med pris och allt annat."
+  "A prop has no shop or game settings of its own. Put it in a mod (Mods): the mod is what the game gets, with its price and the rest.": "En rekvisita har inga egna butiks- eller spelinställningar. Lägg den i en mod (Mods): det är modden spelet får, med pris och allt annat.",
+  "Brightness": "Ljusstyrka",
+  "Colour shift": "Färgförskjutning",
+  "Contrast": "Kontrast",
+  "Flip left to right": "Spegla vänster–höger",
+  "Flip up and down": "Vänd upp och ner",
+  "Reset the edits": "Återställ ändringarna",
+  "Saturation": "Färgmättnad",
+  "Turn and colour": "Vrid och färg",
+  "The colour is the picture's only: the relief and the shine are worked out from the photo as it is.": "Färgen gäller bara bilden: reliefen och glansen räknas ut från fotot som det är."
 }
