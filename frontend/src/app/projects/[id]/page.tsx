@@ -35,6 +35,7 @@ export default function ProjectPage() {
   const [name, setName] = useState("");
   const [status, setStatus] = useState<Status>("saved");
   const editor = useRef<EditorHandle | null>(null);
+  const [history, setHistory] = useState({ canUndo: false, canRedo: false });   // (the editor tells: Undo and Redo in the sub-bar)
   const fileInput = useRef<HTMLInputElement>(null);
   // ?template=...: the admin is adjusting a template made from photos (see /admin/templates/new)
   const [template, setTemplate] = useState<Template | null>(null);
@@ -179,6 +180,8 @@ export default function ProjectPage() {
           if (f && editor.current) await editor.current.importSettings(f);
           e.target.value = "";
         }} />
+        <button type="button" disabled={!project || !history.canUndo} onClick={() => editor.current?.undo()} title={t("Undo (Ctrl+Z)")}>{t("Undo")}</button>
+        <button type="button" disabled={!project || !history.canRedo} onClick={() => editor.current?.redo()} title={t("Redo (Ctrl+Y)")}>{t("Redo")}</button>
         <button type="button" disabled={!project} onClick={() => fileInput.current?.click()}>Import settings</button>
         <button type="button" disabled={!project} onClick={() => editor.current?.exportSettings(name)}>Download settings</button>
       </>}
@@ -192,7 +195,7 @@ export default function ProjectPage() {
         </div>
       )}
       {project
-        ? <Editor key={editorKey} author={authorName(user)} initial={project.data} onChange={s => queue({ data: s })} onKindChange={s => { queue({ data: s }, 0); setProject(p => p && { ...p, data: s, kind: String(s.kind ?? p.kind) }); setEditorKey(k => k + 1); }} onReady={ed => {
+        ? <Editor key={editorKey} onHistory={setHistory} author={authorName(user)} initial={project.data} onChange={s => queue({ data: s })} onKindChange={s => { queue({ data: s }, 0); setProject(p => p && { ...p, data: s, kind: String(s.kind ?? p.kind) }); setEditorKey(k => k + 1); }} onReady={ed => {
             editor.current = ed;
             // a new house has no preview or model files yet: save once so the list shows one and other programs get the model
             // (and once more for a model made before the game mod in it was the full one, with textures)

@@ -141,3 +141,5 @@ The three editors also share their parts, not only the frame: a row of a tree is
 A tab whose left panel would be a long scroll of sections lists them instead (a row for each, as a tree) and shows the chosen one in the details panel (the Inside tab: Floor, Inside walls, Wallpaper by wall). The details panel is left out when nothing is chosen.
 
 Folders are the app's own, not a list's: a building, a prop and a mod choose from the same ones (`FolderSelect`: none, a folder, or "New folder…"), the lists have the same folder tabs (with "New folder…" at the end) and a new folder shows at once, also with nothing in it.
+
+Undo and Redo are in the sub-bar of an editor that has them (the building's, first in `actions`), with Ctrl+Z and Ctrl+Y; a drag or a typed number is one step; they are disabled when there is nothing to undo or redo.

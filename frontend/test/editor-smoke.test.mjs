@@ -183,3 +183,96 @@ test("showRoofs asks for a new frame", async () => {
   const body = src.slice(src.indexOf("function showRoofs()"), src.indexOf("function showRoofs()") + 700);
   assert.match(body.slice(0, body.indexOf("\n}\n")), /needs = true/);
 });
+
+// ---- undo and redo of everything but arranging the inside (Lars, 2026-11-25) ----
+const wait = ms => new Promise(r => w.setTimeout(r, ms));
+function sliderOf(root, key) { return root.querySelector(`#f-${key}`); }
+function slide(inp, v) { inp.value = String(v); inp.dispatchEvent(new w.Event("input", {bubbles: true})); }
+
+test("a change can be undone and redone, and the undone state is saved too", () => {
+  const root = w.document.getElementById("root");
+  root.innerHTML = "";
+  const saved = []; let hist = null;
+  const ed = createEditor(root, {initial: {kind: "house"}, onChange: s => saved.push(s), onHistory: h => { hist = h; }});
+  const before = ed.getSettings(), inp = sliderOf(root, "width");
+  assert.ok(inp, "the width slider");
+  assert.equal(hist.canUndo, false, "nothing to undo at the start");
+  slide(inp, Number(inp.min) + 1);
+  const changed = ed.getSettings();
+  assert.notDeepEqual(changed, before);
+  assert.equal(hist.canUndo, true);
+  ed.undo();
+  assert.deepEqual(ed.getSettings(), before, "back to what it was");
+  assert.deepEqual(saved.at(-1), before, "and saved so");
+  assert.equal(hist.canUndo, false); assert.equal(hist.canRedo, true);
+  ed.redo();
+  assert.deepEqual(ed.getSettings(), changed);
+  assert.equal(hist.canRedo, false);
+  ed.destroy();
+});
+
+test("a drag of a slider is one step, and the steps keep their order", async () => {
+  const root = w.document.getElementById("root");
+  root.innerHTML = "";
+  const ed = createEditor(root, {initial: {kind: "house"}, onChange() {}});
+  const a = ed.getSettings(), inp = sliderOf(root, "width"), lo = Number(inp.min);
+  for (const v of [lo + 1, lo + 2, lo + 3]) slide(inp, v);   // (a drag: many events in a moment)
+  const b = ed.getSettings();
+  await wait(700);                                            // (let go, and a while later another change)
+  const dep = sliderOf(root, "depth");
+  slide(dep, Number(dep.min) + 1);
+  const c = ed.getSettings();
+  ed.undo(); assert.deepEqual(ed.getSettings(), b, "the second change is undone first");
+  ed.undo(); assert.deepEqual(ed.getSettings(), a, "then the whole drag at once");
+  ed.redo(); ed.redo(); assert.deepEqual(ed.getSettings(), c);
+  ed.destroy();
+});
+
+test("a new change after an undo drops what could be redone", () => {
+  const root = w.document.getElementById("root");
+  root.innerHTML = "";
+  let hist = null;
+  const ed = createEditor(root, {initial: {kind: "house"}, onChange() {}, onHistory: h => { hist = h; }});
+  const inp = sliderOf(root, "width"), lo = Number(inp.min);
+  slide(inp, lo + 1); ed.undo();
+  assert.equal(hist.canRedo, true);
+  slide(inp, lo + 2);
+  ed.undo(); ed.redo();
+  assert.equal(ed.getSettings().width, lo + 2, "redo has the new change, not the old one");
+  ed.destroy();
+});
+
+test("Ctrl+Z and Ctrl+Y work in the editor, but not while typing in a text field", () => {
+  const root = w.document.getElementById("root");
+  root.innerHTML = "";
+  const ed = createEditor(root, {initial: {kind: "house"}, onChange() {}});
+  const before = ed.getSettings(), inp = sliderOf(root, "width");
+  slide(inp, Number(inp.min) + 1);
+  const changed = ed.getSettings();
+  const key = (target, k, extra = {}) => target.dispatchEvent(new w.KeyboardEvent("keydown", {key: k, ctrlKey: true, bubbles: true, cancelable: true, ...extra}));
+  const text = root.querySelector("input[type=text], input[type=search], textarea");
+  assert.ok(text, "a text field");
+  key(text, "z");
+  assert.deepEqual(ed.getSettings(), changed, "in a text field the browser's own undo is left alone");
+  key(w.document.body, "z");
+  assert.deepEqual(ed.getSettings(), before, "Ctrl+Z");
+  key(w.document.body, "y");
+  assert.deepEqual(ed.getSettings(), changed, "Ctrl+Y");
+  key(w.document.body, "z"); key(w.document.body, "z", {shiftKey: true});
+  assert.deepEqual(ed.getSettings(), changed, "Ctrl+Shift+Z redoes too");
+  ed.destroy();
+});
+
+test("settings that the page puts in from outside start a new history", () => {
+  const root = w.document.getElementById("root");
+  root.innerHTML = "";
+  let hist = null;
+  const ed = createEditor(root, {initial: {kind: "house"}, onChange() {}, onHistory: h => { hist = h; }});
+  const inp = sliderOf(root, "width");
+  slide(inp, Number(inp.min) + 1);
+  assert.equal(hist.canUndo, true);
+  ed.setSettings({kind: "house", width: 12});
+  assert.equal(hist.canUndo, false, "what was loaded is the start");
+  assert.equal(ed.undo(), false);
+  ed.destroy();
+});

@@ -82,14 +82,74 @@ const MARKUP = `<div class="hx-editor" data-tab="building">
  * options.assets: the user's imported items, {list(), file(id, name)} (see editor.d.mts)
  * Returns {getSettings, setSettings, modelFiles, exportSettings, importSettings, snapshot, toast, destroy}.
  */
-export function createEditor(root, {initial, onChange, onKindChange = null, author = "", assets = null, parts: partSource = null} = {}) {
+export function createEditor(root, {initial, onChange, onKindChange = null, onHistory = null, author = "", assets = null, parts: partSource = null} = {}) {
 root.innerHTML = MARKUP;
 const $ = id => root.querySelector("#" + id);
 const cleanups = [];
 let destroyed = false, raf = 0;
 let p = sanitize(initial || {});
 let G = null, dims = {}, opsByWall = {};
-function persist() { if (!destroyed && onChange) onChange(serialize(p)); }
+function persist() { if (destroyed) return; noteChange(); if (onChange) onChange(serialize(p)); }
+
+/* ---------- Undo and redo of everything but arranging the inside (which has its own steps: ins.hist) ---------- */
+// A step is the whole settings as saved. A change is made a step when it has been left alone for a moment (so a drag of a slider, or a number typed, is one step), or at once when
+// something is undone. The page is told (onHistory) when there is something to undo or redo, and has the buttons; Ctrl+Z, Ctrl+Y and Ctrl+Shift+Z work too, except in a text field.
+const undoLog = {past: [], future: [], now: JSON.stringify(serialize(p)), dirty: false, timer: 0, busy: false};
+const UNDO_LIMIT = 60, UNDO_IDLE = 500;
+const arranging = () => { try { return ins.on; } catch { return false; } };   // (ins is made further down, and persist can run before)
+const canUndoNow = () => (arranging() ? !!(ins.hist && ins.hist.canUndo) : undoLog.dirty || undoLog.past.length > 0);
+const canRedoNow = () => (arranging() ? !!(ins.hist && ins.hist.canRedo) : undoLog.future.length > 0);
+function tellHistory() { if (onHistory && !destroyed) onHistory({canUndo: canUndoNow(), canRedo: canRedoNow()}); }
+function noteChange() {
+  if (undoLog.busy) return;
+  undoLog.dirty = true;
+  clearTimeout(undoLog.timer); undoLog.timer = setTimeout(commitUndo, UNDO_IDLE);
+  tellHistory();
+}
+function commitUndo() {
+  clearTimeout(undoLog.timer); undoLog.timer = 0;
+  if (!undoLog.dirty) return;
+  undoLog.dirty = false;
+  const s = JSON.stringify(serialize(p));
+  if (s !== undoLog.now) {
+    undoLog.past.push(undoLog.now); if (undoLog.past.length > UNDO_LIMIT) undoLog.past.shift();
+    undoLog.now = s; undoLog.future = [];
+  }
+  tellHistory();
+}
+function resetUndo() { clearTimeout(undoLog.timer); undoLog.timer = 0; undoLog.dirty = false; undoLog.past = []; undoLog.future = []; undoLog.now = JSON.stringify(serialize(p)); tellHistory(); }
+function applySnapshot(s) {
+  undoLog.busy = true;
+  try { applySettings(JSON.parse(s)); persist(); } finally { undoLog.busy = false; }
+  tellHistory();
+}
+function undo() {
+  if (arranging()) { const had = canUndoNow(); undoInside(); return had; }
+  commitUndo();
+  if (!undoLog.past.length) return false;
+  undoLog.future.push(undoLog.now); undoLog.now = undoLog.past.pop();
+  applySnapshot(undoLog.now);
+  return true;
+}
+function redo() {
+  if (arranging()) { const had = canRedoNow(); redoInside(); return had; }
+  commitUndo();
+  if (!undoLog.future.length) return false;
+  undoLog.past.push(undoLog.now); undoLog.now = undoLog.future.pop();
+  applySnapshot(undoLog.now);
+  return true;
+}
+const undoKeys = e => {
+  if (!(e.ctrlKey || e.metaKey) || arranging()) return;   // (arranging the inside has its own keys)
+  const k = (e.key || "").toLowerCase();
+  if (k !== "z" && k !== "y") return;
+  const el = e.target, typing = el && (el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable || (el.tagName === "INPUT" && !["range", "checkbox", "radio", "color", "button", "submit"].includes(el.type)));
+  if (typing) return;   // (a text field has the browser's own undo)
+  e.preventDefault();
+  if (k === "y" || e.shiftKey) redo(); else undo();
+};
+window.addEventListener("keydown", undoKeys);
+cleanups.push(() => { window.removeEventListener("keydown", undoKeys); clearTimeout(undoLog.timer); });
 
 // Which sections are open, and which tab: remembered in this browser only (a convenience).
 const remember = {
@@ -2045,7 +2105,7 @@ function enterInside() {
   if (!renderer || !kindOf(p).catalog) return;
   if (ob.on) leavePlan();
   ins.on = true; ins.sel = null; ins.drag = null; ins.pan = [0, 0];
-  editorEl.classList.add("arranging"); placeInside();
+  editorEl.classList.add("arranging"); placeInside(); tellHistory();
   ins.hist = new History(p.items || []);
   ins.saved = {...view, target: [...view.target]};
   placesObj.group.visible = false;
@@ -2060,7 +2120,7 @@ function enterInside() {
 function leaveInside() {
   if (!ins.on) return;
   ins.on = false; ins.drag = null; ins.divider = null; ins.sel = null;
-  editorEl.classList.remove("arranging"); placeInside();
+  editorEl.classList.remove("arranging"); placeInside(); tellHistory();
   showRoofs();
   window.removeEventListener("keydown", insideKey);
   renderer.clippingPlanes = [];
@@ -2186,6 +2246,7 @@ function updateInsideBar() {
   if (!$("insideUndo")) return;
   $("insideUndo").disabled = !(ins.hist && ins.hist.canUndo);
   $("insideRedo").disabled = !(ins.hist && ins.hist.canRedo);
+  tellHistory();
 }
 
 /** The Inside section of a walk-in building: a summary and buttons, or (arranging) the palette and the selected piece. */
@@ -2726,6 +2787,10 @@ function renderKindCard() {
 }
 // Imported settings keep this project's kind: the editor is built for it.
 function setSettings(obj) { p = sanitize({...obj, kind: p.kind}); selId = null; dSel = null; syncControls(); rebuild(true); }
+/** Settings put in by undo or redo: as setSettings, without moving the camera. */
+function applySettings(obj) { p = sanitize({...obj, kind: p.kind}); selId = null; dSel = null; syncControls(); rebuild(false); }
+/** Settings the page puts in from outside (a version loaded again ...): they are the start of a new history. */
+function replaceSettings(obj) { setSettings(obj); resetUndo(); }
 
 /** A small JPEG of the current view, for the project list. */
 function snapshot() {
@@ -2782,5 +2847,6 @@ const modelFiles = async (name, settings) => {
   try { files.export = await modelZip(name, "uint8array"); } catch (e) { console.warn("The model export could not be packed:", e); toast("Model export for the API: " + (e && e.message || e)); }
   return files;
 };
-return {getSettings: () => serialize(p), setSettings, modelFiles, exportSettings, importSettings, snapshot, toast, destroy};
+tellHistory();
+return {getSettings: () => serialize(p), setSettings: replaceSettings, undo, redo, modelFiles, exportSettings, importSettings, snapshot, toast, destroy};
 }

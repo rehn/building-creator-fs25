@@ -1,7 +1,11 @@
 export type Settings = Record<string, unknown>;
 export interface EditorHandle {
   getSettings(): Settings;
+  /** Settings put in from outside (they are the start of a new history). */
   setSettings(settings: Settings): void;
+  /** Undo and redo of what was changed (while the inside is arranged: of that); false when there was nothing. */
+  undo(): boolean;
+  redo(): boolean;
   /** The model files the server keeps (for other programs): OBJ and MTL text and the game mod zip. Of these settings, or the editor's own. */
   modelFiles(name: string, settings?: Settings): Promise<{ obj: string; mtl: string; mod: Uint8Array; export?: Uint8Array }>;
   exportSettings(name: string): void;
@@ -24,5 +28,5 @@ export interface PartSource {
   remove(id: string): Promise<void>;
   isAdmin(): Promise<boolean>;
 }
-export function createEditor(root: HTMLElement, options?: { initial?: Settings; onChange?: (settings: Settings) => void; onKindChange?: (settings: Settings) => void; author?: string; assets?: AssetSource; parts?: PartSource }): EditorHandle;
+export function createEditor(root: HTMLElement, options?: { initial?: Settings; onChange?: (settings: Settings) => void; onKindChange?: (settings: Settings) => void; onHistory?: (h: { canUndo: boolean; canRedo: boolean }) => void; author?: string; assets?: AssetSource; parts?: PartSource }): EditorHandle;
 export function slugify(name: string): string;
