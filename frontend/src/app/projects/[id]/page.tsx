@@ -186,8 +186,6 @@ export default function ProjectPage() {
         }} />
         <button type="button" disabled={!project} onClick={() => fileInput.current?.click()}>Import settings</button>
         <button type="button" disabled={!project} onClick={() => editor.current?.exportSettings(name)}>Download settings</button>
-        <button type="button" disabled={!project} onClick={() => editor.current?.exportModel(name)}>Export model</button>
-        <button type="button" className="primary" disabled={!project} onClick={() => editor.current?.exportMod(name)}>Export game mod</button>
       </div>
       {template && <TemplateBar template={template} status={publishing} onPublish={publishTemplate} />}
       {status === "conflict" && (

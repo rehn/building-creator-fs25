@@ -10,9 +10,9 @@ import {
 } from "./model.mjs";
 import { WINDOW_STYLES, DOOR_STYLES, PORCH_OPTIONS, PORCH_W, PORCH_D, WING_FIELDS, MAX_WINGS } from "./model.mjs";
 import { pieceSheet, pieceMeshes, buildingTree, matList, matTable, slotOf, partStyle, splitAtOf, wallLabel, partName, wallItems, addOpening, addPartOn, addSplit, addPartSplit, duplicateOpening, duplicateSplit, moveBeside, moveToWall, openingProblem, setSectionFloorHeight, setTotalHeight, addPartDoor } from "./model.mjs";
-import { lodKeeps, matTexture, i3dFiles, modTypesFor } from "./model.mjs";
+import { lodKeeps, matTexture, i3dFiles } from "./model.mjs";
 import { encodeDds, decodeDds } from "./dds.mjs";
-import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, seeThroughGlass, kindOf } from "./model.mjs";
+import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, seeThroughGlass, kindOf } from "./model.mjs";
 import { WALLPAPERS } from "./kinds/innerwall.mjs";
 import { evalNumber } from "./calc.mjs";
 import { DOUBLE_DOOR_FROM } from "./openings.mjs";
@@ -79,7 +79,7 @@ const MARKUP = `<div class="hx-editor" data-tab="building">
  * options.initial: saved settings to start from
  * options.onChange(settings): called after every edit with the settings to save
  * options.assets: the user's imported items, {list(), file(id, name)} (see editor.d.mts)
- * Returns {getSettings, setSettings, exportModel, exportSettings, importSettings, snapshot, toast, destroy}.
+ * Returns {getSettings, setSettings, modelFiles, exportSettings, importSettings, snapshot, toast, destroy}.
  */
 export function createEditor(root, {initial, onChange, onKindChange = null, author = "", assets = null, parts: partSource = null} = {}) {
 root.innerHTML = MARKUP;
@@ -2599,23 +2599,6 @@ async function fillMod(dir, name, prefix = "", mod = modName(name)) {
   if (store) dir.file(MOD_FILES.store, canvasDds(store));
   return icon ? canvasDds(icon) : null;
 }
-/** For a mod of several buildings: this one's files into folder dir (named prefix, "folder/": the game reads the XML's paths from the mod's root); {icon, description, author} for the modDesc. */
-async function exportInto(dir, name, prefix = "", mod = modName(name)) {
-  const icon = await fillMod(dir, name, prefix, mod);
-  return {icon, description: p.modDescription || defaultModDescription(p), author: p.modAuthor || author, types: modTypesFor(p, mod)};
-}
-/** The house as a game mod: FS25_Name.zip with modDesc, store XML, i3d, textures, icon and shop picture. */
-async function exportMod(name) {
-  const mod = modName(name);
-  toast("Packing the game mod\u2026");
-  try {
-    const zip = new JSZip();
-    zip.file("modDesc.xml", modDescXml(p, name, {author}));
-    const icon = await fillMod(zip, name);
-    if (icon) zip.file(MOD_FILES.icon, icon);
-    saveFile(`${mod}.zip`, await zip.generateAsync({type: "blob"}), () => toast("The download didn\u2019t start. Try again or use another browser."));
-  } catch (e) { toast("Couldn\u2019t pack the mod. Try again."); }
-}
 /** What "Export model" gives: a zip with a folder of house.i3d, placeable_snippet.xml, textures and imported items. */
 async function modelZip(name, type = "blob") {
   const zip = new JSZip(), dir = zip.folder(slugify(name));
@@ -2624,14 +2607,6 @@ async function modelZip(name, type = "blob") {
   await addTextures(dir);
   await addItems(dir);
   return zip.generateAsync({type, compression: "DEFLATE"});
-}
-async function exportModel(name) {
-  const slug = slugify(name);
-  const plain = () => showText("house.i3d", buildI3d(p, {withTex: false}));
-  toast("Packing the model and textures\u2026");
-  try {
-    saveFile(`${slug}.zip`, await modelZip(name), plain);
-  } catch (e) { plain(); }
 }
 function exportSettings(name) { saveFile(`${slugify(name)}-settings.json`, JSON.stringify(serialize(p), null, 2)); }
 async function importSettings(file) {
@@ -2728,5 +2703,5 @@ const modelFiles = async (name, settings) => {
   try { files.export = await modelZip(name, "uint8array"); } catch (e) { console.warn("The model export could not be packed:", e); toast("Model export for the API: " + (e && e.message || e)); }
   return files;
 };
-return {getSettings: () => serialize(p), setSettings, modelFiles, exportModel, exportMod, exportInto, exportSettings, importSettings, snapshot, toast, destroy};
+return {getSettings: () => serialize(p), setSettings, modelFiles, exportSettings, importSettings, snapshot, toast, destroy};
 }
