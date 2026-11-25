@@ -7,17 +7,10 @@ import { withPasture } from "./pasture.mjs";
 import { COW, PASTURE_GROUNDS, COLORS, CATALOG as COW_CATALOG, openings, cowYard, outsideOf, sceneOf, defaultsOf } from "./cow.mjs";
 import { tone } from "./props.mjs";
 import { INNER_WALL } from "./innerwall.mjs";
+import { SHEEP, MAX_SHEEP, sheepCap, sheepOf, SHEEP_MIN_WIDTH, SHEEP_PLACEABLE } from "../mod/yard.mjs";
+export { SHEEP, MAX_SHEEP, sheepCap } from "../mod/yard.mjs";
+const MIN_PASTURE_WIDTH = SHEEP_MIN_WIDTH;
 
-/** About one sheep per 1.5 m² of floor; at most 70 (the base game's biggest sheep barn takes 68). */
-const M2_PER_SHEEP = 1.5;
-export const MAX_SHEEP = 70;
-export const sheepCap = p => Math.max(1, Math.min(MAX_SHEEP, Math.floor(p.width * p.depth / M2_PER_SHEEP + 1e-9)));
-const sheepOf = p => Math.min(Math.round(p.sheep), sheepCap(p));
-/** Hay storage per sheep, in litres (the base game's sheep barns hold about 160). */
-const FOOD_PER_SHEEP = 160;
-const MIN_PASTURE_WIDTH = 12;
-export const SHEEP = {...COW, count: sheepOf, minWidth: MIN_PASTURE_WIDTH, foodPer: FOOD_PER_SHEEP, animal: "SHEEP", fill: "DRYGRASS_WINDROW",
-  fence: "sheepNetFence/sheepNetFence", pallets: {fills: "WOOL GOATMILK", max: 8}};
 const sheepYard = (geo, p) => cowYard(geo, p, SHEEP);
 
 const LITTER = "#C9AE6B";
@@ -90,10 +83,7 @@ export default {
     return withPasture({...q, sheep: Math.min(q.sheep, sheepCap(q))});
   },
   openings,
-  placeable: () => ({type: "sheepHusbandry",
-    fn: ["$l10n_function_animalPenSheep", "$l10n_function_adjustableMeadow"],
-    shop: {category: "animalpens", type: "husbandry", brush: "animals", tab: "sheeps"},
-    note: `Sheep barn: use <placeable type="sheepHusbandry" ...>, as in the base game's sheep barns.`}),
+  placeable: () => SHEEP_PLACEABLE,
   description: p => `A ${(+p.width).toFixed(1)} x ${(+p.depth).toFixed(1)} m sheep barn for ${sheepOf(p)} sheep, made with House to i3d.`,
   furnish,
   outside: outsideOf(SHEEP),

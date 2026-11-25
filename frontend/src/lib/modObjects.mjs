@@ -3,11 +3,9 @@
 // {id, type, x, z, w, d, h, ix, iz}, as the editor keeps them, editor/objects.mjs). The shared groups only (kinds/gameobjects.mjs): they are never filtered by what the buildings are.
 // Pure functions; none of them changes the list it is given.
 import { SHARED } from "../editor/kinds/gameobjects.mjs";
-import { SHARED_GROUPS, OBJECT_LIMITS, fencePoints, MAX_FENCE_POINTS, nextTroughSpot } from "../editor/objects.mjs";
+import { SHARED_GROUPS, OBJECT_LIMITS, fencePoints, MAX_FENCE_POINTS, nextTroughSpot, cleanObjects } from "../editor/objects.mjs";
 import { HEN_TYPES, COW_TYPES, SHEEP_TYPES } from "../editor/kinds/modframe.mjs";
-import { MAX_HENS } from "../editor/kinds/chicken.mjs";
-import { MAX_COWS } from "../editor/kinds/cow.mjs";
-import { MAX_SHEEP } from "../editor/kinds/sheep.mjs";
+import { MAX_HENS, MAX_COWS, MAX_SHEEP, COW, SHEEP, defaultsOf, defaultObjects as henDefaultObjects } from "../editor/mod/yard.mjs";
 import { postsInside, edgesThrough } from "../editor/modPlan.mjs";
 import { navContourNodes, ccwFence } from "../editor/kinds/pasture.mjs";
 import { wallsOf } from "../editor/layout.mjs";
@@ -59,11 +57,26 @@ export function addGroup(objects, group, p, at = [0, 0], {wall = "back"} = {}) {
   return [...objects, ...made.map(o => ({...o, id: ++id, ...(o.type === "pasture" ? {points: o.points.map(([x, z]) => [round(x + at[0]), round(z + at[1])])} : {x: round(o.x + at[0]), z: round(o.z + at[1])})}))];
 }
 
+/**
+ * The building the yard's starting places are worked out from: a plain one (a shed's walls) as wide and deep as what the mod holds, with its door on the side opposite the pasture's wall, and the
+ * pasture's wall and depth: the fence goes on a wall without a door. The objects of the yard's animals are its settings' defaults (editor/mod/yard.mjs), kept to the editor's limits (cleanObjects).
+ */
+const YARD = {
+  hens: {types: HEN_TYPES, required: ["food", "loading", "pallets", "info", "pasture"], pasture: {minWidth: 12, depth: [6, 40]}, fenceDepth: 8, objects: henDefaultObjects},
+  cows: {types: COW_TYPES, required: ["food", "loading", "info", "pasture"], pasture: {minWidth: 16, depth: [10, 60], gapSize: true}, fenceDepth: 15, objects: defaultsOf(COW)},
+  sheep: {types: SHEEP_TYPES, required: ["food", "loading", "pallets", "info", "pasture"], pasture: {minWidth: 12, depth: [8, 60], gapSize: true}, fenceDepth: 14, objects: defaultsOf(SHEEP)},
+};
+function standIn({width, depth, foundation = 0}, wall, animal) {
+  const y = YARD[animal], size = animal === "hens" ? {width, depth} : {width: Math.max(6, width), depth: Math.max(6, depth)};   // (a barn is at least 6 x 6 m)
+  const base = sanitize({kind: "shed", ...size, foundation, doorWall: OPPOSITE[wall] || "front"});
+  const q = {...base, pastureWall: wall, fenceDepth: y.fenceDepth, hens: 30, cows: 12, sheep: 20};
+  return {...q, objects: cleanObjects(y.objects(q), {objects: {types: y.types, required: y.required, pasture: y.pasture, defaults: y.objects}}, q)};
+}
+
 /** Where a hen yard goes to start with: what a hen house as wide and deep as p has (its feed pad, trailer spot, egg pallets, info area), and its fence as posts the player can move. */
 function henDefaults({width, depth, foundation = 0}, wall = "back") {
-  // (the pasture goes on a wall without a door, so the door of the stand-in building is put on the opposite one)
-  const q = sanitize({kind: "chicken", width, depth, foundation, pastureWall: wall, doorWall: OPPOSITE[wall] || "front"}), pa = q.objects.find(o => o.type === "pasture");
-  // a feed trough and a water trough inside the fence, where the pasture of the stand-in hen house has room (not on each other)
+  const q = standIn({width, depth, foundation}, wall, "hens"), pa = q.objects.find(o => o.type === "pasture");
+  // a feed trough and a water trough inside the fence, where the pasture has room (not on each other)
   const feed = nextTroughSpot(q, "feedTrough"), withFeed = {...q, objects: [...q.objects, {id: 99, type: "feedTrough", ix: 0, iz: 0, ...feed}]}, water = nextTroughSpot(withFeed, "waterTrough");
   const trough = o => { const {x, z, w, d, h} = o; return {type: o.type, x, z, w, d, h, ix: 0, iz: 0}; };
   return [...q.objects.filter(o => o.type !== "pasture"), trough(feed), trough(water), {type: "pasture", wall: pa.wall, a: 0, b: 0, depth: pa.depth, points: fencePoints(q).slice(0, MAX_FENCE_POINTS)}];
@@ -71,7 +84,7 @@ function henDefaults({width, depth, foundation = 0}, wall = "back") {
 
 /** Where a cow yard or sheep yard goes to start with: what a cow or sheep barn as wide and deep as p has (the feed pad, bale drop, trailer spot, info area, a feed and a water trough, wool pallets for sheep), and its fence as posts. */
 function barnDefaults({width, depth, foundation = 0}, wall, animal) {
-  const q = sanitize({kind: animal === "cows" ? "cow" : "sheep", width, depth, foundation, pastureWall: wall, doorWall: OPPOSITE[wall] || "front"}), pa = q.objects.find(o => o.type === "pasture");
+  const q = standIn({width, depth, foundation}, wall, animal), pa = q.objects.find(o => o.type === "pasture");
   return [...q.objects.filter(o => o.type !== "pasture").map(({type, x, z, w, d, h, ix = 0, iz = 0}) => ({type, x, z, w, d, h, ix, iz})), {type: "pasture", wall: pa.wall, a: 0, b: 0, depth: pa.depth, points: fencePoints(q).slice(0, MAX_FENCE_POINTS)}];
 }
 
