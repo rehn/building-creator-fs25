@@ -26,3 +26,15 @@ test("the pages for buildings and mods choose a folder with the same select and 
     assert.match(s, /useFolders\(/, page + " reads the app's folders");
   }
 });
+
+test("a folder can be renamed and deleted from the lists of buildings and mods", () => {
+  const api = src("lib/api.ts");
+  assert.match(api, /renameFolder: \(from: string, to: string\)/);
+  assert.match(api, /deleteFolder: \(name: string\)/);
+  for (const page of ["app/page.tsx", "app/mods/page.tsx"]) {
+    const s = src(page);
+    assert.match(s, /<FolderActions[\s>]/, page + " has rename and delete for the folder shown");
+    assert.match(s, /appFolders\.rename\(/);
+    assert.match(s, /appFolders\.remove\(/);
+  }
+});

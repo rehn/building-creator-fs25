@@ -8,6 +8,7 @@ import { useUser } from "@/lib/useUser";
 import { TopBar } from "@/components/TopBar";
 import { confirmDialog, promptDialog } from "@/components/dialog.mjs";
 import { FolderSelect, askFolderName } from "@/components/FolderSelect";
+import { FolderActions } from "@/components/FolderActions";
 import { useFolders } from "@/lib/useFolders";
 import { sanitize as newProp } from "@/builder/model.mjs";
 import { PRESETS, CATEGORIES, KINDS, groupByKind } from "@/editor/model.mjs";
@@ -282,6 +283,11 @@ export default function HousesPage() {
             {tabFolders.map(f => tabBtn("f:" + f, f, inTab.filter(h => folderOf(h) === f).length, folderNow === f, () => { setFolderSel(f); setKindSel("*"); }, true))}
             {hasLoose && tabBtn("", t("Not in a folder"), inTab.filter(h => !folderOf(h)).length, folderNow === "", () => { setFolderSel(""); setKindSel("*"); })}
             <button type="button" className="starttab link" onClick={async () => { const name = await askFolderName(); if (!name) return; try { await appFolders.add(name); setFolderSel(name); setKindSel("*"); } catch (e) { setError((e as Error).message); } }}>{t("New folder…")}</button>
+            {folderNow !== "*" && folderNow !== "" && (
+              <FolderActions folder={folderNow} disabled={busy} onError={setError}
+                onRename={async to => { const from = folderNow; await appFolders.rename(from, to); setHouses(l => (l ?? []).map(h => (folderOf(h) === from ? { ...h, folder: to } : h))); setFolderSel(to); }}
+                onDelete={async () => { const from = folderNow; await appFolders.remove(from); setHouses(l => (l ?? []).map(h => (folderOf(h) === from ? { ...h, folder: "" } : h))); setFolderSel("*"); }} />
+            )}
           </div>
         )}
         {!choosing && groups.length > 1 && (
