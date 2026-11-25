@@ -42,6 +42,8 @@ export function flipTurn(img, {flipX = false, flipY = false, turn = 0} = {}) {
 
 const MAX_SIDE = 4096, MAX_AREA = 16e6;
 const validQuad = q => Array.isArray(q) && q.length === 4 && q.every(p => Array.isArray(p) && p.length === 2 && p.every(v => typeof v === "number" && Number.isFinite(v)));
+/** The area of a quadrilateral (fractions of the picture, the shoelace sum). */
+const quadArea = q => Math.abs(q.reduce((s, p, i) => s + p[0] * q[(i + 1) % 4][1] - q[(i + 1) % 4][0] * p[1], 0)) / 2;
 const isFullQuad = q => q[0][0] === 0 && q[0][1] === 0 && q[1][0] === 1 && q[1][1] === 0 && q[2][0] === 1 && q[2][1] === 1 && q[3][0] === 0 && q[3][1] === 1;
 
 /** The size of the picture a quadrilateral (top left, top right, bottom right, bottom left, as fractions of img) is made into: the mean of the lengths of its two opposite sides, at most 4096 a side and 16 million pixels. */
@@ -67,8 +69,9 @@ function squareToQuad(p) {
  * the new picture (bilinear). The picture itself when the quadrilateral is not usable or is the whole picture.
  */
 export function perspective(img, quad) {
-  if (!validQuad(quad) || isFullQuad(quad)) return img;
+  if (!validQuad(quad) || isFullQuad(quad) || quadArea(quad) < 1e-6) return img;   // (a quadrilateral with no area, its corners in one place or in a line, is nothing to make upright)
   const {width: W, height: H, rgba} = img, [w, h] = quadSize(img, quad), m = squareToQuad(quad.map(([x, y]) => [x * W, y * H]));
+  if (!m.every(Number.isFinite)) return img;   // (the corners are in one place or in a line: nothing to make upright)
   const out = new Uint8ClampedArray(w * h * 4);
   const at = (x, y, c) => rgba[(clamp(y, 0, H - 1) * W + clamp(x, 0, W - 1)) * 4 + c];
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {

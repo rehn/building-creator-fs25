@@ -156,3 +156,9 @@ test("the colour is on the diffuse only: the relief and the shine are worked out
   assert.notDeepEqual(adj.diffuse, base.diffuse, "another colour");
   assert.deepEqual(makePhotoTexture(img, {size: 64, bump: 2, brightness: 0, contrast: 0, saturation: 0, hue: 0}).diffuse, base.diffuse, "0 is no change");
 });
+
+test("a quadrilateral that cannot be made upright (all its corners in one place, or in a line) leaves the picture as it is", () => {
+  const g = grid(8, 6);
+  assert.equal(perspective(g, [[0.5, 0.5], [0.5, 0.5], [0.5, 0.5], [0.5, 0.5]]), g);
+  assert.equal(perspective(g, [[0.1, 0.5], [0.4, 0.5], [0.7, 0.5], [0.9, 0.5]]), g);
+});

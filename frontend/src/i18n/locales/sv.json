@@ -1111,5 +1111,11 @@
   "Reset the edits": "Återställ ändringarna",
   "Saturation": "Färgmättnad",
   "Turn and colour": "Vrid och färg",
-  "The colour is the picture's only: the relief and the shine are worked out from the photo as it is.": "Färgen gäller bara bilden: reliefen och glansen räknas ut från fotot som det är."
+  "The colour is the picture's only: the relief and the shine are worked out from the photo as it is.": "Färgen gäller bara bilden: reliefen och glansen räknas ut från fotot som det är.",
+  "Crop": "Beskär",
+  "Perspective": "Perspektiv",
+  "Remove the correction": "Ta bort korrigeringen",
+  "What the photo shows": "Vad fotot visar",
+  "The photo, with four corners to drag onto a surface": "Fotot, med fyra hörn att dra till en yta",
+  "Drag the four corners onto the corners of the surface as it looks in the photo (a wall or a board photographed at an angle). What is inside them is made upright and square.": "Dra de fyra hörnen till hörnen på ytan som den ser ut på fotot (en vägg eller en planka fotograferad snett). Det som är innanför görs rakt och rektangulärt."
 }
