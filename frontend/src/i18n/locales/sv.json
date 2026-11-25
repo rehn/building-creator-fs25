@@ -1151,5 +1151,9 @@
   "Measured from the middle of the mod, the same ground the buildings stand on: X to the right, Y up and Z towards you, as the axes in the view show. Taking it away takes the objects that go with it too.": "Mäts från modens mitt, samma mark som byggnaderna står på: X åt höger, Y uppåt och Z mot dig, som axlarna i vyn visar. Tar du bort den försvinner de objekt som hör ihop med den också.",
   "A hen hatch: 40 × 50 cm at the floor, with a frame and the hatch held open above it. Hens go in and out through it; in a mod they walk in through it when the hens are set to walk inside the building.": "En hönslucka: 40 × 50 cm vid golvet, med en karm och luckan uppskjuten ovanför. Hönsen går in och ut genom den; i en mod går de in genom den när hönsen är inställda på att gå inne i byggnaden.",
   "Hen hatch (small, at the floor)": "Hönslucka (liten, vid golvet)",
-  "Places that buy what the player brings, like a fuel station. Placed by a map, not bought.": "Platser som köper det spelaren kommer med, som en bensinmack. Placeras av en karta, kan inte köpas."
+  "Places that buy what the player brings, like a fuel station. Placed by a map, not bought.": "Platser som köper det spelaren kommer med, som en bensinmack. Placeras av en karta, kan inte köpas.",
+  "Cow yard": "Kogård",
+  "Sheep yard": "Fårgård",
+  "The cows walk inside this building": "Korna går inne i den här byggnaden",
+  "The sheep walk inside this building": "Fåren går inne i den här byggnaden"
 }

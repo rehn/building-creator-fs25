@@ -6,7 +6,7 @@ import { snapPost, snapFencePost, feetOf, stretchCuts, mapKey } from "./modPlan.
 
 const ACCENT = 0xd4553f;
 /** The colour of a game object's box by its type (a type not listed gets the last one). */
-const OBJECT_COLORS = {sleep: 0x3a7bd5, workshop: 0xc98a1a, counter: 0x2f8f6b, spawn: 0x2f8f6b, intake: 0xb8a02a, pump: 0xc4523a, palletcounter: 0x7b5fc9, palletspawn: 0x7b5fc9, unload: 0x7b5fc9, food: 0xb8a02a, loading: 0x2f8f6b, pallets: 0xc98a1a, info: 0x8a8f86, pasture: 0x6b8f3a, feedTrough: 0xc4a24a, waterTrough: 0x4a90c4};
+const OBJECT_COLORS = {sleep: 0x3a7bd5, workshop: 0xc98a1a, counter: 0x2f8f6b, spawn: 0x2f8f6b, intake: 0xb8a02a, pump: 0xc4523a, palletcounter: 0x7b5fc9, palletspawn: 0x7b5fc9, unload: 0x7b5fc9, food: 0xb8a02a, bales: 0xd9c46a, loading: 0x2f8f6b, pallets: 0xc98a1a, info: 0x8a8f86, pasture: 0x6b8f3a, feedTrough: 0xc4a24a, waterTrough: 0x4a90c4};
 const OBJECT_COLOR = type => OBJECT_COLORS[type] ?? 0x8a8f86;
 const GRID = 0.25;
 

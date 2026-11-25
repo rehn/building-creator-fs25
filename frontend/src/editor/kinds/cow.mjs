@@ -11,6 +11,7 @@ import { objectOf, objectsOf, boxOf, iconOf, boxFrom, pastureOf, insidePoly, foo
 import { placeOnWall, placeOnBuilding } from "../places.mjs";
 import { tone, shade, arc, strawBale, strawLitter } from "./props.mjs";
 import { INNER_WALL } from "./innerwall.mjs";
+import { troughNodes } from "./chicken.mjs";
 
 /** What the pasture is painted with (ground types of the game's groundTypes.xml): grass is the living meadow the animals graze. */
 export const PASTURE_GROUNDS = [["grass", "Grass"], ["dirt", "Dirt"], ["animalMud", "Mud"], ["gravel", "Gravel"], ["sand", "Sand"], ["forestGround", "Forest floor"]];
@@ -461,12 +462,18 @@ function autoFurnish(p) {
 /* ---------- Export ---------- */
 const quad = (sx, sz) => ({p: [-sx/2, 0, -sz/2, -sx/2, 0, sz/2, sx/2, 0, sz/2, sx/2, 0, -sz/2], n: [0,1,0, 0,1,0, 0,1,0, 0,1,0], uv: [0,0, 0,1, 1,1, 1,0], i: [0, 1, 2, 0, 2, 3]});
 /** Scene nodes and placeable XML for the pasture (c: export context from the core). */
-export const sceneOf = cfg => c => {
-  const {p, geo, doc} = c, y = cowYard(geo, p, cfg), n = cfg.count(p);
+export const sceneOf = cfg => c => cowScene(c, cowYard(c.geo, c.p, cfg), cfg, cfg.count(c.p), {rects: footprints(c.p), clear: footprintHull(c.p), ground: c.p.pastureGround, under: c.p.groundUnder});
+/**
+ * The nodes, placeable XML and ground areas of a yard y (cowYard's shape) for n animals of cfg's kind. rects: what the way back along the fence goes round (footprints); clear: the polygon [[x, z] ...]
+ * where the grass is cleared (none: no clear task); ground: what the pasture is painted with (PASTURE_GROUNDS); under: the ground under the buildings. troughs: draw the troughs as nodes (a mod has no building
+ * to draw them outside of); y.markers: the icons, y.feedTrough(s) and so on as cowYard gives them.
+ */
+export function cowScene(c, y, cfg, n, {rects, clear, ground, under, troughs = false}) {
+  const {doc} = c, pastureGround = PASTURE_GROUNDS.some(g => g[0] === ground) ? ground : "grass";
   const stripesMat = y.pallet && doc.material("warningStripes_mat", {}, ["diffuse", "normal", "specular"].map((k, i) =>
     [["Texture", "Normalmap", "Glossmap"][i], `$data/shared/warningStripes_${k}.png`])); // the game finds the .dds
   const forage = doc.material("forage_mat", {diffuseColor: "0.42 0.45 0.2 1"}), water = doc.material("water_mat", {diffuseColor: "0.22 0.36 0.45 1"});
-  const plane = (name, t, mat) => shape(name, {translation: [t.plane[0], t.planeMax, t.plane[1]], shapeId: doc.shape(name, quad(...t.size)), castsShadows: false, receiveShadows: true, materialIds: mat});
+  const plane = (name, t, mat) => shape(name, {translation: [t.plane[0], t.planeMax, t.plane[1]], ...(t.turn ? {rotation: [0, t.turn, 0]} : {}), shapeId: doc.shape(name, quad(...t.size)), castsShadows: false, receiveShadows: true, materialIds: mat});
   const places = (group, name, list) => tg(group, [0, 0, 0], list.map((q, i) => tg(`${name}${i + 1}`, q.pos, [], {rotation: [0, q.rot, 0]})));
   const blocker = (b, i) => c.box(i ? `navmeshBlocker${i + 1}` : "navmeshBlocker", b, {static: true, collisionFilterGroup: "0x800000", collisionFilterMask: "0x1", buildNavMeshMask: "0xfe"});
   const nodes = [tg(cfg.animal === "COW" ? "cowFeatures" : "animalFeatures", [0, 0, 0], [
@@ -478,6 +485,7 @@ export const sceneOf = cfg => c => {
     tg("markerAnimals", y.markers.animals),
     c.box("infoTrigger", y.info, c.trigger("0x20000000", "0x110000")),
     tg("teleportNode", y.markers.teleport),
+    ...(troughs ? [...y.feedTroughs.flatMap((t, k) => troughNodes(c, "feedTrough", k, t, false)), ...y.waterTroughs.flatMap((t, k) => troughNodes(c, "waterTrough", k, t, true))] : []),
     ...(y.feedTrough ? [plane("foodPlane", y.feedTrough, forage), places("foodPlaces", "foodPlace", y.foodPlaces)] : []),
     ...(y.waterTrough ? [plane("waterPlane", y.waterTrough, water), places("waterPlaces", "waterPlace", y.waterPlaces)] : []),
     // Like the base game's cow barn: the barn and troughs are cut out of the walking area made from the fence.
@@ -490,9 +498,9 @@ export const sceneOf = cfg => c => {
       : y.blockers.map(blocker)),
     tg("fence1", [0, 0, 0], y.fence.map((q, i) => tg(`fence1Node${i + 1}`, q))),
     // the way back from the last post to the first along the building (the game would close the area with a straight line, through the building)
-    tg("navContour", [0, 0, 0], navContourNodes(y.fence, footprints(p)).map(([x, z], i) => tg(`navContourNode${i + 1}`, [x, 0, z]))),
+    tg("navContour", [0, 0, 0], navContourNodes(y.fence, rects).map(([x, z], i) => tg(`navContourNode${i + 1}`, [x, 0, z]))),
     // the ground under the building: the meadow's clear task takes grass away there (and paints dirt)
-    tg("meadowClear", [0, 0, 0], footprintHull(p).map(([x, z], i) => tg(`clearAreaPoint${i + 1}`, [x, 0, z]))),
+    ...(clear.length >= 3 ? [tg("meadowClear", [0, 0, 0], clear.map(([x, z], i) => tg(`clearAreaPoint${i + 1}`, [x, 0, z])))] : []),
     ...(y.pallet ? [
       c.box("palletTrigger", y.pallet.trigger, c.trigger("0x20000000", "0x10000")),
       ...y.pallet.lines.map(([a, b], i) => tg(`palletAreaStart0${i + 1}`, a, [tg(`palletAreaEnd0${i + 1}`, b.map((v, k) => v - a[k]))])),
@@ -554,29 +562,29 @@ ${(pts => pts.length ? `            <!-- the animals' area goes back along the b
             <additionalNavMeshNodes>
 ${pts.map((_, i) => `                <node node="navContourNode${i + 1}"/>`).join("\n")}
             </additionalNavMeshNodes>
-` : "")(navContourNodes(y.fence, footprints(p)))}        </fence>
+` : "")(navContourNodes(y.fence, rects))}        </fence>
         <meadow>
             <fruitType name="GRASS" eatableStartGrowthState="greenMiddle" eatableEndGrowthState="harvestReady" eatenGrowthState="greenSmall"/>
             <fruitType name="MEADOW" eatableStartGrowthState="greenMiddle" eatableEndGrowthState="harvestReady" eatenGrowthState="greenSmall"/>
             <createTask weedState="0">
                 <!-- Grass grows in the pasture only when the ground is grass; any other ground is painted bare, as the base game's farm stable does (grass would cover it). -->
-                <fruit type="${(PASTURE_GROUNDS.some(g => g[0] === p.pastureGround) ? p.pastureGround : "grass") === "grass" ? "MEADOW" : "UNKNOWN"}" growthState="${(PASTURE_GROUNDS.some(g => g[0] === p.pastureGround) ? p.pastureGround : "grass") === "grass" ? "greenSmall" : "0"}"/>
+                <fruit type="${pastureGround === "grass" ? "MEADOW" : "UNKNOWN"}" growthState="${pastureGround === "grass" ? "greenSmall" : "0"}"/>
                 <ground type="NONE"/>
-                <terrainGroundType name="${PASTURE_GROUNDS.some(g => g[0] === p.pastureGround) ? p.pastureGround : "grass"}"/>
-            </createTask>
+                <terrainGroundType name="${pastureGround}"/>
+            </createTask>${clear.length >= 3 ? `
             <clearTask>
                 <fruit type="UNKNOWN" growthState="0"/>
                 <ground type="NONE"/>
-                <terrainGroundType name="${p.groundUnder && p.groundUnder !== "auto" ? p.groundUnder : "dirt"}"/>
+                <terrainGroundType name="${under && under !== "auto" ? under : "dirt"}"/>
                 <polygon>
-${footprintHull(p).map((_, i) => `                    <node node="clearAreaPoint${i + 1}"/>`).join("\n")}
+${clear.map((_, i) => `                    <node node="clearAreaPoint${i + 1}"/>`).join("\n")}
                 </polygon>
-            </clearTask>
+            </clearTask>` : ""}
         </meadow>
     </husbandry>
 `;
   return {nodes, xml, areas: y.areas};
-};
+}
 
 /* ---------- The kind ---------- */
 // (an old red barn: heavy studs, far apart and uneven, seen from inside)

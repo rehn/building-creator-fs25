@@ -353,6 +353,23 @@ function scene(c) {
   return henScene(c, henYard(geo, p), hensOf(p), footprints(p));
 }
 /**
+ * A trough (cow.mjs troughFrom's) as nodes, drawn as the cow barn draws one: a base, four sides round a hollow and a collision box (a water trough has a water surface in the hollow), in a group at its
+ * middle that is turned with the trough. prefix + (k + 1) names it.
+ */
+export function troughNodes(c, prefix, k, t, water) {
+  // (in the trough's own frame, at its middle: a group at the middle, turned with the trough)
+  const o = t.local.outer, i = t.local.inner, name = `${prefix}${k + 1}`, concrete = "#9A968C";
+  const b = (suffix, a, z, h0, h1, color = concrete) => c.solid(`${name}${suffix}`, {center: [(a[0] + z[0]) / 2, (h0 + h1) / 2, (a[1] + z[1]) / 2], size: [Math.abs(z[0] - a[0]), h1 - h0, Math.abs(z[1] - a[1])]}, color);
+  return [tg(name, [t.plane[0], 0, t.plane[1]], [
+    b("Base", [o.x0, o.z0], [o.x1, o.z1], 0, t.bottom),
+    b("SideW", [o.x0, o.z0], [i.x0, o.z1], t.bottom, t.top), b("SideE", [i.x1, o.z0], [o.x1, o.z1], t.bottom, t.top),
+    b("SideN", [i.x0, o.z0], [i.x1, i.z0], t.bottom, t.top), b("SideS", [i.x0, i.z1], [i.x1, o.z1], t.bottom, t.top),
+    ...(water ? [b("Water", [i.x0, i.z0], [i.x1, i.z1], t.bottom, t.planeMax, "#7FA0AE")] : []),
+    c.box(`${name}Collision`, {center: [0, t.box.center[1], 0], size: t.box.size}, {static: true, collisionFilterGroup: "0x3e", collisionFilterMask: "0xfffffbff"}),
+  ], t.turn ? {rotation: [0, t.turn, 0]} : {})];
+}
+
+/**
  * The nodes, placeable XML and ground areas of a hen yard y (henYard's shape: fence, food, pallet, loading, info, blockers, areas; clear: a polygon [[x, z] ...] where the grass is cleared, a clear task as the cow barn has) for n hens, the building's footprints
  * rects ({x0, x1, z0, z1}) the way back along the fence follows. feedTroughs, waterTroughs (cow.mjs troughFrom's): drawn, the first feed trough with the game's food plane and the places the hens eat at. A mod (kinds/modframe.mjs) builds its own yard and uses the same export.
  */
@@ -363,18 +380,7 @@ export function henScene(c, y, n, rects) {
   const floor = y.nav && {...y.nav, rects: y.nav.rects.filter(r => r.inside)}, forage = (y.nav || ft.length) && doc.material("forage_mat", {diffuseColor: "0.42 0.45 0.2 1"});
   // a trough as the cow barn draws it: a base, four sides round a hollow, a collision box; a water trough has a water surface in the hollow
   const quad = (sx, sz) => ({p: [-sx / 2, 0, -sz / 2, -sx / 2, 0, sz / 2, sx / 2, 0, sz / 2, sx / 2, 0, -sz / 2], n: [0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0], uv: [0, 0, 0, 1, 1, 1, 1, 0], i: [0, 1, 2, 0, 2, 3]});
-  const drawTrough = (prefix, k, t, water) => {
-    // (in the trough's own frame, at its middle: a group at the middle, turned with the trough)
-    const o = t.local.outer, i = t.local.inner, name = `${prefix}${k + 1}`, concrete = "#9A968C";
-    const b = (suffix, a, z, h0, h1, color = concrete) => c.solid(`${name}${suffix}`, {center: [(a[0] + z[0]) / 2, (h0 + h1) / 2, (a[1] + z[1]) / 2], size: [Math.abs(z[0] - a[0]), h1 - h0, Math.abs(z[1] - a[1])]}, color);
-    return [tg(name, [t.plane[0], 0, t.plane[1]], [
-      b("Base", [o.x0, o.z0], [o.x1, o.z1], 0, t.bottom),
-      b("SideW", [o.x0, o.z0], [i.x0, o.z1], t.bottom, t.top), b("SideE", [i.x1, o.z0], [o.x1, o.z1], t.bottom, t.top),
-      b("SideN", [i.x0, o.z0], [i.x1, i.z0], t.bottom, t.top), b("SideS", [i.x0, i.z1], [i.x1, o.z1], t.bottom, t.top),
-      ...(water ? [b("Water", [i.x0, i.z0], [i.x1, i.z1], t.bottom, t.planeMax, "#7FA0AE")] : []),
-      c.box(`${name}Collision`, {center: [0, t.box.center[1], 0], size: t.box.size}, {static: true, collisionFilterGroup: "0x3e", collisionFilterMask: "0xfffffbff"}),
-    ], t.turn ? {rotation: [0, t.turn, 0]} : {})];
-  };
+  const drawTrough = (prefix, k, t, water) => troughNodes(c, prefix, k, t, water);
   const stripesMat = doc.material("warningStripes_mat", {}, ["diffuse", "normal", "specular"].map((k, i) =>
     [["Texture", "Normalmap", "Glossmap"][i], `$data/shared/warningStripes_${k}.png`])); // the game finds the .dds
   const nodes = [tg("chickenFeatures", [0, 0, 0], [
