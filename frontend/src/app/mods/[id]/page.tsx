@@ -22,7 +22,8 @@ import { RangeField } from "@/components/RangeField";
 import { TreeRow } from "@/components/TreeRow";
 import { FolderSelect } from "@/components/FolderSelect";
 import { useFolders } from "@/lib/useFolders";
-import { addPost, removePost, setPostType, placePost, choices, payload } from "@/lib/mods.mjs";
+import { addPost, removePost, setPostType, placePost, choices, payload, modState, sameModState } from "@/lib/mods.mjs";
+import { History } from "@/editor/layout.mjs";
 import { groupsFree, addGroup, removeGroup, setObjectOf, settingsFor, objectsOfData, setPoint, addPoint, removePoint, animalOfData, countOfData, ANIMALS, groupOf, GROUPS, entranceBuilding, fenceProblems, fenceProblemList, insertPoint, MIN_POSTS } from "@/lib/modObjects.mjs";
 
 type Kind = { id: string; name: string };
@@ -50,6 +51,10 @@ export default function ModPage() {
   const [closed, setClosed] = useState<Record<string, boolean>>({});   // the tree nodes folded up
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // Undo and redo: a step is what the server holds of the mod (its posts and its plan data), added at each save; undo saves the earlier state as a new version.
+  const hist = useRef<History | null>(null);
+  const [hasHistory, setHasHistory] = useState({ undo: false, redo: false });
+  const syncHistory = () => setHasHistory({ undo: !!hist.current?.canUndo, redo: !!hist.current?.canRedo });
   const appFolders = useFolders(!!user, [mod?.folder]);
   const [nameDraft, setNameDraft] = useState<string | null>(null);   // the name as it is typed in the sub-bar, until it is let go
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -74,7 +79,7 @@ export default function ModPage() {
 
   useEffect(() => {
     if (!user) return;
-    Promise.all([api.mod(id), api.projects()]).then(([m, list]) => { setMod(m); setProjects(list); }).catch(e => setError(e.message));
+    Promise.all([api.mod(id), api.projects()]).then(([m, list]) => { setMod(m); setProjects(list); hist.current = new History(modState(m)); syncHistory(); }).catch(e => setError(e.message));
   }, [user, id]);
   useEffect(() => { setDraft(mod?.items ?? []); setObjects(objectsOfData(mod?.data)); }, [mod]);   // (what the server has now)
 
@@ -97,14 +102,46 @@ export default function ModPage() {
     if (!m) return;
     setBusy(true); setError("");
     try {
-      setMod(await api.updateMod(m.id, {
+      const made = await api.updateMod(m.id, {
         ...(patch.items ? { items: payload(patch.items) } : {}),
         ...(patch.objects || patch.count || patch.animal || "inside" in patch ? { data: { ...(m.data ?? {}), ...(patch.objects ? { objects: patch.objects } : {}), ...(patch.animal ? { animal: patch.animal } : {}), ...(patch.count ? { [patch.animal ?? animalOfData(m.data)]: patch.count } : {}), ...("inside" in patch ? { inside: patch.inside } : {}) } } : {}),
         version: m.version,
-      }));
-    } catch (e) { setError((e as Error).message); api.mod(m.id).then(setMod).catch(() => {}); }
+      });
+      setMod(made);
+      if (hist.current && !sameModState(modState(made), hist.current.now)) { hist.current.push(modState(made)); syncHistory(); }   // (a save is a step)
+    } catch (e) { setError((e as Error).message); readAgain(m.id); }
     finally { setBusy(false); }
   }
+  /** A change made somewhere else was not overwritten: the mod is read again, and what was undone before is not the history any more. */
+  function readAgain(modId: string) { api.mod(modId).then(x => { setMod(x); hist.current = new History(modState(x)); syncHistory(); }).catch(() => {}); }
+  /** Undo or redo: the earlier (or later) state is saved as the mod's new state. */
+  async function step(dir: "undo" | "redo") {
+    const m = modRef.current, h = hist.current;
+    if (!m || !h || busy || !(dir === "undo" ? h.canUndo : h.canRedo)) return;
+    const target = dir === "undo" ? h.undo() : h.redo();
+    setBusy(true); setError("");
+    try {
+      setMod(await api.updateMod(m.id, { items: target.items, data: target.data, version: m.version }));
+      setSel({ kind: "root" });   // (what was chosen may not be there any more)
+    } catch (e) { setError((e as Error).message); readAgain(m.id); }
+    finally { setBusy(false); syncHistory(); }
+  }
+  const stepRef = useRef(step);
+  stepRef.current = step;
+  // Ctrl+Z, Ctrl+Y and Ctrl+Shift+Z, except in a text field (it has the browser's own undo)
+  useEffect(() => {
+    const keys = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const k = e.key.toLowerCase();
+      if (k !== "z" && k !== "y") return;
+      const el = e.target as HTMLElement | null, typing = !!el && (el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable || (el.tagName === "INPUT" && !["range", "checkbox", "radio", "color", "button", "submit"].includes((el as HTMLInputElement).type)));
+      if (typing) return;
+      e.preventDefault();
+      stepRef.current(k === "y" || e.shiftKey ? "redo" : "undo");
+    };
+    window.addEventListener("keydown", keys);
+    return () => window.removeEventListener("keydown", keys);
+  }, []);
   const change = (next: ModPost[]) => { setDraft(next); save({ items: next }); };
   const changeObjects = (next: ModObject[]) => { setObjects(next); save({ objects: next }); };
 
@@ -363,7 +400,11 @@ export default function ModPage() {
       user={user} back={{ href: "/mods", label: t("Mods"), aria: t("All mods") }}
       nameId="modName" nameLabel={t("Name")} name={nameDraft ?? mod?.name ?? ""} onName={setNameDraft} onCommitName={commitName} nameDisabled={!mod || busy}
       status={error ? error : !mod ? "" : busy ? t("Saving…") : t("All changes saved")} bad={!!error}
-      actions={<button type="button" className="primary" onClick={generate} disabled={busy || !mod || draft.length === 0}>{t("Generate game mod")}</button>}
+      actions={<>
+        <button type="button" onClick={() => step("undo")} disabled={busy || !hasHistory.undo} title={t("Undo (Ctrl+Z)")}>{t("Undo")}</button>
+        <button type="button" onClick={() => step("redo")} disabled={busy || !hasHistory.redo} title={t("Redo (Ctrl+Y)")}>{t("Redo")}</button>
+        <button type="button" className="primary" onClick={generate} disabled={busy || !mod || draft.length === 0}>{t("Generate game mod")}</button>
+      </>}
     >
       <main className="modedit" ref={bench} style={panels.style}>
         <div id="rz1" {...panels.handle("panel", t("Resize the left panel"))} />

@@ -33,3 +33,8 @@ export function choices(projects, items, kind) {
 
 /** The list as the server takes it (it works out the names and what is missing itself). */
 export const payload = items => items.map(({id, kind, ref, type, x, z, y = 0, rot}) => ({id, kind, ref, type, x, z, y, rot}));
+
+/** What undo and redo on the mod's page keep of a mod: its posts (as they are saved) and its plan data (the game objects, the animals, the inside). Not the name, the folder or the preview. */
+export const modState = mod => ({items: payload((mod && mod.items) || []), data: (mod && mod.data) || {}});
+/** Whether two such states are the same (a save that changed nothing is not a step). */
+export const sameModState = (a, b) => JSON.stringify(a) === JSON.stringify(b);
