@@ -434,7 +434,6 @@ function syncOutputs() {
   off("downpipes", !p.gutters || (p.roofType === "flat" && !p.roofTilt));
   off("ventilators", p.roofType === "flat");
   off("curtainStyle", !p.interior); off("curtainColor", !p.interior);
-  inputs.modDescription.placeholder = defaultModDescription(p);
 }
 
 /** The materials with a surface texture (surfaceSpec), when their settings give them one. */
