@@ -155,10 +155,21 @@ test("arranging the inside hides every roof, a wing's too, and Done shows them a
     const roofs = () => seen.filter(o => o.isMesh && /^roof/.test(o.name));
     assert.ok(roofs().length >= 1, "the building has a roof mesh");
     assert.ok(roofs().every(m => m.visible), "roofs show as usual");
+    // the button in the view (top right) hides and shows them
+    const btn = root.querySelector("#roofBtn");
+    assert.ok(btn && btn.closest("#stage"), "a roof button in the 3D view");
+    btn.click();
+    assert.ok(roofs().every(m => !m.visible) && btn.getAttribute("aria-pressed") === "true", "hidden by the button");
+    btn.click();
+    assert.ok(roofs().every(m => m.visible) && btn.getAttribute("aria-pressed") === "false", "shown again");
+    btn.click();   // (hidden again: it stays so after arranging)
     root.querySelector("#tab-inside").click();
     root.querySelector("#insideArrange").click();
     assert.ok(roofs().every(m => !m.visible), "no roof while arranging");
+    assert.ok(btn.disabled, "the button waits while arranging");
     root.querySelector("#insideDone").click();
+    assert.deepEqual([roofs().map(m => m.visible), btn.disabled, btn.textContent], [roofs().map(() => false), false, "Show roof"], "the choice made with the button is kept");
+    btn.click();
     assert.ok(roofs().every(m => m.visible), "roofs are back");
     ed.destroy();
   } finally { THREE.Scene.prototype.add = add; }
