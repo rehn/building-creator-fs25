@@ -55,6 +55,8 @@ export interface ModObject {
   h: number;
   ix: number;
   iz: number;
+  /** The turn round the Y axis in degrees, about the middle (a trough); left out when 0. */
+  turn?: number;
   /** A fence has posts [[x, z] ...] instead of a box (its x, z, w, d and h are not there). */
   points?: [number, number][];
 }

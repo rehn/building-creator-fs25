@@ -357,22 +357,23 @@ function scene(c) {
  * rects ({x0, x1, z0, z1}) the way back along the fence follows. feedTroughs, waterTroughs (cow.mjs troughFrom's): drawn, the first feed trough with the game's food plane and the places the hens eat at. A mod (kinds/modframe.mjs) builds its own yard and uses the same export.
  */
 export function henScene(c, y, n, rects) {
-  const {doc} = c, blocker = (b, i) => c.box(i ? `navmeshBlocker${i + 1}` : "navmeshBlocker", b, {static: true, collisionFilterGroup: "0x800000", collisionFilterMask: "0x1", buildNavMeshMask: "0xfe"});
+  const {doc} = c, blocker = (b, i) => c.box(i ? `navmeshBlocker${i + 1}` : "navmeshBlocker", b, {static: true, collisionFilterGroup: "0x800000", collisionFilterMask: "0x1", buildNavMeshMask: "0xfe", ...(b.turn ? {rotation: [0, b.turn, 0]} : {})});
   // (hens that can go inside: a walking mesh of the floor and a walking plane, as the base game's hen barns have; the area outside is the fence less that shape, the walls are the blockers)
   const ft = y.feedTroughs || [], wt = y.waterTroughs || [];
   const floor = y.nav && {...y.nav, rects: y.nav.rects.filter(r => r.inside)}, forage = (y.nav || ft.length) && doc.material("forage_mat", {diffuseColor: "0.42 0.45 0.2 1"});
   // a trough as the cow barn draws it: a base, four sides round a hollow, a collision box; a water trough has a water surface in the hollow
   const quad = (sx, sz) => ({p: [-sx / 2, 0, -sz / 2, -sx / 2, 0, sz / 2, sx / 2, 0, sz / 2, sx / 2, 0, -sz / 2], n: [0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0], uv: [0, 0, 0, 1, 1, 1, 1, 0], i: [0, 1, 2, 0, 2, 3]});
   const drawTrough = (prefix, k, t, water) => {
-    const o = t.outer, i = t.inner, name = `${prefix}${k + 1}`, concrete = "#9A968C";
+    // (in the trough's own frame, at its middle: a group at the middle, turned with the trough)
+    const o = t.local.outer, i = t.local.inner, name = `${prefix}${k + 1}`, concrete = "#9A968C";
     const b = (suffix, a, z, h0, h1, color = concrete) => c.solid(`${name}${suffix}`, {center: [(a[0] + z[0]) / 2, (h0 + h1) / 2, (a[1] + z[1]) / 2], size: [Math.abs(z[0] - a[0]), h1 - h0, Math.abs(z[1] - a[1])]}, color);
-    return [
+    return [tg(name, [t.plane[0], 0, t.plane[1]], [
       b("Base", [o.x0, o.z0], [o.x1, o.z1], 0, t.bottom),
       b("SideW", [o.x0, o.z0], [i.x0, o.z1], t.bottom, t.top), b("SideE", [i.x1, o.z0], [o.x1, o.z1], t.bottom, t.top),
       b("SideN", [i.x0, o.z0], [i.x1, i.z0], t.bottom, t.top), b("SideS", [i.x0, i.z1], [i.x1, o.z1], t.bottom, t.top),
       ...(water ? [b("Water", [i.x0, i.z0], [i.x1, i.z1], t.bottom, t.planeMax, "#7FA0AE")] : []),
-      c.box(`${name}Collision`, t.box, {static: true, collisionFilterGroup: "0x3e", collisionFilterMask: "0xfffffbff"}),
-    ];
+      c.box(`${name}Collision`, {center: [0, t.box.center[1], 0], size: t.box.size}, {static: true, collisionFilterGroup: "0x3e", collisionFilterMask: "0xfffffbff"}),
+    ], t.turn ? {rotation: [0, t.turn, 0]} : {})];
   };
   const stripesMat = doc.material("warningStripes_mat", {}, ["diffuse", "normal", "specular"].map((k, i) =>
     [["Texture", "Normalmap", "Glossmap"][i], `$data/shared/warningStripes_${k}.png`])); // the game finds the .dds
@@ -394,7 +395,7 @@ export function henScene(c, y, n, rects) {
       : y.blockers.map(blocker)),
     // the troughs: drawn; the first feed trough has the game's food plane (it rises and falls with the feed) and the places where the hens stand to eat
     ...ft.flatMap((t, k) => drawTrough("feedTrough", k, t, false)), ...wt.flatMap((t, k) => drawTrough("waterTrough", k, t, true)),
-    ...(ft.length ? [shape("foodPlane", {translation: [ft[0].plane[0], ft[0].planeMax, ft[0].plane[1]], shapeId: doc.shape("foodPlane", quad(...ft[0].size)), castsShadows: false, receiveShadows: true, materialIds: forage}),
+    ...(ft.length ? [shape("foodPlane", {translation: [ft[0].plane[0], ft[0].planeMax, ft[0].plane[1]], ...(ft[0].turn ? {rotation: [0, ft[0].turn, 0]} : {}), shapeId: doc.shape("foodPlane", quad(...ft[0].size)), castsShadows: false, receiveShadows: true, materialIds: forage}),
       tg("foodPlaces", [0, 0, 0], ft.flatMap(t => t.places).map((q, i) => tg(`foodPlace${i + 1}`, q.pos, [], {rotation: [0, q.rot, 0]})))] : []),
     tg("fence1", [0, 0, 0], y.fence.map((q, i) => tg(`fence1Node${i + 1}`, q))),
     // the ground under and round the building: the meadow's clear task takes the grass away there (and paints dirt), so the grass ends a little outside the walls

@@ -109,7 +109,8 @@ function cleanBox(o) {
   const look = (o.type === "feedTrough" || o.type === "waterTrough") && typeof o.asset === "string" && o.asset
     ? {asset: o.asset.slice(0, 64), ...(turnOf(o.rot) ? {rot: turnOf(o.rot)} : {})} : {};   // (turned any angle; width and depth are the box round the turned model)
   const y = round(clamp(num(o.y, 0), L.y));   // (left out when 0: the object stands on the ground, as every saved one does)
-  return {type: o.type, ...look, x: round(clamp(num(o.x, 0), L.x)), z: round(clamp(num(o.z, 0), L.z)), ...(y ? {y} : {}),
+  const turn = turnOf(o.turn);   // (a mod's objects can be turned round the Y axis, about their middle; width along the turned X, depth along the turned Z)
+  return {type: o.type, ...look, ...(turn ? {turn} : {}), x: round(clamp(num(o.x, 0), L.x)), z: round(clamp(num(o.z, 0), L.z)), ...(y ? {y} : {}),
     w: round(clamp(num(o.w, def[0]), L.w)), d: round(clamp(num(o.d, def[1]), L.d)), h: round(clamp(num(o.h, def[2]), L.h)),
     ix: round(clamp(num(o.ix, 0), L.ix)), iz: round(clamp(num(o.iz, 0), L.iz))};
 }

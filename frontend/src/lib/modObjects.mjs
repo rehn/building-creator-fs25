@@ -83,12 +83,14 @@ export function removeGroup(objects, objectId) {
 
 const clampTo = (v, [lo, hi]) => Math.min(hi, Math.max(lo, v));
 
-/** One object with some of x, z, y (the height above the ground), w, d, h, ix, iz changed (kept within the editor's limits, to a millimetre). */
+/** One object with some of x, z, y (the height above the ground), w, d, h, ix, iz and turn (degrees round Y) changed (kept within the editor's limits, to a millimetre). */
 export function setObjectOf(objects, objectId, patch) {
   return objects.map(o => {
     if (o.id !== objectId) return o;
     const next = {...o};
     for (const k of ["x", "z", "y", "w", "d", "h", "ix", "iz"]) if (patch[k] !== undefined && Number.isFinite(+patch[k])) next[k] = round(clampTo(+patch[k], OBJECT_LIMITS[k]));
+    if (patch.turn !== undefined && Number.isFinite(+patch.turn)) next.turn = Math.round((((+patch.turn % 360) + 360) % 360) * 10) / 10 % 360;   // (round the Y axis, degrees, as a post turns)
+    if (!next.turn) delete next.turn;
     if (!next.y) delete next.y;   // (0 is how an object on the ground is kept)
     return next;
   });

@@ -151,6 +151,7 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
     const g = new THREE.Group();
     g.userData = {objectId: ob.id, color, edge};
     g.position.set(ob.x, (ob.y || 0) + ob.h / 2, ob.z);
+    g.rotation.y = (ob.turn || 0) * Math.PI / 180;   // (round Y, about its middle, as a post turns)
     g.add(mesh, edge);
     return g;
   }

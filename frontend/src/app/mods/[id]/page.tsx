@@ -28,6 +28,8 @@ type View = ReturnType<typeof createModView>;
 /** What is chosen in the tree: the mod itself, a building or prop, the "Game objects" node, or one game object. */
 type Sel = { kind: "root" } | { kind: "post"; post: string } | { kind: "group" } | { kind: "object"; object: number };
 const TYPES = KINDS as Kind[];
+/** The game objects that can be turned round the Y axis (the troughs; the others are boxes along the axes in the export so far). */
+const TURNABLE = ["feedTrough", "waterTrough"];
 /** The slider of a building's or prop's place: a mod can be big, and a number typed over may go further. */
 const PLACE = { min: -100, max: 100, step: 0.25, hardMin: -5000, hardMax: 5000 };
 const typeName = (type: string) => t((OBJECT_TYPES as Record<string, { name: string }>)[type]?.name ?? type);
@@ -424,6 +426,16 @@ export default function ModPage() {
                   min={OBJECT_LIMITS[k][0]} max={OBJECT_LIMITS[k][1]} step={k === "x" || k === "z" ? 0.25 : 0.05}
                   onLive={v => setObjects(setObjectOf(objectsRef.current, object.id, { [k]: v }))} onCommit={v => changeObjects(setObjectOf(objectsRef.current, object.id, { [k]: v }))} disabled={busy} />
               ))}
+              {TURNABLE.includes(object.type) && (
+                <>
+                  <RangeField label={t("Turn")} value={object.turn ?? 0} min={0} max={360} step={1} unit="°" hardMin={0} hardMax={360}
+                    onLive={v => setObjects(setObjectOf(objectsRef.current, object.id, { turn: v }))} onCommit={v => changeObjects(setObjectOf(objectsRef.current, object.id, { turn: v }))} disabled={busy} />
+                  <div className="row">
+                    <button type="button" onClick={() => changeObjects(setObjectOf(objects, object.id, { turn: turnedBy(object.turn ?? 0, -90) }))} disabled={busy}>{t("Turn left")}</button>
+                    <button type="button" onClick={() => changeObjects(setObjectOf(objects, object.id, { turn: turnedBy(object.turn ?? 0, 90) }))} disabled={busy}>{t("Turn right")}</button>
+                  </div>
+                </>
+              )}
               {groupOf(object.type) === "hens" && <RangeField label={t("Hens")} value={hens} min={1} max={360} step={1} unit="" onCommit={v => save({ hens: Math.round(v) })} disabled={busy} />}
               <p className="hint">{t("Measured from the middle of the mod, the same ground the buildings stand on: X to the right, Y up and Z towards you, as the axes in the view show. Taking it away takes the objects that go with it too.")}</p>
               <div className="row">

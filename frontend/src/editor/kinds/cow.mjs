@@ -132,9 +132,11 @@ export function troughFrom(o, fence, rects) {
   const top = o.h, bottom = top * 0.6;
   const alongX = o.w >= o.d, len = alongX ? o.w : o.d, k = Math.max(1, Math.floor((len - 0.2) / TROUGH.spacing));
   const out = (alongX ? o.d : o.w) / 2 + TROUGH.stand;
+  // a trough turned round the Y axis (turn, degrees, as three.js turns: x' = x cos + z sin, z' = -x sin + z cos): the places are worked out as for a trough that is not, in its own frame, and turned with it
+  const turn = ((+o.turn || 0) % 360 + 360) % 360, ca = Math.cos(turn * Math.PI / 180), sa = Math.sin(turn * Math.PI / 180), turned = ([lx, lz]) => [lx * ca + lz * sa, -lx * sa + lz * ca];
   const spots = sign => Array.from({length: k}, (_, i) => {
-    const s = -len / 2 + (i + 0.5) * len / k, n = alongX ? [0, sign] : [sign, 0];
-    const pos = [o.x + (alongX ? s : n[0] * out), 0, o.z + (alongX ? n[1] * out : s)];
+    const s = -len / 2 + (i + 0.5) * len / k, ln = alongX ? [0, sign] : [sign, 0], n = turned(ln), l = alongX ? [s, ln[1] * out] : [ln[0] * out, s], w = turned(l);
+    const pos = [o.x + w[0], 0, o.z + w[1]];
     return {pos, rot: Math.atan2(-n[0], -n[1]) * 180 / Math.PI, back: [pos[0] + n[0] * TROUGH.body, 0, pos[2] + n[1] * TROUGH.body]};
   });
   const free = q => !rects.some(r => q[0] > r.x0 - 0.3 && q[0] < r.x1 + 0.3 && q[2] > r.z0 - 0.3 && q[2] < r.z1 + 0.3) && (!fence || insidePoly(fence, q[0], q[2]));
@@ -146,7 +148,10 @@ export function troughFrom(o, fence, rects) {
   }
   const strip = list => list.map(({pos, rot}) => ({pos, rot}));
   return {outer, inner, top, bottom, planeMin: bottom + (top - bottom) * 0.15, planeMax: top - (top - bottom) * 0.2,
-    asset: o.asset, rot: o.rot, plane: [o.x, o.z], size: [inner.x1 - inner.x0, inner.z1 - inner.z0], box: {center: [o.x, top / 2, o.z], size: [o.w, top, o.d]}, places: strip(sides.flat())};
+    asset: o.asset, rot: o.rot, turn, plane: [o.x, o.z], size: [inner.x1 - inner.x0, inner.z1 - inner.z0], places: strip(sides.flat()),
+    // (the box is the trough's own size at its middle, with the turn when it has one; local: the outer and inner rectangles round the middle, for drawing in the trough's own frame)
+    box: {center: [o.x, top / 2, o.z], size: [o.w, top, o.d], ...(turn ? {turn} : {})},
+    local: {outer: {x0: -o.w / 2, x1: o.w / 2, z0: -o.d / 2, z1: o.d / 2}, inner: {x0: -o.w / 2 + t, x1: o.w / 2 - t, z0: -o.d / 2 + t, z1: o.d / 2 - t}}};
 }
 /** The troughs to start with: against the pasture wall outside, feed on one side of the doorway, water on the other (the longer stretch gets the feed). */
 function startTroughs(yf, p, cfg) {

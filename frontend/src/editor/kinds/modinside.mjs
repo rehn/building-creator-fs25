@@ -53,6 +53,6 @@ export function insideNav({settings: q, place, contour, blockers}) {   // (block
   const floorY = (F < 0.03 ? F + 0.03 : F + 0.004) + y;   // (the top of the floor: see FLOOR_LIFT in model.mjs)
   const nav = animalNav({fence: contour, blockers, rooms, items: [], doors: kept.map(k => k.door), floorY, flat: level});
   if (!nav) return {nav: null, reason: "no-fence"};
-  nav.blockers = [...wallSlabs(q, kept.map(k => k.e), []).map(boxW), ...blockers.filter(b => b.keep === KEEP.trough).map(({center, size}) => ({center, size}))];
+  nav.blockers = [...wallSlabs(q, kept.map(k => k.e), []).map(boxW), ...blockers.filter(b => b.keep === KEEP.trough).map(({center, size, turn}) => ({center, size, ...(turn ? {turn} : {})}))];
   return {nav, entrances: kept.length};
 }
