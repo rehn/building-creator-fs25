@@ -158,6 +158,12 @@ CREATE TABLE IF NOT EXISTS mod_packages (
 	zip        BLOB    NOT NULL,
 	updated_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS folders (
+	user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	name       TEXT    NOT NULL,
+	created_at INTEGER NOT NULL,
+	PRIMARY KEY (user_id, name)
+);
 CREATE TABLE IF NOT EXISTS api_tokens (
 	id           TEXT    PRIMARY KEY,
 	user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -313,6 +319,12 @@ CREATE TABLE IF NOT EXISTS mod_packages (
 	zip        BYTEA   NOT NULL,
 	updated_at BIGINT  NOT NULL
 );
+CREATE TABLE IF NOT EXISTS folders (
+	user_id    BIGINT  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	name       TEXT    NOT NULL,
+	created_at BIGINT  NOT NULL,
+	PRIMARY KEY (user_id, name)
+);
 CREATE TABLE IF NOT EXISTS api_tokens (
 	id           TEXT    PRIMARY KEY,
 	user_id      BIGINT  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -397,6 +409,7 @@ func openPostgres(url string) (*Store, error) {
 			`ALTER TABLE api_tokens ADD COLUMN IF NOT EXISTS can_write BOOLEAN NOT NULL DEFAULT FALSE`,
 			`ALTER TABLE users ADD COLUMN IF NOT EXISTS sso_sub TEXT`,
 			`ALTER TABLE mod_items ADD COLUMN IF NOT EXISTS y DOUBLE PRECISION NOT NULL DEFAULT 0`,
+			`ALTER TABLE mods ADD COLUMN IF NOT EXISTS folder TEXT NOT NULL DEFAULT ''`,
 			`CREATE UNIQUE INDEX IF NOT EXISTS users_sso_sub ON users (sso_sub)`,
 			projectIndexes[0], projectIndexes[1],
 		} {
@@ -454,7 +467,7 @@ func openSQLite(path string) (*Store, error) {
 		return nil, fmt.Errorf("updating schema: %w", err)
 	}
 	for _, c := range [][3]string{{"projects", "folder", "TEXT NOT NULL DEFAULT ''"}, {"projects", "source_id", "TEXT NOT NULL DEFAULT ''"},
-		{"projects", "generated_version", "INTEGER NOT NULL DEFAULT 0"}, {"api_tokens", "can_write", "INTEGER NOT NULL DEFAULT 0"}, {"users", "sso_sub", "TEXT"}, {"mod_items", "y", "REAL NOT NULL DEFAULT 0"}} {
+		{"projects", "generated_version", "INTEGER NOT NULL DEFAULT 0"}, {"api_tokens", "can_write", "INTEGER NOT NULL DEFAULT 0"}, {"users", "sso_sub", "TEXT"}, {"mod_items", "y", "REAL NOT NULL DEFAULT 0"}, {"mods", "folder", "TEXT NOT NULL DEFAULT ''"}} {
 		if err := addColumnSQLite(db, c[0], c[1], c[2]); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("updating schema: %w", err)
@@ -982,7 +995,7 @@ func (s *Store) RenameFolder(ctx context.Context, userID int64, from, to string)
 	var n int
 	err := s.inTx(ctx, func(tx *txx) error {
 		var inTo int
-		if err := tx.queryRow(ctx, `SELECT COUNT(*) FROM projects WHERE user_id = ? AND folder = ?`, userID, to).Scan(&inTo); err != nil {
+		if err := tx.queryRow(ctx, `SELECT (SELECT COUNT(*) FROM projects WHERE user_id = ? AND folder = ?) + (SELECT COUNT(*) FROM mods WHERE user_id = ? AND folder = ?)`, userID, to, userID, to).Scan(&inTo); err != nil {
 			return err
 		}
 		if inTo > 0 {
@@ -996,7 +1009,27 @@ func (s *Store) RenameFolder(ctx context.Context, userID int64, from, to string)
 		if err != nil {
 			return err
 		}
-		if c == 0 {
+		resMods, err := tx.exec(ctx, `UPDATE mods SET folder = ? WHERE user_id = ? AND folder = ?`, to, userID, from)
+		if err != nil {
+			return err
+		}
+		cm, err := resMods.RowsAffected()
+		if err != nil {
+			return err
+		}
+		// (a folder that was made: an empty one with the new name is in the way, and the old name moves)
+		if _, err := tx.exec(ctx, `DELETE FROM folders WHERE user_id = ? AND name = ?`, userID, to); err != nil {
+			return err
+		}
+		resMade, err := tx.exec(ctx, `UPDATE folders SET name = ? WHERE user_id = ? AND name = ?`, to, userID, from)
+		if err != nil {
+			return err
+		}
+		cf, err := resMade.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if c == 0 && cm == 0 && cf == 0 {
 			return ErrNotFound
 		}
 		n = int(c)

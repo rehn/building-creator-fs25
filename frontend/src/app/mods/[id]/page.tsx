@@ -20,6 +20,8 @@ import { makeModPackage } from "@/editor/modExport.mjs";
 import { confirmDialog } from "@/components/dialog.mjs";
 import { RangeField } from "@/components/RangeField";
 import { TreeRow } from "@/components/TreeRow";
+import { FolderSelect } from "@/components/FolderSelect";
+import { useFolders } from "@/lib/useFolders";
 import { addPost, removePost, setPostType, placePost, choices, payload } from "@/lib/mods.mjs";
 import { groupsFree, addGroup, removeGroup, setObjectOf, settingsFor, objectsOfData, setPoint, addPoint, removePoint, animalOfData, countOfData, ANIMALS, groupOf, GROUPS, entranceBuilding, fenceProblems, fenceProblemList, insertPoint, MIN_POSTS } from "@/lib/modObjects.mjs";
 
@@ -48,6 +50,7 @@ export default function ModPage() {
   const [closed, setClosed] = useState<Record<string, boolean>>({});   // the tree nodes folded up
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const appFolders = useFolders(!!user, [mod?.folder]);
   const [nameDraft, setNameDraft] = useState<string | null>(null);   // the name as it is typed in the sub-bar, until it is let go
   const canvas = useRef<HTMLCanvasElement>(null);
   const bench = useRef<HTMLElement>(null);
@@ -212,6 +215,13 @@ export default function ModPage() {
       setMade({ name: file, warnings });
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
+  /** The mod's folder (the app's own, the same as the buildings'): a move alone does not change the mod, so its version stays. */
+  async function moveTo(folder: string) {
+    if (!mod) return;
+    setBusy(true); setError("");
+    try { const made = await api.updateMod(mod.id, { folder, version: mod.version }); setMod(m => m && { ...m, folder: made.folder, version: made.version }); }
+    catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
   async function remove() {
     if (!mod) return;
     if (!await confirmDialog(t("Delete the mod “{name}”? The buildings and props in it stay.", { name: mod.name }), { title: t("Delete"), confirm: t("Delete"), danger: true })) return;
@@ -347,6 +357,9 @@ export default function ModPage() {
               <section className="hx-card">
                 <h3 className="hx-card-h" translate="no">{mod.name}</h3>
                 <p className="hint">{t("A mod holds buildings and props, and the player puts the whole of it out in one go. Drag them in the view to place them. The game objects, like where the player sleeps, belong to the whole mod.")}</p>
+                <label className="stack">{t("Folder")}
+                  <FolderSelect value={mod.folder ?? ""} folders={appFolders.names} onChoose={moveTo} onCreate={appFolders.add} disabled={busy} label={t("Folder")} />
+                </label>
                 <div className="row"><button type="button" className="danger" onClick={remove} disabled={busy}>Delete</button></div>
               </section>
               <section className="hx-card">

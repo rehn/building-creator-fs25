@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"net/http"
+	"strings"
 
 	"building-creator-fs25/backend/internal/store"
 )
@@ -28,6 +29,7 @@ type modItemInput struct {
 
 type modInput struct {
 	Name    *string         `json:"name"`
+	Folder  *string         `json:"folder"` // "" takes the mod out of its folder
 	Data    json.RawMessage `json:"data"`
 	Items   *[]modItemInput `json:"items"`
 	Version int64           `json:"version"`
@@ -60,6 +62,17 @@ func checkMod(w http.ResponseWriter, in *modInput) (store.ModUpdate, bool) {
 			return upd, false
 		}
 		upd.Name = &name
+	}
+	if in.Folder != nil {
+		folder := ""
+		if strings.TrimSpace(*in.Folder) != "" {
+			var ok bool
+			if folder, ok = cleanText(*in.Folder, maxFolderLen); !ok {
+				writeError(w, http.StatusBadRequest, "invalid_folder", "Use a folder name of 1 to 80 characters.")
+				return upd, false
+			}
+		}
+		upd.Folder = &folder
 	}
 	if present(in.Data) {
 		if !validData(in.Data) {

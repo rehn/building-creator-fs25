@@ -4,10 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 )
 
 func TestModLifecycle(t *testing.T) {
 	s := openTest(t)
+	// (a clock that moves on each reading: "the last changed first" needs mods changed at different times, and two in the same millisecond come in the order of their ids)
+	clock := time.Unix(1_700_000_000, 0)
+	s.Now = func() time.Time { clock = clock.Add(time.Second); return clock }
 	u := mustUser(t, s, "anna@example.se")
 	house, _ := s.CreateProject(ctx, u.ID, "Huset", json.RawMessage(`{}`))
 	barn, _ := s.CreateProject(ctx, u.ID, "Ladan", json.RawMessage(`{}`))
