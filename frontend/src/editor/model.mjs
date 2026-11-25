@@ -831,10 +831,13 @@ export function sanitize(obj) {
 let ASSETS = [];
 /** Sets the user's imported items (the API's list). */
 export function setAssets(list) { ASSETS = Array.isArray(list) ? list : []; }
-/** The pieces a building can have inside: its kind's own, the user's items for it, stand-ins for deleted ones. */
+/** The pieces a building can have inside: those of every kind (its own first: where two kinds use a name for different pieces, its own is the one), the user's items for it, stand-ins for deleted ones. */
 export function catalogFor(p) {
   const kind = kindOf(p);
-  return kind.catalog ? withAssets(kind.catalog, ASSETS, kind.id, p.items) : {};
+  if (!kind.catalog) return {};
+  const all = {};
+  for (const k of [kind, ...KINDS.filter(x => x !== kind)]) for (const [id, def] of Object.entries(k.catalog || {})) if (!(id in all)) all[id] = def;
+  return withAssets(all, ASSETS, kind.id, p.items);
 }
 /** The user's items that can be the look of a feed or water trough in this building (type: feedTrough | waterTrough). */
 export const troughLooks = (p, type) => troughAssets(ASSETS, type, p.kind);
@@ -933,9 +936,9 @@ function sliceColored(g, from, to) { const o = sliceMesh(g, from, to); if (g.c) 
  * geo.itemParts[id] says which vertices of each material a piece drew (pieceMeshes gives them as meshes): for the thumbnails.
  */
 export function pieceSheet(p) {
-  const q = sanitize(p), cat = catalogFor(q), types = Object.keys(cat).filter(t => !cat[t].asset && !cat[t].missing), cols = 5, gap = 4.6;
-  const items = types.map((type, i) => ({id: i + 1, type, x: ((i % cols) - (cols - 1) / 2) * gap, z: (Math.floor(i / cols) - (Math.ceil(types.length / cols) - 1) / 2) * gap, rot: 0, ...cat[type].defaults}));
-  const s = sanitize({...q, width: 32, depth: 26, floors: 1, floorHeight: 3.4, wings: [], items, age: 0});
+  const q = sanitize(p), cat = catalogFor(q), types = Object.keys(cat).filter(t => !cat[t].asset && !cat[t].missing), gap = 4.6, cols = Math.min(10, Math.ceil(Math.sqrt(types.length * 1.4))), rows = Math.ceil(types.length / cols);
+  const items = types.map((type, i) => ({id: i + 1, type, x: ((i % cols) - (cols - 1) / 2) * gap, z: (Math.floor(i / cols) - (rows - 1) / 2) * gap, rot: 0, ...cat[type].defaults}));
+  const s = sanitize({...q, width: Math.min(60, Math.max(32, cols * gap + 4)), depth: Math.min(50, Math.max(26, rows * gap + 4)), floors: 1, floorHeight: 3.4, wings: [], items, age: 0});
   const geo = buildGeometry(s, {ghosts: true});
   return {geo, p: s, spots: s.items.map(it => ({id: it.id, type: it.type, x: it.x, z: it.z}))};
 }
