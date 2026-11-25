@@ -696,7 +696,6 @@
   "Materials: the same as {name} unless set here": "Material: som {name} om inget annat anges här",
   "Its own colour": "Egen färg",
   "Go back": "Tillbaka",
-  "What the outer walls look like from inside: like the outside (studs behind boards, plaster as plaster, the same split in two materials), or the kind's own finish. Wallpaper goes over either: one for every wall here, or sections along a single wall (one for each room behind it): choose the wall in the Building tab.": "Hur ytterväggarna ser ut inifrån: som utsidan (reglar bakom bräder, puts som puts, samma delning i två material), eller typens egen yta. Tapet läggs över båda: en för alla väggar här, eller sektioner längs en enskild vägg (en för varje rum bakom den): välj väggen i fliken Byggnad.",
   "Downpipes on this wall": "Stuprör på den här väggen",
   "Downpipe {n}": "Stuprör {n}",
   "Spread them evenly": "Fördela dem jämnt",
@@ -1092,5 +1091,8 @@
   "Rubber mats": "Gummimattor",
   "Shavings": "Spån",
   "Straw": "Halm",
-  "What the floor inside is made of: as the inside look gives it (a house has boards, a barn concrete or litter), or one you choose. An extension, and each section of a long building, can have a floor of its own: choose it in the tree.": "Vad golvet inne är gjort av: som inredningen ger det (ett hus har brädor, en ladugård betong eller strö) eller ett du väljer. En tillbyggnad, och varje sektion av en lång byggnad, kan ha ett eget golv: välj det i trädet."
+  "What the outer walls look like from inside: like the outside (studs behind boards, plaster as plaster, the same split in two materials), or the kind's own finish. Wallpaper goes over either: one for every wall here, or sections along a single wall (one for each room behind it), below.": "Hur ytterväggarna ser ut inifrån: som utsidan (reglar bakom bräder, puts som puts, samma delning i två material), eller typens egen yta. Tapet läggs över båda: en för alla väggar här, eller sektioner längs en enskild vägg (en för varje rum bakom den), nedan.",
+  "Wallpaper by wall": "Tapet per vägg",
+  "Wallpaper on a wall or a stretch of it: choose the wall, add sections and choose the paper. To see it, walk round the building (Walk around) or arrange the inside.": "Tapet på en vägg eller en bit av den: välj väggen, lägg till sektioner och välj tapet. För att se den, gå runt i byggnaden (Gå runt) eller ordna insidan.",
+  "What the floor inside is made of: as the inside look gives it (a house has boards, a barn concrete or litter), or one you choose. An extension, and each section of a long building, can have a floor of its own: choose it in the tree (Building tab).": "Vad golvet inne är gjort av: som inredningen ger det (ett hus har brädor, en ladugård betong eller strö) eller ett du väljer. En tillbyggnad, och varje sektion av en lång byggnad, kan ha ett eget golv: välj det i trädet (fliken Byggnad)."
 }

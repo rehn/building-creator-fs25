@@ -140,10 +140,10 @@ const SHARED_SECTIONS = [
     {k:"curtainColor", label:"Curtains", type:"color"}]},
   {title:"Interior", label:"Rooms and curtains", tab:"settings", hint:"The floors above the ground floor are closed: a small furnished room is seen through each of their windows. To pick the room or curtains for one window, choose it under Windows (or a kupa under Kupor). The ground floor's inside is under Inside.", fields:[
     {k:"curtainStyle", label:"Curtains", type:"select", options:CURTAIN_OPTIONS}]},
-  {title:"Floor", label:"Floor", tab:"building", detail:true, hint:"What the floor inside is made of: as the inside look gives it (a house has boards, a barn concrete or litter), or one you choose. An extension, and each section of a long building, can have a floor of its own: choose it in the tree.", fields:[
+  {title:"Floor", label:"Floor", tab:"inside", hint:"What the floor inside is made of: as the inside look gives it (a house has boards, a barn concrete or litter), or one you choose. An extension, and each section of a long building, can have a floor of its own: choose it in the tree (Building tab).", fields:[
     {k:"floorSurface", label:"Floor", type:"select", options:FLOOR_SURFACES},
     {k:"floorColor", label:"Floor color", type:"color"}]},
-  {title:"Inside walls", label:"Inside walls", tab:"building", detail:true, hint:"What the outer walls look like from inside: like the outside (studs behind boards, plaster as plaster, the same split in two materials), or the kind's own finish. Wallpaper goes over either: one for every wall here, or sections along a single wall (one for each room behind it): choose the wall in the Building tab.", fields:[
+  {title:"Inside walls", label:"Inside walls", tab:"inside", hint:"What the outer walls look like from inside: like the outside (studs behind boards, plaster as plaster, the same split in two materials), or the kind's own finish. Wallpaper goes over either: one for every wall here, or sections along a single wall (one for each room behind it), below.", fields:[
     {k:"insideSame", label:"Like the outside (boards show their studs inside)", type:"check"},
     {k:"insidePanel", label:"Inside of the boards", type:"select", options:[["painted","Painted like the outside"],["raw","Unpainted, worn timber"]]},
     {k:"loftBacking", label:"Boards behind the upper windows (so you can't see out through the building)", type:"check"},
@@ -151,6 +151,7 @@ const SHARED_SECTIONS = [
     {k:"studWidth", label:"Studs: width of each (older barns: heavier)", min:0.045, max:0.12, step:0.005, cm:true},
     {k:"studIrregular", label:"Studs: how uneven (older barns: more)", min:0, max:1, step:0.05},
     {k:"insidePaper", label:"Wallpaper on every inside wall", type:"select", options:[["none", "None (plaster as it is)"], ...WALLPAPERS.map((w, i) => [String(i), w[0]])]}]},
+  {title:"Wallpaper by wall", label:"Wallpaper by wall", tab:"inside", custom:"papers", hint:"Wallpaper on a wall or a stretch of it: choose the wall, add sections and choose the paper. To see it, walk round the building (Walk around) or arrange the inside.", fields:[]},
   {title:"Vehicles for sale", tab:"game", hint:"What a shop counter sells (add one and its delivery place under Game objects): pick the groups of the base game's vehicles. The player walks into the counter to open the shop; a bought vehicle appears in the delivery place. Nothing ticked: tractors.", fields:[
     ...DEALER_GROUPS.map(g => ({k: g.key, label: g.name, type: "check"})),
     {k:"sellPrice", label:"Prices, per cent of the game's own", min:50, max:200, step:5, unit:" %"},
