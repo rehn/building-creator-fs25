@@ -12,8 +12,10 @@ export async function askFolderName(): Promise<string> {
 /**
  * The choice of folder of a building, a prop or a mod (the folders are the app's own, useFolders): none, one of them, or a new one (asked for by name, made with onCreate, then chosen).
  */
-export function FolderSelect({ value, folders, onChoose, onCreate, disabled, label, className }: {
+export function FolderSelect({ value, folders, onChoose, onCreate, onError, disabled, label, className }: {
   value: string; folders: string[]; onChoose: (folder: string) => void; onCreate: (name: string) => Promise<void>;
+  /** Told what went wrong when the folder could not be made (else nothing would show). */
+  onError?: (message: string) => void;
   disabled?: boolean; label: string; className?: string;
 }) {
   return (
@@ -22,7 +24,7 @@ export function FolderSelect({ value, folders, onChoose, onCreate, disabled, lab
       if (folder === NEW) {
         folder = await askFolderName();
         if (!folder) return;
-        try { await onCreate(folder); } catch { return; }
+        try { await onCreate(folder); } catch (err) { onError?.((err as Error).message); return; }
       }
       if (folder !== value) onChoose(folder);
     }}>

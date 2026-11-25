@@ -235,7 +235,7 @@ export default function HousesPage() {
                       <button type="button" onClick={() => duplicate(h)} disabled={busy}>Duplicate</button>
                       <button type="button" className="danger" onClick={() => remove(h)} disabled={busy}>Delete</button>
                     </div>
-                    <FolderSelect className="move" value={folderOf(h)} folders={folders} onChoose={f => move(h, f)} onCreate={appFolders.add} disabled={busy} label={t("Move {name} to a folder", { name: h.name })} />
+                    <FolderSelect className="move" value={folderOf(h)} folders={folders} onChoose={f => move(h, f)} onCreate={appFolders.add} onError={setError} disabled={busy} label={t("Move {name} to a folder", { name: h.name })} />
                   </div>
                 </article>
               ))}
