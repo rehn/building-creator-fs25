@@ -383,7 +383,7 @@ export default function ModPage() {
                 <h3 className="hx-card-h" translate="no">{mod.name}</h3>
                 <p className="hint">{t("A mod holds buildings and props, and the player puts the whole of it out in one go. Drag them in the view to place them. The game objects, like where the player sleeps, belong to the whole mod.")}</p>
                 <label className="stack">{t("Folder")}
-                  <FolderSelect value={mod.folder ?? ""} folders={appFolders.names} onChoose={moveTo} onCreate={appFolders.add} disabled={busy} label={t("Folder")} />
+                  <FolderSelect value={mod.folder ?? ""} folders={appFolders.names} onChoose={moveTo} onCreate={appFolders.add} onError={setError} disabled={busy} label={t("Folder")} />
                 </label>
                 <div className="row"><button type="button" className="danger" onClick={remove} disabled={busy}>Delete</button></div>
               </section>

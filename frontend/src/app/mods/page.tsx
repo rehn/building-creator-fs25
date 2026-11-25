@@ -111,7 +111,7 @@ export default function ModsPage() {
                     <button type="button" onClick={() => rename(m)} disabled={busy}>Rename</button>
                     <button type="button" className="danger" onClick={() => remove(m)} disabled={busy}>Delete</button>
                   </div>
-                  <FolderSelect className="move" value={folderOf(m)} folders={folders} onChoose={f => move(m, f)} onCreate={appFolders.add} disabled={busy} label={t("Move {name} to a folder", { name: m.name })} />
+                  <FolderSelect className="move" value={folderOf(m)} folders={folders} onChoose={f => move(m, f)} onCreate={appFolders.add} onError={setError} disabled={busy} label={t("Move {name} to a folder", { name: m.name })} />
                 </div>
               </article>
             ))}

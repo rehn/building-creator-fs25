@@ -38,3 +38,12 @@ test("a folder can be renamed and deleted from the lists of buildings and mods",
     assert.match(s, /appFolders\.remove\(/);
   }
 });
+
+// Lars could not add a folder and saw nothing: a folder that could not be made (the server did not answer or did not know the route) was dropped without a word in the select.
+test("a folder that cannot be made is told, in the select of every page that has one", () => {
+  const sel = src("components/FolderSelect.tsx");
+  assert.match(sel, /onError\?: \(message: string\) => void/);
+  assert.ok(!/catch \{ return; \}/.test(sel), "the failure is not dropped");
+  assert.match(sel, /onError\?\.\(/);
+  for (const page of ["app/page.tsx", "app/mods/page.tsx", "app/mods/[id]/page.tsx"]) assert.match(src(page), /<FolderSelect[\s\S]{0,500}?onError=\{setError\}/, page);   // (the attributes have "=>" in them: no [^>])
+});
