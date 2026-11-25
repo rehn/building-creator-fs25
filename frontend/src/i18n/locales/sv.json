@@ -1117,5 +1117,17 @@
   "Remove the correction": "Ta bort korrigeringen",
   "What the photo shows": "Vad fotot visar",
   "The photo, with four corners to drag onto a surface": "Fotot, med fyra hörn att dra till en yta",
-  "Drag the four corners onto the corners of the surface as it looks in the photo (a wall or a board photographed at an angle). What is inside them is made upright and square.": "Dra de fyra hörnen till hörnen på ytan som den ser ut på fotot (en vägg eller en planka fotograferad snett). Det som är innanför görs rakt och rektangulärt."
+  "Drag the four corners onto the corners of the surface as it looks in the photo (a wall or a board photographed at an angle). What is inside them is made upright and square.": "Dra de fyra hörnen till hörnen på ytan som den ser ut på fotot (en vägg eller en planka fotograferad snett). Det som är innanför görs rakt och rektangulärt.",
+  "Brush size": "Penselstorlek",
+  "Choose another source": "Välj en annan källa",
+  "Click where to copy from, then paint over what should be covered. The brush takes from the same distance away as it goes on.": "Klicka där du vill kopiera från och måla sedan över det som ska döljas. Penseln tar från samma avstånd bort som den målar på.",
+  "Clone": "Klona",
+  "Paint": "Måla",
+  "Paint over a spot with the colour chosen below.": "Måla över en fläck med färgen du valt nedan.",
+  "Remove the retouching": "Ta bort retuschen",
+  "Retouch": "Retuschera",
+  "Softness": "Mjukhet",
+  "The brush": "Penseln",
+  "The photo, to retouch with a brush": "Fotot, att retuschera med en pensel",
+  "Undo the last stroke": "Ångra senaste penseldraget"
 }
