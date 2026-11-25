@@ -122,8 +122,11 @@ export default function HousesPage() {
   }
 
   // A preset is the settings the new project starts with; everything stays editable.
-  const presetGroups = byKind([...presets, ...templates], x => x.kind);
-  const typeNow = newType === "prop" || presetGroups.some(g => g.kind.id === newType) ? newType : (presetGroups[0]?.kind.id ?? "prop");
+  const categoryOf = (x: Preset) => x.category || ((KINDS as Kind[]).find(k => k.id === x.kind)?.category ?? "");
+  const presetGroups = (CATEGORIES as { id: string; name: string }[])
+    .map(c => ({ id: c.id, name: c.name, items: [...presets, ...templates].filter(x => categoryOf(x) === c.id) }))
+    .filter(g => g.items.length);
+  const typeNow = newType === "prop" || presetGroups.some(g => g.id === newType) ? newType : (presetGroups[0]?.id ?? "prop");
   const create = (preset: Preset) => run(async () => {
     const p = await api.createProject(preset.id === "farmhouse" ? "New house" : preset.name, preset.settings);
     router.push(`/projects/${p.id}`);
@@ -141,8 +144,8 @@ export default function HousesPage() {
       </div>
       <div className="starttabs sub" role="tablist" aria-label={t("Type")}>
         {presetGroups.map(g => (
-          <button type="button" role="tab" key={g.kind.id} className={"starttab" + (typeNow === g.kind.id ? " on" : "")} aria-selected={typeNow === g.kind.id} onClick={() => setNewType(g.kind.id)}>
-            {g.kind.plural} <small>{g.items.length}</small>
+          <button type="button" role="tab" key={g.id} className={"starttab" + (typeNow === g.id ? " on" : "")} aria-selected={typeNow === g.id} onClick={() => setNewType(g.id)}>
+            {t(g.name)} <small>{g.items.length}</small>
           </button>
         ))}
         <button type="button" role="tab" className={"starttab" + (typeNow === "prop" ? " on" : "")} aria-selected={typeNow === "prop"} onClick={() => setNewType("prop")}>{t("Props")}</button>
@@ -154,8 +157,8 @@ export default function HousesPage() {
               <span>{t("A free-form object made of boxes and cylinders: a sign, a bike stand ...")}</span>
             </button>
           </div>
-        : presetGroups.filter(g => g.kind.id === typeNow).map(g => (
-          <div className="grid compact" key={g.kind.id}>
+        : presetGroups.filter(g => g.id === typeNow).map(g => (
+          <div className="grid compact" key={g.id}>
             {g.items.map(x => (
               <button type="button" className="preset" key={x.id} onClick={() => create(x)} disabled={busy}>
                 {(x.thumbnail || thumbs[x.id]) ? <img src={x.thumbnail || thumbs[x.id]} alt="" /> : making && !x.id.startsWith("template:") ? <div className="thumbph" aria-hidden="true" /> : null}

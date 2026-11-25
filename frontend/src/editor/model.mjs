@@ -750,30 +750,25 @@ function clampField(f, v) {
  */
 const MAIN_WALLS = ["front", "back", "left", "right"];
 
-/** The types a building can be changed between: those built the same way (walls, roof, openings, a walked-in inside); not the animal buildings, which have a pasture and animals. */
-export const CONVERTIBLE_KINDS = ["house", "shed", "dealership", "fuelstation"];
+/** The looks a building can be changed between: all of them (a building has no game logic, so nothing but the inside depends on it). */
+export const CONVERTIBLE_KINDS = KINDS.map(k => k.id);
 /**
- * The building as another type (docs/PLAN_TYPER.md step 2): -> {ok: true, settings, lost: {items, objects, settings, dormers}, added: {objects}} or {ok: false, error}.
- * The form is kept (size, roof, walls, openings, parts, decorations, looks), the new type's rules apply (sanitize), and what only the old type has is dropped and listed: the furniture its
- * pieces list lacks (names), game objects the new type lacks, settings of the old type's own sections that were changed, dormers where the new type has none.
- * The game objects the new type must have are added where it puts them to start with. The input is not changed.
+ * The building with another inside look (the kind): -> {ok: true, settings, lost: {items, settings, dormers}} or {ok: false, error}.
+ * The form is kept (size, roof, walls, openings, parts, decorations, looks), the new kind's rules apply (sanitize), and what only the old kind has is dropped and listed: the furniture
+ * its pieces list lacks (names), settings of the old kind's own sections that were changed, dormers where the new kind has none. The input is not changed.
  */
 export function changeKind(p, toId) {
   const to = KIND[toId], q = sanitize(p), from = kindOf(q);
-  if (!to) return {ok: false, error: "That type does not exist."};
-  if (from.id === to.id) return {ok: false, error: "It already is that type."};
-  if (!CONVERTIBLE_KINDS.includes(from.id) || !CONVERTIBLE_KINDS.includes(to.id)) return {ok: false, error: "An animal building can't be changed to another type or from one: it has a pasture and animals. Make a new building of the type you want."};
+  if (!to || !CONVERTIBLE_KINDS.includes(to.id)) return {ok: false, error: "That look does not exist."};
+  if (from.id === to.id) return {ok: false, error: "It already has that look."};
   const next = sanitize({...q, kind: to.id});
   const oldCat = catalogFor(q), key = it => it.type + "|" + it.x + "|" + it.z, kept = new Set(next.items.map(key));
   const lostItems = q.items.filter(it => !kept.has(key(it))).map(it => (oldCat[it.type] || {name: it.type}).name);
-  const newTypes = new Set(next.objects.map(o => o.type)), oldTypes = new Set(q.objects.map(o => o.type));
-  const lostObjects = q.objects.filter(o => !newTypes.has(o.type)).map(o => objectInfo(from, o.type).name);
-  const addedObjects = next.objects.filter(o => !oldTypes.has(o.type)).map(o => objectInfo(to, o.type).name);
   const newFields = fieldsFor(to), oldDefs = {...DEFAULTS, ...from.defaults};
   const lostSettings = from.sections.flatMap(g => g.fields).filter(f => !newFields[f.k] && JSON.stringify(q[f.k]) !== JSON.stringify(oldDefs[f.k])).map(f => f.label);
   const dormers = to.hides.includes("Kupor (dormers)") ? q.dormers.length : 0;
   if (dormers) next.dormers = [];
-  return {ok: true, settings: next, lost: {items: lostItems, objects: lostObjects, settings: lostSettings, dormers}, added: {objects: addedObjects}};
+  return {ok: true, settings: next, lost: {items: lostItems, settings: lostSettings, dormers}};
 }
 
 export function sanitize(obj) {
