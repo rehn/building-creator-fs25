@@ -48,8 +48,8 @@ outline with 2 px offset on every focusable thing (`:focus-visible`).
 - **Headings** are Barlow Condensed bold, line height 1.1: page title (`h2`) 30 px, section (`h3`) 20 px, card/group title 15-16 px, small caps
   label (`h4`) 15 px muted uppercase with .04em tracking. Card titles and buttons are Barlow 600.
 - **Hints and secondary text:** 13.5 px `--muted`. Counts inside tabs and headings 14 px `--muted`, normal weight.
-- **Radii:** 6 px controls (buttons, inputs, segments), 8 px tab tops and the app switch, 10 px cards, 12 px big panels and the pack bar, 99 px pills/badges.
-- **Borders:** always 1 px `--line`. Shadows only on things that float (the sticky pack bar: `0 6px 24px rgba(0,0,0,.18)`).
+- **Radii:** 6 px controls (buttons, inputs, segments), 8 px tab tops and the app switch, 10 px cards, 12 px big panels, 99 px pills/badges.
+- **Borders:** always 1 px `--line`. Shadows only on things that float.
 - **Spacing:** 4 / 6 / 8 / 10 / 12 / 16 / 24; grid gaps 12-16, page padding `24px 16px 48px`, page max width 1080 px, centred.
 - **Motion:** almost none; honour `prefers-reduced-motion`.
 
@@ -104,8 +104,6 @@ one filled `--accent`). Sliders pair with an editable number (click the number t
 
 ### 4.7 Badges, bars, toasts
 - **Badge:** 12.5 px, pill, 1 px line, muted; `.ok` is `--ok` text and border.
-- **Pack bar** (`.packbar`): sticky 12 px above the bottom edge, panel, 12 px radius, shadow; count, a text field, the primary action, Clear. It appears only
-  while something is selected.
 - **Toasts** (`.hx-toast`): short, bottom, fade; never block.
 - **Dialogs** (`components/dialog.mjs`: `confirmDialog`, `promptDialog`, `formDialog`): a native `<dialog>` opened modally, never the browser's `confirm`/`prompt`/`alert`. Panel fill, 12 px radius, 440 px wide at most, dark backdrop, a 20 px condensed title (optional), the message (line breaks kept), fields as in 4.6, and buttons at the right: Cancel, then the action as the one primary button (red). A question that deletes puts focus on Cancel so Enter does not delete; a form puts the cursor in its first field. Esc and a click outside cancel.
 

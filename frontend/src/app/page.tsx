@@ -8,7 +8,7 @@ import { useUser } from "@/lib/useUser";
 import { TopBar } from "@/components/TopBar";
 import { confirmDialog, promptDialog } from "@/components/dialog.mjs";
 import { sanitize as newProp } from "@/builder/model.mjs";
-import { PRESETS, CATEGORIES, KINDS, groupByKind, modName, slugify, authorName, modDescXmlMulti } from "@/editor/model.mjs";
+import { PRESETS, CATEGORIES, KINDS, groupByKind } from "@/editor/model.mjs";
 
 // A built-in design or a template the admin published (with its preview).
 type Preset = { id: string; name: string; blurb: string; kind: string; category: string; settings: Record<string, unknown>; thumbnail?: string };
@@ -54,8 +54,6 @@ export default function HousesPage() {
   // the pictures of the starting points (by id), and whether some are still being made
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [making, setMaking] = useState(false);
-  // buildings ticked to be packed together into one game mod, its title, and how far the packing is
-  const [picked, setPicked] = useState<string[]>([]);
   // Folders and kinds that are folded up, remembered in this browser ("f:<folder>", "k:<folder>:<kind>").
   const [folded, setFolded] = useState<string[]>([]);
   useEffect(() => { try { setFolded(JSON.parse(localStorage.getItem(FOLDED_KEY) || "[]")); } catch { /* blocked: everything starts open */ } }, []);
@@ -74,8 +72,6 @@ export default function HousesPage() {
   const [folderSel, setFolderSel] = useState("*");
   const [kindSel, setKindSel] = useState("*");
   const [newType, setNewType] = useState("");
-  const [modTitle, setModTitle] = useState("My buildings");
-  const [packing, setPacking] = useState<{ done: number; total: number; name: string } | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -202,56 +198,11 @@ export default function HousesPage() {
       setHouses(list => (list ?? []).map(x => (x.id === p.id ? { ...x, folder: p.folder, updatedAt: p.updatedAt, version: p.version } : x)));
     });
   };
-  const toggle = (id: string) => setPicked(list => (list.includes(id) ? list.filter(x => x !== id) : [...list, id]));
-  /**
-   * One game mod of the ticked buildings: each is opened in an editor that is not shown (the same code as the editor's own
-   * "Export game mod" makes its i3d, textures and pictures), its files go in a folder of its own and the modDesc lists them all.
-   */
-  const pack = () => run(async () => {
-    const ids = picked.filter(id => houses?.some(h => h.id === id));
-    if (!ids.length) return;
-    const [{ createEditor }, { default: JSZip }] = await Promise.all([import("@/editor/editor.mjs"), import("jszip")]);
-    const zip = new JSZip(), entries: { xml: string }[] = [], notes: string[] = [], used = new Set<string>(), types = new Map<string, { name: string; parent: string; specializations: string[] }>();
-    let icon: Uint8Array | null = null, author = authorName(user);
-    try {
-      for (let i = 0; i < ids.length; i++) {
-        const h = houses!.find(x => x.id === ids[i])!;
-        setPacking({ done: i, total: ids.length, name: h.name });
-        const proj = await api.project(h.id);
-        let slug = slugify(h.name), n = 2;
-        while (used.has(slug)) slug = slugify(h.name) + "_" + n++;
-        used.add(slug);
-        // an editor that is out of sight but laid out (the renderer needs a size)
-        const host = document.createElement("div");
-        host.className = "editor-host";
-        host.style.cssText = "position:fixed;left:-10000px;top:0;width:900px;height:700px;visibility:hidden;pointer-events:none";
-        document.body.appendChild(host);
-        const ed = createEditor(host, { initial: proj.data as Record<string, unknown>, author, assets: { list: api.assets, file: api.assetFile } });
-        try {
-          const info = await ed.exportInto(zip.folder(slug)!, h.name, slug + "/", modName(modTitle));
-          for (const ty of info.types) types.set(ty.name, ty);
-          entries.push({ xml: slug + "/house.xml" });
-          if (!icon && info.icon) icon = info.icon;
-          if (info.author && !author) author = info.author;
-          notes.push(h.name + (info.description ? ": " + info.description : ""));
-        } finally { ed.destroy(); host.remove(); }
-      }
-      setPacking({ done: ids.length, total: ids.length, name: "" });
-      zip.file("modDesc.xml", modDescXmlMulti(entries, { title: modTitle, description: notes.join("\n\n"), author, types: [...types.values()] }));
-      if (icon) zip.file("icon.dds", icon);
-      const blob = await zip.generateAsync({ type: "blob" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob); a.download = modName(modTitle) + ".zip";
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    } finally { setPacking(null); }
-  });
   const remove = async (h: ProjectSummary) => {
     if (!await confirmDialog(t("Delete \u201C{name}\u201D? This can\u2019t be undone.", { name: h.name }), { title: t("Delete"), confirm: t("Delete"), danger: true })) return;
     run(async () => {
       await api.deleteProject(h.id);
       setHouses(list => (list ?? []).filter(x => x.id !== h.id));
-      setPicked(list => list.filter(x => x !== h.id));
     });
   };
 
@@ -265,18 +216,10 @@ export default function HousesPage() {
   const renderGroup = (g: { id: string; title: string; items: ProjectSummary[] }, scope = "") => (
           <section className="kind-group" key={g.id} aria-label={g.title}>
             <h3>{foldButton(`k:${scope}:${g.id}`)}{g.title} <small>{g.items.length}</small>
-              {g.items.length > 1 && (
-                <button type="button" className="linklike" onClick={() => setPicked(list => g.items.every(h => list.includes(h.id)) ? list.filter(id => !g.items.some(h => h.id === id)) : [...new Set([...list, ...g.items.map(h => h.id)])])} disabled={busy}>
-                  {g.items.every(h => picked.includes(h.id)) ? "Select none" : "Select all"}
-                </button>
-              )}
             </h3>
             {!folded.includes(`k:${scope}:${g.id}`) && <div className="grid">
               {g.items.map(h => (
                 <article className="house" key={h.id}>
-                  <label className="pick" title="Tick to pack with others into one game mod">
-                    <input type="checkbox" checked={picked.includes(h.id)} onChange={() => toggle(h.id)} disabled={busy} aria-label={t("Pack {name} into a game mod", { name: h.name })} />
-                  </label>
                   <Link className="thumb" href={openHref(h)} aria-label={t("Open {name}", { name: h.name })}>
                     {h.thumbnail
                       ? <img src={h.thumbnail} alt="" />
@@ -312,8 +255,6 @@ export default function HousesPage() {
   const kindNow = groups.some(g => g.id === kindSel) ? kindSel : "*";
   const shown = groups.filter(g => kindNow === "*" || g.id === kindNow);
   const visible = shown.flatMap(g => g.items);
-  const allVisiblePicked = visible.length > 0 && visible.every(h => picked.includes(h.id));
-  const pickVisible = () => setPicked(list => allVisiblePicked ? list.filter(id => !visible.some(h => h.id === id)) : [...new Set([...list, ...visible.map(h => h.id)])]);
   const tabBtn = (key: string, label: string, count: number, on: boolean, set: () => void, noTranslate = false) => (
     <button type="button" role="tab" key={key} className={"starttab" + (on ? " on" : "")} aria-selected={on} onClick={set}>
       <span translate={noTranslate ? "no" : undefined}>{label}</span> <small>{count}</small>
@@ -328,7 +269,6 @@ export default function HousesPage() {
         <div className="page-head">
           <h2>{tab === "props" ? t("Props") : t("Buildings")}</h2>
           <div className="head-actions">
-            {visible.length > 1 && <button type="button" onClick={pickVisible} disabled={busy}>{allVisiblePicked ? "Select none" : "Select all"}</button>}
             <button className="primary" type="button" onClick={() => { if (tab === "props") setNewType("prop"); setChoosing(true); }} disabled={!user || busy} aria-expanded={choosing}>New</button>
           </div>
         </div>
@@ -365,16 +305,6 @@ export default function HousesPage() {
         {!choosing && houses && houses.length > 0 && shown.map(g => renderGroup(g))}
         {!choosing && houses && houses.length > 0 && shown.length === 0 && (
           <p className="hint">{tab === "props" ? t("No props yet. Choose New, then Props.") : t("No buildings here.")}</p>
-        )}
-        {picked.length > 0 && (
-          <div className="packbar" role="region" aria-label="Pack a game mod">
-            <span><b>{picked.length}</b> selected</span>
-            <label>Mod name <input type="text" value={modTitle} onChange={e => setModTitle(e.target.value)} maxLength={60} disabled={busy} /></label>
-            <button className="primary" type="button" onClick={pack} disabled={busy}>
-              {packing ? `Packing ${Math.min(packing.done + 1, packing.total)} of ${packing.total}${packing.name ? ": " + packing.name : ""}…` : "Pack into one game mod"}
-            </button>
-            <button type="button" onClick={() => setPicked([])} disabled={busy}>Clear</button>
-          </div>
         )}
       </main>
     </>
