@@ -131,5 +131,6 @@ one filled `--accent`). Sliders pair with an editable number (click the number t
 - Icons: the app switch has icons, nothing else does. Decide on one small icon set before adding more (e.g. for kinds in the tab rows).
 - "My items" and props are still two places; a later step may merge them under one tab.
 
-- **The header stays in the editors** (2026-11-25): a building's page has the top bar (brand, app switch, Buildings / Mods / Items / Textures, settings) above its own bar (back, name, status, settings file), as the other pages have it. The editor fills what is left of the window.
-- **A back button in the editors** (2026-11-25): the building, the prop and the mod each have `‹ Buildings` / `‹ Buildings` / `‹ Mods` (`.btn.back`) as the first thing under the top bar, in the editor's own bar or at the top of the mod's tree, so they look alike. The text is translated (`‹ {t("Buildings")}`).
+
+### Editor pages (2026-11-25)
+A page where one thing is edited (a building, a prop, a mod) is made with `components/EditorShell.tsx`, which gives all of them the same frame: the top bar, then the sub-bar (`.editor-bar`: the back button `‹ <the list>`, the name as a field that is saved when it is let go, what is saved, the page's own buttons, the primary one last), then the work area, which fills what is left of the window (`flex: 1; min-height: 0`; on a narrow screen it is as high as it needs). Messages that need an answer (a conflict, a template's bar) are further `.editor-bar`s under it. A new editor page uses the shell; test/editor-shell.test.mjs fails for one in its list that builds its own bar.

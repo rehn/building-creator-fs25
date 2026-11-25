@@ -8,7 +8,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { api, type Mod, type ModObject, type ModPost, type ProjectSummary } from "@/lib/api";
 import { useUser } from "@/lib/useUser";
-import { TopBar } from "@/components/TopBar";
+import { EditorShell } from "@/components/EditorShell";
 import { t } from "@/i18n/index.mjs";
 import { KINDS, sanitize, modName } from "@/editor/model.mjs";
 import { OBJECT_TYPES, OBJECT_LIMITS } from "@/editor/objects.mjs";
@@ -16,7 +16,7 @@ import { createModView } from "@/editor/modView.mjs";
 import { projectGroups, boundsOf, footprint, turnedBy, mapKey, proceduralPicture, feetOf, buildingFeet, stretchCuts } from "@/editor/modPlan.mjs";
 import { decodeDds } from "@/editor/dds.mjs";
 import { makeModPackage } from "@/editor/modExport.mjs";
-import { confirmDialog, promptDialog } from "@/components/dialog.mjs";
+import { confirmDialog } from "@/components/dialog.mjs";
 import { RangeField } from "@/components/RangeField";
 import { addPost, removePost, setPostType, placePost, choices, payload } from "@/lib/mods.mjs";
 import { groupsFree, addGroup, removeGroup, setObjectOf, settingsFor, objectsOfData, setPoint, addPoint, removePoint, animalOfData, countOfData, ANIMALS, groupOf, GROUPS, entranceBuilding, fenceProblems, fenceProblemList, insertPoint, MIN_POSTS } from "@/lib/modObjects.mjs";
@@ -46,6 +46,7 @@ export default function ModPage() {
   const [closed, setClosed] = useState<Record<string, boolean>>({});   // the tree nodes folded up
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [nameDraft, setNameDraft] = useState<string | null>(null);   // the name as it is typed in the sub-bar, until it is let go
   const canvas = useRef<HTMLCanvasElement>(null);
   const view = useRef<View | null>(null);
   const draftRef = useRef(draft);
@@ -157,12 +158,13 @@ export default function ModPage() {
     view.current?.select(sel.kind === "post" ? sel.post : null, sel.kind === "object" ? sel.object : null);
   }, [sel, draft, objects]);
 
-  async function rename() {
-    if (!mod) return;
-    const name = await promptDialog(t("Name"), mod.name, { title: t("Rename"), confirm: t("Rename"), maxLength: 100 });
-    if (!name?.trim() || name.trim() === mod.name) return;
+  /** The name typed in the sub-bar is kept when the field is let go (an empty one is not). */
+  async function commitName() {
+    const typed = nameDraft?.trim();
+    setNameDraft(null);
+    if (!mod || !typed || typed === mod.name) return;
     setBusy(true); setError("");
-    try { setMod(await api.updateMod(mod.id, { name: name.trim(), version: mod.version })); }
+    try { setMod(await api.updateMod(mod.id, { name: typed, version: mod.version })); }
     catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
   /** The game mod as a zip: the whole mod is one placeable (editor/modExport.mjs), made here in the browser from what the posts are now, and downloaded. */
@@ -318,11 +320,14 @@ export default function ModPage() {
   );
 
   return (
-    <>
-      <TopBar user={user} />
+    <EditorShell
+      user={user} back={{ href: "/mods", label: t("Mods"), aria: t("All mods") }}
+      nameId="modName" nameLabel={t("Name")} name={nameDraft ?? mod?.name ?? ""} onName={setNameDraft} onCommitName={commitName} nameDisabled={!mod || busy}
+      status={error ? error : !mod ? "" : busy ? t("Saving…") : t("All changes saved")} bad={!!error}
+      actions={<button type="button" className="primary" onClick={generate} disabled={busy || !mod || draft.length === 0}>{t("Generate game mod")}</button>}
+    >
       <main className="modedit">
         <aside className="hx-panel modedit-tree" aria-label={t("The mod")}>
-          <p><Link className="btn back" href="/mods" aria-label={t("All mods")}>‹ {t("Mods")}</Link></p>
           {!mod && !error && !userError && <p className="loading">Loading the mod…</p>}
           {tree}
         </aside>
@@ -336,7 +341,7 @@ export default function ModPage() {
               <section className="hx-card">
                 <h3 className="hx-card-h" translate="no">{mod.name}</h3>
                 <p className="hint">{t("A mod holds buildings and props, and the player puts the whole of it out in one go. Drag them in the view to place them. The game objects, like where the player sleeps, belong to the whole mod.")}</p>
-                <div className="row"><button type="button" onClick={rename} disabled={busy}>Rename</button><button type="button" className="danger" onClick={remove} disabled={busy}>Delete</button></div>
+                <div className="row"><button type="button" className="danger" onClick={remove} disabled={busy}>Delete</button></div>
               </section>
               <section className="hx-card">
                 <h3 className="hx-card-h">{t("Game mod")}</h3>
@@ -460,6 +465,6 @@ export default function ModPage() {
           <p className="modedit-keys hint">{t("Drag a building or a prop to move it. Drag the ground to turn the view, right-drag to pan and scroll to zoom. Hold Alt while you drag to move without snapping.")}</p>
         </div>
       </main>
-    </>
+    </EditorShell>
   );
 }
