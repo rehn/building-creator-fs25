@@ -67,3 +67,19 @@ test("the Inside tab offers every other look, and a change is handed to the page
   assert.equal(got, null);
   ed.destroy();
 });
+
+test("a piece that is chosen inside has its settings in the details panel, next to the left panel", () => {
+  const root = w.document.getElementById("root");
+  root.innerHTML = "";
+  const ed = createEditor(root, {initial: {kind: "house"}, onChange() {}});
+  root.querySelector("#tab-inside").click();
+  const card = root.querySelector("#details #pieceCard");
+  assert.ok(card, "the card is in the details panel");
+  assert.match(card.textContent, /Arrange the inside/, "before arranging it says how to choose a piece");
+  root.querySelector("#insideArrange").click();
+  assert.equal(card.querySelector(".piece"), null, "no piece chosen yet");
+  root.querySelector("[data-add]").click();   // (adds the first piece of the palette, and chooses it)
+  assert.ok(card.querySelector(".piece input[type=range]"), "its settings are in the details panel");
+  assert.equal(root.querySelector("#insideEditor .piece"), null, "and not in the left panel");
+  ed.destroy();
+});

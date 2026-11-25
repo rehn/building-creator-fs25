@@ -128,16 +128,18 @@ html:has(.editor-page) { overscroll-behavior: none; }
 /* The settings are in one panel with a tab for each thing you do (shape, openings, inside, look, game) and a search box. */
 .hx-editor { flex: 1; min-height: 0; position: relative; display: grid; grid-template-columns: var(--panelw, 360px) var(--detw, 0px) minmax(0, 1fr); grid-template-rows: auto 1fr; }
 /* what is chosen in the tree has a panel of its own beside the left one, on the Building tab; both can be made wider or narrower */
-.hx-editor[data-tab="building"]:not(.searching) { --detw: var(--detwset, 380px); }
+.hx-editor:is([data-tab="building"], [data-tab="inside"]):not(.searching) { --detw: var(--detwset, 380px); }
 .hx-panel { position: relative; overflow-y: auto; min-height: 0; border-right: 1px solid var(--line); background: var(--panel); padding: 0 16px 32px; grid-column: 1; grid-row: 2; }
 .hx-details { grid-column: 2; grid-row: 1 / span 2; display: none; }
-.hx-editor[data-tab="building"]:not(.searching) .hx-details { display: block; }
+.hx-editor:is([data-tab="building"], [data-tab="inside"]):not(.searching) .hx-details { display: block; }
+/* on the Inside tab the details panel holds the piece that is chosen, and nothing of the tree's */
+.hx-editor[data-tab="inside"] .hx-details > :not(#pieceCard), .hx-editor:not([data-tab="inside"]) #pieceCard { display: none; }
 .hx-rz { position: absolute; top: 0; bottom: 0; width: 11px; margin-left: -6px; z-index: 6; cursor: col-resize; touch-action: none; outline: none; }
 .hx-rz::after { content: ""; position: absolute; top: 0; bottom: 0; left: 4px; width: 3px; background: transparent; transition: background .12s; }
 .hx-rz:hover::after, .hx-rz:focus-visible::after, .hx-rz.drag::after { background: var(--accent, #9B2A1F); }
 #rz1 { left: var(--panelw, 360px); }
 #rz2 { left: calc(var(--panelw, 360px) + var(--detw, 0px)); display: none; }
-.hx-editor[data-tab="building"]:not(.searching) #rz2 { display: block; }
+.hx-editor:is([data-tab="building"], [data-tab="inside"]):not(.searching) #rz2 { display: block; }
 .hx-tabs { grid-column: 1; grid-row: 1; display: flex; gap: 2px; padding: 6px 10px 0; background: var(--panel); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .hx-tabs button { flex: 1; justify-content: center; border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: none; padding: 8px 0 7px; font-weight: 600; font-size: 14.5px; color: var(--muted); min-width: 0; }
 .hx-tabs button:hover { color: var(--ink); background: none; }
@@ -200,8 +202,9 @@ html:has(.editor-page) { overscroll-behavior: none; }
 .hx-inside-bar .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 #insideEditor .palette { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 6px 0 10px; }
 #insideEditor .palette button { font-size: 13.5px; padding: 6px 8px; text-align: left; }
-#insideEditor .piece { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin: 8px 0; }
-#insideEditor .piece h4 { margin: 0 0 6px; font-size: 15px; }
+#insideEditor .piece, #pieceCard .piece { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin: 8px 0; }
+#pieceCard .row { margin-top: 6px; }
+#insideEditor .piece h4, #pieceCard .piece h4 { margin: 0 0 6px; font-size: 15px; }
 .hx-toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 9px 14px; border-radius: 6px; font-size: 14px; max-width: 90vw; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 10; }
 .hx-toast.show { opacity: 1; }
 .hx-dialog { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink); width: min(680px, 92vw); padding: 16px; }

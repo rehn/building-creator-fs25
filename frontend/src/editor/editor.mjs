@@ -43,9 +43,9 @@ const MARKUP = `<div class="hx-editor" data-tab="building">
     <div class="hx-tabbody" id="controls-shape" data-tab="shape" hidden></div>
     <p class="hint hx-nomatch" id="noMatches" hidden>Nothing matches. Try another word, like \u201Croof\u201D, \u201Ccolor\u201D or \u201Cdoor\u201D.</p>
   </aside>
-  <aside class="hx-panel hx-details" id="details" aria-label="Details of what is chosen in the tree">
+  <aside class="hx-panel hx-details" id="details" aria-label="Details of what is chosen in the tree or of the piece that is chosen inside">
     <div class="hx-subtabs" id="mainSubtabs" role="tablist" hidden><button type="button" role="tab" data-sub="shape">Shape</button><button type="button" role="tab" data-sub="look">Look</button></div>
-    <div id="mainShapeHost"></div><div id="mainCard"></div><div id="mainShapeHost2"></div><div id="wallCard"></div><div id="winEditor"></div><div id="wingsEditor"></div>
+    <div id="mainShapeHost"></div><div id="mainCard"></div><div id="mainShapeHost2"></div><div id="wallCard"></div><div id="winEditor"></div><div id="wingsEditor"></div><div id="pieceCard"></div>
   </aside>
   <div class="hx-rz" id="rz1" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Resize the left panel"></div>
   <div class="hx-rz" id="rz2" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Resize the details panel"></div>
@@ -189,7 +189,7 @@ function clearSearch() { $("settingsSearch").value = ""; applySearch(); }
 const PANEL_MIN = 240, DETAILS_MIN = 260, STAGE_MIN = 320;
 const panelSizes = Object.assign({panel: 360, details: 380}, remember.get("hx-panel-w") || {});
 const desktop = () => window.matchMedia("(min-width: 821px)").matches;
-const detailsShown = () => editorEl.dataset.tab === "building" && !searching;
+const detailsShown = () => (editorEl.dataset.tab === "building" || editorEl.dataset.tab === "inside") && !searching;
 function applyPanelSizes() {
   const room = editorEl.clientWidth || window.innerWidth;
   if (desktop()) {
@@ -207,7 +207,7 @@ function applyPanelSizes() {
 function fitTree() {
   const nav = $("treeNav"), panel = $("panel");
   if (!nav || !panel) return;
-  if (!desktop() || !detailsShown()) { nav.style.height = ""; return; }
+  if (!desktop() || !detailsShown() || editorEl.dataset.tab !== "building") { nav.style.height = ""; return; }
   nav.style.height = "";
   const room = panel.getBoundingClientRect().bottom - nav.getBoundingClientRect().top;
   nav.style.height = Math.max(160, Math.floor(room - 12)) + "px";
@@ -2126,6 +2126,7 @@ function renderInsideUI() {
       + (out ? `<p class="warn">${out} piece${out > 1 ? "s stick" : " sticks"} out through a wall and ${out > 1 ? "are" : "is"} left out. Make the building bigger, move ${out > 1 ? "them" : "it"} or fill it again.</p>` : "")
       + (other ? `<p class="warn">${other} piece${other > 1 ? "s overlap or block" : " overlaps or blocks"} something.</p>` : "")
       + `<div class="row"><button type="button" class="primary" id="insideArrange" ${renderer ? "" : "disabled"}>Arrange the inside</button></div>` + fillRow;
+    $("pieceCard").innerHTML = `<p class="hint">Press “Arrange the inside”, then click a piece in the building to change or move it here.</p>`;
     $("insideArrange").onclick = () => { setTab("inside"); enterInside(); };
   } else {
     const it = selected(), def = it && cat[it.type];
@@ -2137,20 +2138,21 @@ function renderInsideUI() {
     const addBtn = ([type, d]) => `<button type="button" class="pal" data-add="${type}" title="${esc(d.name)}">${thumbUrls[type] ? `<img src="${thumbUrls[type]}" alt="" width="96" height="72">` : ""}<span>${esc(d.name)}</span></button>`;
     // the pieces in groups (a group folds away; the choice is kept while arranging), each with a picture of it
     const groupsHtml = pieceGroups(cat).map(g => `<details class="pgroup" data-group="${esc(g.name)}" ${ins.closed.has(g.name) ? "" : "open"}><summary>${esc(g.name)} <span>${g.types.length}</span></summary><div class="palette">${g.types.map(t => addBtn([t, cat[t]])).join("")}</div></details>`).join("");
-    ed.innerHTML = `<p class="hint">Click a piece to add it, then drag it into place or use the position sliders. Pieces are free; wall pieces (counters, beds, wardrobes) snap to a wall or inner wall when put close to it.</p>`
-      + groupsHtml
-      + `<h4 class="palette-head">My items</h4>`
-      + (mine.length ? `<div class="palette">${mine.map(addBtn).join("")}</div>` : `<p class="hint">Items you import from Giants Editor show here.</p>`)
-      + (shared.length ? `<h4 class="palette-head">Shared items</h4><div class="palette">${shared.map(addBtn).join("")}</div>` : "")
-      + `<p class="hint"><a href="/items" target="_blank" rel="noopener">Import an item…</a></p>`
-      + (it ? `<div class="piece"><h4>${esc(def.name)}</h4>${def.missing ? `<p class="warn">This item isn’t in My items any more, so it’s left out. Remove it, or import it again.</p>` : ""}${pr.has(it.id) ? `<p class="warn">${pr.get(it.id)}.</p>` : ""}`
+    const pcard = $("pieceCard");
+    pcard.innerHTML = (it ? `<div class="piece"><h4>${esc(def.name)}</h4>${def.missing ? `<p class="warn">This item isn’t in My items any more, so it’s left out. Remove it, or import it again.</p>` : ""}${pr.has(it.id) ? `<p class="warn">${pr.get(it.id)}.</p>` : ""}`
           + def.params.filter(f => !f.when || f.when(it)).map(f => f.options
             // a choice (wallpaper, a doorway or not): a list
             ? `<div class="field"><div class="fl"><label for="pc-${f.k}">${f.label}</label></div><select id="pc-${f.k}" data-k="${f.k}">${f.options.map((nm, i) => `<option value="${i}" ${i === Math.round(it[f.k]) ? "selected" : ""}>${esc(nm)}</option>`).join("")}</select></div>`
             : `<div class="field"><div class="fl"><label for="pc-${f.k}">${f.label}</label><output id="pc-${f.k}-o">${fmtP(f, it[f.k])}</output></div><input type="range" id="pc-${f.k}" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}" value="${it[f.k]}" ${f.metres ? `data-scale="${f.metres(it)[1]}" data-offset="${f.metres(it)[0]}"` : ""}></div>`).join("")
           + posSliders(it, def)
           + `<div class="row"><button type="button" id="pcTurn">Turn</button><button type="button" id="pcRemove" class="danger">Remove</button></div></div>`
-        : `<p class="hint">Click a piece in the building to change or move it.</p>`)
+        : `<p class="hint">Click a piece in the building to change or move it.</p>`);
+    ed.innerHTML = `<p class="hint">Click a piece to add it, then drag it into place or use the position sliders. Pieces are free; wall pieces (counters, beds, wardrobes) snap to a wall or inner wall when put close to it.</p>`
+      + groupsHtml
+      + `<h4 class="palette-head">My items</h4>`
+      + (mine.length ? `<div class="palette">${mine.map(addBtn).join("")}</div>` : `<p class="hint">Items you import from Giants Editor show here.</p>`)
+      + (shared.length ? `<h4 class="palette-head">Shared items</h4><div class="palette">${shared.map(addBtn).join("")}</div>` : "")
+      + `<p class="hint"><a href="/items" target="_blank" rel="noopener">Import an item…</a></p>`
       + (pr.size ? `<p class="warn">${pr.size} piece${pr.size > 1 ? "s have" : " has"} a problem (red).</p>` : "")
       + fillRow;
     ed.querySelectorAll("[data-add]").forEach(b => b.onclick = () => addPiece(b.dataset.add));
@@ -2158,7 +2160,7 @@ function renderInsideUI() {
     if (it) {
       // position sliders: move the piece without dragging (to the centimetre; wall pieces stay on their wall)
       // the rotation slider: any angle (the position is kept inside the room)
-      ed.querySelectorAll("[data-rot]").forEach(inp => {
+      pcard.querySelectorAll("[data-rot]").forEach(inp => {
         inp.oninput = () => {
           const cur = selected(), next = snapItem({...cur, rot: +inp.value}, def, roomNow(), p.items, catalogNow(), true);
           p.items = p.items.map(x => x.id === cur.id ? next : x);
@@ -2168,7 +2170,7 @@ function renderInsideUI() {
         };
         inp.onchange = () => { ins.hist.push(p.items); persist(); rebuild(false); };
       });
-      ed.querySelectorAll("[data-pos]").forEach(inp => {
+      pcard.querySelectorAll("[data-pos]").forEach(inp => {
         const axis = inp.dataset.pos;
         inp.oninput = () => {
           const cur = selected(), next = snapItem({...cur, [axis]: +inp.value}, def, roomNow(), p.items, catalogNow(), true);
@@ -2179,7 +2181,7 @@ function renderInsideUI() {
         inp.onchange = () => { ins.hist.push(p.items); persist(); rebuild(false); };
       });
       $("pcTurn").onclick = turnSelected; $("pcRemove").onclick = removeSelected;
-      ed.querySelectorAll("[data-k]").forEach(inp => {
+      pcard.querySelectorAll("[data-k]").forEach(inp => {
         const f = def.params.find(x => x.k === inp.dataset.k);
         // While sliding, rebuild without redrawing this panel; remember the edit when the slider is let go.
         inp.oninput = () => {
