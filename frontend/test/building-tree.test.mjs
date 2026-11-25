@@ -64,20 +64,8 @@ test("building tree: windows on a floor the building doesn't have are not in it;
 });
 
 test("the Building tab comes first and holds the tree; the parts are no longer a section of Shape (there is no Shape tab)", () => {
-  assert.deepEqual(TABS.map(t => t[0]), ["building", "inside", "settings", "game"]);
+  assert.deepEqual(TABS.map(t => t[0]), ["building", "inside", "settings"]);
   assert.deepEqual(SCHEMA.filter(g => g.tab === "building" && !g.detail).map(g => [g.title, g.custom]), [["Building", "tree"]]);
   assert.ok(!SCHEMA.some(g => g.custom === "wings"), "the old parts editor is gone");
 });
 
-test("the game objects are a node of their own after the building: each object, by the name its kind gives it", () => {
-  const cow = sanitize({kind: "cow", width: 16, depth: 9}), t = buildingTree(cow);
-  assert.equal(t.game.type, "game");
-  const flat = t.game.children.flatMap(c => c.type === "group" ? c.children : [c]);
-  assert.ok(flat.length >= 3, "the pasture, the troughs ...");
-  assert.deepEqual(flat.map(c => c.type), flat.map(() => "object"));
-  assert.ok(flat.every(c => Number.isInteger(c.id) && c.name && c.otype), "id, name and type");
-  assert.ok(flat.some(c => c.otype === "pasture"));
-  assert.deepEqual([...flat.map(c => c.id)].sort(), cow.objects.map(o => o.id).sort(), "all of them");
-  // a building without any (the kinds' lists decide) has no node
-  assert.ok(buildingTree(sanitize({})).game === null || buildingTree(sanitize({})).game.type === "game");
-});

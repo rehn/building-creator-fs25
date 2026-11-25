@@ -30,13 +30,14 @@ test("sanitize: invalid selects, colors and booleans fall back to defaults", () 
 // The editor has a tab for each thing you do; every section is in one of them.
 test("schema: every section is in a tab, in the order of what you do", () => {
   const ids = TABS.map(t => t[0]), inTab = t => SCHEMA.filter(g => g.tab === t).map(g => g.title);
-  assert.deepEqual(ids, ["building", "inside", "settings", "game"]);
-  assert.ok(SCHEMA.every(g => ids.includes(g.tab)), "every section has a tab");
+  assert.deepEqual(ids, ["building", "inside", "settings"]);
+  assert.ok(SCHEMA.every(g => ids.includes(g.tab) || g.tab === "game"), "every section has a tab (the game's settings are the mod's)");
   assert.deepEqual(inTab("building"), ["Open sides", "Pumps", "Building", "Size", "Roof", "Kupor (dormers)", "Surfaces", "Inside walls"], "the tree, and the sections of the main building's card (detail: true)");
   assert.deepEqual(SCHEMA.filter(g => g.detail).map(g => g.title), ["Open sides", "Pumps", "Size", "Roof", "Kupor (dormers)", "Surfaces", "Inside walls"]);
   assert.deepEqual(inTab("inside"), ["Inside"]);
   assert.deepEqual(inTab("settings"), ["Windows", "Doors", "Colors", "Interior"], "what the whole building has unless something says otherwise");
-  assert.deepEqual(inTab("game"), ["Chickens", "Cows", "Sheep", "Map shop", "In the shop", "Vehicles for sale", "What it buys", "Fuel", "Prices and pallets", "Goods", "Game mod"], "the game objects are in the tree");
+  assert.deepEqual(inTab("game"), ["Vehicles for sale", "What it buys", "Fuel", "Prices and pallets", "Goods", "Game mod"], "the game's settings: no building shows them");
+  assert.ok(SCHEMA.filter(g => g.tab === "game").every(g => g.kinds && g.kinds.length === 0));
   // the names shown say what the section is for
   const label = t => { const g = SCHEMA.find(x => x.title === t); return g.label || g.title; };
   assert.deepEqual(["Inside", "Interior", "Inside walls", "Game mod"].map(label), ["Furniture and pieces", "Rooms and curtains", "Inside walls", "Shop and mod"]);
@@ -560,66 +561,6 @@ const camForward = ([rx, ry]) => {
   return [-Math.cos(a) * Math.sin(b), Math.sin(a), -Math.cos(a) * Math.cos(b)];
 };
 
-test("sanitize: a house has a sleep point to start with; a save that had it off has none", () => {
-  assert.deepEqual(sanitize({}).objects.map(o => o.type), ["sleep"]);
-  assert.deepEqual(sanitize({ sleepPoint: false }).objects, []);
-});
-
-for (const doorWall of ["front", "back", "left", "right"]) {
-  test(`sleep point: trigger, icon, spawn and camera for a door on the ${doorWall} wall`, () => {
-    const p = sanitize({ doorWall, doorPos: 0.4, foundation: 0.6, entrance: "porch" });
-    const geo = buildGeometry(p), sp = sleepPoint(geo, p);
-    const { w, ops } = geo.opsByWall[doorWall], door = ops.find(o => o.kind === "door");
-    const sc = (door.s0 + door.s1) / 2;
-    const out = q => (q[0] - w.o[0]) * w.n[0] + (q[2] - w.o[2]) * w.n[2];
-    const along = q => (q[0] - w.o[0]) * w.u[0] + (q[2] - w.o[2]) * w.u[2];
-    const { center: c, size: s } = sp.trigger;
-    // in front of the door, outside the wall, from the ground to above head height on the floor
-    assert.ok(Math.abs(along(c) - sc) < 1e-6, "trigger not centred on the door");
-    const halfOut = (Math.abs(w.n[0]) * s[0] + Math.abs(w.n[2]) * s[2]) / 2;
-    assert.ok(out(c) - halfOut >= -1e-9, "trigger reaches into the house");
-    assert.ok(out(c) > 0.5, "trigger not outside the door");
-    assert.ok(c[1] - s[1] / 2 <= 1e-9 && c[1] + s[1] / 2 >= p.foundation + 1.8, "trigger misses a standing player");
-    // the icon floats inside the trigger, at the door
-    assert.ok(inBox(sp.marker, c, s), "sleep icon outside the trigger");
-    // spawn on the ground, outside everything that is cleared for the house
-    const { clear } = placementAreas(geo);
-    assert.equal(sp.spawn.pos[1], 0);
-    const [x, , z] = sp.spawn.pos;
-    assert.ok(x < clear.x0 || x > clear.x1 || z < clear.z0 || z > clear.z1, "spawn inside the house area");
-    // camera outside, above the roof, looking at the house
-    const cam = sp.camera;
-    assert.ok(cam.pos[1] > geo.dims.ridgeY, "camera below the roof");
-    const f = camForward(cam.rot), to = [0, geo.dims.ridgeY * 0.45, 0].map((v, k) => v - cam.pos[k]);
-    const cos = (f[0]*to[0] + f[1]*to[1] + f[2]*to[2]) / Math.hypot(...to);
-    assert.ok(cos > 0.999, `camera not looking at the house (cos ${cos})`);
-  });
-}
-
-test("i3d: sleep point nodes match the snippet and use the base game's trigger filter", () => {
-  const p = sanitize({ doorWall: "right" });
-  const sp = sleepPoint(buildGeometry(p), p);
-  const tree = sceneTree(buildI3d(p)), snippet = placeableSnippet(p);
-  const map = Object.fromEntries([...snippet.matchAll(/<i3dMapping id="([^"]+)" node="([^"]+)"\/>/g)].map(m => [m[1], m[2]]));
-  for (const id of ["sleepingTrigger", "sleepTriggerMarker", "spawnPoint", "sleepCamera"]) assert.ok(map[id], `${id} has no i3dMapping`);
-  for (const [id, path] of Object.entries(map)) assert.equal(resolve(tree, path).node.name, id, path);
-  for (const m of snippet.matchAll(/(?:triggerNode|cameraNode|spawnNode|node|teleportNode)="([^"0][^"]*)"/g)) assert.ok(map[m[1]], `${m[1]} has no i3dMapping`);
-  const near = (a, b, what) => a.forEach((v, i) => assert.ok(Math.abs(v - b[i]) < 1e-3, `${what}: ${a} vs ${b}`));
-  near(resolve(tree, map.sleepingTrigger).pos, sp.trigger.center, "trigger");
-  near(resolve(tree, map.sleepTriggerMarker).pos, sp.marker, "marker");
-  near(resolve(tree, map.spawnPoint).pos, sp.spawn.pos, "spawn");
-  near(resolve(tree, map.sleepCamera).pos, sp.camera.pos, "camera");
-  near(resolve(tree, map.sleepCamera).node.rotation.slice(0, 2), sp.camera.rot, "camera rotation");
-  const trig = resolve(tree, map.sleepingTrigger).node.attrs;
-  assert.match(trig, /trigger="true"/);
-  assert.match(trig, /collisionFilterGroup="0x20000000"/);
-  assert.match(trig, /collisionFilterMask="0x100000"/);
-  assert.match(trig, /nonRenderable="true"/);
-  assert.match(snippet, /<farmhouse spawnNode="spawnPoint">\s*<sleeping triggerNode="sleepingTrigger" cameraNode="sleepCamera"\/>\s*<\/farmhouse>/);
-  assert.match(snippet, /<triggerMarker node="sleepTriggerMarker" filename="\$data\/shared\/assets\/marker\/markerIconSleep.i3d"\/>/);
-  assert.match(snippet, /<hotspot type="FARM" linkNode="0>" teleportNode="spawnPoint"\/>/);
-  assert.match(snippet, /type="farmhouse"/);
-});
 
 test("sleep point: the trigger box is a closed mesh turned outwards", () => {
   const g = boxMesh([1.8, 2.6, 1.2]);
@@ -634,7 +575,6 @@ test("i3d: physics shapes are CPU meshes, visual shapes are not", () => {
   const xml = buildI3d(sanitize({}));
   const sets = Object.fromEntries([...xml.matchAll(/<IndexedTriangleSet name="([^"]+)"[^>]*?(?: meshUsage="(\d+)")?>/g)].map(m => [m[1], m[2]]));
   assert.equal(sets.collision, "256");
-  assert.equal(sets.sleepingTrigger, "256");
   for (const m of ["walls", "roof", "glass"]) assert.equal(sets[m], undefined, m);
 });
 

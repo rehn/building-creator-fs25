@@ -19,7 +19,7 @@ import { WINDOW_STYLES, DOOR_STYLES, WINDOW_STYLE_IDS, DOOR_STYLE_IDS, DOUBLE_DO
 export { WINDOW_STYLES, DOOR_STYLES, DOUBLE_DOOR_FROM, HATCH_SIZE } from "./openings.mjs";
 export { boxMesh } from "./i3d.mjs";
 export { KINDS, KIND, kindOf, groupByKind, CATEGORIES } from "./kinds/index.mjs";
-export { henYard, henCap, HENS_PER_M2, MAX_HENS } from "./kinds/chicken.mjs";
+export { henCap, HENS_PER_M2, MAX_HENS } from "./kinds/chicken.mjs";
 
 /* ---------- Settings ---------- */
 /** Settings every building has. A kind adds its own (kind.defaults). */
@@ -74,7 +74,8 @@ const pickColor = v => typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v) ? v : 
 /** What the walls can be clad in: [id, name]. */
 const CLADDING = [["lockpanel","Board and batten (lockpanel)"],["horizontal","Horizontal boards"],["vertical","Vertical boards (stående plank)"],["plaster","Plaster"],["corrugated","Corrugated sheet metal (korrugerad plåt)"]];
 /** The editor's tabs, one for each thing you do: [id, name]. Every section is in one of them (its tab). */
-export const TABS = [["building", "Building"], ["inside", "Inside"], ["settings", "Settings"], ["game", "Game"]];
+// (the game's settings are the mod's: sections of the tab "game" are read by the mod's frame, and no building shows them)
+export const TABS = [["building", "Building"], ["inside", "Inside"], ["settings", "Settings"]];
 /** Editor sections every building shares (kinds hide the ones they don't use, see kind.hides). */
 const SHARED_SECTIONS = [
   {title:"Building", label:"Extensions, walls and openings", tab:"building", custom:"tree", hint:"The building as a tree: the main building, its walls, and on each wall its windows, doors and extensions (an extension has walls of its own, with their things). Choose one to change it, and add a window, a door or an extension on a wall. Tap a wall, a window or a door in the preview to find it here.", fields:[]},
@@ -179,7 +180,8 @@ for (const k of KINDS) for (const g of k.sections) kindSections.set(g, [...(kind
 export const SCHEMA = [
   ...[...kindSections].map(([g, kinds]) => ({...g, kinds})),
   ...SHARED_SECTIONS.map(g => {
-    const kinds = KINDS.filter(k => !k.hides.includes(g.title)).map(k => k.id);
+    // (the game settings are the mod's: no building shows them; the mod's frame still reads them)
+    const kinds = g.tab === "game" ? [] : KINDS.filter(k => !k.hides.includes(g.title)).map(k => k.id);
     return kinds.length === KINDS.length ? g : {...g, kinds};
   }),
 ];
@@ -768,7 +770,7 @@ function clampField(f, v) {
 const MAIN_WALLS = ["front", "back", "left", "right"];
 
 /** The types a building can be changed between: those built the same way (walls, roof, openings, a walked-in inside); not the animal buildings, which have a pasture and animals. */
-export const CONVERTIBLE_KINDS = ["house", "shed", "dealership", "defaultdealer", "warehouse", "fuelstation"];
+export const CONVERTIBLE_KINDS = ["house", "shed", "dealership", "fuelstation"];
 /**
  * The building as another type (docs/PLAN_TYPER.md step 2): -> {ok: true, settings, lost: {items, objects, settings, dormers}, added: {objects}} or {ok: false, error}.
  * The form is kept (size, roof, walls, openings, parts, decorations, looks), the new type's rules apply (sanitize), and what only the old type has is dropped and listed: the furniture its

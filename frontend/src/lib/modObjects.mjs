@@ -70,7 +70,7 @@ function standIn({width, depth, foundation = 0}, wall, animal) {
   const y = YARD[animal], size = animal === "hens" ? {width, depth} : {width: Math.max(6, width), depth: Math.max(6, depth)};   // (a barn is at least 6 x 6 m)
   const base = sanitize({kind: "shed", ...size, foundation, doorWall: OPPOSITE[wall] || "front"});
   const q = {...base, pastureWall: wall, fenceDepth: y.fenceDepth, hens: 30, cows: 12, sheep: 20};
-  return {...q, objects: cleanObjects(y.objects(q), {objects: {types: y.types, required: y.required, pasture: y.pasture, defaults: y.objects}}, q)};
+  return {...q, objects: cleanObjects(y.objects(q), {gameObjects: true, objects: {types: y.types, required: y.required, pasture: y.pasture, defaults: y.objects}}, q)};
 }
 
 /** Where a hen yard goes to start with: what a hen house as wide and deep as p has (its feed pad, trailer spot, egg pallets, info area), and its fence as posts the player can move. */

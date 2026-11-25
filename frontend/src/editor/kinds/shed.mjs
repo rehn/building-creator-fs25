@@ -135,14 +135,11 @@ export default {
   hides: ["Interior", "Kupor (dormers)"],
   /** Settings as this kind uses them: no sleep point, rooms or dormers. */
   normalize: p => ({...p, interior: false, dormers: []}),
-  // (a workshop makes it a garage with one: gameobjects.mjs sharedPlaceable)
   placeable: p => ({type: "simplePlaceable", fn: "$l10n_function_decoration", shop: shopFor(p, SHEDS)}),
-  description: p => `A ${(+p.width).toFixed(1)} x ${(+p.depth).toFixed(1)} m shed made with House to i3d.${objectOf(p, "workshop") ? " Repair and paint your vehicles inside." : ""}`,
+  description: p => `A ${(+p.width).toFixed(1)} x ${(+p.depth).toFixed(1)} m shed made with House to i3d.`,
   furnish,
   catalog: CATALOG,
   autoFurnish,
-  // the game objects: a vehicle workshop is optional
-  objects: {types: ["workshop"], required: [], defaults: p => sharedDefaults(p, "workshop")},
   presets: [
     {id: "garage", name: "Garage", blurb: "6 × 6 m red garage with a sliding door, room for a car or a tractor.", settings: {
       ...falu, width: 6, depth: 6, floors: 1, floorHeight: 3.2, foundation: 0.2, foundationColor: "#8C8A84", roofType: "gable", ridge: "width", roofPitch: 28, overhang: 0.4,

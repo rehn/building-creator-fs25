@@ -1,56 +1,14 @@
 // Chicken barn: an FS25 chickenHusbandryPasture you can walk into, modelled on the base game's
 // chicken barns (data/placeables/rudolfHormann/chickenBarnBig is the 360-hen one).
 // Imports only the i3d writer; the core hands in what it needs (see kinds/index.mjs).
-import { tg, shape } from "../i3d.mjs";
-import { navMesh } from "../walkarea.mjs";
 import { roomOf, furnisher } from "../layout.mjs";
-import { OPPOSITE, wallLength, yardFrame, shellOf, teleportFor, withPasture, pastureWallFor, cornerStripes, palletLines, contourClosure, navContourNodes, ccwFence } from "./pasture.mjs";
-import { objectOf, objectsOf, boxOf, iconOf, boxFrom, pastureOf, blockersOf, footprints } from "../objects.mjs";
+import { OPPOSITE } from "./pasture.mjs";
 import { tone, shade, strawBale } from "./props.mjs";
-import { troughFrom, drawTrough } from "./cow.mjs";
 import { INNER_WALL } from "./innerwall.mjs";
-import { placeOnWall, placeOnBuilding } from "../places.mjs";
-import { HENS_PER_M2, MAX_HENS, FEED_PER_HEN, henCap, hensOf, HEN_MIN_WIDTH, henObjects, defaultObjects, HEN_PLACEABLE, troughNodes, henScene } from "../mod/yard.mjs";
-export { HENS_PER_M2, MAX_HENS, henCap, HEN_PLACEABLE, troughNodes, henScene } from "../mod/yard.mjs";
-const MIN_PASTURE_WIDTH = HEN_MIN_WIDTH;
-
-/**
- * Where a chicken barn's gameplay places are, from built geometry. All points in world space.
- *   fence:   posts on the ground from one corner of the pasture wall, out fenceDepth, across and back
- *            to the other corner (the base game's winding); 6 posts when the pasture is wider than
- *            the wall, so the fence runs back along the wall line. The player can reshape it.
- *   food:    feed pad {center, size}, low on the ground beside one of the other walls; marker on it
- *   pallet:  egg pallet spawn lines (2, [start, end]) and their trigger box, beside another one
- *   loading: animal trailer trigger box further out on the feed side; marker; teleport spot beyond
- *   info:    box around the barn; blocker: the barn's footprint, kept out of the walking area
- *   areas:   ground rectangles of the food and pallet places, for clearing and leveling
- * The feed and pallet sides are two of the three walls that aren't the pasture's, walls without a
- * door: the wall opposite the pasture for feed if it has no door, else a side wall without one.
- * The player moves and sizes them as game objects (objects.mjs, p.objects).
- */
-export function henYard(geo, p) {
-  // The game can't make a walking area for a tiny pasture (a 6 x 4.4 m one failed): at least 12 m wide.
-  const yf = yardFrame(geo, p, MIN_PASTURE_WIDTH), {rectOf} = yf, pa = pastureOf(p);
-  const {food, loading, pallets, info} = henObjects(geo, p, yf);
-  // two spawn lines inside the pallet trigger, along its longer side: 50 cm in from its ends and 80 cm
-  // either side of its middle
-  const lines = palletLines(pallets.box);
-  return {
-    fence: ccwFence(pa ? pa.fence : yf.fence),
-    food: {...food.box, marker: food.icon},
-    pallet: {lines, trigger: pallets.box, stripes: cornerStripes(rectOf(pallets.box))},
-    loading: {...loading.box, marker: loading.icon, teleport: teleportFor(loading, geo.dims)},
-    info: info.box,
-    blockers: blockersOf(p),
-    areas: [food.box, pallets.box].map(rectOf),
-  };
-}
-/** The hen hatch: 40 x 50 cm at floor level in the middle of the pasture wall, kept clear 80 cm inside. */
-function openings(p) {
-  if (p.pastureNoGap) return [];
-  const L = (p.pastureWall === "front" || p.pastureWall === "back") ? p.width : p.depth, m = p.pastureMid ?? L / 2;
-  return [{wall: p.pastureWall, s0: m - 0.2, s1: m + 0.2, t1: 0.5, clear: 0.8, what: "the hen hatch", ramp: !!p.pastureRamp}];
-}
+import { shopFor } from "./shop.mjs";
+const BARNS = {category: "sheds", type: "placeable", brush: "buildings", tab: "sheds"};   // (the shop place of the kind: shop.mjs lets the player choose another)
+import { henCap } from "../mod/yard.mjs";
+export { HENS_PER_M2, MAX_HENS, henCap } from "../mod/yard.mjs";
 
 /* ---------- Interior ---------- */
 const COOP = {litter: "#B8935A", straw: "#DDBF73", bale: "#D9BC6A", wood: "#A47A4E", ply: "#C29C68", dark: "#4A3422", metal: "#A3A9AD",
@@ -246,17 +204,17 @@ const step = (v, s) => +(Math.floor(v / s + 1e-9) * s).toFixed(3);
  * Returns {style, items}.
  */
 function autoFurnish(p) {
-  const room = roomOf(p, openings(p)), n = hensOf(p);
+  const room = roomOf(p, []), n = henCap(p);   // (furnished for as many hens as fit: the animals themselves are the mod's)
   const style = n <= 40 ? "backyard" : n <= 150 ? "floor" : "commercial";
   const f = furnisher(room, CATALOG), {items} = f;
   // (a wall with a wing opening into it is in two pieces: the longer one)
   const len = wl => wl.x1 - wl.x0 + wl.z1 - wl.z0, byName = {};
   for (const wl of room.walls) if (!byName[wl.name] || len(wl) > len(byName[wl.name])) byName[wl.name] = wl;
-  const opposite = byName[OPPOSITE[p.pastureWall]];
+  const doorAt = ((p.windows || []).find(w => w.type === "door" && w.floor === 0) || {}).wall, opposite = byName[OPPOSITE[doorAt]];   // (the nest boxes go on the wall away from the first door)
 
   // Nest boxes: about one per 5 hens, on the wall opposite the pasture if it has room, else the longest free stretch.
   const want = Math.ceil(n / 5);
-  let ns = f.longest([opposite], nestDepth);
+  let ns = (opposite ? f.longest([opposite], nestDepth) : null);
   if (!ns || ns.len < Math.min(want, 4) * 0.35 + 0.1) ns = f.longest(room.walls, nestDepth);
   if (ns && ns.len >= 0.45) {
     const perRow = Math.max(1, Math.floor((ns.len - 0.1) / 0.35));
@@ -296,74 +254,40 @@ function autoFurnish(p) {
   return {style, items};
 }
 
-/* ---------- Export ---------- */
-/**
- * Scene nodes and placeable XML for the pasture. c: export context from the core
- * {p, geo, doc, box(name, {center, size}, attrs), trigger(group, mask)}.
- */
-function scene(c) {
-  const {p, geo} = c;
-  return henScene(c, henYard(geo, p), hensOf(p), footprints(p));
-}
 export default {
   id: "chicken",
   name: "Hen house",
   plural: "Hen houses",
   category: "animals",
-  /** Walk-in: inside walls, hollow collision, a door that opens and a furnished inside. */
   walkIn: true,
-  glyph: "hen",
-  yard: (geo, p) => henYard(geo, p),
-  defaults: {ceiling: false, insideSame: true, hens: 30, pastureWall: "back", fenceDepth: 8, winStyle: "single", doorStyle: "zbrace"},
-  /** Editor sections only this kind has (shown first), and shared ones it doesn't use. */
-  sections: [
-    {title: "Chickens", tab: "game", hint: "Hens go in and out through a small hatch in the middle of the wall the pasture encloses. The pasture (at least 12 m wide and 6 m deep: the game can't handle a smaller one), the feed pad, the egg pallets and the rest are under Game objects.", fields: [
-      {k: "hens", label: "Hens", min: 1, max: MAX_HENS, step: 1}]},
-  ],
+  defaults: {ceiling: false, insideSame: true, winStyle: "single", doorStyle: "zbrace"},
+  sections: [],
   hides: ["Interior", "Kupor (dormers)"],
-  /**
-   * Settings as this kind uses them: no sleep point, rooms or dormers; no more hens than fit; and
-   * the pasture on a wall without a door if it can be (the opposite one, else another).
-   */
-  normalize: p => withPasture({...p, interior: false, dormers: [], hens: Math.min(p.hens, henCap(p))}),
-  openings,
-  placeable: () => HEN_PLACEABLE,
-  description: p => `A ${(+p.width).toFixed(1)} x ${(+p.depth).toFixed(1)} m chicken barn for ${hensOf(p)} hens, made with House to i3d.`,
+  /** Settings as this kind uses them: no sleep point, rooms or dormers. */
+  normalize: p => ({...p, interior: false, dormers: []}),
+  placeable: p => ({type: "simplePlaceable", fn: "$l10n_function_decoration", shop: shopFor(p, BARNS)}),
+  description: p => `A ${(+p.width).toFixed(1)} x ${(+p.depth).toFixed(1)} m chicken barn made with House to i3d.`,
   furnish,
   catalog: CATALOG,
   autoFurnish,
   summary,
-  scene,
-  // (feeders and drinkers outside are only for looks: the game feeds the hens from the feed pad)
-  objects: {types: ["food", "loading", "pallets", "info", "feedTrough", "waterTrough", "pasture"], required: ["food", "loading", "pallets", "info", "pasture"],
-    pasture: {minWidth: MIN_PASTURE_WIDTH, depth: [6, 40]}, defaults: defaultObjects,
-    labels: {
-      feedTrough: {name: "Feeder", hint: "A feeder for the hens in the pasture, for looks (the game feeds the hens from the feed pad). Put it inside the fence."},
-      waterTrough: {name: "Drinker", hint: "A drinker for the hens in the pasture, for looks (the water is automatic). Put it inside the fence."},
-    }},
-  outside: c => {
-    for (const o of [...objectsOf(c.p, "feedTrough"), ...objectsOf(c.p, "waterTrough")]) drawTrough(c, troughFrom(o, null, []));
-  },
   presets: [
     {id: "gardenCoop", name: "Red garden coop", blurb: "4 × 3 m coop for 30 hens, red boards with white trim.", settings: {
-      hens: 30, fenceDepth: 8,
       width: 4, depth: 3, floors: 1, floorHeight: 2.3, foundation: 0.2, roofType: "gable", ridge: "width", roofPitch: 35, overhang: 0.3,
       chimney: false, gutters: false, downpipes: 0, winFront: 1, winBack: 0, winLeft: 1, winRight: 0, winW: 0.6, winH: 0.5, sill: 1.2,
-      doorWall: "front", pastureWall: "back", doorPos: 0.6, doorW: 0.8, doorH: 1.8, entrance: "none",
+      doorWall: "front", doorPos: 0.6, doorW: 0.8, doorH: 1.8, entrance: "none",
       wallCladding: "lockpanel", roofMaterial: "tiles", wallColor: "#8E2A1E", trimColor: "#F2EFE8", roofColor: "#2B2D2F", doorColor: "#F2EFE8",
       modPrice: 4500, modUpkeep: 10}},
     {id: "longHenHouse", name: "Long hen house", blurb: "9 × 5 m for 110 hens: low walls, a row of small windows and a metal roof.", settings: {
-      hens: 110, fenceDepth: 14,
       width: 9, depth: 5, floors: 1, floorHeight: 2.4, foundation: 0.2, roofType: "gable", ridge: "width", roofPitch: 18, overhang: 0.4,
       chimney: false, gutters: true, downpipes: 1, winFront: 5, winBack: 0, winLeft: 0, winRight: 1, winW: 0.8, winH: 0.5, sill: 1.3,
-      doorWall: "left", pastureWall: "front", doorPos: 0, doorW: 1.6, doorH: 2, entrance: "none", winStyle: "stall",
+      doorWall: "left", doorPos: 0, doorW: 1.6, doorH: 2, entrance: "none", winStyle: "stall",
       wallCladding: "horizontal", roofMaterial: "metal", wallColor: "#E8E4DA", trimColor: "#3E5A4A", roofColor: "#4A4F52", doorColor: "#3E5A4A",
       modPrice: 22000, modUpkeep: 30}},
     {id: "poultryBarn", name: "Poultry barn", blurb: "20 × 8 m barn for 360 hens, as many as the biggest barn in the game.", settings: {
-      hens: 360, fenceDepth: 20,
       width: 20, depth: 8, floors: 1, floorHeight: 3, foundation: 0.3, roofType: "gable", ridge: "width", roofPitch: 15, overhang: 0.5,
       chimney: false, gutters: true, downpipes: 2, winFront: 8, winBack: 8, winLeft: 0, winRight: 0, winW: 1.2, winH: 0.6, sill: 1.5,
-      doorWall: "right", pastureWall: "front", doorPos: 0, doorW: 2.5, doorH: 2.6, entrance: "none", doorStyle: "sliding",
+      doorWall: "right", doorPos: 0, doorW: 2.5, doorH: 2.6, entrance: "none", doorStyle: "sliding",
       wallCladding: "lockpanel", roofMaterial: "metal", wallColor: "#7C8A8F", trimColor: "#F2EFE8", roofColor: "#3B3F42", doorColor: "#F2EFE8",
       modPrice: 79000, modUpkeep: 100}},
   ],

@@ -22,9 +22,9 @@ const NEEDS = {
 const GAME_TYPE = {sleep: "farmhouse", workshop: "garageWorkshopSolarPanels", intake: "sellingStation", pump: "buyingStation", warehouse: "warehouse"};
 
 const house = (groups) => {
-  const base = sanitize({kind: "house", objects: []});
+  const base = sanitize({kind: "modframe", objects: []});
   const objects = groups.flatMap(g => SHARED[g].types.flatMap(t => sharedDefaults(base, t)));
-  return sanitize({kind: "house", objects});
+  return sanitize({kind: "modframe", objects});
 };
 
 for (let mask = 0; mask < 1 << GROUPS.length; mask++) {

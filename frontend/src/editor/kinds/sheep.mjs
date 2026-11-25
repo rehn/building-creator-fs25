@@ -3,15 +3,14 @@
 // along the barn's pasture wall; wool (and goat milk) comes out on pallets. It is built on the cow barn's module
 // (cow.mjs): the same yard, outside troughs, game objects and export, with its own animal, pieces and presets.
 import { roomOf, furnisher } from "../layout.mjs";
-import { withPasture } from "./pasture.mjs";
-import { COW, PASTURE_GROUNDS, COLORS, CATALOG as COW_CATALOG, openings, cowYard, outsideOf, sceneOf, defaultsOf } from "./cow.mjs";
+import { COLORS, CATALOG as COW_CATALOG } from "./cow.mjs";
 import { tone } from "./props.mjs";
 import { INNER_WALL } from "./innerwall.mjs";
-import { SHEEP, MAX_SHEEP, sheepCap, sheepOf, SHEEP_MIN_WIDTH, SHEEP_PLACEABLE } from "../mod/yard.mjs";
+import { shopFor } from "./shop.mjs";
+const BARNS = {category: "sheds", type: "placeable", brush: "buildings", tab: "sheds"};   // (the shop place of the kind: shop.mjs lets the player choose another)
+import { sheepCap } from "../mod/yard.mjs";
 export { SHEEP, MAX_SHEEP, sheepCap } from "../mod/yard.mjs";
-const MIN_PASTURE_WIDTH = SHEEP_MIN_WIDTH;
 
-const sheepYard = (geo, p) => cowYard(geo, p, SHEEP);
 
 const LITTER = "#C9AE6B";
 /** The floor: deep straw litter over the whole room. */
@@ -48,7 +47,7 @@ for (const [k, g] of Object.entries({"innerwall":"Walls and doors","feedtrough":
 
 /** Fills the inside: hay troughs and racks along the longest free walls, water bowls, a lambing pen per 20 sheep, bales. */
 function autoFurnish(p) {
-  const room = roomOf(p, openings(p)), n = sheepOf(p), f = furnisher(room, CATALOG), {items} = f;
+  const room = roomOf(p, []), n = sheepCap(p), f = furnisher(room, CATALOG), {items} = f;
   for (let k = 0; k < Math.min(3, Math.max(1, Math.ceil(n / 12))); k++) {
     const s = f.longest(room.walls, 0.6);
     if (!s || s.len < 1.3) break;
@@ -68,50 +67,33 @@ export default {
   plural: "Sheep barns",
   category: "animals",
   walkIn: true,
-  glyph: "sheep",
-  defaults: {ceiling: false, insideSame: true, animalsInside: true, pastureGround: "grass", sheep: 20, pastureWall: "back", fenceDepth: 14, winStyle: "stall", doorStyle: "xbrace"},
-  sections: [
-    {title: "Sheep", tab: "game", hint: "Sheep graze in the pasture and come in through a doorway in the pasture side; they eat hay and drink at troughs along that wall. Fill feed (or drop bales) at the feed place outside the fence; water is automatic. Wool comes out on pallets beside the barn. The pasture, the feed pad, the wool pallets and the rest are under Game objects.", fields: [
-      {k: "sheep", label: "Sheep", min: 1, max: MAX_SHEEP, step: 1},
-      {k: "pastureGround", cardRow: true, label: "Ground in the pasture", type: "select", options: PASTURE_GROUNDS},
-      {k: "animalsInside", cardRow: true, label: "The animals can walk inside through the doorway", type: "check"}]},
-  ],
+  defaults: {ceiling: false, insideSame: true, winStyle: "stall", doorStyle: "xbrace"},
+  sections: [],
   hides: ["Interior", "Kupor (dormers)"],
-  /** Settings as this kind uses them: no sleep point, rooms or dormers; at least 6 x 6 m; no more sheep than fit. */
-  normalize: p => {
-    const q = {...p, interior: false, dormers: [], width: Math.max(6, p.width), depth: Math.max(6, p.depth)};
-    return withPasture({...q, sheep: Math.min(q.sheep, sheepCap(q))});
-  },
-  openings,
-  placeable: () => SHEEP_PLACEABLE,
-  description: p => `A ${(+p.width).toFixed(1)} x ${(+p.depth).toFixed(1)} m sheep barn for ${sheepOf(p)} sheep, made with House to i3d.`,
+  /** Settings as this kind uses them: no sleep point, rooms or dormers; at least 6 x 6 m. */
+  normalize: p => ({...p, interior: false, dormers: [], width: Math.max(6, p.width), depth: Math.max(6, p.depth)}),
+  placeable: p => ({type: "simplePlaceable", fn: "$l10n_function_decoration", shop: shopFor(p, BARNS)}),
+  description: p => `A ${(+p.width).toFixed(1)} x ${(+p.depth).toFixed(1)} m sheep barn made with House to i3d.`,
   furnish,
-  outside: outsideOf(SHEEP),
-  yard: sheepYard,
   catalog: CATALOG,
   autoFurnish,
-  scene: sceneOf(SHEEP),
-  // the game objects: the bale drop is optional; wool comes out on pallets
-  objects: {types: ["food", "bales", "loading", "pallets", "feedTrough", "waterTrough", "info", "pasture"], required: ["food", "loading", "pallets", "info", "pasture"],
-    pasture: {minWidth: MIN_PASTURE_WIDTH, depth: [8, 60], gapSize: true}, defaults: defaultsOf(SHEEP),
-    labels: {pallets: {name: "Wool pallets", hint: "Where wool (and goat milk) pallets appear (two rows inside it), with warning stripes in its corners."}}},
   presets: [
     {id: "farhus", name: "Fårhus", blurb: "8 × 6 m small red sheep shed for 12 sheep, a red tile roof and a plain door.", settings: {
-      sheep: 12, pastureWall: "back", fenceDepth: 12, ...swedishRed, wallColor: "#7A2418",
+      ...swedishRed, wallColor: "#7A2418",
       width: 8, depth: 6, floors: 1, floorHeight: 2.5, foundation: 0.4, foundationColor: "#8C8A84", roofType: "gable", ridge: "width", roofPitch: 32, overhang: 0.4,
       roofMaterial: "tiles", roofColor: "#7A2E1F", chimney: false, gutters: false, downpipes: 0, ventilators: 0,
       winFront: 2, winBack: 0, winLeft: 1, winRight: 1, winW: 0.7, winH: 0.5, sill: 1.4,
       doorWall: "front", doorPos: -0.5, doorW: 1.2, doorH: 2.1, doorColor: "#F2EFE8", entrance: "none", doorStyle: "zbrace",
       modPrice: 9000, modUpkeep: 25}},
     {id: "farstall", name: "Fårstall", blurb: "14 × 8 m red sheep barn for 40 sheep with a falu red front, white trim and a stone base.", settings: {
-      sheep: 40, pastureWall: "back", fenceDepth: 16, ...swedishRed,
+      ...swedishRed,
       width: 14, depth: 8, floors: 1, floorHeight: 3, foundation: 0.5, foundationColor: "#8C8A84", roofType: "gable", ridge: "width", roofPitch: 35, overhang: 0.5,
       roofMaterial: "tiles", roofColor: "#2F2F2F", chimney: false, gutters: true, downpipes: 2, ventilators: 1,
       winFront: 4, winBack: 4, winLeft: 1, winRight: 0, winW: 0.8, winH: 0.6, sill: 1.5,
       doorWall: "left", doorPos: 0, doorW: 2.2, doorH: 2.4, doorColor: "#5B1E16", entrance: "none",
       modPrice: 24000, modUpkeep: 60}},
     {id: "storfarstall", name: "Stor fårstall", blurb: "24 × 12 m big sheep barn for 68 sheep with a low metal roof and ventilators along the ridge.", settings: {
-      sheep: 68, pastureWall: "front", fenceDepth: 24,
+      fenceDepth: 24,
       wallCladding: "lockpanel", wallColor: "#A8A398", trimColor: "#3B3F42",
       width: 24, depth: 12, floors: 1, floorHeight: 3.4, foundation: 0.3, foundationColor: "#8C8A84", roofType: "gable", ridge: "width", roofPitch: 15, overhang: 0.5,
       roofMaterial: "metal", roofColor: "#4A4F52", chimney: false, gutters: true, downpipes: 2, ventilators: 3,

@@ -8,10 +8,10 @@ const farm = () => sanitize({kind: "house", width: 11, depth: 7, floors: 1, roof
   decor: [{asset: "s1gn01", x: 6, z: 2, rot: 90, y: 1}], wings: [{id: 1, wall: "right", pos: 0.5, width: 3, depth: 3, floors: 1}]});
 
 test("the convertible types are the simple walk-in buildings", () => {
-  assert.deepEqual(CONVERTIBLE_KINDS.slice().sort(), ["dealership", "defaultdealer", "fuelstation", "house", "shed", "warehouse"]);
+  assert.deepEqual(CONVERTIBLE_KINDS.slice().sort(), ["dealership", "fuelstation", "house", "shed"]);
 });
 
-test("a house becomes a shed: the form stays, the furniture is listed as lost, the sleep point stays (any building may have one)", () => {
+test("a house becomes a shed: the form stays, the furniture is listed as lost", () => {
   const p = farm(), r = changeKind(p, "shed");
   assert.equal(r.ok, true);
   const q = r.settings;
@@ -21,18 +21,11 @@ test("a house becomes a shed: the form stays, the furniture is listed as lost, t
   assert.equal(q.wings.length, 1, "so does the part");
   assert.equal(q.windows.length, p.windows.length, "and the windows and doors");
   assert.ok(!r.lost.objects.includes("Sleep point"));
-  assert.ok(q.objects.some(o => o.type === "sleep"));
+  assert.deepEqual(q.objects, [], "a building has no game objects");
   assert.ok(r.lost.items.length > 0 && r.lost.items.some(n => /bed/i.test(n)), `lost: ${r.lost.items}`);
   assert.ok(!q.items.some(it => it.type === "bed"));
 });
 
-test("a house becomes a dealership: the counter and the spawn area it needs are added", () => {
-  const r = changeKind(farm(), "dealership");
-  assert.ok(r.ok);
-  assert.deepEqual(r.settings.objects.map(o => o.type).sort(), ["counter", "sleep", "spawn"]);
-  assert.deepEqual(r.added.objects.slice().sort(), ["Shop counter", "Vehicle spawn area"]);
-  assert.ok(buildGeometry(r.settings), "and it builds");
-});
 
 test("a shed with open sides becomes a house: the open sides are the old type's own setting, dropped and listed", () => {
   const shed = sanitize({kind: "shed", openFront: true, width: 9, depth: 6});

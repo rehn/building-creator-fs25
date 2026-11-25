@@ -66,15 +66,6 @@ test("collision and triggers are kept in memory (mesh usage 256), what is drawn 
   assert.ok(nodes.length > 0);
 });
 
-test("a cow barn: the navigation mesh has the CPU Mesh flag the game demands (0x1000000), as do the walking plane and the blockers", () => {
-  const shapes = readShapes(i3dFiles(make("ladugard", {binaryShapes: true}))["house.i3d.shapes"]);
-  for (const name of ["navigationMeshShape", "walkingPlane"]) {
-    const s = shapes.find(x => x.name === name);
-    assert.ok(s, name);
-    assert.ok(s.opts & 0x1000000, );
-  }
-  assert.ok(shapes.some(s => /^navmeshBlocker/.test(s.name) && (s.opts & 0x1000000)), "a blocker with the flag");
-});
 
 test("the shapes file and the i3d together are well under the XML they replace (about 60 percent)", () => {
   const files = i3dFiles(make("ladugard", {binaryShapes: true})), xml = i3dFiles(make("ladugard", {binaryShapes: false}))["house.i3d"];

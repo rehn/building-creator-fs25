@@ -13,17 +13,9 @@ const ps = {type: "palletspawn", x: 8, z: 0, w: 2.8, d: 6, h: 0.4, ix: 0, iz: 0}
 const un = {type: "unload", x: 0, z: 6, w: 6, d: 4, h: 3, ix: 0, iz: 0};
 const intake = {type: "intake", x: 0, z: 0, w: 5, d: 4, h: 2, ix: 0, iz: 0};
 
-test("every kind can have the pallet shop's objects, and they come together", () => {
-  for (const id of ["house", "shed", "chicken", "cow", "sheep", "dealership", "fuelstation", "warehouse"]) for (const t of ["palletcounter", "palletspawn", "unload"]) assert.ok(allowedTypes(kindOf({kind: id})).includes(t), `${id} takes ${t}`);
-  assert.deepEqual(SHARED_GROUPS.warehouse, ["palletcounter", "palletspawn", "unload"]);
-  assert.deepEqual(SHARED.warehouse.types, ["palletcounter", "palletspawn", "unload"]);
-  for (const t of SHARED_GROUPS.warehouse) assert.equal(sharedDefaults(sanitize({kind: "house"}), t).length, 1, t);
-  assert.deepEqual(sanitize({kind: "house", objects: [pc]}).objects.map(o => o.type).sort(), ["palletcounter", "palletspawn", "unload"]);
-  assert.deepEqual(sanitize({kind: "house", objects: [un]}).objects.map(o => o.type).sort(), ["palletcounter", "palletspawn", "unload"]);
-});
 
 test("a house with the pallet shop is the game's warehouse: its own type, the buying station with the goods of the list and the selling station", () => {
-  const p = sanitize({kind: "house", objects: [pc, ps, un], buyList: ["BREAD", "FLOUR"], sellList: ["EGG"], buyPrice: 144, goodsPrice: 120, palletLines: 2});
+  const p = sanitize({kind: "modframe", objects: [pc, ps, un], buyList: ["BREAD", "FLOUR"], sellList: ["EGG"], buyPrice: 144, goodsPrice: 120, palletLines: 2});
   const xml = placeableXml(p, "Shop", {mod: "FS25_Shop"});
   assert.match(xml, /<placeable type="warehouse">/);
   assert.deepEqual(modTypesFor(p, "FS25_Shop"), []);
@@ -38,17 +30,17 @@ test("a house with the pallet shop is the game's warehouse: its own type, the bu
 });
 
 test("the goods lists and prices are on every building", () => {
-  const h = sanitize({kind: "house"});
+  const h = sanitize({kind: "modframe"});
   assert.ok(Array.isArray(h.buyList) && h.buyList.includes("BREAD"));
   assert.ok(Array.isArray(h.sellList) && h.sellList.includes("EGG"));
   assert.equal(h.buyPrice, 144);
   assert.equal(h.goodsPrice, 100);
   assert.equal(h.palletLines, 2);
-  assert.deepEqual(sanitize({kind: "cow", buyList: ["BREAD", "NOT_A_GOOD", "BREAD"]}).buyList, ["BREAD"]);
+  assert.deepEqual(sanitize({kind: "modframe", buyList: ["BREAD", "NOT_A_GOOD", "BREAD"]}).buyList, ["BREAD"]);
 });
 
 test("a pallet shop and a grain intake in one building: one type with every specialization once, and one <sellingStation> holding both triggers", () => {
-  const p = sanitize({kind: "house", objects: [pc, ps, un, intake]});
+  const p = sanitize({kind: "modframe", objects: [pc, ps, un, intake]});
   const types = modTypesFor(p, "FS25_M"), specs = types[0].specializations;
   assert.equal(types.length, 1);
   assert.equal(types[0].parent, "simplePlaceable");
@@ -64,7 +56,7 @@ test("a pallet shop and a grain intake in one building: one type with every spec
 
 test("a vehicle shop and a pallet shop together: the two counters are different objects", () => {
   const veh = [{type: "counter", x: 0, z: 2, w: 2, d: 1.4, h: 2.6, ix: 0, iz: 0}, {type: "spawn", x: 0, z: 9, w: 12, d: 5, h: 3.5, ix: 0, iz: 0}];
-  const p = sanitize({kind: "house", objects: [...veh, pc, ps, un]});
+  const p = sanitize({kind: "modframe", objects: [...veh, pc, ps, un]});
   assert.equal(p.objects.length, 5);
   const xml = placeableXml(p, "M", {mod: "FS25_M"});
   assert.match(xml, /<vehicleBuyingStation>/);
@@ -72,20 +64,9 @@ test("a vehicle shop and a pallet shop together: the two counters are different 
   assert.equal(modTypesFor(p, "FS25_M").length, 1);
 });
 
-test("the warehouse is a building with the three objects required; its counter is the pallet counter and it is not in the shop unless asked", () => {
-  const p = sanitize(PRESETS.find(x => x.id === "affar").settings), kind = kindOf(p);
-  assert.deepEqual(kind.objects.required.slice().sort(), ["palletcounter", "palletspawn", "unload"]);
-  assert.deepEqual(p.objects.map(o => o.type).sort(), ["palletcounter", "palletspawn", "unload"]);
-  const xml = placeableXml(p, "Affar", {mod: "FS25_Affar"});
-  assert.match(xml, /<placeable type="warehouse">/);
-  assert.match(xml, /<canBeSold>false<\/canBeSold>/);
-  assert.match(placeableXml(sanitize({...PRESETS.find(x => x.id === "affar").settings, shopBuyable: true}), "A"), /<canBeSold>true<\/canBeSold>/);
-  assert.doesNotMatch(xml, /vehicleBuyingStation/);
-  assert.deepEqual(modTypesFor(p, "FS25_Affar"), []);
-});
 
 test("the pallet delivery area is at the back, the grain intake and the vehicle spawn at the front", () => {
-  const base = sanitize({kind: "house", objects: []});
+  const base = sanitize({kind: "modframe", objects: []});
   const get = (t, type) => sharedDefaults(base, t).find(o => o.type === type);
   assert.ok(get("unload", "unload").z < 0);
   assert.ok(get("intake", "intake").z > 0);

@@ -41,23 +41,21 @@ test("sanitize: mod price, upkeep and texts", () => {
   assert.equal(sanitize({ modAuthor: 42 }).modAuthor, "");
 });
 
-test("mod: placeable XML is a farmhouse with the house's price and upkeep", () => {
+test("mod: placeable XML of a house with the house's price and upkeep", () => {
   const p = sanitize({ modPrice: 123000, modUpkeep: 95 });
   const xml = placeableXml(p, "Röda stugan");
   assertWellFormed(xml, "placeable");
-  assert.match(xml, /<placeable type="farmhouse"/);
+  assert.match(xml, /<placeable type="simplePlaceable"/);
   assert.equal(tag(xml, "name"), "Röda stugan");
   assert.equal(tag(xml, "price"), "123000");
   assert.equal(tag(xml, "dailyUpkeep"), "95");
   assert.equal(tag(xml, "image"), MOD_FILES.store);
   assert.equal(tag(xml, "filename"), MOD_FILES.i3d);
   assert.equal(tag(xml, "category"), "farmhouses");
-  assert.match(xml, /<function>\$l10n_function_farmHouse<\/function>/);
   assert.match(xml, /<brush>\s*<type>placeable<\/type>\s*<category>buildings<\/category>\s*<tab>farmhouses<\/tab>\s*<\/brush>/);
   for (const t of ["canBeSold", "showInStore"]) assert.equal(tag(xml, t), "true");
   // it carries every block and mapping of the paste-in snippet
   for (const m of placeableSnippet(p).matchAll(/<i3dMapping [^>]+\/>/g)) assert.ok(xml.includes(m[0]), m[0]);
-  assert.match(xml, /<farmhouse spawnNode="spawnPoint">/);
 });
 
 test("mod: without a sleep point the house is a plain placeable", () => {
@@ -103,9 +101,8 @@ test("mod: without an author of its own, the mod is by the logged-in user", () =
 });
 
 test("defaultModDescription: describes the house, and is used when the description is empty", () => {
-  const p = sanitize({ width: 12, depth: 8, sleepPoint: true });
+  const p = sanitize({ width: 12, depth: 8 });
   assert.match(defaultModDescription(p), /12\.0 x 8\.0 m/);
-  assert.match(defaultModDescription(p), /sleep/i);
   assert.doesNotMatch(defaultModDescription(sanitize({ sleepPoint: false })), /sleep/i);
   assert.ok(modDescXml(p, "x").includes(defaultModDescription(p)));
   assert.ok(!modDescXml(sanitize({ ...p, modDescription: "Mine." }), "x").includes(defaultModDescription(p)));

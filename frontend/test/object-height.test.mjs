@@ -18,7 +18,7 @@ test("the box and the icon of an object stand on the ground, or y above it", () 
 });
 
 test("y is kept within its range, and left out when 0 so a saved object is as it was", () => {
-  const objs = p => sanitize({kind: "house", objects: [p]}).objects.find(o => o.type === "workshop");
+  const objs = p => sanitize({kind: "modframe", objects: [p]}).objects.find(o => o.type === "workshop");
   assert.equal("y" in objs(workshop), false);
   assert.equal("y" in objs({...workshop, y: 0}), false);
   assert.equal(objs({...workshop, y: 1.25}).y, 1.25);
@@ -28,7 +28,7 @@ test("y is kept within its range, and left out when 0 so a saved object is as it
 });
 
 test("the export puts the workshop's triggers and icon at that height", () => {
-  const low = buildI3d(sanitize({kind: "house", objects: [workshop]})), high = buildI3d(sanitize({kind: "house", objects: [{...workshop, y: 2}]}));
+  const low = buildI3d(sanitize({kind: "modframe", objects: [workshop]})), high = buildI3d(sanitize({kind: "modframe", objects: [{...workshop, y: 2}]}));
   assert.equal(translation(high, "markerWrench")[1] - translation(low, "markerWrench")[1], 2, "the icon is 2 m higher");
   assert.equal(translation(high, "vehicleTrigger")[1] - translation(low, "vehicleTrigger")[1], 2, "so is the trigger box");
 });

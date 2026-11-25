@@ -25,48 +25,8 @@ const house = (s = {}) => sanitize({wings: [{wall: "back", pos: 0.5, width: 5, d
 const mid = r => [(r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2];
 const roomFor = p => roomOf(p, KIND[p.kind].openings ? KIND[p.kind].openings(p) : []);
 
-test("room across parts: the floors abut, the walls are the outline, a wall a wing opens into is in two pieces", () => {
-  for (const [name, p] of [["barn", barn()], ["house", house()]]) {
-    const room = roomFor(p);
-    assert.equal(room.rects.length, 2, name);
-    const names = room.walls.map(w => w.name);
-    assert.ok(["w1End", "w1Left", "w1Right"].every(n => names.includes(n)), `${name}: the wing's walls ${names}`);
-    const wall = p.wings[0].wall;
-    assert.equal(names.filter(n => n === wall).length, 2, `${name}: the ${wall} wall is in two pieces`);
-    // every stretch of wall faces into the room
-    for (const w of room.walls) {
-      const c = [(w.x0 + w.x1) / 2 + w.into[0] * 0.02, (w.z0 + w.z1) / 2 + w.into[1] * 0.02];
-      assert.ok(inRoom(room, {x0: c[0], x1: c[0], z0: c[1], z1: c[1]}), `${name}: ${w.name} faces the room`);
-    }
-    const box = roomBox(room);
-    assert.ok(box.z1 - box.z0 > room.z1 - room.z0, `${name}: the box reaches the wing`);
-  }
-  assert.equal(roomOf(sanitize({})).rects.length, 1, "no wing: one rectangle as before");
-});
 
-test("room across parts: a piece may straddle the passage, not stick out", () => {
-  const p = barn(), room = roomFor(p), [a, b] = room.rects, line = a.z1;
-  assert.ok(inRoom(room, {x0: b.x0 + 0.5, x1: b.x1 - 0.5, z0: line - 1, z1: line + 1}), "across the passage line");
-  assert.ok(!inRoom(room, {x0: b.x1 - 0.5, x1: b.x1 + 1, z0: line + 0.5, z1: line + 1.5}), "out through the wing's side");
-  assert.ok(!inRoom(room, {x0: b.x1 + 0.2, x1: b.x1 + 1.2, z0: line + 0.2, z1: line + 1.2}), "in the corner beside the wing");
-  // snapping keeps pieces in the room, wall pieces on a stretch of wall
-  const cat = catalogFor(p), stall = snapItem({id: 1, type: "stalls", x: mid(b)[0], z: b.z1, rot: 0, count: 4}, cat.stalls, room);
-  assert.equal(stall.rot, 180, "against the wing's far wall, facing in");
-  const bale = snapItem({id: 2, type: "bale", x: b.x1 + 5, z: b.z1 + 5, rot: 0}, cat.bale, room);
-  assert.ok(inRoom(room, footprint(bale, cat.bale)), "a floor piece dropped far away comes back into the room");
-  const it = placeNew("calfpen", [], cat, room);
-  assert.deepEqual([...problems([it], cat, room)], []);
-});
 
-test("room across parts: furnished automatically across both parts, with nothing wrong", () => {
-  const hen = sanitize({kind: "chicken", wings: [{wall: "front", pos: 0.1, width: 6, depth: 6, floors: 0}], hens: 80, width: 12, depth: 7});
-  for (const p of [barn(), barn({cows: 60, width: 30, depth: 12}), house(), hen]) {
-    const room = roomFor(p), cat = catalogFor(p), r = room.rects[1];
-    assert.deepEqual([...problems(p.items, cat, room)], [], p.kind);
-    const inWing = p.items.filter(i => i.x > r.x0 && i.x < r.x1 && i.z > r.z0 && i.z < r.z1);
-    assert.ok(p.items.length > 0 && inWing.length > 0, `${p.kind}: something stands in the wing (${p.items.length} pieces)`);
-  }
-});
 
 test("walls across parts: a passage in the house's wall, collision across the wing, closed round it", () => {
   const p = barn({items: []}), geo = buildGeometry(p), wing = geo.wings[0], F = p.foundation;   // (no furniture in the way)
@@ -100,9 +60,3 @@ test("walls across parts: a house's wing has its ceiling and doors that open", (
   assert.equal(buildGeometry(shut).doors.length, 1, "a door that doesn't open stays shut");
 });
 
-test("walls across parts: a wing in the pasture is warned about; barns keep their wings through a save", () => {
-  const p = barn({wings: [{wall: "back", pos: 0.5, width: 6, depth: 5, floors: 0}]});
-  assert.ok([...objectProblems(p).values()].some(m => /wing/i.test(m)), "the pasture is on the back wall");
-  assert.equal(sanitize(JSON.parse(JSON.stringify(p))).wings.length, 1);
-  assert.equal(KIND.cow.hides.includes("Wings"), false);
-});

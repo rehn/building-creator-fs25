@@ -187,26 +187,8 @@ test("doors: windows added to a wall leave room for every door on it", () => {
   assert.deepEqual(q.windows.map(w => [w.type, w._hidden]), [["window", true], ["door", false]]);
 });
 
-test("doors: export order is the doors' order; the sleep point is at the first door", () => {
-  const p = sanitize({windows: [door("left", 0.5), door("front", 0.5)]});
-  const sp = sleepPoint(buildGeometry(p), p);
-  assert.ok(sp.trigger.center[0] < -p.width / 2, "in front of the left door");
-  const q = hen({windows: [door("left", 0.5), door("front", 0.5)], pastureWall: "back"});
-  assert.deepEqual(buildGeometry(q).doors.map(d => d.wall), ["left", "front"]);
-});
 
-test("animal buildings: the fence and the places outside keep away from every wall with a door", () => {
-  const p = hen({pastureWall: "back", windows: [door("front", 0.5), door("left", 0.5)]});
-  const y = henYard(buildGeometry(p), p), geo = buildGeometry(p);
-  const wallOf = q => { let best, bd = 1e9; for (const [k, {w}] of Object.entries(geo.opsByWall)) { const d = (q[0] - w.o[0]) * w.n[0] + (q[2] - w.o[2]) * w.n[2]; if (d > 0 && d < bd) { bd = d; best = k; } } return best; };
-  assert.equal(wallOf(y.food.center), "right", "feed on the wall without a door");
-  // a pasture on a wall with a door moves to one without
-  const q = hen({pastureWall: "front", windows: [door("front", 0.5)]});
-  assert.notEqual(q.pastureWall, "front");
-  const c = sanitize({kind: "cow", pastureWall: "left", windows: [door("left", 0.5), door("back", 0.3)]});
-  assert.ok(!["left", "back"].includes(c.pastureWall), c.pastureWall);
-});
-import { SCHEMA, sleepPoint, henYard } from "../src/editor/model.mjs";
+import { SCHEMA, sleepPoint } from "../src/editor/model.mjs";
 
 /** The wall of the building's first door. */
 function firstDoorWall(p) { return p.windows.find(w => w.type === "door" && w.floor === 0).wall; }

@@ -96,6 +96,7 @@ function yardOf(p, geo, host) {
 export default {
   ...shed,
   id: "modframe",
+  gameObjects: true,
   name: "Mod",
   plural: "Mods",
   presets: [],
