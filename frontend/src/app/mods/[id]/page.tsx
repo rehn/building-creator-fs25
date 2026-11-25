@@ -333,6 +333,16 @@ export default function ModPage() {
     </ul>
   );
 
+  /** How many animals the mod's yard holds (hens, cows or sheep: the yard says which). Where it can be found: the mod's card and the Game objects card, and on a yard object's card. */
+  const hasYard = animal in ANIMALS && objects.some(o => groupOf(o.type, animal) === animal);
+  const animalsCard = hasYard && (
+    <section className="hx-card">
+      <h3 className="hx-card-h">{t("Animals")}</h3>
+      <RangeField label={t(animal === "hens" ? "Hens" : animal === "cows" ? "Cows" : "Sheep")} value={count} min={1} max={ANIMALS[animal as keyof typeof ANIMALS].max} step={1} unit="" onCommit={v => save({ count: Math.round(v) })} disabled={busy} />
+      <p className="hint">{t("How many animals the yard of the mod holds. The yard takes at most as many as it has room for.")}</p>
+    </section>
+  );
+
   return (
     <EditorShell
       user={user} back={{ href: "/mods", label: t("Mods"), aria: t("All mods") }}
@@ -369,6 +379,7 @@ export default function ModPage() {
                 {made && <p className="hint">{t("Made {file}.", { file: made.name })} {t("Not tried in the game yet.")}</p>}
                 {made && made.warnings.map(w => <p className="error" key={w}>{w}</p>)}
               </section>
+              {animalsCard}
               <section className="hx-card">
                 <h3 className="hx-card-h">{t("Add to the mod")}</h3>
                 <div className="starttabs sub" role="tablist" aria-label={t("What to add")}>
@@ -429,6 +440,7 @@ export default function ModPage() {
               </div>
             </section>
           )}
+          {mod && sel.kind === "group" && animalsCard}
 
           {mod && object && (
             <section className="hx-card">

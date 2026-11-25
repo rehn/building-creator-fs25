@@ -1102,5 +1102,7 @@
   "Folder": "Mapp",
   "Rename folder": "Byt namn på mappen",
   "Delete folder": "Ta bort mappen",
-  "Delete the folder “{name}”? What is in it stays, in no folder.": "Ta bort mappen “{name}”? Det som ligger i den blir kvar, utan mapp."
+  "Delete the folder “{name}”? What is in it stays, in no folder.": "Ta bort mappen “{name}”? Det som ligger i den blir kvar, utan mapp.",
+  "Animals": "Djur",
+  "How many animals the yard of the mod holds. The yard takes at most as many as it has room for.": "Hur många djur modens gård rymmer. Gården tar som mest så många som det finns plats för."
 }
