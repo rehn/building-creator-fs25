@@ -54,6 +54,7 @@ const MARKUP = `<div class="hx-editor" data-tab="building">
     <div class="readout" id="readout"></div>
     <div class="orbit-hint" id="orbitHint">Drag to orbit · right-drag or Shift+drag to move · scroll to zoom · double-click to look from there</div>
     <button type="button" class="hx-walk" id="walkBtn" title="See the building as a person walking round and in it">Walk around</button>
+    <button type="button" class="hx-walk hx-walk2" id="roofBtn" aria-pressed="false" title="Hide the roof to see into the building, and show it again">Hide roof</button>
     <button type="button" class="hx-walk hx-walk3" id="lodBtn" aria-pressed="false" hidden title="Switch between the detailed model and the simple one the game shows from far away (set the distance under Game > Shop and mod)">Detail: close up</button>
     <div class="hx-inside-bar" id="insideBar" hidden>
       <div class="seg" role="group" aria-label="View">
@@ -548,8 +549,16 @@ function makeMesh(m) {
   mesh.name = m;
   meshes[m] = mesh; scene.add(mesh);
 }
-/** While the inside is arranged no roof is drawn (the cut under the eaves left a wing's lower roof standing): every mesh of the roof slot, the wings' too, is hidden. */
-function showRoofs() { for (const m of Object.keys(meshes)) meshes[m].visible = !(ins.on && slotOf(m) === "roof"); }
+/**
+ * The roof can be hidden with the button in the view (roofsHidden). While the inside is arranged no roof is drawn either (the cut under the eaves left a wing's lower roof standing):
+ * every mesh of the roof slot, the wings' too, is hidden, and the button waits.
+ */
+let roofsHidden = false;
+function showRoofs() {
+  for (const m of Object.keys(meshes)) meshes[m].visible = !((roofsHidden || ins.on) && slotOf(m) === "roof");
+  const b = $("roofBtn");
+  if (b) { b.setAttribute("aria-pressed", String(roofsHidden || ins.on)); b.textContent = roofsHidden || ins.on ? "Show roof" : "Hide roof"; b.disabled = ins.on; }
+}
 function initThree() {
   renderer = new THREE.WebGLRenderer({canvas, antialias:true});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -2463,6 +2472,7 @@ function applyLod() {
   btn.setAttribute("aria-pressed", String(showFar));
   btn.textContent = showFar ? t("Detail: far away (from {m} m)", {m: p.lodDistance}) : t("Detail: close up");
   for (const [m, o] of Object.entries(meshes)) o.visible = !showFar || lodKeeps(m);
+  showRoofs();   // (the roof button and arranging the inside come on top of that)
   needs = true;
 }
 function rebuild(fit) {
@@ -2604,6 +2614,7 @@ function leaveWalk() {
   updateCam(); updateHighlight(); updatePlacesMarker();
 }
 $("lodBtn").onclick = () => { showFar = !showFar; rebuild(false); };
+$("roofBtn").onclick = () => { roofsHidden = !roofsHidden; showRoofs(); };
 $("walkBtn").onclick = () => walk.on ? leaveWalk() : enterWalk();
 cleanups.push(() => { window.removeEventListener("keydown", walkKey); window.removeEventListener("keyup", walkKey); });
 

@@ -1095,5 +1095,8 @@
   "Wallpaper on a wall or a stretch of it: choose the wall, add sections and choose the paper. To see it, walk round the building (Walk around) or arrange the inside.": "Tapet på en vägg eller en bit av den: välj väggen, lägg till sektioner och välj tapet. För att se den, gå runt i byggnaden (Gå runt) eller ordna insidan.",
   "What the floor inside is made of: as the inside look gives it (a house has boards, a barn concrete or litter), or one you choose. An extension, and each section of a long building, can have a floor of its own: choose it in the tree (Building tab).": "Vad golvet inne är gjort av: som inredningen ger det (ett hus har brädor, en ladugård betong eller strö) eller ett du väljer. En tillbyggnad, och varje sektion av en lång byggnad, kan ha ett eget golv: välj det i trädet (fliken Byggnad).",
   "The prop": "Objektet",
-  "The zip was not kept on the server (other programs can't fetch it): {why}": "Zippen sparades inte på servern (andra program kan inte hämta den): {why}"
+  "The zip was not kept on the server (other programs can't fetch it): {why}": "Zippen sparades inte på servern (andra program kan inte hämta den): {why}",
+  "Hide roof": "Dölj tak",
+  "Show roof": "Visa tak",
+  "Hide the roof to see into the building, and show it again": "Dölj taket för att se in i byggnaden, och visa det igen"
 }
