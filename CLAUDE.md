@@ -1,14 +1,17 @@
 # House to i3d – notes for Claude
 
-Web app for building Farming Simulator 25 houses and exporting them as .i3d
-(zipped with textures) for Giants Editor. Invite-only accounts, houses saved per user.
+Web app for building Farming Simulator 25 buildings and props, putting them together in a **mod** and exporting the mod as one placeable (.i3d zipped with textures and XML)
+for the game. Buildings and props have no game logic; the mod holds it (docs/PLAN_MALLAR.md). Invite-only accounts, everything saved per user.
 
 ## Where things are
 - backend/ Go API (stdlib net/http, SQLite by default, Postgres when DATABASE_URL is set): internal/auth, store, api, config, vision (Claude reads photos), cmd/server.
 - frontend/ Next.js 16 (App Router, TypeScript); /api/* is proxied to the Go API.
-  - src/editor/model.mjs = the core every building shares (settings, geometry, export, game-mod XML), no DOM. kinds/ = one module per kind of building, registered in kinds/index.mjs (which documents the
-    interface; a kind imports only i3d.mjs, never model.mjs). layout.mjs = inside, wings, walls. i3d.mjs = the i3d writer. objects.mjs = game objects. openings.mjs = window and door styles.
-    editor.mjs = controls and the three.js r128 preview, mounted by Editor.tsx.
+  - src/editor/model.mjs = the core every building shares (settings, geometry, the i3d of a building and of a mod's parts), no DOM. kinds/ = one module per **inside look** (house, chicken, cow, sheep, shed, dealership,
+    fuelstation: furniture, inside walls, presets; the look can be changed on a building at any time), registered in kinds/index.mjs (which documents the interface; a kind imports only i3d.mjs, never model.mjs).
+    layout.mjs = inside, wings, walls. i3d.mjs = the i3d writer. openings.mjs = window and door styles. editor.mjs = controls and the three.js r128 preview, mounted by Editor.tsx.
+  - The mod (the only thing that is exported as a game mod): editor/modExport.mjs (the whole mod as one placeable), editor/mod/yard.mjs and kinds/modframe.mjs, modinside.mjs, gameobjects.mjs (the game objects and what the
+    animal yards need), objects.mjs (the game object types), modPlan.mjs/modView.mjs (the 3D plan); lib/mods.mjs and lib/modObjects.mjs = the mod's data and its game objects; the page is app/mods/[id].
+  - components/: EditorShell (the frame of the building, prop and mod pages), TreeRow, RangeField, usePanelSizes = the parts those pages share (docs/DESIGN.md "Editor pages").
   - src/builder/ = the modeller (props); src/app/ = the pages (My buildings, My items, My textures, the modeller, admin, API access); src/lib/ = the generate API for other programs.
 - charts/building-creator-fs25 = Helm chart; docker-compose.yml runs api + web; CI in .github/workflows/ci.yml.
 - docs/: DESIGN.md (how the pages look and behave: follow it), API.md, PLAN*.md (the plans; PLAN_MOD.md is the next big one), and

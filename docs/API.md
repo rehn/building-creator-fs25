@@ -128,7 +128,7 @@ All files carry `ETag: "v<version>"`. Send it back as `If-None-Match` to get `30
 | `/api/v1/buildings/{id}/icon` | The picture of the building |
 | `/api/v1/buildings/{id}/model.obj` | The model to draw: metres, y up, one group per material |
 | `/api/v1/buildings/{id}/model.mtl` | The colours the `.obj` refers to (no textures: `map_Kd` is not written) |
-| `/api/v1/buildings/{id}/game-mod.zip` | **The game mod**: `modDesc.xml`, `house.xml` (the placeable and its shop data), `house.i3d` (+ `house.i3d.shapes`), textures, imported items, shop picture. What a map builder unpacks into a map |
+| `/api/v1/buildings/{id}/game-mod.zip` (**to go**: from 2026-11-25 a building has no game logic and only a mod is exported, docs/PLAN_MALLAR.md step 3; the files below are what the app still sends with the building until the server keeps the mod's zip instead) | **The game mod**: `modDesc.xml`, `house.xml` (the placeable and its shop data), `house.i3d` (+ `house.i3d.shapes`), textures, imported items, shop picture. What a map builder unpacks into a map |
 | `/api/v1/buildings/{id}/mod.zip`, `/model.zip` | What the editor's **Export model** gives: a folder with `house.i3d`, `placeable_snippet.xml`, textures and imported items (no `modDesc.xml`). `mod.zip` gives the game mod instead for a building saved before this export was kept; `model.zip` gives 404 then |
 | `/api/v1/buildings/{id}/model.i3d` | `house.i3d` out of the zip, for Giants Editor |
 
