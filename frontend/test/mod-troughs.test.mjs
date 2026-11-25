@@ -80,7 +80,7 @@ test("a turned trough is turned in the export: its planks and collision in a gro
   const i3d = text(files.get("house.i3d")), xml = text(files.get("house.xml"));
   assert.match(i3d, /<TransformGroup name="waterTrough1"[^>]*rotation="0 90 0"/);
   assert.match(i3d, /<TransformGroup name="feedTrough1"[^>]*rotation="0 90 0"/);
-  assert.match(i3d, /<Shape name="foodPlane"[^>]*rotation="0 90 0"/);
+  assert.ok(!/<Shape name="foodPlane"[^>]*rotation=/.test(i3d), "the food plane is turned in its corners (planeQuad), not by a rotation the game may not follow");
   assert.ok((i3d.match(/<Shape name="navmeshBlocker\d*"[^>]*rotation="0 90 0"/g) || []).length >= 2, "the blockers of the troughs are turned");
   // the places of the feed trough stand on its sides after the turn: along x of the trough's middle
   const feed = objects.find(o => o.type === "feedTrough"), places = [...i3d.matchAll(/name="foodPlace\d+" translation="([^"]+)" rotation="([^"]+)"/g)].map(m => ({pos: m[1].split(" ").map(Number), rot: +m[2].split(" ")[1]}));
