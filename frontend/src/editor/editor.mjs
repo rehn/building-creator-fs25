@@ -189,7 +189,8 @@ function clearSearch() { $("settingsSearch").value = ""; applySearch(); }
 const PANEL_MIN = 240, DETAILS_MIN = 260, STAGE_MIN = 320;
 const panelSizes = Object.assign({panel: 360, details: 380}, remember.get("hx-panel-w") || {});
 const desktop = () => window.matchMedia("(min-width: 821px)").matches;
-const detailsShown = () => (editorEl.dataset.tab === "building" || editorEl.dataset.tab === "inside") && !searching;
+/** The details panel is left out when it has nothing to show (the Inside tab before the inside is being arranged): "no-details" on the editor, set where the inside is drawn. */
+const detailsShown = () => (editorEl.dataset.tab === "building" || editorEl.dataset.tab === "inside") && !searching && !editorEl.classList.contains("no-details");
 function applyPanelSizes() {
   const room = editorEl.clientWidth || window.innerWidth;
   if (desktop()) {
@@ -2007,6 +2008,7 @@ function enterInside() {
 function leaveInside() {
   if (!ins.on) return;
   ins.on = false; ins.drag = null; ins.divider = null; ins.sel = null;
+  editorEl.classList.add("no-details"); applyPanelSizes();
   window.removeEventListener("keydown", insideKey);
   renderer.clippingPlanes = [];
   sunLight.castShadow = true;
@@ -2136,6 +2138,7 @@ function updateInsideBar() {
 function renderInsideUI() {
   const ed = $("insideEditor"), kind = kindOf(p);
   if (!ed || !kind.catalog || ins.keep) return;
+  if (editorEl.classList.contains("no-details") === ins.on) { editorEl.classList.toggle("no-details", !ins.on); applyPanelSizes(); }
   const cat = catalogNow(), items = p.items || [], pr = problems(items, cat, roomNow());
   const fillRow = `<div class="row"><button type="button" id="insideFill">Fill automatically</button><button type="button" id="insideClear" ${items.length ? "" : "disabled"}>Remove all</button></div>`;
   if (!ins.on) {

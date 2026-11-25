@@ -75,8 +75,10 @@ test("a piece that is chosen inside has its settings in the details panel, next 
   root.querySelector("#tab-inside").click();
   const card = root.querySelector("#details #pieceCard");
   assert.ok(card, "the card is in the details panel");
-  assert.match(card.textContent, /Arrange the inside/, "before arranging it says how to choose a piece");
+  const ed0 = root.querySelector(".hx-editor");
+  assert.ok(ed0.classList.contains("no-details"), "before arranging there is nothing to show in the details panel, so it is hidden");
   root.querySelector("#insideArrange").click();
+  assert.ok(!ed0.classList.contains("no-details"), "arranging gives it content");
   assert.equal(card.querySelector(".piece"), null, "no piece chosen yet");
   root.querySelector("[data-add]").click();   // (adds the first piece of the palette, and chooses it)
   assert.ok(card.querySelector(".piece input[type=range]"), "its settings are in the details panel");
