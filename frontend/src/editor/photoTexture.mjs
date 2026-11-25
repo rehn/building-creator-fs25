@@ -4,6 +4,7 @@
 // A see-through photo is made opaque: the game's shader reads the diffuse's alpha as something else.
 import { normalFromHeight } from "./surfaces.mjs";
 import { encodeDds } from "./dds.mjs";
+import { adjustColor, hasColorAdjust } from "./photoEdit.mjs";
 
 export const MIN_SIZE = 64, MAX_SIZE = 2048, DEFAULT_SIZE = 1024;
 
@@ -125,11 +126,11 @@ function overBackground(img, background) {
  * img: {width, height, rgba}. opts: size (output side, rounded to a power of two, default 1024), crop {x, y, w, h} as fractions of the picture,
  * rotate (degrees, -45 to 45: straighten a photo taken at an angle; positive levels lines that slope down to the right),
  * flatten (0-1: take out the left-to-right shading, so a photo lit from one side repeats without a step),
- * seamless (blend the edges so it repeats), background (a colour for see-through parts, default white), margin (0 to 0.45: the picture is shrunk to leave this share of the square free on every side, in the background colour), bump (normal map strength, 0 = flat, default 2), meters (the real side of the texture in metres, default 1).
+ * brightness, contrast, saturation, hue (photoEdit.mjs COLOR_LIMITS: the colour of the diffuse only, after the relief and the shine are worked out), seamless (blend the edges so it repeats), background (a colour for see-through parts, default white), margin (0 to 0.45: the picture is shrunk to leave this share of the square free on every side, in the background colour), bump (normal map strength, 0 = flat, default 2), meters (the real side of the texture in metres, default 1).
  * -> {size, meters, diffuse, normal, specular}: Uint8ClampedArray size * size * 4 each, opaque.
  * Specular channels are an assumption (R shine from brightness, G a fixed level, B 255); check them against the game's own maps.
  */
-export function makePhotoTexture(img, {size = DEFAULT_SIZE, crop, rotate = 0, flatten = 0, seamless = false, bump = 2, meters = 1, background = "#ffffff", margin = 0} = {}) {
+export function makePhotoTexture(img, {size = DEFAULT_SIZE, crop, rotate = 0, flatten = 0, seamless = false, bump = 2, meters = 1, background = "#ffffff", margin = 0, brightness = 0, contrast = 0, saturation = 0, hue = 0} = {}) {
   if (!img || !(img.width > 0) || !(img.height > 0) || !img.rgba || img.rgba.length !== img.width * img.height * 4) throw new Error("That is not a usable picture.");
   img = overBackground(img, background);
   const n = nearestPow2(size), r = cropRect(img.width, img.height, crop);
@@ -148,12 +149,15 @@ export function makePhotoTexture(img, {size = DEFAULT_SIZE, crop, rotate = 0, fl
   if (seamless) f = makeSeamless(f, n);
   const H = new Float32Array(n * n);
   for (let i = 0; i < n * n; i++) H[i] = luma(f, i);
+  // (the colour is the diffuse's: the relief and the shine above are of the picture as it is, so that a darker or more contrasty picture does not get another relief)
+  let fd = f;
+  if (hasColorAdjust({brightness, contrast, saturation, hue})) { fd = Float32Array.from(f); adjustColor(fd, {brightness, contrast, saturation, hue}); }
   const strength = (Number.isFinite(bump) ? Math.max(0, Math.min(10, bump)) : 2) * 8;
   const nrm = strength > 0 ? normalFromHeight(H, n, strength) : null;
   const diffuse = new Uint8ClampedArray(n * n * 4), normal = new Uint8ClampedArray(n * n * 4), specular = new Uint8ClampedArray(n * n * 4);
   for (let i = 0; i < n * n; i++) {
     const o = i * 4;
-    diffuse[o] = byte(f[i * 3]); diffuse[o + 1] = byte(f[i * 3 + 1]); diffuse[o + 2] = byte(f[i * 3 + 2]); diffuse[o + 3] = 255;
+    diffuse[o] = byte(fd[i * 3]); diffuse[o + 1] = byte(fd[i * 3 + 1]); diffuse[o + 2] = byte(fd[i * 3 + 2]); diffuse[o + 3] = 255;
     if (nrm) { normal[o] = byte((nrm[i * 3] * 0.5 + 0.5) * 255); normal[o + 1] = byte((nrm[i * 3 + 1] * 0.5 + 0.5) * 255); normal[o + 2] = byte((nrm[i * 3 + 2] * 0.5 + 0.5) * 255); }
     else { normal[o] = 128; normal[o + 1] = 128; normal[o + 2] = 255; }
     normal[o + 3] = 255;
