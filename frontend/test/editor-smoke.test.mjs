@@ -174,3 +174,22 @@ test("arranging the inside hides every roof, a wing's too, and Done shows them a
     ed.destroy();
   } finally { THREE.Scene.prototype.add = add; }
 });
+
+test("the roof button draws the view again at once (it is drawn only when something asks)", async () => {
+  const THREE = await import("three");
+  const draw = THREE.WebGLRenderer.prototype.render;
+  let drawn = 0;
+  THREE.WebGLRenderer.prototype.render = function (...a) { drawn++; return draw.apply(this, a); };
+  try {
+    const root = w.document.getElementById("root");
+    root.innerHTML = "";
+    const ed = createEditor(root, {initial: {kind: "house"}, onChange() {}});
+    const wait = () => new Promise(r => w.setTimeout(r, 120));
+    await wait();
+    const before = drawn;
+    root.querySelector("#roofBtn").click();
+    await wait();
+    assert.ok(drawn > before, "the view was drawn after the button");
+    ed.destroy();
+  } finally { THREE.WebGLRenderer.prototype.render = draw; }
+});
