@@ -45,7 +45,7 @@ const MARKUP = `<div class="hx-editor" data-tab="building">
   </aside>
   <aside class="hx-panel hx-details" id="details" aria-label="Details of what is chosen in the tree or of the piece that is chosen inside">
     <div class="hx-subtabs" id="mainSubtabs" role="tablist" hidden><button type="button" role="tab" data-sub="shape">Shape</button><button type="button" role="tab" data-sub="look">Look</button></div>
-    <div id="mainShapeHost"></div><div id="mainCard"></div><div id="mainShapeHost2"></div><div id="wallCard"></div><div id="winEditor"></div><div id="wingsEditor"></div><div id="pieceCard"></div>
+    <div id="mainShapeHost"></div><div id="mainCard"></div><div id="mainShapeHost2"></div><div id="wallCard"></div><div id="winEditor"></div><div id="wingsEditor"></div><div id="insideSettings"></div><div id="pieceCard"></div>
   </aside>
   <div class="hx-rz" id="rz1" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Resize the left panel"></div>
   <div class="hx-rz" id="rz2" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Resize the details panel"></div>
@@ -140,6 +140,9 @@ function installNumberEntry() {
 let searching = false;
 // (the Shape tab's sections: shown in the details panel while the main building is chosen in the tree, see placeShape; declared early, setTab uses them when the editor starts)
 const shapeSections = [];
+/** The Inside tab: its sections of settings (Floor, Inside walls, Wallpaper by wall) are shown in the details panel, one at a time, as the list in the left panel chooses (null: none). */
+const insideSections = [];
+let insideChoice = null;
 // (the main building's two groups of cards; declared here because setTab runs placeShape before the rest of the file is read)
 const SHAPE_FIRST = ["Size", "Roof", "Kupor (dormers)", "Open sides"], SHAPE_THEN = ["Surfaces", "Inside walls"];
 let mainSub = remember.get("hx-main-sub") === "look" ? "look" : "shape";
@@ -159,6 +162,7 @@ function applySearch() {
   const was = searching; searching = words.length > 0;
   editorEl.classList.toggle("searching", searching);
   placeShape();
+  placeInside();
   if (!searching) {
     if (was) {
       for (const d of editorEl.querySelectorAll(".hx-panel details")) { d.classList.remove("nomatch"); d.querySelectorAll(".nomatch").forEach(x => x.classList.remove("nomatch")); if (openBeforeSearch.has(d)) d.open = openBeforeSearch.get(d); }
@@ -190,7 +194,7 @@ const PANEL_MIN = 240, DETAILS_MIN = 260, STAGE_MIN = 320;
 const panelSizes = Object.assign({panel: 360, details: 380}, remember.get("hx-panel-w") || {});
 const desktop = () => window.matchMedia("(min-width: 821px)").matches;
 /** The details panel is left out when it has nothing to show (the Inside tab before the inside is being arranged): "no-details" on the editor, set where the inside is drawn. */
-const detailsShown = () => (editorEl.dataset.tab === "building" || editorEl.dataset.tab === "inside") && !searching && !editorEl.classList.contains("no-details");
+const detailsShown = () => (editorEl.dataset.tab === "building" || editorEl.dataset.tab === "inside") && !searching && !(editorEl.dataset.tab === "inside" && editorEl.classList.contains("no-details"));
 function applyPanelSizes() {
   const room = editorEl.clientWidth || window.innerWidth;
   if (desktop()) {
@@ -243,6 +247,7 @@ function setTab(t) {
   if (!TABS.some(x => x[0] === t)) t = TABS[0][0];
   editorEl.dataset.tab = t;
   placeShape();
+  placeInside();
   $("controls-shape").hidden = !searching;   // (home of the main building's sections when they are not in the details panel: only looked at when searching)
   for (const [s] of TABS) {
     const b = $("tab-" + s);
@@ -296,6 +301,7 @@ SCHEMA.forEach(g => {
   d.innerHTML = `<summary data-tabname="${TABS.find(x => x[0] === g.tab)[1]}">${g.label || g.title}</summary>` + (g.hint ? `<p class="hint">${g.hint}</p>` : "");
   d.dataset.section = g.title;
   if (g.detail) shapeSections.push(d);
+  if (g.tab === "inside" && g.custom !== "inside") insideSections.push(d);
   const wrap = document.createElement("div");
   if (g.colors) wrap.className = "colors";
   g.fields.forEach(f => {
@@ -462,6 +468,38 @@ function placeShape() {
     const there = [...want.children].filter(x => list.includes(x));
     if (there.length !== list.length || there.some((x, i) => x !== list[i])) for (const d of list) want.appendChild(d);
   }
+}
+/**
+ * The Inside tab: the left panel has the list of what can be set (a row for each section of settings), and the chosen one is shown in the details panel, as the Building tab's tree does for
+ * what it chooses. While searching the sections are in the left panel again, as results. The details panel is left out (class "no-details") when nothing is chosen and the inside is not being arranged.
+ */
+function placeInside() {
+  const host = $("insideSettings"), home = $("controls-inside");
+  if (!host || !home || !insideSections.length) return;
+  let nav = $("insideNav");
+  if (!nav) {
+    nav = document.createElement("ul"); nav.id = "insideNav"; nav.className = "tree"; nav.setAttribute("role", "tree");
+    nav.innerHTML = insideSections.map(d => `<li class="tnode" style="--d:0"><span class="caret" aria-hidden="true"></span><button type="button" class="tbtn" data-inside="${esc(d.dataset.section)}" aria-pressed="false">${d.querySelector("summary").innerHTML}</button></li>`).join("");
+    nav.onclick = ev => {
+      const b = ev.target.closest && ev.target.closest("[data-inside]");
+      if (!b) return;
+      insideChoice = insideChoice === b.dataset.inside ? null : b.dataset.inside;
+      placeInside();
+    };
+    home.appendChild(nav);
+  }
+  const on = !searching, want = on ? host : home;
+  // (moved only when they are not there in this order: moving an element under the pointer would end a slider's drag)
+  const there = [...want.children].filter(x => insideSections.includes(x));
+  if (there.length !== insideSections.length || there.some((x, i) => x !== insideSections[i])) for (const d of insideSections) want.appendChild(d);
+  for (const d of insideSections) {
+    d.hidden = on && d.dataset.section !== insideChoice;
+    if (on && !d.hidden) d.open = true;
+  }
+  nav.hidden = !on;
+  nav.querySelectorAll("[data-inside]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.inside === insideChoice)));
+  const empty = !editorEl.classList.contains("arranging") && !insideChoice;
+  if (editorEl.classList.contains("no-details") !== empty) { editorEl.classList.toggle("no-details", empty); applyPanelSizes(); }
 }
 /**
  * Every help text (a p.hint in the panels) sits behind a small "?": hover it, focus it or tap it to read the text. A hint right under a section's heading
@@ -1994,6 +2032,7 @@ function enterInside() {
   if (!renderer || !kindOf(p).catalog) return;
   if (ob.on) leavePlan();
   ins.on = true; ins.sel = null; ins.drag = null; ins.pan = [0, 0];
+  editorEl.classList.add("arranging"); placeInside();
   ins.hist = new History(p.items || []);
   ins.saved = {...view, target: [...view.target]};
   placesObj.group.visible = false;
@@ -2008,7 +2047,7 @@ function enterInside() {
 function leaveInside() {
   if (!ins.on) return;
   ins.on = false; ins.drag = null; ins.divider = null; ins.sel = null;
-  editorEl.classList.add("no-details"); applyPanelSizes();
+  editorEl.classList.remove("arranging"); placeInside();
   window.removeEventListener("keydown", insideKey);
   renderer.clippingPlanes = [];
   sunLight.castShadow = true;
@@ -2138,7 +2177,6 @@ function updateInsideBar() {
 function renderInsideUI() {
   const ed = $("insideEditor"), kind = kindOf(p);
   if (!ed || !kind.catalog || ins.keep) return;
-  if (editorEl.classList.contains("no-details") === ins.on) { editorEl.classList.toggle("no-details", !ins.on); applyPanelSizes(); }
   const cat = catalogNow(), items = p.items || [], pr = problems(items, cat, roomNow());
   const fillRow = `<div class="row"><button type="button" id="insideFill">Fill automatically</button><button type="button" id="insideClear" ${items.length ? "" : "disabled"}>Remove all</button></div>`;
   if (!ins.on) {
@@ -2150,7 +2188,7 @@ function renderInsideUI() {
       + (out ? `<p class="warn">${out} piece${out > 1 ? "s stick" : " sticks"} out through a wall and ${out > 1 ? "are" : "is"} left out. Make the building bigger, move ${out > 1 ? "them" : "it"} or fill it again.</p>` : "")
       + (other ? `<p class="warn">${other} piece${other > 1 ? "s overlap or block" : " overlaps or blocks"} something.</p>` : "")
       + `<div class="row"><button type="button" class="primary" id="insideArrange" ${renderer ? "" : "disabled"}>Arrange the inside</button></div>` + fillRow;
-    $("pieceCard").innerHTML = `<p class="hint">Press “Arrange the inside”, then click a piece in the building to change or move it here.</p>`;
+    $("pieceCard").innerHTML = "";
     $("insideArrange").onclick = () => { setTab("inside"); enterInside(); };
   } else {
     const it = selected(), def = it && cat[it.type];

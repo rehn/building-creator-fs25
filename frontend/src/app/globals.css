@@ -133,7 +133,10 @@ html:has(.editor-page) { overscroll-behavior: none; }
 .hx-details { grid-column: 2; grid-row: 1 / span 2; display: none; }
 .hx-editor:is([data-tab="building"], [data-tab="inside"]):not(.searching) .hx-details { display: block; }
 /* on the Inside tab the details panel holds the piece that is chosen, and nothing of the tree's */
-.hx-editor[data-tab="inside"] .hx-details > :not(#pieceCard), .hx-editor:not([data-tab="inside"]) #pieceCard { display: none; }
+.hx-editor[data-tab="inside"] .hx-details > :not(#pieceCard):not(#insideSettings), .hx-editor:not([data-tab="inside"]) :is(#pieceCard, #insideSettings), .hx-editor.arranging #insideSettings { display: none; }
+/* the Inside tab's settings are shown one at a time as cards: the list in the left panel chooses, so the heading does not fold */
+#insideSettings > details > summary { pointer-events: none; }
+#insideSettings > details > summary::after { display: none; }
 /* nothing to show in it (the Inside tab, before the inside is arranged): the view takes its room */
 .hx-editor[data-tab="inside"].no-details:not(.searching) { --detw: 0px; }
 .hx-editor[data-tab="inside"].no-details:not(.searching) .hx-details, .hx-editor[data-tab="inside"].no-details:not(.searching) #rz2 { display: none; }

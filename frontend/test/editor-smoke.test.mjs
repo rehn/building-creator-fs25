@@ -79,6 +79,7 @@ test("a piece that is chosen inside has its settings in the details panel, next 
   assert.ok(ed0.classList.contains("no-details"), "before arranging there is nothing to show in the details panel, so it is hidden");
   root.querySelector("#insideArrange").click();
   assert.ok(!ed0.classList.contains("no-details"), "arranging gives it content");
+  assert.ok(ed0.classList.contains("arranging"));
   assert.equal(card.querySelector(".piece"), null, "no piece chosen yet");
   root.querySelector("[data-add]").click();   // (adds the first piece of the palette, and chooses it)
   assert.ok(card.querySelector(".piece input[type=range]"), "its settings are in the details panel");
@@ -114,5 +115,30 @@ test("the floor and the walls inside, with wallpaper by wall, are in the Inside 
   assert.ok(root.querySelector("#controls-inside #papersEditor #ppWall"), "the choice of a wall");
   root.querySelector("#papersEditor #ppAdd").click();
   assert.equal(saved.at(-1).papers.length, 1, "a section of wallpaper is added to the wall");
+  ed.destroy();
+});
+
+test("the Inside tab's left panel lists its settings and the details panel shows the one that is chosen", () => {
+  const root = w.document.getElementById("root");
+  root.innerHTML = "";
+  const ed = createEditor(root, {initial: {kind: "house"}, onChange() {}});
+  root.querySelector("#tab-inside").click();
+  const top = root.querySelector(".hx-editor"), host = root.querySelector("#details #insideSettings");
+  const names = [...root.querySelectorAll("#insideNav [data-inside]")].map(b => b.dataset.inside);
+  assert.deepEqual(names, ["Floor", "Inside walls", "Wallpaper by wall"]);
+  assert.ok(top.classList.contains("no-details"), "nothing chosen: no details panel");
+  const section = n => root.querySelector(`details[data-section="${n}"]`);
+  root.querySelector('[data-inside="Inside walls"]').click();
+  assert.ok(!top.classList.contains("no-details"));
+  assert.ok(host.contains(section("Inside walls")) && !section("Inside walls").hidden, "the chosen one is in the details panel");
+  assert.ok(section("Floor").hidden, "the others are not shown");
+  assert.equal(root.querySelector('[data-inside="Inside walls"]').getAttribute("aria-pressed"), "true");
+  root.querySelector('[data-inside="Wallpaper by wall"]').click();
+  assert.ok(section("Inside walls").hidden && !section("Wallpaper by wall").hidden);
+  // searching: the sections are results in the left panel again
+  const q = root.querySelector("#settingsSearch"); q.value = "floor"; q.dispatchEvent(new w.Event("input", {bubbles: true}));
+  assert.ok(root.querySelector("#controls-inside").contains(section("Floor")) && !section("Floor").hidden, "a result in the left panel");
+  q.value = ""; q.dispatchEvent(new w.Event("input", {bubbles: true}));
+  assert.ok(host.contains(section("Wallpaper by wall")), "back in the details panel");
   ed.destroy();
 });
