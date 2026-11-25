@@ -14,7 +14,7 @@ const un = {type: "unload", x: 0, z: 6, w: 6, d: 4, h: 3, ix: 0, iz: 0};
 const intake = {type: "intake", x: 0, z: 0, w: 5, d: 4, h: 2, ix: 0, iz: 0};
 
 test("every kind can have the pallet shop's objects, and they come together", () => {
-  for (const id of ["house", "shed", "chicken", "cow", "sheep", "dealership", "grainsilo", "fuelstation", "warehouse"]) for (const t of ["palletcounter", "palletspawn", "unload"]) assert.ok(allowedTypes(kindOf({kind: id})).includes(t), `${id} takes ${t}`);
+  for (const id of ["house", "shed", "chicken", "cow", "sheep", "dealership", "fuelstation", "warehouse"]) for (const t of ["palletcounter", "palletspawn", "unload"]) assert.ok(allowedTypes(kindOf({kind: id})).includes(t), `${id} takes ${t}`);
   assert.deepEqual(SHARED_GROUPS.warehouse, ["palletcounter", "palletspawn", "unload"]);
   assert.deepEqual(SHARED.warehouse.types, ["palletcounter", "palletspawn", "unload"]);
   for (const t of SHARED_GROUPS.warehouse) assert.equal(sharedDefaults(sanitize({kind: "house"}), t).length, 1, t);

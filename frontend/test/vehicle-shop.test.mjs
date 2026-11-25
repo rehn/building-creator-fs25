@@ -18,7 +18,7 @@ test("the shared groups in objects.mjs are the shared exporters' types", () => {
 });
 
 test("every kind can have a shop counter and a delivery place, except the map shop, which uses those names for its own", () => {
-  for (const id of ["house", "shed", "chicken", "cow", "sheep", "grainsilo", "fuelstation", "dealership", "warehouse"]) for (const t of ["counter", "spawn"]) assert.ok(allowedTypes(kindOf({kind: id})).includes(t), `${id} takes ${t}`);
+  for (const id of ["house", "shed", "chicken", "cow", "sheep", "fuelstation", "dealership", "warehouse"]) for (const t of ["counter", "spawn"]) assert.ok(allowedTypes(kindOf({kind: id})).includes(t), `${id} takes ${t}`);
   // the map shop's counter and delivery place are the map's shop nodes, not a vehicle shop
   for (const t of ["counter", "spawn"]) assert.ok(allowedTypes(kindOf({kind: "defaultdealer"})).includes(t), "its own " + t);
 });

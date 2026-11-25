@@ -12,7 +12,7 @@ const sleepObj = {type: "sleep", x: 0, z: 6, w: 1.8, d: 1.8, h: 2.2, ix: 0, iz: 
 const workObj = {type: "workshop", x: 0, z: 0, w: 6, d: 4, h: 3, ix: 0, iz: 0};
 
 test("sleep and workshop are allowed on every kind of building", () => {
-  for (const id of ["house", "shed", "chicken", "cow", "sheep", "dealership", "grainsilo", "fuelstation"]) {
+  for (const id of ["house", "shed", "chicken", "cow", "sheep", "dealership", "fuelstation"]) {
     const kind = kindOf({kind: id});
     for (const t of ["sleep", "workshop"]) assert.ok(allowedTypes(kind).includes(t), `${id} takes ${t}`);
   }

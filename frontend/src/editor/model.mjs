@@ -768,7 +768,7 @@ function clampField(f, v) {
 const MAIN_WALLS = ["front", "back", "left", "right"];
 
 /** The types a building can be changed between: those built the same way (walls, roof, openings, a walked-in inside); not the animal buildings, which have a pasture and animals. */
-export const CONVERTIBLE_KINDS = ["house", "shed", "dealership", "defaultdealer", "warehouse", "grainsilo", "fuelstation"];
+export const CONVERTIBLE_KINDS = ["house", "shed", "dealership", "defaultdealer", "warehouse", "fuelstation"];
 /**
  * The building as another type (docs/PLAN_TYPER.md step 2): -> {ok: true, settings, lost: {items, objects, settings, dormers}, added: {objects}} or {ok: false, error}.
  * The form is kept (size, roof, walls, openings, parts, decorations, looks), the new type's rules apply (sanitize), and what only the old type has is dropped and listed: the furniture its

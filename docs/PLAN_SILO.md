@@ -1,3 +1,5 @@
+> **Borttagen 2026-11-25 (Lars):** byggnadstypen spannmålssilo (hallen med silotankar) är borttagen; intaget finns kvar som spelobjekt på valfri byggnad. Texten nedan är historik.
+
 # Plan: spannmålssilo som köper spannmål (november 2026)
 
 Första av Lars särskilda byggnader (sedan bensinmack, djurhandlare). Beslutat med Lars: **börja med en spannmålssilo som köper spannmål, man ska kunna välja vad den köper; den ska inte vara köpbar** (kartan placerar den, den syns inte i butiken och kan inte säljas).

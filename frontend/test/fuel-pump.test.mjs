@@ -11,7 +11,7 @@ const pump = {type: "pump", x: 0, z: 0, w: 8, d: 5, h: 4, ix: 0, iz: 0};
 const sleep = {type: "sleep", x: 0, z: 6, w: 1.8, d: 1.8, h: 2.2, ix: 0, iz: 0};
 
 test("every kind can have a fuel area", () => {
-  for (const id of ["house", "shed", "chicken", "cow", "sheep", "dealership", "grainsilo", "fuelstation"]) assert.ok(allowedTypes(kindOf({kind: id})).includes("pump"), id);
+  for (const id of ["house", "shed", "chicken", "cow", "sheep", "dealership", "fuelstation"]) assert.ok(allowedTypes(kindOf({kind: id})).includes("pump"), id);
   assert.deepEqual(SHARED_GROUPS.pump, ["pump"]);
   assert.deepEqual(SHARED.pump.types, ["pump"]);
   assert.equal(sharedDefaults(sanitize({kind: "house"}), "pump").length, 1);
