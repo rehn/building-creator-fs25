@@ -28,7 +28,7 @@ Befintligt som återanvänds: `modDescXmlMulti` (flera byggnader i en mod), bete
 3. **Mods som egen tabell** (backend gjort 2026-11-24: tabellerna `mods` och `mod_items`, `/api/mods`; sidan `/mods` och `/mods/[id]` med flikar finns (2026-11-24, inte sedd i webbläsare); planen i 3D (fliken Plan: flytta med dragning, snappa, vrida; inte sedd i webbläsare) finns; kvar: modtypen används av exporten, spelobjekt per post. Beslutat av Lars: namnet är "mod", rekvisita får ligga ensam, `/api/v1` får brytas) (`mods`, poster med läge och modtyp, spelobjekt per post), sidan `/mods` och modens plan med flera saker (flytta, vrida, snappa).
 4. **Staketet** som eget objekt med förankrade punkter, portar och djurens ingång.
 5. **Migrering**: varje befintligt projekt blir en byggnad plus en mod med sin gamla typ och sina objekt. Guldtesterna (`golden-saves`) ska ge samma bygge före och efter.
-6. **API:et** (`/api/v1`, kartappen): `buildings` fortsätter fungera; `mods` läggs till. Beslut behövs om vad kartappen läser (byggnadens egen standardmod, eller en vald mod).
+6. **API:et** (`/api/v1`, kartappen): `buildings` fortsätter fungera; `mods` läggs till (gjort 2026-11-25: `GET /api/v1/mods` och `/api/v1/mods/{id}`, bara läsning; hel-mod-zip lagras inte på servern). Beslut behövs om vad kartappen läser (byggnadens egen standardmod, eller en vald mod).
 
 ## 4. Sidorna följer DESIGN.md
 
