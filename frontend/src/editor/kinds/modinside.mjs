@@ -5,7 +5,7 @@
 import { wallsOf, roomOf, openingSpan, openSide, WALL_T } from "../layout.mjs";
 import { animalNav, KEEP } from "../walkarea.mjs";
 import { insidePoly } from "../objects.mjs";
-import { wallSlabs } from "./cow.mjs";
+import { wallSlabs } from "../mod/yard.mjs";
 
 /**
  * The ways in for the animals in a building (its sanitized settings), as {wall, s0, s1} along the wall: ground floor doors that are an open framed doorway (door style "hole") or a hen hatch ("henhatch", 40 cm), and an open side (a carport:

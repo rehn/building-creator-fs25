@@ -10,17 +10,9 @@ import { tone, shade, strawBale } from "./props.mjs";
 import { troughFrom, drawTrough } from "./cow.mjs";
 import { INNER_WALL } from "./innerwall.mjs";
 import { placeOnWall, placeOnBuilding } from "../places.mjs";
-
-/** Floor space per hen, as in the base game's 360-hen barn (about 2.2 per m², rounded up). */
-export const HENS_PER_M2 = 2.5;
-export const MAX_HENS = 360;
-/** Feed storage per hen, in litres (the base game's chicken barns hold about 25 l per hen). */
-const FEED_PER_HEN = 25;
-export const henCap = p => Math.max(1, Math.min(MAX_HENS, Math.floor(HENS_PER_M2 * p.width * p.depth + 1e-9)));
-const hensOf = p => Math.min(Math.round(p.hens), henCap(p));
-
-/** Smallest starting pasture, like the base game's smallest (about 12 m along the barn, 6 m deep). */
-const MIN_PASTURE_WIDTH = 12;
+import { HENS_PER_M2, MAX_HENS, FEED_PER_HEN, henCap, hensOf, HEN_MIN_WIDTH, henObjects, defaultObjects, HEN_PLACEABLE, troughNodes, henScene } from "../mod/yard.mjs";
+export { HENS_PER_M2, MAX_HENS, henCap, HEN_PLACEABLE, troughNodes, henScene } from "../mod/yard.mjs";
+const MIN_PASTURE_WIDTH = HEN_MIN_WIDTH;
 
 /**
  * Where a chicken barn's gameplay places are, from built geometry. All points in world space.
@@ -53,45 +45,6 @@ export function henYard(geo, p) {
     areas: [food.box, pallets.box].map(rectOf),
   };
 }
-/**
- * The hen house's game objects as {box, icon}: the building's (p.objects), or where they go to start
- * with: the feed pad and trailer spot on the feed side, the egg pallets on another wall, the info area
- * round the barn (the feed and pallet sides: walls that aren't the pasture's, walls without a door first).
- */
-function henObjects(geo, p, yf = yardFrame(geo, p, MIN_PASTURE_WIDTH)) {
-  const {feedKey, otherKey, frames, mid} = yf, {W, D} = geo.dims;
-  const start = {
-    // Feed pad: low on the ground, so a tipping trailer's or auger's raycast starts above it.
-    food: placeOnWall(frames, feedKey, w => { const [c, len] = mid(w); return {s: c, d: 1.75, along: Math.max(2.5, Math.min(4, len)), out: 3, h: 0.3, icon: [c, 1.75]}; }),
-    loading: placeOnWall(frames, feedKey, w => { const [c, len] = mid(w); return {s: c, d: 5.5, along: Math.min(4, len), out: 4, h: 3, icon: [c, 5.5]}; }),
-    pallets: placeOnWall(frames, otherKey, w => {
-      const [c, len] = mid(w), lines = Math.min(4.8, Math.max(1.2, len - 1));
-      return {s: c, d: 2.8, along: Math.min(lines + 1, len), out: 3.2, h: 2.5, icon: null};
-    }),
-    info: {box: placeOnBuilding({center: [0, 1.5, 0], size: [W + 2, 3, D + 2]}), icon: null},
-  };
-  const out = {};
-  for (const t of ["food", "loading", "pallets", "info"]) {
-    const o = objectOf(p, t);
-    out[t] = o ? {box: boxOf(o), icon: iconOf(o)} : start[t];
-  }
-  return out;
-}
-/** Where the hen house's objects go to start with (kind.objects.defaults): from its pasture wall and depth. */
-function defaultObjects(p) {
-  const q = {...p, pastureWall: pastureWallFor(p), objects: undefined}, y = henObjects(shellOf(q), q);
-  return [
-    ...["food", "loading", "pallets", "info"].map(t => boxFrom(t, y[t].box, t === "food" || t === "loading" ? y[t].icon : null)),
-    // (a new barn's pasture goes on a wall without a door, if it can)
-    {type: "pasture", wall: q.pastureWall, a: 0, b: 0, depth: p.fenceDepth},
-  ];
-}
-
-/** The placeable a hen house is (and a mod with a hen yard): the game's chicken barn type. */
-export const HEN_PLACEABLE = {type: "chickenHusbandryPasture", fn: "$l10n_function_animalPenChicken",
-  shop: {category: "animalpens", type: "husbandry", brush: "animals", tab: "chickens"},
-  note: `Chicken barn: use <placeable type="chickenHusbandryPasture" ...>, as in the base game's chicken barns.`};
-
 /** The hen hatch: 40 x 50 cm at floor level in the middle of the pasture wall, kept clear 80 cm inside. */
 function openings(p) {
   if (p.pastureNoGap) return [];
@@ -352,134 +305,6 @@ function scene(c) {
   const {p, geo} = c;
   return henScene(c, henYard(geo, p), hensOf(p), footprints(p));
 }
-/**
- * A trough (cow.mjs troughFrom's) as nodes, drawn as the cow barn draws one: a base, four sides round a hollow and a collision box (a water trough has a water surface in the hollow), in a group at its
- * middle that is turned with the trough. prefix + (k + 1) names it.
- */
-export function troughNodes(c, prefix, k, t, water) {
-  // (in the trough's own frame, at its middle: a group at the middle, turned with the trough)
-  const o = t.local.outer, i = t.local.inner, name = `${prefix}${k + 1}`, concrete = "#9A968C";
-  const b = (suffix, a, z, h0, h1, color = concrete) => c.solid(`${name}${suffix}`, {center: [(a[0] + z[0]) / 2, (h0 + h1) / 2, (a[1] + z[1]) / 2], size: [Math.abs(z[0] - a[0]), h1 - h0, Math.abs(z[1] - a[1])]}, color);
-  return [tg(name, [t.plane[0], 0, t.plane[1]], [
-    b("Base", [o.x0, o.z0], [o.x1, o.z1], 0, t.bottom),
-    b("SideW", [o.x0, o.z0], [i.x0, o.z1], t.bottom, t.top), b("SideE", [i.x1, o.z0], [o.x1, o.z1], t.bottom, t.top),
-    b("SideN", [i.x0, o.z0], [i.x1, i.z0], t.bottom, t.top), b("SideS", [i.x0, i.z1], [i.x1, o.z1], t.bottom, t.top),
-    ...(water ? [b("Water", [i.x0, i.z0], [i.x1, i.z1], t.bottom, t.planeMax, "#7FA0AE")] : []),
-    c.box(`${name}Collision`, {center: [0, t.box.center[1], 0], size: t.box.size}, {static: true, collisionFilterGroup: "0x3e", collisionFilterMask: "0xfffffbff"}),
-  ], t.turn ? {rotation: [0, t.turn, 0]} : {})];
-}
-
-/**
- * The nodes, placeable XML and ground areas of a hen yard y (henYard's shape: fence, food, pallet, loading, info, blockers, areas; clear: a polygon [[x, z] ...] where the grass is cleared, a clear task as the cow barn has) for n hens, the building's footprints
- * rects ({x0, x1, z0, z1}) the way back along the fence follows. feedTroughs, waterTroughs (cow.mjs troughFrom's): drawn, the first feed trough with the game's food plane and the places the hens eat at. A mod (kinds/modframe.mjs) builds its own yard and uses the same export.
- */
-export function henScene(c, y, n, rects) {
-  const {doc} = c, blocker = (b, i) => c.box(i ? `navmeshBlocker${i + 1}` : "navmeshBlocker", b, {static: true, collisionFilterGroup: "0x800000", collisionFilterMask: "0x1", buildNavMeshMask: "0xfe", ...(b.turn ? {rotation: [0, b.turn, 0]} : {})});
-  // (hens that can go inside: a walking mesh of the floor and a walking plane, as the base game's hen barns have; the area outside is the fence less that shape, the walls are the blockers)
-  const ft = y.feedTroughs || [], wt = y.waterTroughs || [];
-  const floor = y.nav && {...y.nav, rects: y.nav.rects.filter(r => r.inside)}, forage = (y.nav || ft.length) && doc.material("forage_mat", {diffuseColor: "0.42 0.45 0.2 1"});
-  // a trough as the cow barn draws it: a base, four sides round a hollow, a collision box; a water trough has a water surface in the hollow
-  const quad = (sx, sz) => ({p: [-sx / 2, 0, -sz / 2, -sx / 2, 0, sz / 2, sx / 2, 0, sz / 2, sx / 2, 0, -sz / 2], n: [0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0], uv: [0, 0, 0, 1, 1, 1, 1, 0], i: [0, 1, 2, 0, 2, 3]});
-  const drawTrough = (prefix, k, t, water) => troughNodes(c, prefix, k, t, water);
-  const stripesMat = doc.material("warningStripes_mat", {}, ["diffuse", "normal", "specular"].map((k, i) =>
-    [["Texture", "Normalmap", "Glossmap"][i], `$data/shared/warningStripes_${k}.png`])); // the game finds the .dds
-  const nodes = [tg("chickenFeatures", [0, 0, 0], [
-    // Solid, not a trigger: unloading finds it with a raycast. It only collides with triggers.
-    c.box("exactFillRootNodeFood", y.food, {static: true, collisionFilterGroup: "0x40000000", collisionFilterMask: "0x20000000"}),
-    tg("markerFood", y.food.marker),
-    c.box("loadingTrigger", y.loading, c.trigger("0x20000000", "0x110000")),
-    tg("markerAnimals", y.loading.marker),
-    c.box("infoTrigger", y.info, c.trigger("0x20000000", "0x110000")),
-    tg("teleportNode", y.loading.teleport),
-    c.box("palletTrigger", y.pallet.trigger, c.trigger("0x20000000", "0x10000")),
-    ...y.pallet.lines.map(([a, b], i) => tg(`palletAreaStart0${i + 1}`, a, [tg(`palletAreaEnd0${i + 1}`, b.map((v, k) => v - a[k]))])),
-    // Like the base game's horse barn: the footprint is cut out of the walking area made from the fence.
-    tg("navigationRootNode", [0, 0, 0], y.nav
-      ? [shape("navigationMeshShape", {shapeId: doc.shape("navigationMeshShape", navMesh(floor), {cpu: true}), nonRenderable: true, buildNavMeshMask: "0xfe", castsShadows: false, receiveShadows: false, materialIds: forage}),
-        shape("walkingPlane", {shapeId: doc.shape("walkingPlane", navMesh(floor), {cpu: true}), static: true, collisionFilterGroup: "0x400000", collisionFilterMask: "0x1", nonRenderable: true, castsShadows: false, receiveShadows: false, materialIds: forage}),
-        ...y.nav.blockers.map(blocker)]
-      : y.blockers.map(blocker)),
-    // the troughs: drawn; the first feed trough has the game's food plane (it rises and falls with the feed) and the places where the hens stand to eat
-    ...ft.flatMap((t, k) => drawTrough("feedTrough", k, t, false)), ...wt.flatMap((t, k) => drawTrough("waterTrough", k, t, true)),
-    ...(ft.length ? [shape("foodPlane", {translation: [ft[0].plane[0], ft[0].planeMax, ft[0].plane[1]], ...(ft[0].turn ? {rotation: [0, ft[0].turn, 0]} : {}), shapeId: doc.shape("foodPlane", quad(...ft[0].size)), castsShadows: false, receiveShadows: true, materialIds: forage}),
-      tg("foodPlaces", [0, 0, 0], ft.flatMap(t => t.places).map((q, i) => tg(`foodPlace${i + 1}`, q.pos, [], {rotation: [0, q.rot, 0]})))] : []),
-    tg("fence1", [0, 0, 0], y.fence.map((q, i) => tg(`fence1Node${i + 1}`, q))),
-    // the ground under and round the building: the meadow's clear task takes the grass away there (and paints dirt), so the grass ends a little outside the walls
-    ...(y.clear && y.clear.length >= 3 ? [tg("meadowClear", [0, 0, 0], y.clear.map(([x, z], i) => tg(`clearAreaPoint${i + 1}`, [x, 0, z])))] : []),
-    // the way back from the last post to the first along the building (the game would close the area with a straight line, through the building)
-    tg("navContour", [0, 0, 0], navContourNodes(y.fence, rects).map(([x, z], i) => tg(`navContourNode${i + 1}`, [x, 0, z]))),
-    // Hidden until the game's trigger marker setting shows it; projected onto the terrain.
-    shape("warningStripes01", {translation: [0, 0.02, 0], shapeId: doc.shape("warningStripes", y.pallet.stripes), castsShadows: false, receiveShadows: true,
-      nonRenderable: true, terrainDecal: true, materialIds: stripesMat, clipDistance: 100}),
-  ])];
-  const xml = `
-    <triggerMarkers>
-        <triggerMarker node="markerFood" filename="$data/shared/assets/marker/markerIconFood.i3d" adjustToGround="true"/>
-        <triggerMarker node="markerAnimals" filename="$data/shared/assets/marker/markerIconAnimals.i3d" adjustToGround="true"/>
-        <!-- Stripes around the egg pallets, shown or hidden with the game's trigger marker setting. -->
-        <triggerMarker node="warningStripes01"/>
-    </triggerMarkers>
-
-    <hotspots>
-        <hotspot type="CHICKEN" teleportNode="teleportNode"/>
-    </hotspots>
-
-    <infoTrigger triggerNode="infoTrigger"/>
-
-    <husbandry saveId="Animals_CHICKEN" hasStatistics="false">
-        <!-- The walking area is made from the fence when the barn is placed; the barn itself is blocked out. -->
-        <animals type="CHICKEN" baseMaxNumAnimals="${n}" maxNumAnimals="${n}">
-            <navigation rootNode="navigationRootNode"${y.nav ? ' shape="navigationMeshShape"' : ""}/>
-            <loadingTrigger node="loadingTrigger"/>
-        </animals>
-        <food capacity="${n * FEED_PER_HEN}">
-${ft.length ? `            <foodPlaces>
-${ft.flatMap(t => t.places).map((_, i) => `                <foodPlace node="foodPlace${i + 1}"/>`).join("\n")}
-            </foodPlaces>
-            <foodPlane node="foodPlane" minY="${+ft[0].planeMin.toFixed(3)}" maxY="${+ft[0].planeMax.toFixed(3)}" changeVisibility="true" defaultFillType="WHEAT"/>
-` : ""}            <unloadTrigger exactFillRootNode="exactFillRootNodeFood"/>
-        </food>
-        <pallets>
-            <palletSpawner fillTypes="EGG" maxNumPallets="6">
-                <palletTrigger node="palletTrigger"/>
-                <spawnPlaces>
-                    <spawnPlace startNode="palletAreaStart01" endNode="palletAreaEnd01"/>
-                    <spawnPlace startNode="palletAreaStart02" endNode="palletAreaEnd02"/>
-                </spawnPlaces>
-            </palletSpawner>
-        </pallets>
-        <fence xmlFilename="$data/placeables/brandless/fences/husbandries/chickenNetFence/chickenNetFence.xml">
-            <sections>
-                <section segmentId="SEGMENT" customizable="true">
-${y.fence.map((_, i) => `                    <node node="fence1Node${i + 1}"/>`).join("\n")}
-                </section>
-            </sections>
-${(pts => pts.length ? `            <!-- the animals' area goes back along the building to the first post, not through it -->
-            <additionalNavMeshNodes>
-${pts.map((_, i) => `                <node node="navContourNode${i + 1}"/>`).join("\n")}
-            </additionalNavMeshNodes>
-` : "")(navContourNodes(y.fence, rects))}        </fence>
-        <meadow>
-            <createTask weedState="0">
-                <decoFoliage name="grassShort"/>
-                <ground type="NONE"/>
-                <terrainGroundType name="grass"/>
-            </createTask>${y.clear && y.clear.length >= 3 ? `
-            <clearTask>
-                <fruit type="UNKNOWN" growthState="0"/>
-                <ground type="NONE"/>
-                <terrainGroundType name="dirt"/>
-                <polygon>
-${y.clear.map((_, i) => `                    <node node="clearAreaPoint${i + 1}"/>`).join("\n")}
-                </polygon>
-            </clearTask>` : ""}
-        </meadow>
-    </husbandry>
-`;
-  return {nodes, xml, areas: y.areas};
-}
-
-/* ---------- The kind ---------- */
 export default {
   id: "chicken",
   name: "Hen house",

@@ -5,13 +5,11 @@
 // barn and the husbandry is written as those barns write it (kinds/cow.mjs cowScene), the troughs drawn as nodes. Not in KINDS: no one makes a new frame, only the mod export does.
 // Not tried in the game: that the game takes a chicken, cow or sheep barn whose buildings are several, and a fence round them all.
 import shed from "./shed.mjs";
-import { henScene, HEN_PLACEABLE, MAX_HENS } from "./chicken.mjs";
+import { henScene, HEN_PLACEABLE, MAX_HENS, cowScene, COW, MAX_COWS, SHEEP, MAX_SHEEP, PASTURE_GROUNDS, troughFrom, COW_PLACEABLE, SHEEP_PLACEABLE } from "../mod/yard.mjs";
 import { palletLines, cornerStripes, teleportFor, ccwFence, navContourNodes, buildingOutline } from "./pasture.mjs";
 import { insideNav } from "./modinside.mjs";
 import { KEEP } from "../walkarea.mjs";
 import { objectOf, objectsOf, boxOf, iconOf, pastureOf } from "../objects.mjs";
-import cow, { troughFrom, cowScene, COW, MAX_COWS, PASTURE_GROUNDS } from "./cow.mjs";
-import sheep, { SHEEP, MAX_SHEEP } from "./sheep.mjs";
 import { sharedDefaults, turnNodes } from "./gameobjects.mjs";
 
 /** The nodes (by name) of each object of the hen yard that turn with it: what belongs to its box (the fence does not turn; the troughs are turned in their own way, chicken.mjs drawTrough). */
@@ -24,7 +22,7 @@ export const COW_TYPES = ["food", "bales", "loading", "info", "pasture", "feedTr
 /** The object types of a sheep yard: the cows', and the wool pallets. */
 export const SHEEP_TYPES = [...COW_TYPES, "pallets"];
 /** The animals a mod can have, one kind to a mod: the husbandry of each (the cow barn's and the sheep barn's, kinds/cow.mjs) and the most of them. */
-const YARDS = {cows: {cfg: COW, kind: cow, max: MAX_COWS}, sheep: {cfg: SHEEP, kind: sheep, max: MAX_SHEEP}};
+const YARDS = {cows: {cfg: COW, placeable: COW_PLACEABLE, max: MAX_COWS}, sheep: {cfg: SHEEP, placeable: SHEEP_PLACEABLE, max: MAX_SHEEP}};
 /** The kind of animals of a mod's settings: "hens" (the first mods had only those), "cows" or "sheep". */
 export const animalOf = p => (p && YARDS[p.animal] ? p.animal : "hens");
 /** How many animals the mod is made for (hens, cows or sheep, each to the most the game's biggest barn holds). */
@@ -107,7 +105,7 @@ export default {
     {k: "animal", label: "Animals", type: "select", options: [["hens", "Hens"], ["cows", "Cows"], ["sheep", "Sheep"]]}, {k: "pastureGround", label: "Ground in the pasture", type: "select", options: PASTURE_GROUNDS}]}],
   // the shed's workshop, the shared objects and the yard of the animals
   objects: {types: ["workshop", ...new Set([...HEN_TYPES, ...SHEEP_TYPES])], required: [], pasture: PASTURE, defaults: p => sharedDefaults(p, "workshop")},
-  placeable: p => (!hasYard(p) ? shed.placeable(p) : animalOf(p) === "hens" ? HEN_PLACEABLE : YARDS[animalOf(p)].kind.placeable(p)),
+  placeable: p => (!hasYard(p) ? shed.placeable(p) : animalOf(p) === "hens" ? HEN_PLACEABLE : YARDS[animalOf(p)].placeable),
   description: p => (hasYard(p) ? `A farm of buildings with a ${{hens: "hen", cows: "cow", sheep: "sheep"}[animalOf(p)]} yard for ${countOf(p)} ${animalOf(p)}, made with House to i3d.` : "A mod made with House to i3d."),
   /** The hen yard's nodes and XML, when the mod has one (c: the export context, with the host). */
   scene(c) {
