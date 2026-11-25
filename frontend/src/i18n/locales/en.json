@@ -1206,6 +1206,7 @@
   "The walls of this floor are below it in the tree: choose one to put windows, doors and extensions on it and to set how it looks.": "The walls of this floor are below it in the tree: choose one to put windows, doors and extensions on it and to set how it looks.",
   "The whole picture is stretched to the square, nothing is cut off. On a face set to “Fit to face” it comes back at its own proportions. Zoom, straighten and the seamless option are not used.": "The whole picture is stretched to the square, nothing is cut off. On a face set to “Fit to face” it comes back at its own proportions. Zoom, straighten and the seamless option are not used.",
   "The widest free stretch is {n} m, and the window is {n} m wide (30 cm at the ends and 20 cm beside other things are kept clear).": "The widest free stretch is {n} m, and the window is {n} m wide (30 cm at the ends and 20 cm beside other things are kept clear).",
+  "The zip was not kept on the server (other programs can't fetch it): {why}": "The zip was not kept on the server (other programs can't fetch it): {why}",
   "There is no room on that wall for an extension: it is full, or its extensions are too close.": "There is no room on that wall for an extension: it is full, or its extensions are too close.",
   "There is no such wall to put it on.": "There is no such wall to put it on.",
   "There is no such wall.": "There is no such wall.",

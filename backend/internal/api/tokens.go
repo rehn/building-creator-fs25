@@ -414,6 +414,7 @@ type modV1 struct {
 	Version   int64           `json:"version"`
 	ItemCount int             `json:"itemCount"`
 	UpdatedAt time.Time       `json:"updatedAt"`
+	Package   *modPackageV1   `json:"package,omitempty"` // the game mod of the whole mod, when the editor has made one
 	Items     []modItemV1     `json:"items,omitempty"`
 	Data      json.RawMessage `json:"data,omitempty"`
 }
@@ -438,7 +439,12 @@ func (s *Server) listModsV1(w http.ResponseWriter, r *http.Request, u store.User
 	}
 	out := make([]modV1, 0, len(list))
 	for _, m := range list {
-		out = append(out, newModV1(m))
+		v := newModV1(m)
+		if v.Package, err = s.packageOf(r, u, m); err != nil {
+			internalError(w, err)
+			return
+		}
+		out = append(out, v)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"mods": out})
 }
@@ -449,5 +455,10 @@ func (s *Server) getModV1(w http.ResponseWriter, r *http.Request, u store.User) 
 		modError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, newModV1(m))
+	v := newModV1(m)
+	if v.Package, err = s.packageOf(r, u, m); err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, v)
 }

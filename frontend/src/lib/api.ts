@@ -231,6 +231,9 @@ export const api = {
   updateMod: (id: string, patch: { name?: string; items?: Pick<ModPost, "id" | "kind" | "ref" | "type" | "x" | "z" | "y" | "rot">[]; data?: Record<string, unknown>; version?: number }) =>
     request<Mod>("PATCH", "/mods/" + encodeURIComponent(id), patch),
   deleteMod: (id: string) => request<void>("DELETE", "/mods/" + encodeURIComponent(id)),
+  /** The game mod of the whole mod (a zip), made from saved version `version` of the mod, kept for other programs to fetch (GET /api/v1/mods/{id}/mod.zip). */
+  putModPackage: (id: string, version: number, zip: Blob) =>
+    send<void>("PUT", "/mods/" + encodeURIComponent(id) + "/package?version=" + version, zip, { "Content-Type": "application/zip" }),
   textures: () => request<Texture[]>("GET", "/textures"),
   /** Saves a texture: form fields name, size, meters, thumb and the files diffuse, normal, specular (DDS). */
   createTexture: (form: FormData) => send<Texture>("POST", "/textures", form),
