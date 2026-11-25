@@ -152,6 +152,12 @@ CREATE TABLE IF NOT EXISTS project_models (
 	mod_zip    BLOB    NOT NULL,
 	updated_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS mod_packages (
+	mod_id     TEXT    PRIMARY KEY REFERENCES mods(id) ON DELETE CASCADE,
+	version    INTEGER NOT NULL,
+	zip        BLOB    NOT NULL,
+	updated_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS api_tokens (
 	id           TEXT    PRIMARY KEY,
 	user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -299,6 +305,12 @@ CREATE TABLE IF NOT EXISTS project_models (
 	obj        BYTEA   NOT NULL,
 	mtl        BYTEA   NOT NULL,
 	mod_zip    BYTEA   NOT NULL,
+	updated_at BIGINT  NOT NULL
+);
+CREATE TABLE IF NOT EXISTS mod_packages (
+	mod_id     TEXT    PRIMARY KEY REFERENCES mods(id) ON DELETE CASCADE,
+	version    BIGINT  NOT NULL,
+	zip        BYTEA   NOT NULL,
 	updated_at BIGINT  NOT NULL
 );
 CREATE TABLE IF NOT EXISTS api_tokens (

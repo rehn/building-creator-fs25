@@ -205,7 +205,11 @@ export default function ModPage() {
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob); a.download = file; a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 10000);
-      setMade({ name: file, warnings: pkg.warnings as string[] });
+      // the zip is kept on the server too, for the map app; if that fails the download is still good, and it says so
+      const warnings = [...(pkg.warnings as string[])];
+      try { await api.putModPackage(mod.id, mod.version, blob); }
+      catch (e) { warnings.push(t("The zip was not kept on the server (other programs can't fetch it): {why}", { why: (e as Error).message })); }
+      setMade({ name: file, warnings });
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
   async function remove() {

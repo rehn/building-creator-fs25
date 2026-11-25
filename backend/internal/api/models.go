@@ -93,25 +93,28 @@ func (s *Server) putModel(w http.ResponseWriter, r *http.Request, u store.User) 
 
 // checkModZip returns what is wrong with a game mod zip ("" if it is fine): it must open, hold what a mod needs at its root, only
 // plain relative paths, and not unpack to something huge.
-func checkModZip(data []byte) string {
+func checkModZip(data []byte) string { return checkZip(data, "The mod", requiredInMod...) }
+
+// checkZip is checkModZip for any zip: what is called (in the messages) and the files it must have at its root.
+func checkZip(data []byte, what string, required ...string) string {
 	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
-		return "The mod is not a zip file."
+		return what + " is not a zip file."
 	}
 	have, total := map[string]bool{}, uint64(0)
 	for _, f := range zr.File {
 		n := strings.TrimSuffix(f.Name, "/") // a folder entry, as the editor's zip has for textures/
 		if n == "" || strings.HasPrefix(n, "/") || strings.Contains(n, "\\") || path.Clean(n) != n || strings.HasPrefix(n, "..") {
-			return "The mod has a file name that is not allowed."
+			return what + " has a file name that is not allowed."
 		}
 		have[n] = true
 		if total += f.UncompressedSize64; total > maxModUnpack {
-			return "The mod is too big."
+			return what + " is too big."
 		}
 	}
-	for _, n := range requiredInMod {
+	for _, n := range required {
 		if !have[n] {
-			return "The mod has no " + n + "."
+			return what + " has no " + n + "."
 		}
 	}
 	return ""

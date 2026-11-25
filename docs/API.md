@@ -390,3 +390,14 @@ Say so where you use them. Do not send people's private details to this API: it 
 
 The read endpoints above keep working as they are. New fields may be added to answers, so ignore the ones you do not know. The planned generate endpoint
 will be marked as available here (and the status table at the top changed) when it is built.
+
+## The game mod of a whole mod (2026-11-25)
+
+A mod is exported as **one** placeable (docs/PLAN_MALLAR.md). The editor makes the zip in the browser when the user presses *Generate game mod* on the mod's page and sends it to the server with the version of the mod it was made from (`PUT /api/mods/{id}/package?version=N`, the zip as the body, up to 64 MB; it must have `modDesc.xml` at its root; `409 version_conflict` if the mod has been saved again). A program with a token fetches it:
+
+| | |
+|---|---|
+| `GET /api/v1/mods/{id}` and the list | have `package`: `{ "version": N, "upToDate": true/false, "zip": "/api/v1/mods/{id}/mod.zip" }` when a zip has been made (left out when none). `upToDate` is false when the mod has been saved after the zip was made (a change in a building or prop inside it is not seen by this: press Generate game mod again) |
+| `GET /api/v1/mods/{id}/mod.zip` | The game mod, `FS25_<Name>.zip`, with an `ETag` (send `If-None-Match` to get `304`). 404 until one has been made |
+
+Not tried in the game or with the map app.
