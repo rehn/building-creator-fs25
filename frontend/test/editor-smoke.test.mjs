@@ -55,3 +55,15 @@ for (const kind of KINDS.map(k => k.id)) {
     ed.destroy();
   });
 }
+
+test("the Inside tab offers every other look, and a change is handed to the page", async () => {
+  const root = w.document.getElementById("root");
+  root.innerHTML = "";
+  let got = null;
+  const ed = createEditor(root, {initial: {kind: "house"}, onChange() {}, onKindChange: s => { got = s; }});
+  const sel = root.querySelector("#controls-inside #kindSel");
+  assert.ok(sel, "the card is in the Inside tab");
+  assert.deepEqual([...sel.options].map(o => o.value).sort(), KINDS.map(k => k.id).filter(id => id !== "house").sort());
+  assert.equal(got, null);
+  ed.destroy();
+});

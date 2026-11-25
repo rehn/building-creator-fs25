@@ -2613,34 +2613,31 @@ async function importSettings(file) {
   try { setSettings(JSON.parse(await file.text())); persist(); toast("Settings loaded"); return true; }
   catch (e) { toast("That file isn\u2019t a settings file from this app."); return false; }
 }
-/* ---------- The type of building (docs/PLAN_TYPER.md step 2) ---------- */
-/** The card at the top of the Game tab: what the building is for FS25, and (between the simple walk-in types) a way to change it. The editor's controls are built for one type, so a change
- *  is handed to the page (onKindChange), which saves it and starts the editor again on the new settings. */
+/* ---------- What the inside looks like (the kind: docs/PLAN_MALLAR.md step 4) ---------- */
+/** The card at the top of the Inside tab: what the building is furnished like (a farmhouse, a hen house, a hall ...) and a way to change it. The editor's controls are built for one kind, so a
+ *  change is handed to the page (onKindChange), which saves it and starts the editor again on the new settings. */
 function renderKindCard() {
-  const host = $("controls-game");
+  const host = $("controls-inside");
   if (!host) return;
   let card = host.querySelector("#kindCard");
   if (!card) { card = document.createElement("div"); card.id = "kindCard"; card.className = "hx-card"; const h = host.querySelector("h2"); if (h) h.after(card); else host.prepend(card); }
   const cur = kindOf(p), others = KINDS.filter(k => k.id !== cur.id && CONVERTIBLE_KINDS.includes(k.id));
-  const can = CONVERTIBLE_KINDS.includes(cur.id) && !!onKindChange;
-  card.innerHTML = `<h3 class="hx-card-h">Type of building</h3><p class="hint">What it is in FS25: <b>${esc(cur.name)}</b>. The type decides the game objects, the pieces that can stand inside and what is written for the game.</p>`
-    + (can ? `<div class="row"><select id="kindSel" aria-label="New type">${others.map(k => `<option value="${k.id}">${esc(k.name)}</option>`).join("")}</select><button type="button" id="kindGo">Change the type…</button></div>
-      <p class="hint">The form stays: the size, roof, walls, windows, doors, parts and decorations. You are told what is lost before it is changed.</p>`
-      : `<p class="hint">${CONVERTIBLE_KINDS.includes(cur.id) ? "" : "An animal building can't be changed to another type: it has a pasture and animals. Make a new building of the type you want."}</p>`);
+  card.innerHTML = `<h3 class="hx-card-h">Inside look</h3><p class="hint">Furnished like: <b>${esc(cur.name)}</b>. It decides how the inside is furnished and which pieces can stand there.</p>`
+    + (onKindChange ? `<div class="row"><select id="kindSel" aria-label="New inside look">${others.map(k => `<option value="${k.id}">${esc(k.name)}</option>`).join("")}</select><button type="button" id="kindGo">Change the inside look…</button></div>
+      <p class="hint">The form stays: the size, roof, walls, windows, doors, parts and decorations. You are told what is lost before it is changed.</p>` : "");
   const go = card.querySelector("#kindGo");
   if (go) go.onclick = async () => {
     const to = card.querySelector("#kindSel").value, r = changeKind(p, to), name = (KINDS.find(k => k.id === to) || {}).name || to;
     if (!r.ok) { toast(r.error); return; }
-    const lines = [t("Change this building to “{name}”?", {name}), ""];
+    const lines = [t("Change the inside look to “{name}”?", {name}), ""];
     lines.push(t("The form stays: the size, roof, walls, windows, doors, parts and decorations."));
-    const lost = [...r.lost.objects, ...r.lost.settings, ...(r.lost.dormers ? [t("Dormers: {n}", {n: r.lost.dormers})] : [])];
+    const lost = [...r.lost.settings, ...(r.lost.dormers ? [t("Dormers: {n}", {n: r.lost.dormers})] : [])];
     const counts = {}; for (const n of r.lost.items) counts[n] = (counts[n] || 0) + 1;
     const items = Object.entries(counts).map(([n, c]) => c > 1 ? `${n} × ${c}` : n);
     if (items.length) lines.push(t("Furniture that is dropped: {list}.", {list: items.join(", ")}));
     if (lost.length) lines.push(t("Dropped: {list}.", {list: lost.join(", ")}));
-    if (r.added.objects.length) lines.push(t("Added: {list}.", {list: r.added.objects.join(", ")}));
     lines.push("", t("Changing back does not bring back what was dropped."));
-    if (!await confirmDialog(lines.join("\n"), {title: t("Change the type of building"), confirm: t("Change the type")})) return;
+    if (!await confirmDialog(lines.join("\n"), {title: t("Change the inside look"), confirm: t("Change")})) return;
     persist();   // (what is saved now is the building as it was; the change is saved by the page)
     onKindChange(serialize(r.settings));
   };
