@@ -10,8 +10,11 @@ import { insideNav } from "./modinside.mjs";
 import { KEEP } from "../walkarea.mjs";
 import { objectOf, objectsOf, boxOf, iconOf, pastureOf } from "../objects.mjs";
 import { troughFrom } from "./cow.mjs";
-import { sharedDefaults } from "./gameobjects.mjs";
+import { sharedDefaults, turnNodes } from "./gameobjects.mjs";
 
+/** The nodes (by name) of each object of the hen yard that turn with it: what belongs to its box (the fence does not turn; the troughs are turned in their own way, chicken.mjs drawTrough). */
+const HEN_PARTS = {food: ["exactFillRootNodeFood", "markerFood"], loading: ["loadingTrigger", "markerAnimals", "teleportNode"], info: ["infoTrigger"],
+  pallets: ["palletTrigger", "palletAreaStart01", "palletAreaStart02", "warningStripes01"]};
 /** The object types of a hen yard (objects.mjs OBJECT_TYPES): the feed pad, trailer spot, egg pallets, info area and the fence. */
 export const HEN_TYPES = ["food", "loading", "pallets", "info", "pasture", "feedTrough", "waterTrough"];
 /** The smallest fence the game makes a walking area for (the hen house's own limit). */
@@ -67,7 +70,7 @@ function yardOf(p, geo, host) {
     info,
     feedTroughs, waterTroughs,
     blockers: [...feet.map(r => ({center: [(r.x0 + r.x1) / 2, 1, (r.z0 + r.z1) / 2], size: [r.x1 - r.x0, 2, r.z1 - r.z0]})), ...troughBoxes],
-    areas: [food, pallets, ...troughBoxes].map(rectOf),
+    areas: [{...food, turn: o("food").turn}, {...pallets, turn: o("pallets").turn}, ...troughBoxes].map(rectOf),
   };
 }
 
@@ -87,6 +90,10 @@ export default {
   /** The hen yard's nodes and XML, when the mod has one (c: the export context, with the host). */
   scene(c) {
     if (!hasYard(c.p) || !c.host) return {nodes: [], xml: "", areas: []};
-    return henScene(c, yardOf(c.p, c.geo, c.host), hensOf(c.p), c.host.footprints || []);
+    const out = henScene(c, yardOf(c.p, c.geo, c.host), hensOf(c.p), c.host.footprints || []);
+    // (an object that is turned: its nodes turn about its middle)
+    let nodes = out.nodes;
+    for (const [type, names] of Object.entries(HEN_PARTS)) { const o = objectOf(c.p, type); if (o && o.turn) nodes = turnNodes(nodes, names, [o.x, o.z], o.turn); }
+    return {...out, nodes};
   },
 };
