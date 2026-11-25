@@ -21,3 +21,12 @@ test("the colour reaches makePhotoTexture, and the preview is made again when it
   assert.match(page, /brightness: d\.brightness, contrast: d\.contrast, saturation: d\.saturation, hue: d\.hue/);
   assert.match(page, /\[d\.picture, [^\]]*d\.brightness, d\.contrast, d\.saturation, d\.hue\]/);
 });
+
+test("the photo can be shown for the crop or for the perspective, with four corners to drag", () => {
+  assert.match(page, /function QuadEditor\(/);
+  assert.match(page, /<QuadEditor /);
+  for (const text of ["Perspective", "Remove the correction"]) assert.ok(page.includes(text), text);
+  assert.match(page, /quad: Quad \| null/);
+  assert.match(page, /prepareSource\(n\.original, \{ quad: n\.quad,/);
+  assert.match(page, /onPointerUp/, "the picture is made again when a corner is let go, not at every move");
+});
