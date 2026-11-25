@@ -12,8 +12,7 @@ export interface Part {
 export interface MaterialTexture { id: string; meters: number; fit: boolean }
 export interface Material { id: number; name: string; color: string; texture: MaterialTexture | null; smoothness: number; metalness: number }
 export interface Face { id: string; label: string }
-export interface ModSettings { price: number; upkeep: number; sellable: boolean }
-export interface BuilderProject { format: string; version: number; kind: "prop"; mod: ModSettings; item: { id: string } | null; materials: Material[]; parts: Part[] }
+export interface BuilderProject { format: string; version: number; kind: "prop"; item: { id: string } | null; materials: Material[]; parts: Part[] }
 export const FORMAT: string;
 export const VERSION: number;
 export const MAX_PARTS: number;

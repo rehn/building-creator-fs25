@@ -8,10 +8,9 @@ import { api, ApiError, type Project } from "@/lib/api";
 import { useUser } from "@/lib/useUser";
 import { EditorShell } from "@/components/EditorShell";
 import { exportI3dAtlas, atlasFiles, atlasDdsFiles, type TextureMaps } from "@/builder/atlas.mjs";
-import { exportMod, MOD_STEM } from "@/builder/mod.mjs";
 import { makeItem } from "@/builder/item.mjs";
 import { t } from "@/i18n/index.mjs";
-import { decodeDds, encodeDds } from "@/editor/dds.mjs";
+import { decodeDds } from "@/editor/dds.mjs";
 
 /** The atlas's DDS files: the user's textures the atlas is made of are fetched (diffuse and normal) and put together. */
 async function atlasPictures(layout: Parameters<typeof atlasDdsFiles>[0], ids: string[]) {
@@ -96,29 +95,22 @@ export default function BuilderPage() {
     if (n !== savedName.current) queue({ name: n }, 0);
   }
   const [note, setNote] = useState(""), [done, setDone] = useState("");
-  /** mod: the whole game mod (placeable XML, modDesc, shop picture, icon) instead of just the i3d and the atlas. */
-  async function download(mod = false) {
+  /** The i3d and the atlas in a zip (a prop is put in a game by a mod: Mods). */
+  async function download() {
     if (!latest.current && !project) return;
     setNote("");
     const data = latest.current ?? project!.data;
-    const stem = mod ? MOD_STEM : (name || "prop").replace(/[^\w-]+/g, "_");
-    const modOut = mod ? exportMod(data, { name, author: user?.name || user?.email.split("@")[0] || "" }) : null;
-    const out = modOut ? { ...modOut, i3d: String(modOut.files[stem + ".i3d"]), shapes: modOut.files[stem + ".i3d.shapes"] as Uint8Array } : exportI3dAtlas(data, { name: stem });
+    const stem = (name || "prop").replace(/[^\w-]+/g, "_");
+    const out = exportI3dAtlas(data, { name: stem });
     if (!out.layout.fits) { setNote("The textures are too many or too big for one atlas (at most 4096 pixels high). Use fewer textures."); return; }
     let blob: Blob, file: string;
     try {
       // a zip with the i3d and the atlas beside it: the materials' textures are put together into one picture (atlas.mjs)
       const dds = await atlasPictures(out.layout, out.textures), names = atlasFiles(stem);
       const { default: JSZip } = await import("jszip"), zip = new JSZip();
-      if (modOut) for (const [f, v] of Object.entries(modOut.files)) { if (v) zip.file(f, v); }
-      else { zip.file(stem + ".i3d", out.i3d); if (out.shapes) zip.file(stem + ".i3d.shapes", out.shapes); }
+      zip.file(stem + ".i3d", out.i3d); if (out.shapes) zip.file(stem + ".i3d.shapes", out.shapes);
       for (const k of ["diffuse", "normal", "specular"] as const) zip.file(names[k], dds[k]);
-      if (modOut) {   // the shop picture and the icon, from the view
-        const store = await handle.current?.picture(512), icon = await handle.current?.picture(256);
-        if (store) zip.file("store.dds", encodeDds(store.width, store.height, store.rgba));
-        if (icon) zip.file("icon.dds", encodeDds(icon.width, icon.height, icon.rgba));
-      }
-      blob = await zip.generateAsync({ type: "blob" }); file = (mod ? (name || "prop").replace(/[^\w-]+/g, "_") : stem) + ".zip";
+      blob = await zip.generateAsync({ type: "blob" }); file = stem + ".zip";
     } catch (e) { setNote(e instanceof Error ? e.message : "Couldn’t make the file."); return; }
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob); a.download = file;
@@ -162,8 +154,7 @@ export default function BuilderPage() {
         {done && <span className="status" role="status">{done}</span>}
       </>}
       actions={<>
-        <button type="button" disabled={!project} onClick={() => download(false)}>Download i3d + atlas</button>
-        <button type="button" disabled={!project} onClick={() => download(true)}>Download game mod</button>
+        <button type="button" disabled={!project} onClick={() => download()}>Download i3d + atlas</button>
         <button type="button" disabled={!project} onClick={saveItem}>Save as item</button>
       </>}
     >
