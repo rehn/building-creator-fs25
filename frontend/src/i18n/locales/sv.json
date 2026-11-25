@@ -1081,5 +1081,16 @@
   "Inside look": "Inredning",
   "New inside look": "Ny inredning",
   "Furnished like:": "Inredd som:",
-  "Press “Arrange the inside”, then click a piece in the building to change or move it here.": "Tryck på “Ordna insidan” och klicka sedan på en del i byggnaden för att ändra eller flytta den här."
+  "Press “Arrange the inside”, then click a piece in the building to change or move it here.": "Tryck på “Ordna insidan” och klicka sedan på en del i byggnaden för att ändra eller flytta den här.",
+  "As the inside look": "Som inredningen",
+  "Floor": "Golv",
+  "Floor color": "Golvfärg",
+  "Floor inside": "Golv inne",
+  "Like the building": "Som byggnaden",
+  "Like the extension": "Som tillbyggnaden",
+  "Planks": "Plankor",
+  "Rubber mats": "Gummimattor",
+  "Shavings": "Spån",
+  "Straw": "Halm",
+  "What the floor inside is made of: as the inside look gives it (a house has boards, a barn concrete or litter), or one you choose. An extension, and each section of a long building, can have a floor of its own: choose it in the tree.": "Vad golvet inne är gjort av: som inredningen ger det (ett hus har brädor, en ladugård betong eller strö) eller ett du väljer. En tillbyggnad, och varje sektion av en lång byggnad, kan ha ett eget golv: välj det i trädet."
 }

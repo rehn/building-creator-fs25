@@ -388,7 +388,24 @@ export function roomOf(p, openings = []) {
       start = Math.max(start, cut.c + t / 2);
     });
   }
-  return {x0, x1, z0, z1, F, H, door, keepOut, rects, floorRects: parts.map(q => q.rect), walls: wallSegments(rects, names)};
+  // The floor's pieces, for a floor with a look of its own in each section: each part's floor cut at the middle of its dividers (the floor runs under them), {x0, x1, z0, z1, wid, sec}.
+  const floorAreas = [];
+  for (const q of parts) {
+    const secs = sectionsOf(p, q.wid);
+    if (secs.length <= 1) { floorAreas.push({...q.rect, wid: q.wid, sec: 0}); continue; }
+    const wg = q.wid ? liveWings(p).find(g => g.id === q.wid) : null, list = q.wid ? wg.splits : splitsOf(p);
+    let axis, origin, sg;
+    if (!q.wid) { axis = p.ridge === "width" ? 0 : 2; origin = axis === 0 ? -W / 2 : -D / 2; sg = 1; }
+    else { const fr = frames[wingWallKey(q.wid, "Left")]; axis = Math.abs(fr.u[0]) > 0.5 ? 0 : 2; origin = fr.o[axis]; sg = Math.sign(fr.u[axis]) || 1; }
+    const lo = axis === 0 ? q.rect.x0 : q.rect.z0, hi = axis === 0 ? q.rect.x1 : q.rect.z1;
+    const cuts = list.map(s => Math.min(hi, Math.max(lo, origin + sg * s.at))).sort((u, v) => u - v);
+    let start = lo;
+    [...cuts, hi].forEach((end, i) => {
+      floorAreas.push({...q.rect, ...(axis === 0 ? {x0: start, x1: end} : {z0: start, z1: end}), wid: q.wid, sec: sg > 0 ? i : secs.length - 1 - i});
+      start = end;
+    });
+  }
+  return {x0, x1, z0, z1, F, H, door, keepOut, rects, floorRects: parts.map(q => q.rect), floorAreas, walls: wallSegments(rects, names)};
 }
 
 const EPS = 1e-6;

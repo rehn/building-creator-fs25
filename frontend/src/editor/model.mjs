@@ -23,9 +23,12 @@ export { henCap, HENS_PER_M2, MAX_HENS } from "./kinds/chicken.mjs";
 
 /* ---------- Settings ---------- */
 /** Settings every building has. A kind adds its own (kind.defaults). */
+/** What a floor inside can be made of: "kind" is the inside look's own, the rest are surfaces (surfaces.mjs) with the color of the floor setting. */
+export const FLOOR_SURFACES = [["kind", "As the inside look"], ["concrete", "Concrete"], ["boards", "Boards"], ["wood", "Planks"], ["litter", "Shavings"], ["straw", "Straw"], ["rubber", "Rubber mats"]];
+const FLOOR_SURFACE_IDS = FLOOR_SURFACES.map(x => x[0]);
 export const DEFAULTS = {
   kind:"house",
-  width:10, depth:7, floors:2, floorHeight:2.7, floor2Height:0, floor3Height:0, foundation:0.4, groundUnder:"auto", halfStorey:false, ceiling:true, insideSame:false, insidePanel:"painted", studSpacing:0.6, studWidth:0.045, studIrregular:0, kneeWall:0.9,
+  width:10, depth:7, floors:2, floorHeight:2.7, floor2Height:0, floor3Height:0, foundation:0.4, groundUnder:"auto", halfStorey:false, ceiling:true, insideSame:false, floorSurface:"kind", floorColor:"#A9A39A", insidePanel:"painted", studSpacing:0.6, studWidth:0.045, studIrregular:0, kneeWall:0.9,
   roofType:"gable", roofTilt:0, tiltHigh:"front", ridge:"width", roofPitch:38, overhang:0.5, chimney:true,
   winFront:2, winBack:3, winLeft:1, winRight:1, winW:1.0, winH:1.25, sill:0.85, winStyle:"casement",
   doorStyle:"panel",
@@ -137,6 +140,9 @@ const SHARED_SECTIONS = [
     {k:"curtainColor", label:"Curtains", type:"color"}]},
   {title:"Interior", label:"Rooms and curtains", tab:"settings", hint:"The floors above the ground floor are closed: a small furnished room is seen through each of their windows. To pick the room or curtains for one window, choose it under Windows (or a kupa under Kupor). The ground floor's inside is under Inside.", fields:[
     {k:"curtainStyle", label:"Curtains", type:"select", options:CURTAIN_OPTIONS}]},
+  {title:"Floor", label:"Floor", tab:"building", detail:true, hint:"What the floor inside is made of: as the inside look gives it (a house has boards, a barn concrete or litter), or one you choose. An extension, and each section of a long building, can have a floor of its own: choose it in the tree.", fields:[
+    {k:"floorSurface", label:"Floor", type:"select", options:FLOOR_SURFACES},
+    {k:"floorColor", label:"Floor color", type:"color"}]},
   {title:"Inside walls", label:"Inside walls", tab:"building", detail:true, hint:"What the outer walls look like from inside: like the outside (studs behind boards, plaster as plaster, the same split in two materials), or the kind's own finish. Wallpaper goes over either: one for every wall here, or sections along a single wall (one for each room behind it): choose the wall in the Building tab.", fields:[
     {k:"insideSame", label:"Like the outside (boards show their studs inside)", type:"check"},
     {k:"insidePanel", label:"Inside of the boards", type:"select", options:[["painted","Painted like the outside"],["raw","Unpainted, worn timber"]]},
@@ -448,6 +454,26 @@ function cleanWallZones(z, p) {
     out[k] = v.split === "height" ? {split: "height", height: clampN(v.height, 0.5, 10, p.splitHeight)} : {split: v.split};
   }
   return out;
+}
+/** The floors with a look of their own, kept where the part (or the section of it) is there: {key: {surface, color}}. */
+function cleanFloorLooks(z, p) {
+  const out = {};
+  if (!z || typeof z !== "object") return out;
+  const ids = new Set(liveWings(p).map(w => w.id));
+  for (const [k, v] of Object.entries(z)) {
+    const m = /^(\d+)(?::(\d+))?$/.exec(k);
+    if (!m || !v || typeof v !== "object" || !FLOOR_SURFACE_IDS.includes(v.surface)) continue;
+    const wid = +m[1], sec = m[2] === undefined ? null : +m[2];
+    if (wid ? !ids.has(wid) : sec === null) continue;   // (the main building's own floor is the setting itself)
+    if (sec !== null && !(sec < sectionsOf(p, wid).length && sectionsOf(p, wid).length > 1)) continue;
+    out[k] = {surface: v.surface, color: typeof v.color === "string" && HEX.test(v.color) ? v.color : p.floorColor};
+  }
+  return out;
+}
+/** The floor of section sec of part wid (0: the main building): [color, surface] for the walls' paint(), or null for the inside look's own. A section's own look, else its part's, else the building's. */
+export function floorLookAt(p, wid, sec) {
+  const L = p.floorLooks || {}, own = L[wid + ":" + sec] || (wid ? L[String(wid)] : null) || {surface: p.floorSurface, color: p.floorColor};
+  return own.surface && own.surface !== "kind" ? [own.color, own.surface] : null;
 }
 /** Walls with a panel/colour of their own (wallCladding, wallColor, lowerCladding, lowerColor; the rest as the part the wall belongs to): {wall: {...}}. */
 const WALL_STYLE_KEYS = ["wallCladding", "wallColor", "lowerCladding", "lowerColor"];
@@ -812,6 +838,8 @@ export function sanitize(obj) {
   out.wallZones = cleanWallZones(obj.wallZones, out);
   // walls with a panel and colour of their own: {wall: {wallCladding, wallColor, lowerCladding, lowerColor}}
   out.wallStyles = cleanWallStyles(obj.wallStyles, out);
+  // floors with a look of their own: {"<part id>": {surface, color}} for a part, {"<part id>:<section>": ...} for a section of a part (part 0: the main building)
+  out.floorLooks = cleanFloorLooks(obj.floorLooks, out);
   // where the player moved the game places (sleep point, feed pad ...), one entry per place of the kind
   // the game objects (sleep point, feed pad, pasture ...): the save's, or where the kind puts them to start with
   // (from the settings of before they were objects: the pasture's wall and depth, the sleep point on or off)
@@ -1982,9 +2010,17 @@ function buildRoofFrame(ext, span, top, ridgeY, tanP, M, th, vents, skip = () =>
 function buildInside(kind, F, H) {
   const room = roomOf(p, openings), catalog = catalogFor(p), items = p.items || [];
   if (kind.furnish) kind.furnish({floor: (color, surf) => {
-    paint(color, surf);
     const low = F < FLOOR_LIFT, top = low ? F + FLOOR_LIFT : F + FLOOR_T;
-    for (const r of room.floorRects) {
+    // (the floor's pieces: each part's, cut at its dividers; each with its own look, else the building's, else the inside look's)
+    // (a part whose sections all have the same floor has one floor piece, as a part without sections)
+    const areas = [];
+    for (const r of room.floorAreas) {
+      const own = floorLookAt(p, r.wid, r.sec) || [color, surf], before = areas[areas.length - 1];
+      if (before && before.wid === r.wid && JSON.stringify(before.own) === JSON.stringify(own)) Object.assign(before, {x0: Math.min(before.x0, r.x0), x1: Math.max(before.x1, r.x1), z0: Math.min(before.z0, r.z0), z1: Math.max(before.z1, r.z1)});
+      else areas.push({...r, own});
+    }
+    for (const r of areas) {
+      paint(r.own[0], r.own[1]);
       abox("fittings", [r.x0, low ? F - 0.05 : F, r.z0], [r.x1, top, r.z1]);
       if (low) abox("collision", [r.x0, F - 0.05, r.z0], [r.x1, top, r.z1]);   // (so the player and the animals stand on it)
     }

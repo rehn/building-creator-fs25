@@ -8,7 +8,7 @@ import {
   SCHEMA, TABS, fieldsFor, DTYPES, DORM_DEF, MATS, fittingTextures,
   genRow, sanitize, serialize, slugify, buildGeometry, buildI3d, placeableSnippet, gamePlaces, surfaceSpec, scaledUV, colorFor, WP
 } from "./model.mjs";
-import { WINDOW_STYLES, DOOR_STYLES, PORCH_OPTIONS, PORCH_W, PORCH_D, WING_FIELDS, MAX_WINGS } from "./model.mjs";
+import { FLOOR_SURFACES, WINDOW_STYLES, DOOR_STYLES, PORCH_OPTIONS, PORCH_W, PORCH_D, WING_FIELDS, MAX_WINGS } from "./model.mjs";
 import { pieceSheet, pieceMeshes, buildingTree, matList, matTable, slotOf, partStyle, splitAtOf, wallLabel, partName, wallItems, addOpening, addPartOn, addSplit, addPartSplit, duplicateOpening, duplicateSplit, moveBeside, moveToWall, openingProblem, setSectionFloorHeight, setTotalHeight, addPartDoor } from "./model.mjs";
 import { lodKeeps, matTexture, i3dFiles } from "./model.mjs";
 import { encodeDds, decodeDds } from "./dds.mjs";
@@ -375,6 +375,7 @@ function syncOutputs() {
   // Controls that don't apply right now are not shown (a kind may not have some of them at all).
   const off = (k, v) => { if (inputs[k]) { inputs[k].disabled = v; const row = inputs[k].closest("[data-k]"); if (row) row.classList.toggle("na", v); } };
   off("ridge", p.roofType !== "gable");
+  off("floorColor", p.floorSurface === "kind");
   // the walls' zones: board settings apply when either zone has boards
   const clads = [p.wallCladding, ...(p.innerCladding === "same" || p.innerCladding === "sameLow" ? [] : [p.innerCladding]), ...(zonesUsed() || p.innerCladding === "sameLow" ? [p.lowerCladding] : [])];
   off("innerColor", p.innerCladding === "same" || p.innerCladding === "sameLow");
@@ -1197,6 +1198,7 @@ function renderPartCard() {
       + `<div class="field"><div class="fl"><label for="wg-pitch">Roof angle</label><output id="wg-pitch-o">${w.pitch ? w.pitch + "°" : "as the house (" + p.roofPitch + "°)"}</output></div><input type="range" id="wg-pitch" min="0" max="60" step="1" value="${w.pitch}"></div>`
       + `<div class="field"><div class="fl"><label for="wg-vent">Roof ventilators (lanterns on the ridge)</label><output id="wg-vent-o">${w.ventilators || 0}</output></div><input type="range" id="wg-vent" min="0" max="4" step="1" value="${w.ventilators || 0}"></div>`
       + partLookHtml(w)
+      + floorLookHtml(w.id, null)
       + dividersHtml(w.id)
       + `<p class="hint">An extension with fewer floors, or a flatter roof, has a lower roof. Roof angle 0 follows the house.</p><div class="row">${wings.length < MAX_WINGS ? `<button type="button" id="wingAddChild">+ Add an extension on ${esc(partName(p, w.id))}</button>` : ""}${partSource ? `<button type="button" id="partSave">Save to My extensions</button>` : ""}<button type="button" id="partExport">Export this extension</button><button type="button" id="wingRemove" class="danger">Remove ${esc(partName(p, w.id))} and what stands on it</button></div></div>`;
   }
@@ -1224,6 +1226,7 @@ function renderPartCard() {
   if ($("wingAddChild")) $("wingAddChild").onclick = () => addChildPart(w.id);
   $("wg-name").onchange = e => { w.name = e.target.value.trim().slice(0, 40); changed(); };
   bindPartLook(ed, w, changed);
+  bindFloorLook(ed, w.id, null, renderPartCard);
   $("wingRemove").onclick = () => removePart(w.id);
 }
 /* ---------- The building as a tree ---------- */
@@ -1453,7 +1456,24 @@ function sectionCardHtml() {
     + (dv ? `<div class="field"><div class="fl"><label for="sp${wvPart}-${dv.id}">Starts at</label><output id="sp${wvPart}-${dv.id}-o">${dv.at.toFixed(2)} m</output></div><input type="range" id="sp${wvPart}-${dv.id}" data-split="${dv.id}" min="2" max="${Math.max(2, L - 2)}" step="0.05" value="${dv.at}"></div>`
         + sectionHtml(wvPart, dv, sc, base)
         + `<div class="addrow"><button type="button" data-gosplit="${dv.id}">Go to the wall it starts with</button><button type="button" class="danger" data-splitrm="${dv.id}">Remove this section</button></div>`
-      : `<p class="hint">The first section has the ${w ? "extension's" : "building's"} own floors: ${w ? "set them in the extension's card" : "set how many with Full floors, below"}.</p>`) + `</div>`;
+      : `<p class="hint">The first section has the ${w ? "extension's" : "building's"} own floors: ${w ? "set them in the extension's card" : "set how many with Full floors, below"}.</p>`) + floorLookHtml(wvPart, wvSec) + `</div>`;
+}
+/** The floor of part wid (0: the building) or of its section sec (null: the whole part): a choice (like the building, as the inside look, or a surface) and, for a surface, its colour. */
+function floorLookHtml(wid, sec) {
+  const key = sec === null ? String(wid) : wid + ":" + sec, own = (p.floorLooks || {})[key];
+  const inherit = sec !== null && wid ? "Like the extension" : "Like the building";
+  return `<div class="field"><div class="fl"><label for="flk-sel">Floor inside</label></div><select id="flk-sel"><option value="">${inherit}</option>${FLOOR_SURFACES.map(([v, n]) => `<option value="${v}" ${own && own.surface === v ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></div>`
+    + (own && own.surface !== "kind" ? `<div class="field"><input type="color" id="flk-col" value="${own.color}"><label for="flk-col">Floor color</label></div>` : "");
+}
+/** Makes the floor choice of floorLookHtml work; again draws the card again (the colour is there or not). */
+function bindFloorLook(host, wid, sec, again) {
+  const sel = host.querySelector("#flk-sel");
+  if (!sel) return;
+  const key = sec === null ? String(wid) : wid + ":" + sec;
+  const set = v => { p.floorLooks = {...(p.floorLooks || {})}; if (v) p.floorLooks[key] = v; else delete p.floorLooks[key]; persist(); rebuild(false); };
+  sel.onchange = () => { const cur = (p.floorLooks || {})[key]; set(sel.value ? {surface: sel.value, color: cur ? cur.color : p.floorColor} : null); again(); };
+  const col = host.querySelector("#flk-col");
+  if (col) col.oninput = () => set({...p.floorLooks[key], color: col.value});
 }
 /** Puts the settings row of the chosen floor in its card (the main building's: the rows of the schema; a part's have their own slider). */
 function bindFloorCard() {
@@ -1587,7 +1607,7 @@ function renderTreeUI() {
   if (treeKind === "main") {
     bindDividers(main, 0);
   }
-  if (treeKind === "section") bindDividers(wall, wvPart);
+  if (treeKind === "section") { bindDividers(wall, wvPart); bindFloorLook(wall, wvPart, wvSec, renderTreeUI); }
   if (treeKind === "wall" && isSplitWall(wvWall)) wall.querySelectorAll("[data-gosection]").forEach(b => b.onclick = () => selectNode("section", {part: wingIdOf(wvWall), index: +b.dataset.gosection}));
   if (treeKind === "wall") { renderPipesUI(); bindWallLook(wvWall); renderZonesUI("zonesEditorW", wvWall); renderPapersUI("papersEditorW", wvWall); }
   if (treeKind === "floor") bindFloorCard();
