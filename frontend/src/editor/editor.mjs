@@ -963,11 +963,16 @@ function renderWinCard() {
     const walls = wallKeys().filter(k => floorOk(s.floor, k));
     html += `<div class="field"><div class="fl"><label for="wf-wall">Wall</label></div><select id="wf-wall">${walls.map(k => opt(k, wallLabel(p, k), s.wall)).join("")}</select></div>`;
     html += `<div class="field"><div class="fl"><label for="wf-style">Style</label></div><select id="wf-style">${opt("default", `Same as the building (${own})`, s.style)}${styles.map(x => opt(x.id, x.name, s.style)).join("")}</select></div>`;
+    const hatchDoor = door && s.style === "henhatch";   // (its size is the style's: 40 x 50 cm at the floor)
     for (const f of WIN_FIELDS) {
       if (door && f.k === "sill") continue;
+      if (hatchDoor && (f.k === "w" || f.k === "h")) continue;
       html += door && f.k === "h" ? range(f, 1.5, 12) : door && f.k === "w" ? range(f, 0.3, 20) : range(f);
     }
-    if (door) {
+    if (hatchDoor) {
+      html += `<p class="hint">A hen hatch: 40 × 50 cm at the floor, with a frame and the hatch held open above it. Hens go in and out through it; in a mod they walk in through it when the hens are set to walk inside the building.</p>`;
+      html += `<label class="check"><input type="checkbox" id="wf-ramp" ${s.ramp ? "checked" : ""}> A ramp down to the ground (instead of steps; needs a foundation)</label>`;
+    } else if (door) {
       html += `<div class="field"><div class="fl"><label for="wf-porch">In front of the door</label></div><select id="wf-porch">${PORCH_OPTIONS.map(o => opt(o[0], o[1], s.porch)).join("")}</select></div>`;
       if (s.porch !== "none") html += PORCH_FIELDS.map(f => range(f)).join("");
       html += `<label class="check"><input type="checkbox" id="wf-ramp" ${s.ramp ? "checked" : ""}> A ramp down to the ground (instead of steps; needs a foundation)</label>`;

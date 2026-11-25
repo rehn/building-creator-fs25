@@ -8,14 +8,14 @@ import { insidePoly } from "../objects.mjs";
 import { wallSlabs } from "./cow.mjs";
 
 /**
- * The ways in for the animals in a building (its sanitized settings), as {wall, s0, s1} along the wall: ground floor doors that are an open framed doorway (door style "hole"), and an open side (a carport:
+ * The ways in for the animals in a building (its sanitized settings), as {wall, s0, s1} along the wall: ground floor doors that are an open framed doorway (door style "hole") or a hen hatch ("henhatch", 40 cm), and an open side (a carport:
  * posts and a beam instead of a wall) along its whole length less the posts at the corners.
  */
 export function entrancesOf(q) {
   const frames = wallsOf(q), out = [];
   for (const d of q.windows || []) {
     if (d.type !== "door" || d.floor !== 0 || !frames[d.wall]) continue;
-    if ((d.style && d.style !== "default" ? d.style : q.doorStyle) !== "hole") continue;
+    if (!["hole", "henhatch"].includes(d.style && d.style !== "default" ? d.style : q.doorStyle)) continue;   // (an open framed doorway, or a hen hatch)
     const [s0, s1] = openingSpan(d, frames[d.wall].L);
     out.push({wall: d.wall, s0, s1});
   }

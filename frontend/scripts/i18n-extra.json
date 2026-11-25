@@ -98,5 +98,6 @@
   "Post {n} (stop)",
   "The hens walk inside this building",
   "Gives the building a floor the hens can walk on, and a ramp through each open framed doorway (door style Open doorway, framed) or open side (a carport) that faces the fence, as in the game's own hen barns. One building in a mod. The way in has to be on the side of the fence.",
-  "The stretch between posts {a} and {b} is {len} m long: the game cuts {cut} m off it and leaves a hole. The mod is made with the posts moved a little so that it is whole ({to} m), or move a post yourself."
+  "The stretch between posts {a} and {b} is {len} m long: the game cuts {cut} m off it and leaves a hole. The mod is made with the posts moved a little so that it is whole ({to} m), or move a post yourself.",
+  "A hen hatch: 40 × 50 cm at the floor, with a frame and the hatch held open above it. Hens go in and out through it; in a mod they walk in through it when the hens are set to walk inside the building."
 ]

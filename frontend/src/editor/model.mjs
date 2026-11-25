@@ -15,8 +15,8 @@ import { agedColor } from "./age.mjs";
 import { cleanObjects, objectOf, boxOf, objectInfo, allowedTypes } from "./objects.mjs";
 import { cleanDecor, decorRects } from "./decor.mjs";
 import { WALLPAPERS } from "./kinds/innerwall.mjs";
-import { WINDOW_STYLES, DOOR_STYLES, WINDOW_STYLE_IDS, DOOR_STYLE_IDS, DOUBLE_DOOR_FROM, isPair, styleOf, drawSash, drawLeaf } from "./openings.mjs";
-export { WINDOW_STYLES, DOOR_STYLES, DOUBLE_DOOR_FROM } from "./openings.mjs";
+import { WINDOW_STYLES, DOOR_STYLES, WINDOW_STYLE_IDS, DOOR_STYLE_IDS, DOUBLE_DOOR_FROM, HATCH_SIZE, isPair, styleOf, drawSash, drawLeaf } from "./openings.mjs";
+export { WINDOW_STYLES, DOOR_STYLES, DOUBLE_DOOR_FROM, HATCH_SIZE } from "./openings.mjs";
 export { boxMesh } from "./i3d.mjs";
 export { KINDS, KIND, kindOf, groupByKind, CATEGORIES } from "./kinds/index.mjs";
 export { henYard, henCap, HENS_PER_M2, MAX_HENS } from "./kinds/chicken.mjs";
@@ -110,7 +110,7 @@ const SHARED_SECTIONS = [
     {k:"winH", label:"Height", min:0.4, max:2.2, step:0.05, unit:" m"},
     {k:"sill", label:"Sill height", min:0.2, max:6, step:0.05, unit:" m"}]},
   {title:"Doors", tab:"settings", hint:"The style of every door. The doors themselves are in the Building tab: choose one there (or tap it in the preview) to move it, change its size or give it a porch or canopy.", fields:[
-    {k:"doorStyle", label:"Style", type:"select", options:DOOR_STYLES.map(s => [s.id, s.name])}]},
+    {k:"doorStyle", label:"Style", type:"select", options:DOOR_STYLES.filter(s => s.id !== "henhatch").map(s => [s.id, s.name])}]},
   {title:"Inside", label:"Furniture and pieces", tab:"inside", custom:"inside", hint:"The pieces inside the building. Fill it automatically to match its size, then change it as you like.", fields:[]},
   {title:"Surfaces", tab:"building", detail:true, hint:"Panel, split and roof look of the building (its extensions follow it unless they have a look of their own). A single wall can have its own panel, colour and split: choose it in the tree.", fields:[
     {k:"wallCladding", label:"Wall cladding (the upper part when split)", type:"select", options:CLADDING},
@@ -713,13 +713,13 @@ const cleanPorch = (type, w, d) => ({porch: PORCH_TYPES.includes(type) ? type : 
  */
 function cleanWindows(arr) {
   return arr.filter(w => w && (WALLS.includes(w.wall) || WING_WALLS.includes(w.wall) || SPLIT_WALLS.includes(w.wall) || WING_SPLIT_WALLS.includes(w.wall))).slice(0, 80).map((w, i) => {
-    const k = openingKind(w), door = k.type === "door";
-    const porch = !door ? {} : w.porch !== undefined ? cleanPorch(w.porch, w.porchW, w.porchD)
+    const k = openingKind(w), door = k.type === "door", hatch = door && k.style === "henhatch";   // (a hen hatch is a door with a size of its own: 40 x 50 cm at the floor, no porch, nothing to open)
+    const porch = !door ? {} : hatch ? cleanPorch("none") : w.porch !== undefined ? cleanPorch(w.porch, w.porchW, w.porchD)
       : cleanPorch("none");
     return {
       id: i + 1, wall: w.wall, floor: Math.round(clampN(w.floor, 0, 2, 0)), pos: clampN(w.pos, 0, 1, 0.5),
-      w: clampN(w.w, 0.3, door ? 20 : 3, 1), h: clampN(w.h, 0.3, door ? 12 : 2.4, 1.25), sill: clampN(w.sill, 0, 6, 0.85),
-      ...k, ...porch, ...(door ? {ramp: !!w.ramp, opens: w.opens !== false, swing: w.swing === "in" ? "in" : "out", hinge: w.hinge === "right" ? "right" : "left"} : {}),
+      w: hatch ? HATCH_SIZE.w : clampN(w.w, 0.3, door ? 20 : 3, 1), h: hatch ? HATCH_SIZE.h : clampN(w.h, 0.3, door ? 12 : 2.4, 1.25), sill: hatch ? 0 : clampN(w.sill, 0, 6, 0.85),
+      ...k, ...porch, ...(door ? {ramp: !!w.ramp, opens: hatch ? false : w.opens !== false, swing: w.swing === "in" ? "in" : "out", hinge: w.hinge === "right" ? "right" : "left"} : {}),
       room: pickRoom(w.room), curtain: pickCurtain(w.curtain), curtainColor: pickColor(w.curtainColor)
     };
   });
@@ -1306,6 +1306,7 @@ function layoutWall(key, L, hs, topAt, cover = null, capAt = null) {
     const op = {s0, s1, t0, t1, kind: door ? "door" : "window", id: win.id, style: styleOf(p, win), ...(door ? {opens: win.opens !== false, swingIn: win.swing === "in", hingeRight: win.hinge === "right"} : {})};
     if (door && win.ramp) op.ramp = true;
     if (door && op.style === "hole") { op.kind = "hatch"; op.plain = true; op.hole = true; delete op.opens; delete op.swingIn; delete op.hingeRight; }   // an empty doorway: the framed hole
+    else if (door && op.style === "henhatch") { op.kind = "hatch"; op.plain = false; delete op.opens; delete op.swingIn; delete op.hingeRight; }   // a hen hatch: the frame and the sliding hatch held open above it, as the hen house has it (the ramp, if the door has one)
     else if (door) op.porch = {type: win.porch || "none", w: win.porchW || PORCH_W[2], d: win.porchD || PORCH_D[2]};
     const g = 0.18;
     if (t1 - t0 < 0.3 || s1 - s0 < 0.3 || ops.some(q => q.s0 < op.s1 + g && op.s0 < q.s1 + g && q.t0 < op.t1 + g && op.t0 < q.t1 + g)
