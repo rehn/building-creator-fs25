@@ -1,57 +1,39 @@
 "use client";
-// The modeller's editor: a list of parts with the chosen one's settings on the left, the 3D view on the right (docs/PLAN_BUILDER.md).
+// The modeller's editor, laid out as the building's and the mod's (docs/DESIGN.md "Editor pages"): the tree of the prop in the left panel, the settings of what is chosen as cards
+// in the details panel, the 3D view filling the rest (docs/PLAN_BUILDER.md).
 import { useEffect, useRef, useState } from "react";
 import { addMaterial, addPart, duplicatePart, groundPart, partFaces, removeMaterial, removePart, sanitize, setFaceMaterial, setFaceRotation, updateMaterial, updatePart, MAX_MATERIALS, type BuilderProject, type Part } from "./model.mjs";
 import { createBuilderView, type BuilderView } from "./view.mjs";
-import { draftValue, shownValue } from "./number.mjs";
 import { api, type Texture } from "@/lib/api";
 import { decodeDds } from "@/editor/dds.mjs";
+import { RangeField } from "@/components/RangeField";
+import { TreeRow } from "@/components/TreeRow";
+import { usePanelSizes } from "@/components/usePanelSizes";
+import { t } from "@/i18n/index.mjs";
 
 export type BuilderModel = BuilderProject;
 export interface BuilderHandle { snapshot: () => string | null; picture: (size: number) => Promise<{ width: number; height: number; rgba: Uint8ClampedArray } | null>; setItemId: (id: string) => void }
 
-// label, step of the arrow keys, and the range of the slider (what is typed may go beyond it, up to what the model allows)
-const NUM: Record<"x" | "y" | "z" | "rotX" | "rotY" | "rotZ" | "w" | "d" | "h" | "r" | "seg", [string, number, number, number]> = {
-  x: ["x", 0.05, -10, 10], y: ["y", 0.05, 0, 10], z: ["z", 0.05, -10, 10],
-  rotX: ["Tilt forward, around x (degrees)", 5, -180, 180], rotY: ["Turn, around y (degrees)", 5, -180, 180], rotZ: ["Tilt sideways, around z (degrees)", 5, -180, 180],
-  seg: ["Sides (more is rounder)", 1, 6, 64], w: ["Width", 0.05, 0.05, 10], d: ["Depth", 0.05, 0.05, 10], h: ["Height", 0.05, 0.05, 10], r: ["Radius", 0.05, 0.05, 5],
+type Num = "x" | "y" | "z" | "rotX" | "rotY" | "rotZ" | "w" | "d" | "h" | "r" | "seg";
+// label, step, the slider's ends, the ends of what may be typed (what the model allows), unit
+const NUM: Record<Num, [string, number, number, number, number, number, string]> = {
+  x: ["x", 0.05, -10, 10, -200, 200, "m"], y: ["y", 0.05, 0, 10, -10, 100, "m"], z: ["z", 0.05, -10, 10, -200, 200, "m"],
+  rotX: ["Tilt forward, around x (degrees)", 5, -180, 180, -180, 180, "°"], rotY: ["Turn, around y (degrees)", 5, -180, 180, -180, 180, "°"], rotZ: ["Tilt sideways, around z (degrees)", 5, -180, 180, -180, 180, "°"],
+  seg: ["Sides (more is rounder)", 1, 6, 64, 6, 64, ""], w: ["Width", 0.05, 0.05, 10, 0.01, 50, "m"], d: ["Depth", 0.05, 0.05, 10, 0.01, 50, "m"], h: ["Height", 0.05, 0.05, 10, 0.01, 50, "m"], r: ["Radius", 0.05, 0.05, 5, 0.01, 25, "m"],
 };
 
-/** A number field that keeps what is typed until it is left: the model clamps every value, and showing the clamped value while typing made 3 over 6 into 62. */
-function NumberField({ label, value, step, min, max, onCommit }: { label: string; value: number; step: number; min?: number; max?: number; onCommit: (v: number) => void }) {
-  const [text, setText] = useState(() => shownValue(value));
-  const editing = useRef(false);
-  useEffect(() => { if (!editing.current) setText(shownValue(value)); }, [value]);
-  const typed = (t: string) => { setText(t); const v = draftValue(t); if (v !== null) onCommit(v); };
-  return (
-    <label className="field">{label}
-      <span className="numrow">
-      {min !== undefined && max !== undefined && (
-        <input type="range" aria-label={label} min={min} max={max} step={step >= 1 ? step : 0.01} value={Math.min(max, Math.max(min, value))}
-          onChange={e => { const v = Number(e.target.value); setText(shownValue(v)); onCommit(v); }} />
-      )}
-      <input type="text" inputMode="decimal" value={text}
-        onFocus={e => { editing.current = true; e.target.select(); }}
-        onChange={e => typed(e.target.value)}
-        onKeyDown={e => {
-          if (e.key === "Enter") e.currentTarget.blur();
-          if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-            e.preventDefault();
-            const v = (draftValue(text) ?? value) + (e.key === "ArrowUp" ? step : -step);
-            setText(shownValue(v)); onCommit(+shownValue(v));
-          }
-        }}
-        onBlur={() => { editing.current = false; setText(shownValue(value)); }} />
-      </span>
-    </label>
-  );
-}
+/** What the tree has chosen when no part is: the prop itself (its game mod settings) or the materials. */
+type Node = "root" | "materials";
 
 export default function Builder({ initial, onChange, onReady }: { initial: Record<string, unknown>; onChange: (m: BuilderModel) => void; onReady?: (h: BuilderHandle) => void }) {
   const [model, setModel] = useState<BuilderModel>(() => sanitize(initial));
   const modelRef = useRef(model);
   modelRef.current = model;
   const [chosen, setChosen] = useState<number | null>(null);
+  const [node, setNode] = useState<Node>("root");
+  const [closed, setClosed] = useState(false);
+  const bench = useRef<HTMLDivElement>(null);
+  const panels = usePanelSizes(bench);
   const canvas = useRef<HTMLCanvasElement>(null);
   const view = useRef<BuilderView | null>(null);
   const [face, setFace] = useState<string | null>(null);
@@ -90,73 +72,65 @@ export default function Builder({ initial, onChange, onReady }: { initial: Recor
     change(next); setChosen(next.parts[next.parts.length - 1]?.id ?? null); setFace(null);
   };
   const set = (patch: Partial<Part>) => part && change(updatePart(model, part.id, patch));
-  const field = (k: keyof typeof NUM) => {
-    const [label, step, min, max] = NUM[k];
-    return <NumberField key={`${part?.id}-${k}`} label={label} step={step} min={min} max={max} value={part ? part[k] : 0} onCommit={v => set({ [k]: v })} />;
+  /** While a slider is dragged the view follows, and nothing is saved until it is let go. */
+  const live = (patch: Partial<Part>) => part && setModel(updatePart(modelRef.current, part.id, patch));
+  const field = (k: Num) => {
+    const [label, step, min, max, hardMin, hardMax, unit] = NUM[k];
+    return <RangeField key={`${part?.id}-${k}`} label={label} step={step} min={min} max={max} hardMin={hardMin} hardMax={hardMax} unit={unit}
+      value={part ? part[k] : 0} onLive={v => live({ [k]: v })} onCommit={v => set({ [k]: v })} />;
   };
+  const choosePart = (id: number) => { setChosen(id); setFace(null); };
+  const chooseNode = (n: Node) => { setChosen(null); setFace(null); setNode(n); };
 
   return (
-    <div className="builder">
-      <aside className="builder-panel" aria-label="Parts">
-        <div className="builder-add">
+    <div className="modedit" ref={bench} style={panels.style}>
+      <div id="rz1" {...panels.handle("panel", t("Resize the left panel"))} />
+      <div id="rz2" {...panels.handle("details", t("Resize the details panel"))} />
+      <aside className="hx-panel modedit-tree" aria-label={t("Parts")}>
+        <div className="mtree-menu">
           <button type="button" onClick={() => add("box")}>+ Box</button>
           <button type="button" onClick={() => add("cylinder")}>+ Cylinder</button>
         </div>
-        <p className="hint axes"><b style={{ color: "#d33" }}>x</b> red, <b style={{ color: "#2a2" }}>y</b> green (up), <b style={{ color: "#33d" }}>z</b> blue.</p>
-        {model.parts.length === 0 && <p className="hint">Add a box or a cylinder to start. Drag in the view to turn, scroll to zoom, click a part to choose it.</p>}
-        <section className="builder-materials" aria-label="Materials">
-          <h3>Materials</h3>
-          {model.materials.length === 0 && <p className="hint">A material is a colour you can put on any face. Add one, then choose a face and pick it.</p>}
-          <ul className="builder-list">
-            {model.materials.map(m => (
-              <li key={m.id} className="builder-material">
-                <div className="builder-material-head">
-                  <input type="color" aria-label="Colour" value={m.color} onChange={e => change(updateMaterial(model, m.id, { color: e.target.value }))} />
-                  <input type="text" translate="no" aria-label="Name" maxLength={60} value={m.name} onChange={e => change(updateMaterial(model, m.id, { name: e.target.value }))} />
-                  <button type="button" className="danger" aria-label="Delete this material" onClick={() => change(removeMaterial(model, m.id))}>×</button>
-                </div>
-                <label className="field">Texture
-                  <select value={m.texture?.id ?? ""} onChange={e => {
-                    const t = library.find(x => x.id === e.target.value);
-                    change(updateMaterial(model, m.id, { texture: t ? { id: t.id, meters: t.meters, fit: m.texture?.fit ?? false } : null }));
-                  }}>
-                    <option value="">Colour only</option>
-                    {m.texture && !library.some(x => x.id === m.texture!.id) && <option value={m.texture.id}>{"A texture that is gone"}</option>}
-                    {library.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                  </select>
-                </label>
-                <NumberField key={`${m.id}-smooth`} label="Shine (0 matt, 1 glossy)" step={0.05} min={0} max={1} value={m.smoothness} onCommit={v => change(updateMaterial(model, m.id, { smoothness: v }))} />
-                <NumberField key={`${m.id}-metal`} label="Metal (0 none, 1 bare metal)" step={0.05} min={0} max={1} value={m.metalness} onCommit={v => change(updateMaterial(model, m.id, { metalness: v }))} />
-                {m.texture && <label className="check"><input type="checkbox" checked={m.texture.fit} onChange={e => change(updateMaterial(model, m.id, { texture: { id: m.texture!.id, meters: m.texture!.meters, fit: e.target.checked } }))} /> Fit to face (the picture once over the whole face)</label>}
-                {m.texture && !m.texture.fit && <NumberField key={`${m.id}-meters`} label="Size of one repeat, in metres" step={0.05} min={0.05} max={10} value={m.texture.meters} onCommit={v => change(updateMaterial(model, m.id, { texture: { id: m.texture!.id, meters: v, fit: false } }))} />}
-              </li>
+        <ul className="tree" role="tree">
+          <TreeRow depth={0} label={t("The prop")} strong on={chosen === null && node === "root"} onChoose={() => chooseNode("root")} folded={closed} onFold={() => setClosed(c => !c)} />
+          {!closed && <>
+            <TreeRow depth={1} label={t("Materials")} hint={String(model.materials.length)} on={chosen === null && node === "materials"} onChoose={() => chooseNode("materials")} />
+            {model.parts.map(p => (
+              <TreeRow key={p.id} depth={1} label={p.name} on={p.id === chosen} onChoose={() => choosePart(p.id)}
+                lead={<span className="swatch" style={{ background: p.color }} aria-hidden="true" />} />
             ))}
-          </ul>
-          <button type="button" disabled={model.materials.length >= MAX_MATERIALS} onClick={() => change(addMaterial(model, { name: `Material ${model.materials.length + 1}` }))}>+ Material</button>
-        </section>
-        <section className="builder-materials" aria-label="Game mod">
-          <h3>Game mod</h3>
-          <NumberField key="mod-price" label="Price in the shop" step={100} value={model.mod.price} onCommit={v => change(sanitize({ ...model, mod: { ...model.mod, price: v } }))} />
-          <NumberField key="mod-upkeep" label="Upkeep per day" step={1} value={model.mod.upkeep} onCommit={v => change(sanitize({ ...model, mod: { ...model.mod, upkeep: v } }))} />
-          <label className="check"><input type="checkbox" checked={model.mod.sellable} onChange={e => change(sanitize({ ...model, mod: { ...model.mod, sellable: e.target.checked } }))} /> Can be bought and sold in the shop</label>
-        </section>
-        <h3>Parts</h3>
-        <ul className="builder-list">
-          {model.parts.map(p => (
-            <li key={p.id}>
-              <button type="button" className={p.id === chosen ? "on" : ""} aria-pressed={p.id === chosen} onClick={() => { setChosen(p.id); setFace(null); }}>
-                <span className="swatch" style={{ background: p.color }} aria-hidden="true" /> <span translate="no">{p.name}</span>
-              </button>
-            </li>
-          ))}
+          </>}
         </ul>
-        {part && (
-          <section className="builder-part" aria-label="Chosen part">
-            <label className="field">Name <input type="text" translate="no" maxLength={60} value={part.name} onChange={e => set({ name: e.target.value })} /></label>
-            <label className="field">Colour <input type="color" value={part.color} onChange={e => set({ color: e.target.value })} /></label>
-            <label className="check"><input type="checkbox" checked={part.collision} onChange={e => set({ collision: e.target.checked })} /> Solid (players and vehicles cannot pass through)</label>
-            <fieldset className="builder-faces">
-              <legend>Faces</legend>
+        {model.parts.length === 0 && <p className="hint">Add a box or a cylinder to start. Drag in the view to turn, scroll to zoom, click a part to choose it.</p>}
+        <p className="hint axes"><b style={{ color: "#d33" }}>x</b> red, <b style={{ color: "#2a2" }}>y</b> green (up), <b style={{ color: "#33d" }}>z</b> blue.</p>
+      </aside>
+
+      <aside className="hx-details modedit-props" aria-label={t("Properties")}>
+        {part ? (
+          <>
+            <section className="hx-card" aria-label="Chosen part">
+              <h3 className="hx-card-h" translate="no">{part.name}</h3>
+              <label className="field">Name <input type="text" translate="no" maxLength={60} value={part.name} onChange={e => set({ name: e.target.value })} /></label>
+              <label className="field">Colour <input type="color" value={part.color} onChange={e => set({ color: e.target.value })} /></label>
+              <label className="check"><input type="checkbox" checked={part.collision} onChange={e => set({ collision: e.target.checked })} /> Solid (players and vehicles cannot pass through)</label>
+              <div className="row">
+                <button type="button" onClick={() => { const n = duplicatePart(model, part.id); change(n); setChosen(n.parts[n.parts.length - 1].id); setFace(null); }}>Duplicate</button>
+                <button type="button" className="danger" onClick={() => { change(removePart(model, part.id)); setChosen(null); setFace(null); }}>Delete</button>
+              </div>
+            </section>
+            <section className="hx-card" aria-label="Position">
+              <h3 className="hx-card-h">{t("Position")}</h3>
+              {(["x", "y", "z", "rotX", "rotY", "rotZ"] as const).map(field)}
+              <div className="row">
+                <button type="button" onClick={() => change(groundPart(model, part.id))} title="Move the part up or down so its lowest point is on the ground">Put on the ground</button>
+              </div>
+            </section>
+            <section className="hx-card" aria-label="Size">
+              <h3 className="hx-card-h">{t("Size")}</h3>
+              {(part.shape === "cylinder" ? (["r", "h", "seg"] as const) : (["w", "h", "d"] as const)).map(field)}
+            </section>
+            <section className="hx-card" aria-label="Faces">
+              <h3 className="hx-card-h">{t("Faces")}</h3>
               <p className="hint">Click a face in the view, or pick it here, to give it a material.</p>
               <div className="seg wrap">
                 {partFaces(part).map(f => (
@@ -181,20 +155,54 @@ export default function Builder({ initial, onChange, onReady }: { initial: Recor
                   </select>
                 </label>
               )}
-            </fieldset>
-            {(["x", "y", "z", "rotX", "rotY", "rotZ"] as const).map(field)}
-            {(part.shape === "cylinder" ? (["r", "h", "seg"] as const) : (["w", "h", "d"] as const)).map(field)}
-            <div className="builder-add">
-              <button type="button" onClick={() => change(groundPart(model, part.id))} title="Move the part up or down so its lowest point is on the ground">Put on the ground</button>
+            </section>
+          </>
+        ) : node === "materials" ? (
+          <section className="hx-card" aria-label="Materials">
+            <h3 className="hx-card-h">{t("Materials")}</h3>
+            {model.materials.length === 0 && <p className="hint">A material is a colour you can put on any face. Add one, then choose a face and pick it.</p>}
+            <ul className="builder-list">
+              {model.materials.map(m => (
+                <li key={m.id} className="builder-material">
+                  <div className="builder-material-head">
+                    <input type="color" aria-label="Colour" value={m.color} onChange={e => change(updateMaterial(model, m.id, { color: e.target.value }))} />
+                    <input type="text" translate="no" aria-label="Name" maxLength={60} value={m.name} onChange={e => change(updateMaterial(model, m.id, { name: e.target.value }))} />
+                    <button type="button" className="danger" aria-label="Delete this material" onClick={() => change(removeMaterial(model, m.id))}>×</button>
+                  </div>
+                  <label className="field">Texture
+                    <select value={m.texture?.id ?? ""} onChange={e => {
+                      const tx = library.find(x => x.id === e.target.value);
+                      change(updateMaterial(model, m.id, { texture: tx ? { id: tx.id, meters: tx.meters, fit: m.texture?.fit ?? false } : null }));
+                    }}>
+                      <option value="">Colour only</option>
+                      {m.texture && !library.some(x => x.id === m.texture!.id) && <option value={m.texture.id}>{"A texture that is gone"}</option>}
+                      {library.map(tx => <option key={tx.id} value={tx.id}>{tx.name}</option>)}
+                    </select>
+                  </label>
+                  <RangeField key={`${m.id}-smooth`} label="Shine (0 matt, 1 glossy)" unit="" step={0.05} min={0} max={1} value={m.smoothness} onCommit={v => change(updateMaterial(model, m.id, { smoothness: v }))} />
+                  <RangeField key={`${m.id}-metal`} label="Metal (0 none, 1 bare metal)" unit="" step={0.05} min={0} max={1} value={m.metalness} onCommit={v => change(updateMaterial(model, m.id, { metalness: v }))} />
+                  {m.texture && <label className="check"><input type="checkbox" checked={m.texture.fit} onChange={e => change(updateMaterial(model, m.id, { texture: { id: m.texture!.id, meters: m.texture!.meters, fit: e.target.checked } }))} /> Fit to face (the picture once over the whole face)</label>}
+                  {m.texture && !m.texture.fit && <RangeField key={`${m.id}-meters`} label="Size of one repeat, in metres" step={0.05} min={0.05} max={10} value={m.texture.meters} onCommit={v => change(updateMaterial(model, m.id, { texture: { id: m.texture!.id, meters: v, fit: false } }))} />}
+                </li>
+              ))}
+            </ul>
+            <div className="row">
+              <button type="button" disabled={model.materials.length >= MAX_MATERIALS} onClick={() => change(addMaterial(model, { name: `Material ${model.materials.length + 1}` }))}>+ Material</button>
             </div>
-            <div className="builder-add">
-              <button type="button" onClick={() => { const n = duplicatePart(model, part.id); change(n); setChosen(n.parts[n.parts.length - 1].id); setFace(null); }}>Duplicate</button>
-              <button type="button" className="danger" onClick={() => { change(removePart(model, part.id)); setChosen(null); setFace(null); }}>Delete</button>
-            </div>
+          </section>
+        ) : (
+          <section className="hx-card" aria-label="Game mod">
+            <h3 className="hx-card-h">{t("Game mod")}</h3>
+            <RangeField key="mod-price" label="Price in the shop" unit="" step={100} min={0} max={100000} hardMax={10000000} value={model.mod.price} onCommit={v => change(sanitize({ ...model, mod: { ...model.mod, price: Math.round(v) } }))} />
+            <RangeField key="mod-upkeep" label="Upkeep per day" unit="" step={1} min={0} max={1000} hardMax={100000} value={model.mod.upkeep} onCommit={v => change(sanitize({ ...model, mod: { ...model.mod, upkeep: Math.round(v) } }))} />
+            <label className="check"><input type="checkbox" checked={model.mod.sellable} onChange={e => change(sanitize({ ...model, mod: { ...model.mod, sellable: e.target.checked } }))} /> Can be bought and sold in the shop</label>
           </section>
         )}
       </aside>
-      <canvas ref={canvas} className="builder-canvas" aria-label="3D view of the parts" />
+
+      <div className="modedit-stage">
+        <canvas ref={canvas} aria-label="3D view of the parts" />
+      </div>
     </div>
   );
 }
