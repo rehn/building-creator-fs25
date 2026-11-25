@@ -6,6 +6,7 @@ This page says what exists today, and (clearly marked) what is planned for makin
 | Part | Status |
 |---|---|
 | [Reading buildings and their files](#reading-buildings-v1) (`GET /api/v1/...`) | Works today |
+| [Reading mods](#reading-mods-v1) (`GET /api/v1/mods`) | Works today (read only; the game zip of a whole mod is not stored on the server, see below) |
 | [What a token may do](#get-apiv1me) (`GET /api/v1/me`) | Works today |
 | [Folders](#folders) (`?folder=`, `GET /api/v1/folders`) | Works today |
 | [Creating buildings and sending their files](#writing-buildings-v1-write-tokens) (`POST /api/v1/buildings`, `PUT .../model`, tokens that may write) | Works today (not yet tried against a real map program) |
@@ -108,6 +109,15 @@ The same fields, plus:
   `"<mod name>.dealership"`, and `customTypes` lists the types its `modDesc.xml` defines. A program that copies `house.xml` into **its own mod**
   must define those types in its own `modDesc.xml` (`<placeableTypes>`) and write its own mod name in the type, or the game logs "Unknown type".
   The game's own types (`gardenShed` ...) need nothing.
+
+### Reading mods (v1)
+
+A mod holds buildings and props placed in a plan, plus the game objects, the hen yard and the fence that were added on its page (docs/PLAN_MOD.md).
+
+- `GET /api/v1/mods` gives `{"mods": [...]}` with `id`, `name`, `version`, `itemCount`, `updatedAt` (no items, no plan).
+- `GET /api/v1/mods/{id}` also gives `items` (each post: `id`, `kind` "building" or "prop", `ref` the id of the building or prop, `type`, `x`, `z`, `rot` in degrees, `y`, `name`, `missing`, and for a building `building`: the path to fetch it) and `data`, the mod's own plan as the editor saves it (`objects`, `hens`, `inside`). Treat `data` as the editor's: it may get new fields.
+- 404 `not_found` when the mod is not yours. Writing mods and the game zip of a whole mod are not here yet: the zip is made in the browser from the plan, so a program that wants one fetches the buildings (`mod.zip`) it needs.
+- `GET /api/v1/buildings` keeps working as it was.
 
 ### Files
 

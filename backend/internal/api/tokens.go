@@ -398,3 +398,56 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request, u store.User) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"tokenName": t.Name, "write": t.Write, "appVersion": s.cfg.Version})
 }
+
+/* ---------- /api/v1/mods: read-only ---------- */
+
+// modItemV1 is a post of a mod as the API tells it: the place it has in the mod's plan, and (for a building) where to fetch it.
+type modItemV1 struct {
+	store.ModItem
+	Building string `json:"building,omitempty"` // path of the building (GET /api/v1/buildings/{id}); not for a prop
+}
+
+// modV1 is a mod as the API tells it. Items and Data (the plan: fence, game objects, hens) only when one mod is fetched.
+type modV1 struct {
+	ID        string          `json:"id"`
+	Name      string          `json:"name"`
+	Version   int64           `json:"version"`
+	ItemCount int             `json:"itemCount"`
+	UpdatedAt time.Time       `json:"updatedAt"`
+	Items     []modItemV1     `json:"items,omitempty"`
+	Data      json.RawMessage `json:"data,omitempty"`
+}
+
+func newModV1(m store.Mod) modV1 {
+	out := modV1{ID: m.ID, Name: m.Name, Version: m.Version, ItemCount: m.ItemCount, UpdatedAt: m.UpdatedAt, Data: m.Data}
+	for _, it := range m.Items {
+		v := modItemV1{ModItem: it}
+		if it.Kind == store.ModBuilding && !it.Missing {
+			v.Building = "/api/v1/buildings/" + it.Ref
+		}
+		out.Items = append(out.Items, v)
+	}
+	return out
+}
+
+func (s *Server) listModsV1(w http.ResponseWriter, r *http.Request, u store.User) {
+	list, err := s.st.ListMods(r.Context(), u.ID)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	out := make([]modV1, 0, len(list))
+	for _, m := range list {
+		out = append(out, newModV1(m))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"mods": out})
+}
+
+func (s *Server) getModV1(w http.ResponseWriter, r *http.Request, u store.User) {
+	m, err := s.st.GetMod(r.Context(), u.ID, r.PathValue("id"))
+	if err != nil {
+		modError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, newModV1(m))
+}

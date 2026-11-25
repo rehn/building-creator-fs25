@@ -122,6 +122,8 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /api/v1/folders", s.requireToken(s.listFolders))
 	m.HandleFunc("POST /api/v1/folders/rename", s.requireWriteToken(s.renameFolder))
 	m.HandleFunc("GET /api/v1/me", s.requireToken(s.me))
+	m.HandleFunc("GET /api/v1/mods", s.requireToken(s.listModsV1))
+	m.HandleFunc("GET /api/v1/mods/{id}", s.requireToken(s.getModV1))
 	m.HandleFunc("PUT /api/v1/buildings/{id}/model", s.requireWriteToken(s.putModel))
 	m.HandleFunc("GET /api/v1/buildings/{id}", s.requireToken(s.getBuilding))
 	m.HandleFunc("GET /api/v1/buildings/{id}/icon", s.requireToken(s.buildingIcon))
