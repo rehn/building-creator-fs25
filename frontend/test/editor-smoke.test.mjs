@@ -100,3 +100,17 @@ test("a part and a section can be given a floor of their own from the tree", () 
   assert.ok(looks && Object.keys(looks).length >= 2 && Object.values(looks).every(v => v.surface === "litter"), JSON.stringify(looks));
   ed.destroy();
 });
+
+test("the floor and the walls inside, with wallpaper by wall, are in the Inside tab", () => {
+  const root = w.document.getElementById("root");
+  root.innerHTML = "";
+  const saved = [];
+  const ed = createEditor(root, {initial: {kind: "house"}, onChange: s => saved.push(s)});
+  const titles = [...root.querySelectorAll("#controls-inside details")].map(d => d.dataset.section);
+  assert.deepEqual(titles, ["Inside", "Floor", "Inside walls", "Wallpaper by wall"]);
+  assert.ok(root.querySelector("#controls-inside #f-insidePaper"), "the wallpaper for every wall");
+  assert.ok(root.querySelector("#controls-inside #papersEditor #ppWall"), "the choice of a wall");
+  root.querySelector("#papersEditor #ppAdd").click();
+  assert.equal(saved.at(-1).papers.length, 1, "a section of wallpaper is added to the wall");
+  ed.destroy();
+});

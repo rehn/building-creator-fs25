@@ -342,6 +342,7 @@ SCHEMA.forEach(g => {
   });
   if (g.custom === "dormers") { const ed = document.createElement("div"); ed.id = "dormEditor"; d.appendChild(ed); }
   if (g.custom === "inside") { const ed = document.createElement("div"); ed.id = "insideEditor"; d.appendChild(ed); }
+  if (g.custom === "papers") { const ed = document.createElement("div"); ed.id = "papersEditor"; d.appendChild(ed); }
   if (g.custom === "tree") { const ed = document.createElement("div"); ed.id = "treeEditor"; ed.innerHTML = `<div id="treeNav"></div>`; d.appendChild(ed); }
   if (g.custom === "windows") {
     const sub = document.createElement("p"); sub.className = "sub"; sub.textContent = "Size for new windows"; d.appendChild(sub);
