@@ -130,3 +130,5 @@ one filled `--accent`). Sliders pair with an editable number (click the number t
 - The kind tabs and folder tabs reset on reload (not remembered); decide whether to keep them in `localStorage`.
 - Icons: the app switch has icons, nothing else does. Decide on one small icon set before adding more (e.g. for kinds in the tab rows).
 - "My items" and props are still two places; a later step may merge them under one tab.
+
+- **The header stays in the editors** (2026-11-25): a building's page has the top bar (brand, app switch, Buildings / Mods / Items / Textures, settings) above its own bar (back, name, status, settings file), as the other pages have it. The editor fills what is left of the window.
