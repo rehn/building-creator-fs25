@@ -545,8 +545,11 @@ function makeMesh(m) {
     : new THREE.MeshStandardMaterial(slot === "glass" ? {roughness:0.05, metalness:0.1} : slot === "gutter" || slot === "iron" ? {roughness:0.45, metalness:0.35} : slot === "curtain" || slot === "fittings" ? {roughness:0.95, metalness:0, vertexColors:true} : {roughness:0.85, metalness:0});
   const mesh = new THREE.Mesh(new THREE.BufferGeometry(), matObjs[m]);
   mesh.castShadow = !["glass", "interior", "curtain"].includes(slot); mesh.receiveShadow = slot !== "interior";
+  mesh.name = m;
   meshes[m] = mesh; scene.add(mesh);
 }
+/** While the inside is arranged no roof is drawn (the cut under the eaves left a wing's lower roof standing): every mesh of the roof slot, the wings' too, is hidden. */
+function showRoofs() { for (const m of Object.keys(meshes)) meshes[m].visible = !(ins.on && slotOf(m) === "roof"); }
 function initThree() {
   renderer = new THREE.WebGLRenderer({canvas, antialias:true});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -2048,6 +2051,7 @@ function leaveInside() {
   if (!ins.on) return;
   ins.on = false; ins.drag = null; ins.divider = null; ins.sel = null;
   editorEl.classList.remove("arranging"); placeInside();
+  showRoofs();
   window.removeEventListener("keydown", insideKey);
   renderer.clippingPlanes = [];
   sunLight.castShadow = true;
@@ -2064,6 +2068,7 @@ function setInsideView(v) {
   const eaves = r.H - (p.roofType === "flat" ? 0 : p.overhang * Math.tan(p.roofPitch * Math.PI / 180));
   // (under a ceiling: just under it)
   const cut3d = p.ceiling ? p.floorHeight - 0.05 : Math.max(1.4, eaves - 0.12);
+  showRoofs();
   clipPlane.constant = r.F + (v === "plan" ? 1.3 : cut3d);
   renderer.clippingPlanes = [clipPlane];
   if (v === "3d") {
@@ -2492,6 +2497,7 @@ function rebuild(fit) {
         mat.color.set(m === "curtain" || m === "fittings" ? "#ffffff" : colorFor(p, m)); mat.needsUpdate = true;
       }
     });
+    showRoofs();
     drawFittingSurfaces();
     scheduleSurfaces();
     drawItems(geo.refs);

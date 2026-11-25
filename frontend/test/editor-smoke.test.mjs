@@ -142,3 +142,24 @@ test("the Inside tab's left panel lists its settings and the details panel shows
   assert.ok(host.contains(section("Wallpaper by wall")), "back in the details panel");
   ed.destroy();
 });
+
+test("arranging the inside hides every roof, a wing's too, and Done shows them again", async () => {
+  const THREE = await import("three");
+  const seen = [], add = THREE.Scene.prototype.add;
+  THREE.Scene.prototype.add = function (...o) { seen.push(...o); return add.apply(this, o); };
+  try {
+    const root = w.document.getElementById("root");
+    root.innerHTML = "";
+    seen.length = 0;
+    const ed = createEditor(root, {initial: {kind: "house", wings: [{id: 1, wall: "back", pos: 0.5, width: 5, depth: 5, floors: 1}]}, onChange() {}});
+    const roofs = () => seen.filter(o => o.isMesh && /^roof/.test(o.name));
+    assert.ok(roofs().length >= 1, "the building has a roof mesh");
+    assert.ok(roofs().every(m => m.visible), "roofs show as usual");
+    root.querySelector("#tab-inside").click();
+    root.querySelector("#insideArrange").click();
+    assert.ok(roofs().every(m => !m.visible), "no roof while arranging");
+    root.querySelector("#insideDone").click();
+    assert.ok(roofs().every(m => m.visible), "roofs are back");
+    ed.destroy();
+  } finally { THREE.Scene.prototype.add = add; }
+});
