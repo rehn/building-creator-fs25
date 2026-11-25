@@ -19,6 +19,7 @@ import { decodeDds } from "@/editor/dds.mjs";
 import { makeModPackage } from "@/editor/modExport.mjs";
 import { confirmDialog } from "@/components/dialog.mjs";
 import { RangeField } from "@/components/RangeField";
+import { TreeRow } from "@/components/TreeRow";
 import { addPost, removePost, setPostType, placePost, choices, payload } from "@/lib/mods.mjs";
 import { groupsFree, addGroup, removeGroup, setObjectOf, settingsFor, objectsOfData, setPoint, addPoint, removePoint, animalOfData, countOfData, ANIMALS, groupOf, GROUPS, entranceBuilding, fenceProblems, fenceProblemList, insertPoint, MIN_POSTS } from "@/lib/modObjects.mjs";
 
@@ -284,12 +285,8 @@ export default function ModPage() {
 
   /** One row of the tree, as the building editor draws it: a caret (when it has children) and a button. */
   const row = (key: string, depth: number, label: string, on: boolean, choose: () => void, opts: { kids?: boolean; hint?: string; strong?: boolean; add?: () => void; warn?: string } = {}) => (
-    <li className={"tnode" + (opts.strong ? " t-main" : "")} style={{ ["--d" as string]: depth }} key={key}>
-      {opts.kids ? <button type="button" className="caret" aria-label={closed[key] ? t("Unfold") : t("Fold")} aria-expanded={!closed[key]} onClick={() => fold(key)}>{closed[key] ? "▸" : "▾"}</button> : <span className="caret" aria-hidden="true" />}
-      <button type="button" className="tbtn" aria-pressed={on} onClick={choose}><span translate="no">{label}</span>{opts.hint && <small> {opts.hint}</small>}</button>
-      {opts.warn && <span className="twarn" role="img" tabIndex={0} title={opts.warn} aria-label={opts.warn}>⚠</span>}
-      {opts.add && <button type="button" className="linklike tadd" onClick={opts.add} disabled={busy}>{t("+ Add")}</button>}
-    </li>
+    <TreeRow key={key} depth={depth} label={label} on={on} onChoose={choose} hint={opts.hint} strong={opts.strong} warn={opts.warn}
+      folded={!!closed[key]} onFold={opts.kids ? () => fold(key) : undefined} add={opts.add} addDisabled={busy} />
   );
 
   /** The rows of one game object, and under a fence one for each of its posts (the first is where it starts, the last where it stops). */

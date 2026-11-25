@@ -1185,6 +1185,7 @@
   "The post before": "The post before",
   "The preview could not be made from the .shapes file: {why} Pick an .obj of the item too (in Giants Editor: select it, then File → Export → OBJ).": "The preview could not be made from the .shapes file: {why} Pick an .obj of the item too (in Giants Editor: select it, then File → Export → OBJ).",
   "The price of the pallets the player buys at a pallet shop, and of what the player sells there, as per cent of the game's own price (the base game's warehouses sell at 144 %). Add the shop counter, the delivery area and the selling area under Game objects.": "The price of the pallets the player buys at a pallet shop, and of what the player sells there, as per cent of the game's own price (the base game's warehouses sell at 144 %). Add the shop counter, the delivery area and the selling area under Game objects.",
+  "The prop": "The prop",
   "The reference building failed: {error}": "The reference building failed: {error}",
   "The ridge runs along the front with ridge \"width\", from front to back with \"depth\". Heights: \"floorHeight\" is one full floor's height, so the walls are floors x floorHeight tall (plus a knee wall with a half floor),": "The ridge runs along the front with ridge \"width\", from front to back with \"depth\". Heights: \"floorHeight\" is one full floor's height, so the walls are floors x floorHeight tall (plus a knee wall with a half floor),",
   "The same id ({id}) is sent twice in this request.": "The same id ({id}) is sent twice in this request.",
