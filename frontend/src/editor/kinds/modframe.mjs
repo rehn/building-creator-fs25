@@ -38,7 +38,8 @@ function clearOf(host, fence) {
   return best ? buildingOutline(best.rects, CLEAR_MARGIN) : [];
 }
 
-const rectOf = b => ({x0: b.center[0] - b.size[0] / 2, x1: b.center[0] + b.size[0] / 2, z0: b.center[2] - b.size[2] / 2, z1: b.center[2] + b.size[2] / 2});
+// (the ground a box covers: a turned one, the box round it)
+const rectOf = b => { const a = (b.turn || 0) * Math.PI / 180, hx = (Math.abs(Math.cos(a)) * b.size[0] + Math.abs(Math.sin(a)) * b.size[2]) / 2, hz = (Math.abs(Math.sin(a)) * b.size[0] + Math.abs(Math.cos(a)) * b.size[2]) / 2; return {x0: b.center[0] - hx, x1: b.center[0] + hx, z0: b.center[2] - hz, z1: b.center[2] + hz}; };
 
 /** The yard (as henYard gives it) from the mod's objects: p.objects in the frame's coordinates, host.footprints (what the walking area goes round) the mod's buildings and props. */
 function yardOf(p, geo, host) {
@@ -46,7 +47,7 @@ function yardOf(p, geo, host) {
   const food = boxOf(o("food")), loading = boxOf(o("loading")), pallets = boxOf(o("pallets")), info = boxOf(o("info"));
   const feet = (host && host.footprints) || [], fence = ccwFence(pa.fence);
   // the troughs (cow.mjs troughFrom: where the hens stand to eat, the food plane): drawn, and obstacles in the hens' area
-  const asTrough = o => troughFrom({x: o.x, z: o.z, w: o.w, d: o.d, h: o.h}, fence, feet);
+  const asTrough = o => troughFrom({x: o.x, z: o.z, w: o.w, d: o.d, h: o.h, turn: o.turn}, fence, feet);
   const feedTroughs = objectsOf(p, "feedTrough").map(asTrough), waterTroughs = objectsOf(p, "waterTrough").map(asTrough), troughBoxes = [...feedTroughs, ...waterTroughs].map(t => t.box);
   // the hens walk inside the chosen building (host.inside: {settings, place}): its floor and the doorways that face the fence; the answer (or why not) is left in host.insideResult for the warnings
   let nav = null;
