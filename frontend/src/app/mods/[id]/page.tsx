@@ -19,7 +19,7 @@ import { makeModPackage } from "@/editor/modExport.mjs";
 import { confirmDialog, promptDialog } from "@/components/dialog.mjs";
 import { RangeField } from "@/components/RangeField";
 import { addPost, removePost, setPostType, placePost, choices, payload } from "@/lib/mods.mjs";
-import { groupsFree, addGroup, removeGroup, setObjectOf, settingsFor, objectsOfData, setPoint, addPoint, removePoint, hensOfData, groupOf, entranceBuilding, fenceProblems, fenceProblemList, insertPoint, MIN_POSTS } from "@/lib/modObjects.mjs";
+import { groupsFree, addGroup, removeGroup, setObjectOf, settingsFor, objectsOfData, setPoint, addPoint, removePoint, hensOfData, groupOf, GROUPS, entranceBuilding, fenceProblems, fenceProblemList, insertPoint, MIN_POSTS } from "@/lib/modObjects.mjs";
 
 type Kind = { id: string; name: string };
 type Groups = ReturnType<typeof projectGroups>;
@@ -285,6 +285,17 @@ export default function ModPage() {
     </li>
   );
 
+  /** The rows of one game object, and under a fence one for each of its posts (the first is where it starts, the last where it stops). */
+  const objectRows = (o: (typeof objects)[number], depth: number) => {
+    const posts = Array.isArray(o.points) ? o.points : null, mine = sel.kind === "object" && sel.object === o.id;
+    return [
+      row(`o:${o.id}`, depth, typeName(o.type), mine && !(posts && postOn), () => { setPostOn(false); setSel({ kind: "object", object: o.id }); }, { warn: fenceWarning(o.id), kids: !!posts }),
+      ...(posts && !closed[`o:${o.id}`] ? posts.map((_, i) => row(`o:${o.id}:${i}`, depth + 1,
+        i === 0 ? t("Post {n} (start)", { n: i + 1 }) : i === posts.length - 1 ? t("Post {n} (stop)", { n: i + 1 }) : t("Post {n}", { n: i + 1 }),
+        mine && postOn && Math.min(postIx, posts.length - 1) === i, () => { setPostIx(i); setPostOn(true); setSel({ kind: "object", object: o.id }); }, { warn: postWarning(o.id, i) })) : []),
+    ];
+  };
+
   const tree = mod && (
     <ul className="tree" role="tree">
       {row("root", 0, mod.name, sel.kind === "root", () => setSel({ kind: "root" }), { kids: true, strong: true, add: () => setSel({ kind: "root" }) })}
@@ -292,14 +303,12 @@ export default function ModPage() {
         ...draft.map(p => row(p.id, 1, p.missing ? t("Deleted") : p.name, sel.kind === "post" && sel.post === p.id, () => setSel({ kind: "post", post: p.id }),
           { hint: p.kind === "prop" ? t("prop") : p.type ? TYPES.find(k => k.id === p.type)?.name : undefined })),
         row("objects", 1, t("Game objects"), sel.kind === "group", () => setSel({ kind: "group" }), { kids: objects.length > 0 }),
-        ...(closed.objects ? [] : objects.flatMap(o => {
-          const posts = Array.isArray(o.points) ? o.points : null, mine = sel.kind === "object" && sel.object === o.id;
+        // (the objects that belong together, such as the hen yard's, are under a node of their group; the nodes come in the order the objects were added in)
+        ...(closed.objects ? [] : [...new Set(objects.map(o => groupOf(o.type) ?? ""))].flatMap(g => {
+          const inGroup = objects.filter(o => (groupOf(o.type) ?? "") === g), gKey = `g:${g}`;
           return [
-            row(`o:${o.id}`, 2, typeName(o.type), mine && !(posts && postOn), () => { setPostOn(false); setSel({ kind: "object", object: o.id }); }, { warn: fenceWarning(o.id), kids: !!posts }),
-            // (each post of a fence is an item of its own under it: the first is where it starts, the last where it stops)
-            ...(posts && !closed[`o:${o.id}`] ? posts.map((_, i) => row(`o:${o.id}:${i}`, 3,
-              i === 0 ? t("Post {n} (start)", { n: i + 1 }) : i === posts.length - 1 ? t("Post {n} (stop)", { n: i + 1 }) : t("Post {n}", { n: i + 1 }),
-              mine && postOn && Math.min(postIx, posts.length - 1) === i, () => { setPostIx(i); setPostOn(true); setSel({ kind: "object", object: o.id }); }, { warn: postWarning(o.id, i) })) : []),
+            ...(g ? [row(gKey, 2, t(GROUPS.find(x => x.id === g)?.name ?? g), false, () => fold(gKey), { kids: true, hint: String(inGroup.length) })] : []),
+            ...(g && closed[gKey] ? [] : inGroup.flatMap(o => objectRows(o, g ? 3 : 2))),
           ];
         })),
       ]}
