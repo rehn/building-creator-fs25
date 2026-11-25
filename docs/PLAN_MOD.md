@@ -19,6 +19,8 @@ Inget av detta är byggt.
 - Byggnadens form och innehåll stannar hos byggnaden: walkIn, möbelkatalog, presets, öppna sidor, ventilatorer.
 - Spelfunktionen flyttar till modtypen: placeable-typ, objekttyper (`kind.objects`), djur, XML, navmesh, shopkategori, varulistor.
 
+**Läget 2026-11-25 (docs/PLAN_MALLAR.md):** `kind` är nu bara byggnadens *inredning* (byggnadstypen är en mall); placeable-typ, spelobjekt och export hör till modden, och byggnaden har ingen egen export i redigeraren. Beskrivningarna nedan av byggnadens egen `placeable`, `objects` och `makeFiles` är historiska. Det som återstår är serverns zip av modden (PLAN_MALLAR steg 3b).
+
 Befintligt som återanvänds: `modDescXmlMulti` (flera byggnader i en mod), betesobjektets förankring vid väggen, planvyn med `snapDecor`/`snapFencePoint`, hjälpfunktionerna för hörn och väggar i `layout.mjs`, och exportfilerna per kind.
 
 ## 3. Steg
