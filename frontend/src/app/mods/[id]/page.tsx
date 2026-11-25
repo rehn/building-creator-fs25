@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, type Mod, type ModObject, type ModPost, type ProjectSummary } from "@/lib/api";
 import { useUser } from "@/lib/useUser";
 import { EditorShell } from "@/components/EditorShell";
+import { usePanelSizes } from "@/components/usePanelSizes";
 import { t } from "@/i18n/index.mjs";
 import { KINDS, sanitize, modName } from "@/editor/model.mjs";
 import { OBJECT_TYPES, OBJECT_LIMITS } from "@/editor/objects.mjs";
@@ -48,6 +49,8 @@ export default function ModPage() {
   const [busy, setBusy] = useState(false);
   const [nameDraft, setNameDraft] = useState<string | null>(null);   // the name as it is typed in the sub-bar, until it is let go
   const canvas = useRef<HTMLCanvasElement>(null);
+  const bench = useRef<HTMLElement>(null);
+  const panels = usePanelSizes(bench);
   const view = useRef<View | null>(null);
   const draftRef = useRef(draft);
   draftRef.current = draft;
@@ -326,7 +329,9 @@ export default function ModPage() {
       status={error ? error : !mod ? "" : busy ? t("Saving…") : t("All changes saved")} bad={!!error}
       actions={<button type="button" className="primary" onClick={generate} disabled={busy || !mod || draft.length === 0}>{t("Generate game mod")}</button>}
     >
-      <main className="modedit">
+      <main className="modedit" ref={bench} style={panels.style}>
+        <div id="rz1" {...panels.handle("panel", t("Resize the left panel"))} />
+        <div id="rz2" {...panels.handle("details", t("Resize the details panel"))} />
         <aside className="hx-panel modedit-tree" aria-label={t("The mod")}>
           {!mod && !error && !userError && <p className="loading">Loading the mod…</p>}
           {tree}
