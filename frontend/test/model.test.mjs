@@ -32,8 +32,8 @@ test("schema: every section is in a tab, in the order of what you do", () => {
   const ids = TABS.map(t => t[0]), inTab = t => SCHEMA.filter(g => g.tab === t).map(g => g.title);
   assert.deepEqual(ids, ["building", "inside", "settings"]);
   assert.ok(SCHEMA.every(g => ids.includes(g.tab) || g.tab === "game"), "every section has a tab (the game's settings are the mod's)");
-  assert.deepEqual(inTab("building"), ["Open sides", "Pumps", "Building", "Size", "Roof", "Kupor (dormers)", "Surfaces", "Inside walls"], "the tree, and the sections of the main building's card (detail: true)");
-  assert.deepEqual(SCHEMA.filter(g => g.detail).map(g => g.title), ["Open sides", "Pumps", "Size", "Roof", "Kupor (dormers)", "Surfaces", "Inside walls"]);
+  assert.deepEqual(inTab("building"), ["Open sides", "Pumps", "Building", "Size", "Roof", "Kupor (dormers)", "Surfaces", "Floor", "Inside walls"], "the tree, and the sections of the main building's card (detail: true)");
+  assert.deepEqual(SCHEMA.filter(g => g.detail).map(g => g.title), ["Open sides", "Pumps", "Size", "Roof", "Kupor (dormers)", "Surfaces", "Floor", "Inside walls"]);
   assert.deepEqual(inTab("inside"), ["Inside"]);
   assert.deepEqual(inTab("settings"), ["Windows", "Doors", "Colors", "Interior"], "what the whole building has unless something says otherwise");
   assert.deepEqual(inTab("game"), ["Vehicles for sale", "What it buys", "Fuel", "Prices and pallets", "Goods", "Game mod"], "the game's settings: no building shows them");

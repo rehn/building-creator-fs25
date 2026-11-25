@@ -83,3 +83,20 @@ test("a piece that is chosen inside has its settings in the details panel, next 
   assert.equal(root.querySelector("#insideEditor .piece"), null, "and not in the left panel");
   ed.destroy();
 });
+
+test("a part and a section can be given a floor of their own from the tree", () => {
+  const root = w.document.getElementById("root");
+  root.innerHTML = "";
+  const saved = [];
+  const ed = createEditor(root, {initial: {kind: "shed", width: 24, depth: 8, splits: [{at: 12}], wings: [{id: 1, wall: "back", pos: 0.5, width: 6, depth: 6, floors: 0}]}, onChange: s => saved.push(s)});
+  const nodes = [...root.querySelectorAll("[data-node]")].map(b => b.dataset.node);
+  for (const key of nodes.filter(k => k.startsWith("section:") || k.startsWith("part:"))) {
+    root.querySelector(`[data-node="${key}"]`).click();
+    const sel = root.querySelector("#flk-sel");
+    assert.ok(sel, "the floor choice is in the card of " + key);
+    sel.value = "litter"; sel.dispatchEvent(new w.Event("change", {bubbles: true}));
+  }
+  const looks = saved.at(-1).floorLooks;
+  assert.ok(looks && Object.keys(looks).length >= 2 && Object.values(looks).every(v => v.surface === "litter"), JSON.stringify(looks));
+  ed.destroy();
+});
