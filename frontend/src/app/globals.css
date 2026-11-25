@@ -134,6 +134,9 @@ html:has(.editor-page) { overscroll-behavior: none; }
 .hx-editor:is([data-tab="building"], [data-tab="inside"]):not(.searching) .hx-details { display: block; }
 /* on the Inside tab the details panel holds the piece that is chosen, and nothing of the tree's */
 .hx-editor[data-tab="inside"] .hx-details > :not(#pieceCard), .hx-editor:not([data-tab="inside"]) #pieceCard { display: none; }
+/* nothing to show in it (the Inside tab, before the inside is arranged): the view takes its room */
+.hx-editor[data-tab="inside"].no-details:not(.searching) { --detw: 0px; }
+.hx-editor[data-tab="inside"].no-details:not(.searching) .hx-details, .hx-editor[data-tab="inside"].no-details:not(.searching) #rz2 { display: none; }
 .hx-rz { position: absolute; top: 0; bottom: 0; width: 11px; margin-left: -6px; z-index: 6; cursor: col-resize; touch-action: none; outline: none; }
 .hx-rz::after { content: ""; position: absolute; top: 0; bottom: 0; left: 4px; width: 3px; background: transparent; transition: background .12s; }
 .hx-rz:hover::after, .hx-rz:focus-visible::after, .hx-rz.drag::after { background: var(--accent, #9B2A1F); }
