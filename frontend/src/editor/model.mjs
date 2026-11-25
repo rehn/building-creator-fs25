@@ -12,7 +12,7 @@ import { WALL_T, openSide, wallFrames, wallsOf, liveWings, wingsOf, wingIdOf, ea
 import { withAssets, placement, assetFolder, normalizeMeta, troughAssets } from "./assets.mjs";
 import { SURFACES } from "./surfaces.mjs";
 import { agedColor } from "./age.mjs";
-import { cleanObjects, objectOf, boxOf, objectInfo, allowedTypes } from "./objects.mjs";
+import { cleanObjects, objectOf, boxOf, objectInfo } from "./objects.mjs";
 import { cleanDecor, decorRects } from "./decor.mjs";
 import { WALLPAPERS } from "./kinds/innerwall.mjs";
 import { WINDOW_STYLES, DOOR_STYLES, WINDOW_STYLE_IDS, DOOR_STYLE_IDS, DOUBLE_DOOR_FROM, HATCH_SIZE, isPair, styleOf, drawSash, drawLeaf } from "./openings.mjs";
@@ -553,23 +553,8 @@ export function wallItems(p, key) {
   }
   return out.sort((a, b) => a.s0 - b.s0 || a.s1 - b.s1);
 }
-/** An object's name in the tree: its type's, numbered when the building has several of that type. */
-/** The feed troughs are one folder and the water troughs another (where the first of each stands in the list), with the troughs under them. */
-function groupTroughs(p, nodes) {
-  const out = [], made = {};
-  for (const n of nodes) {
-    if (n.otype !== "feedTrough" && n.otype !== "waterTrough") { out.push(n); continue; }
-    if (!made[n.otype]) { made[n.otype] = {type: "group", otype: n.otype, name: objectInfo(kindOf(p), n.otype).name + "s", children: []}; out.push(made[n.otype]); }
-    made[n.otype].children.push(n);
-  }
-  return out;
-}
 /** What a decoration is called in the tree: its item's name. */
 function decorName(d) { const a = ASSETS.find(q => q.id === d.asset); return a ? a.name : "(an item no longer in your list)"; }
-function objectName(p, o) {
-  const name = objectInfo(kindOf(p), o.type).name, same = (p.objects || []).filter(x => x.type === o.type);
-  return same.length > 1 ? `${name} ${same.indexOf(o) + 1}` : name;
-}
 /**
  * The building as a tree for the editor: {type: "main", children, lost: [parts]}. The children are floors {type: "floor", part (0 = the main building, else the part), floor, section, children: its walls}, or,
  * when there are dividers, sections {type: "section", part, index, from, to, floors, children: floors}. A wall {type: "wall", key, floor, section, span?, children}: a wall along the building is in every
@@ -610,13 +595,9 @@ export function buildingTree(p) {
   };
   const children = sectionNodes(0, ["front", "back", "left", "right", ...splitsOf(p).map(s => s.key)]);
   const lost = (p.wings || []).filter(w => !seen.has(w.id)).map(w => ({type: "part", id: w.id, off: "It is left out: the extension it stands on is.", children: []}));
-  // the game objects (the sleep point, feed places, the pasture ...): a node of their own after the building (every kind can have some: allowedTypes)
-  const game = allowedTypes(kindOf(p)).length ? {type: "game", children: groupTroughs(p, (p.objects || []).map(o => ({type: "object", id: o.id, otype: o.type, name: objectName(p, o),
-    // a fence drawn by hand is a folder of its posts
-    ...(o.type === "pasture" && o.points ? {children: o.points.map((_, i) => ({type: "post", id: o.id, index: i, name: `Post ${i + 1}`, role: i === 0 ? "start" : i === o.points.length - 1 ? "stop" : ""}))} : {})})))} : null;
-  // the decorations (decor.mjs): a node of their own after the game objects, always there (it is where they are added)
+  // the decorations (decor.mjs): a node of their own after the building, always there (it is where they are added)
   const decor = {type: "decor", children: (p.decor || []).map(d => ({type: "deco", id: d.id, name: decorName(d)}))};
-  return {type: "main", children, lost, game, decor};
+  return {type: "main", children, lost, decor};
 }
 /** The free stretches of a wall [s0, s1] on a floor: 30 cm from its ends and 20 cm from what stands there (a part blocks the floors it covers). forPart: for a part, which may stand over windows. */
 export function freeStretches(p, key, floor, forPart = false) {

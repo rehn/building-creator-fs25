@@ -4,20 +4,15 @@ import * as THREE from "three";
 import JSZip from "jszip";
 import { t } from "../i18n/index.mjs";
 import { confirmDialog } from "../components/dialog.mjs";
-import { walkArea, areaOf, cellRects } from "./walkarea.mjs";
 import {
-  SCHEMA, TABS, fieldsFor, WALLS, WALL_NAMES, DTYPES, DORM_DEF, MATS, fittingTextures,
+  SCHEMA, TABS, fieldsFor, DTYPES, DORM_DEF, MATS, fittingTextures,
   genRow, sanitize, serialize, slugify, buildGeometry, buildI3d, placeableSnippet, gamePlaces, surfaceSpec, scaledUV, colorFor, WP
 } from "./model.mjs";
 import { WINDOW_STYLES, DOOR_STYLES, PORCH_OPTIONS, PORCH_W, PORCH_D, WING_FIELDS, MAX_WINGS } from "./model.mjs";
 import { pieceSheet, pieceMeshes, buildingTree, matList, matTable, slotOf, partStyle, splitAtOf, wallLabel, partName, wallItems, addOpening, addPartOn, addSplit, addPartSplit, duplicateOpening, duplicateSplit, moveBeside, moveToWall, openingProblem, setSectionFloorHeight, setTotalHeight, addPartDoor } from "./model.mjs";
 import { lodKeeps, matTexture, i3dFiles, modTypesFor } from "./model.mjs";
-import { sharedDefaults } from "./kinds/gameobjects.mjs";
-import { DEALER_GROUPS } from "./kinds/vehicleshop.mjs";
-import { GRAINS } from "./kinds/grainintake.mjs";
-import { LISTS } from "./kinds/palletshop.mjs";
 import { encodeDds, decodeDds } from "./dds.mjs";
-import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, henCap, seeThroughGlass, kindOf } from "./model.mjs";
+import { GLASS_ALPHA, ROOM_OPTIONS, CURTAIN_OPTIONS, MOD_FILES, modName, modDescXml, placeableXml, defaultModDescription, seeThroughGlass, kindOf } from "./model.mjs";
 import { WALLPAPERS } from "./kinds/innerwall.mjs";
 import { evalNumber } from "./calc.mjs";
 import { DOUBLE_DOOR_FROM } from "./openings.mjs";
@@ -25,13 +20,10 @@ import { cleanPapers, wallBreaks, pieceGroups, roomOf, problems, footprint, snap
 import { makeWalker } from "./walk.mjs";
 import { exportPart, importPart } from "./partfile.mjs";
 import { modelBundle } from "./bundle.mjs";
-import { OBJECT_TYPES, objectInfo, OBJECT_LIMITS, GAP_LIMITS, objectOf, pastureOf, snapBox, snapPasture, objectProblems, objectWarnings, fencePoints, snapFencePoint, MAX_FENCE_POINTS, MANY, MAX_TROUGHS, nextTroughSpot, TROUGH_KINDS, allowedTypes, SHARED_GROUPS } from "./objects.mjs";
-import { setAssets, catalogFor, usedAssets, troughLooks, changeKind, CONVERTIBLE_KINDS } from "./model.mjs";
+import { setAssets, catalogFor, usedAssets, changeKind, CONVERTIBLE_KINDS } from "./model.mjs";
 import { KINDS } from "./kinds/index.mjs";
-import FILL_TYPES from "./filltypes.mjs";
-import { SHOP_KINDS } from "./kinds/shop.mjs";
 import { cleanDecor, decorRect, decorRects, snapDecor, MAX_DECOR } from "./decor.mjs";
-import { readObj, assetFolder, flattenI3d, assetSize, normalizeMeta, turnedSize } from "./assets.mjs";
+import { readObj, assetFolder, flattenI3d } from "./assets.mjs";
 import { paintInterior, paintGlass } from "./interior.mjs";
 import { TEX, baseFor, fitBase as fitBasePx, compose as composePx, textureFiles } from "./textures.mjs";
 import { splitBySurface } from "./i3d.mjs";
@@ -62,7 +54,6 @@ const MARKUP = `<div class="hx-editor" data-tab="building">
     <div class="readout" id="readout"></div>
     <div class="orbit-hint" id="orbitHint">Drag to orbit · right-drag or Shift+drag to move · scroll to zoom · double-click to look from there</div>
     <button type="button" class="hx-walk" id="walkBtn" title="See the building as a person walking round and in it">Walk around</button>
-    <button type="button" class="hx-walk hx-walk2" id="walkAreaBtn" aria-pressed="false" hidden title="Where the animals can walk: in the yard, and inside the building where they can go in">Show where the animals can walk</button>
     <button type="button" class="hx-walk hx-walk3" id="lodBtn" aria-pressed="false" hidden title="Switch between the detailed model and the simple one the game shows from far away (set the distance under Game > Shop and mod)">Detail: close up</button>
     <div class="hx-inside-bar" id="insideBar" hidden>
       <div class="seg" role="group" aria-label="View">
@@ -273,14 +264,12 @@ for (const [s] of TABS) {
 }
 setTab(remember.get("hx-tab"));
 renderKindCard();
-renderGoodsUI();
 installPanelResizers();
 $("settingsSearch").addEventListener("input", applySearch);
 $("settingsSearch").addEventListener("keydown", ev => { if (ev.key === "Escape") { ev.stopPropagation(); clearSearch(); } });
 $("searchClear").onclick = () => { clearSearch(); $("settingsSearch").focus(); };
 const inputs = {};
 function fmt(f, v) {
-  if (f.k === "hens") { const cap = henCap(p); return v > cap ? `${cap} (barn full)` : `${v} (room for ${cap})`; }
   if (f.cm) return (Math.round(v * 1000) / 10) + " cm";
   if (f.money) return Math.round(v).toLocaleString("en-US");
   if (f.zero && v < 2.3) return f.zero;
@@ -329,7 +318,7 @@ SCHEMA.forEach(g => {
       el = document.createElement("div"); el.className = "field";
       el.innerHTML = `<div class="fl"><label for="${id}">${f.label}</label><output id="${id}-o"></output></div><input type="range" id="${id}" min="${f.min}" max="${f.max}" step="${f.step}">`;
     }
-    if (f.floorRow || f.cardRow) floorRows[f.k] = el; else wrap.appendChild(el);
+    if (f.floorRow) floorRows[f.k] = el; else wrap.appendChild(el);
     el.dataset.k = f.k;
     const input = el.querySelector("input,select,textarea");
     inputs[f.k] = input;
@@ -348,11 +337,10 @@ SCHEMA.forEach(g => {
       persist(); rebuild(false);
       if (["floors", "halfStorey", "roofType", "ridge", "interior", "curtainStyle", "curtainColor", "winStyle", "doorStyle"].includes(f.k)) { renderTreeUI(); renderDormUI(); }
       renderPipesUI(); renderPapersAll(); renderZonesAll();
-      if (ob.sel || ob.on) renderObjectsUI();
+      if (ob.on) renderTreeNav();
     });
   });
   if (g.custom === "dormers") { const ed = document.createElement("div"); ed.id = "dormEditor"; d.appendChild(ed); }
-  if (g.custom === "filltypes") { const ed = document.createElement("div"); ed.id = "goodsEditor"; d.appendChild(ed); }
   if (g.custom === "inside") { const ed = document.createElement("div"); ed.id = "insideEditor"; d.appendChild(ed); }
   if (g.custom === "tree") { const ed = document.createElement("div"); ed.id = "treeEditor"; ed.innerHTML = `<div id="treeNav"></div>`; d.appendChild(ed); }
   if (g.custom === "windows") {
@@ -375,31 +363,8 @@ function syncControls() {
   syncKind();
   renderTreeUI();
   renderDormUI();
-  renderObjectsUI();
   renderTreeUI();
   renderPipesUI(); renderPapersAll(); renderZonesAll();
-  renderGoodsUI();
-}
-/* ---------- A warehouse's goods: what it sells and what it buys, chosen from lists of the game's fill types ---------- */
-/** Two lists with a filter and checkboxes (LISTS: buyList, sellList); "All shown" and "None shown" act on what the filter leaves. */
-function renderGoodsUI() {
-  const ed = $("goodsEditor");
-  if (!ed) return;
-  const kind = kindOf(p);
-  const info = Object.fromEntries(FILL_TYPES.map(f => [f[0], f])), titles = {buyList: "The player buys here (pallets)", sellList: "The player sells here"};
-  ed.innerHTML = Object.keys(LISTS).map(k => `<div class="goods" data-list="${k}"><h4 class="sub">${titles[k] || k} <span class="muted" data-count></span></h4>
-    <input type="search" data-filter placeholder="Filter" aria-label="Filter the list">
-    <div class="row"><button type="button" data-all>All shown</button><button type="button" data-none>None shown</button></div>
-    <div class="goods-list" role="group">${LISTS[k].options.map(n => `<label class="check" data-name="${n}"><input type="checkbox" value="${n}" ${(p[k] || []).includes(n) ? "checked" : ""}> <span translate="no">${esc((info[n] || [n, n])[1])}</span> <span class="muted">${info[n] ? info[n][2] : ""}</span></label>`).join("")}</div></div>`).join("");
-  ed.querySelectorAll(".goods").forEach(box => {
-    const k = box.dataset.list, rows = [...box.querySelectorAll("label[data-name]")], count = box.querySelector("[data-count]");
-    const save = () => { const on = new Set(rows.filter(r => r.querySelector("input").checked).map(r => r.dataset.name)); p[k] = LISTS[k].options.filter(n => on.has(n)); count.textContent = String(p[k].length); persist(); rebuild(false); };
-    count.textContent = String((p[k] || []).length);
-    rows.forEach(r => r.querySelector("input").onchange = save);
-    box.querySelector("[data-filter]").oninput = e => { const q = e.target.value.trim().toLowerCase(); rows.forEach(r => { r.hidden = q !== "" && !r.textContent.toLowerCase().includes(q) && !r.dataset.name.toLowerCase().includes(q); }); };
-    const all = on => () => { rows.filter(r => !r.hidden).forEach(r => { r.querySelector("input").checked = on; }); save(); };
-    box.querySelector("[data-all]").onclick = all(true); box.querySelector("[data-none]").onclick = all(false);
-  });
 }
 function syncOutputs() {
   for (const k in inputs) {
@@ -419,11 +384,6 @@ function syncOutputs() {
   { const low = zonesUsed() || p.innerCladding === "sameLow"; off("lowerCladding", !low); off("lowerColor", !low); }
   for (const k of ["studSpacing", "studWidth", "studIrregular", "insidePanel"]) off(k, !p.insideSame);
   off("roofMaterial", false);
-  { const shop = !!objectOf(p, "counter") && !!objectOf(p, "spawn") && !(kindOf(p).handles || []).includes("counter"); for (const k of [...DEALER_GROUPS.map(g => g.key), "sellPrice", "sellDelivery"]) off(k, !shop); }   // (the vehicle shop: a counter and its delivery place)
-  { const on = !!objectOf(p, "intake"); for (const k of [...GRAINS.map(g => g[0]), "grainPrice", "siloHopper"]) off(k, !on); }   // (the grain intake)
-  { const on = !!objectOf(p, "pump"); off("fuelPrice", !on); off("fuelRate", !on); }   // (the fuel area)
-  { const on = ["palletcounter", "palletspawn", "unload"].every(t => objectOf(p, t)); for (const k of ["buyPrice", "goodsPrice", "palletLines"]) off(k, !on); }   // (the pallet shop)
-  off("shopCategory", !SHOP_KINDS.includes(p.kind));   // (animal buildings and stations keep their own place in the shop)
   for (const w of ["Front", "Back", "Left", "Right"]) off("post" + w, !p["open" + w]);
   off("roofPitch", p.roofType === "flat"); off("ridge", p.roofType === "flat");
   off("roofTilt", p.roofType !== "flat"); off("tiltHigh", p.roofType !== "flat" || !p.roofTilt);
@@ -478,7 +438,6 @@ const stage = $("stage");
 const readout = $("readout");
 // first-person walking (see "Walking around" below)
 let lastGeo = null;
-let showWalkArea = false;   // (paint where the animals can walk on the ground)
 /** The Shape tab's sections live under the main building in the tree while it is chosen (and the Shape tab isn't shown), else in the Shape tab. */
 // (the order of the main building's cards: the shape, then how it is divided, then what it looks like: Size, Roof, Open sides, Sections (the card in between), Surfaces, Inside walls, Kupor)
 // (the main building's cards come in two groups, one at a time: Shape (Size, Roof, Kupor, Open sides, Sections) and Look (Surfaces, Inside walls))
@@ -535,7 +494,7 @@ let wvWall = "front", wvFloor = 0, wvPart = 0, wvSec = 0, wSel = null, partImpor
 const walk = {on: false, pos: {x: 0, y: 0, z: 0}, yaw: 0, pitch: 0, keys: new Set(), last: 0, walker: null, eye: 1.65, ey: 0};
 let interiorTex = null, interiorCv = null, groundObj = null, gridObj = null;
 const interiorCanvas = () => interiorCv || (interiorCv = paintInterior(document));
-let renderer, scene, camera, groundMat, selMesh = null, placesObj = null, yardObj = null, meshes = {}, matObjs = {}, needs = true, sunLight = null;
+let renderer, scene, camera, groundMat, selMesh = null, placesObj = null, meshes = {}, matObjs = {}, needs = true, sunLight = null;
 
 /** The mesh and material of one of the building's materials (the shared ones when the editor starts, a part's own when a building has them). */
 function makeMesh(m) {
@@ -577,7 +536,6 @@ function initThree() {
   // (drawn over everything, so a door hanging out from the wall or a window's frame never hides it; faceSel hides it from behind)
   selMesh.renderOrder = 50; selMesh.visible = false; scene.add(selMesh);
   placesObj = makePlacesMarker(); scene.add(placesObj.group);
-  yardObj = makeYardMarker(); scene.add(yardObj.group);
   itemsGroup = new THREE.Group(); scene.add(itemsGroup);
   itemMat = new THREE.MeshStandardMaterial({color: 0x9aa3a8, roughness: 0.7, metalness: 0.15});
   ortho = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 200);
@@ -658,25 +616,15 @@ function setupOrbit() {
   canvas.addEventListener("pointerdown", e => {
     canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); downAt = ptrs.size === 1 ? [e.clientX, e.clientY] : null;
     if (e.button === 1 || e.button === 2 || e.shiftKey) { panIds.add(e.pointerId); downAt = null; } else panIds.delete(e.pointerId);
-    // The yard's plan view: pressing on an object (or a pasture handle) picks it up.
+    // The plan view: pressing on a decoration picks it up.
     if (ob.on && ptrs.size === 1) {
-      const q = groundPoint(e), hit = q && objectAt(q), dh = q && !(hit && hit.handle) ? decorAt(q) : null;
+      const q = groundPoint(e), dh = q ? decorAt(q) : null;
       if (dh !== null && dh !== undefined && q) {
-        // a decoration: chosen in the tree and dragged (snapped to the grid and the walls)
+        // chosen in the tree and dragged (snapped to the grid and the walls)
         const d = decorNow().find(x => x.id === dh);
         decSel = dh; treeKind = "deco"; treeReveal = true;
         ob.drag = {deco: true, id: dh, off: [q[0] - d.x, q[1] - d.z], moved: false};
         renderTreeUI(); updatePlacesMarker();
-      } else if (hit) {
-        const o = objectsNow().find(x => x.id === hit.id);
-        if (hit.handle && /^m[0-9]+$/.test(hit.handle) && o.points) {
-          // a pale dot between two posts: a new post there, to drag
-          const i = +hit.handle.slice(1), pts = o.points.slice(), m = [(pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2];
-          pts.splice(i + 1, 0, m); o.points = pts; p.objects = objectsNow().map(x => x.id === o.id ? {...x, points: pts} : x);
-          hit.handle = "p" + (i + 1); ob.pt = i + 1; rebuild(false);
-        } else if (hit.handle && /^p[0-9]+$/.test(hit.handle)) ob.pt = +hit.handle.slice(1);
-        ob.sel = hit.id; treeKind = "object"; treeReveal = true; ob.drag = {...hit, off: o.type === "pasture" ? [0, 0] : [q[0] - o.x, q[1] - o.z], moved: false, before: p.objects};
-        renderObjectsUI(); updatePlacesMarker();
       }
     }
     // Arranging the inside: pressing on a piece picks it up.
@@ -698,8 +646,7 @@ function setupOrbit() {
     const click = downAt && ptrs.size === 1 && Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) < 5;
     if (ob.drag) {
       const d = ob.drag; ob.drag = null;
-      if (d.deco) { if (d.moved) setDecor(decorNow()); else { renderTreeUI(); updatePlacesMarker(); } downAt = null; return; }
-      if (d.moved) setObjects(sanitize({...p, objects: p.objects}).objects, d.id); else { renderObjectsUI(); updatePlacesMarker(); }
+      if (d.moved) setDecor(decorNow()); else { renderTreeUI(); updatePlacesMarker(); }
       downAt = null; return;
     }
     if (ins.divider) { ins.divider = null; persist(); renderTreeUI(); renderInsideUI(); updateInsideOverlay(); downAt = null; return; }
@@ -717,18 +664,12 @@ function setupOrbit() {
     const prev = ptrs.get(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
     if (walk.on) { walk.yaw -= (e.clientX - prev[0]) * 0.005; walk.pitch = Math.max(-1.4, Math.min(1.4, walk.pitch - (e.clientY - prev[1]) * 0.005)); walkLook(); return; }
     if (ob.drag && ptrs.size === 1) {
-      // where it would go, snapped as it moves (the pasture rebuilds the fence, doorway and troughs as it goes)
+      // where it would go, snapped as it moves
       const q = groundPoint(e);
-      if (q && ob.drag.deco) {
+      if (q) {
         const cur = decorNow().find(x => x.id === ob.drag.id), at = snapDecor(p, decorFind, cur, q[0] - ob.drag.off[0], q[1] - ob.drag.off[1], e.altKey ? {walls: false, grid: false} : decSnap);
         p.decor = decorNow().map(x => x.id === cur.id ? {...x, x: at.x, z: at.z, rot: at.rot} : x);
         ob.drag.moved = true; rebuild(false); updatePlacesMarker();
-        return;
-      }
-      if (q) {
-        const next = dragTo(ob.drag, q);
-        p.objects = objectsNow().map(x => x.id === ob.drag.id ? next : x);
-        ob.drag.moved = true; applyKindRules(); rebuild(false);
       }
       return;
     }
@@ -1303,34 +1244,27 @@ function selectNode(kind, v) {
   if (kind === "wall") { wvWall = typeof v === "string" ? v : v.key; if (typeof v !== "string") { wvFloor = v.floor; wvSec = v.section || 0; } }
   if (kind === "floor") { wvPart = v.part; wvFloor = v.floor; wvSec = v.section || 0; }
   if (kind === "section") { wvPart = v.part; wvSec = v.index; }
-  if (kind === "object") { ob.sel = v; ob.pt = null; }
   if (kind === "deco") decSel = v;
   if (kind === "decor") decSel = null;
-  if (kind === "group") { treeKind = "game"; ob.sel = null; ob.pt = null; }   // (a folder of troughs: the card of the game objects, where they are added)
-  if (kind === "post") { treeKind = "object"; ob.sel = v.id; ob.pt = v.index; }   // (a post of the fence drawn by hand: its object is chosen, and the post in it)
   if (searching) clearSearch();
   setTab("building");
   const det = $("treeEditor") && $("treeEditor").closest("details"); if (det) det.open = true;
   renderTreeUI(); updateHighlight(); updatePlacesMarker();
-  const card = {main: "mainCard", wall: "wallCard", floor: "wallCard", section: "wallCard", game: "wallCard", object: "wallCard", decor: "wallCard", deco: "wallCard", win: "winEditor", part: "wingsEditor"}[kind];
+  const card = {main: "mainCard", wall: "wallCard", floor: "wallCard", section: "wallCard", decor: "wallCard", deco: "wallCard", win: "winEditor", part: "wingsEditor"}[kind];
   if (card && $(card) && !window.matchMedia("(max-width: 820px)").matches) $(card).scrollIntoView({block: "nearest"});
 }
-const nodeKey = n => n.type === "main" ? "main" : n.type === "game" ? "game" : n.type === "decor" ? "decor" : n.type === "deco" ? "deco:" + n.id : n.type === "group" ? "group:" + n.otype : n.type === "object" ? "object:" + n.id : n.type === "post" ? `post:${n.id}:${n.index}` : n.type === "section" ? `section:${n.part}:${n.index}` : n.type === "wall" ? `wall:${n.key}:${n.floor}:${n.section || 0}` : n.type === "floor" ? `floor:${n.part}:${n.floor}:${n.section || 0}` : n.type === "part" ? "part:" + n.id : "win:" + n.id;
+const nodeKey = n => n.type === "main" ? "main" : n.type === "decor" ? "decor" : n.type === "deco" ? "deco:" + n.id : n.type === "section" ? `section:${n.part}:${n.index}` : n.type === "wall" ? `wall:${n.key}:${n.floor}:${n.section || 0}` : n.type === "floor" ? `floor:${n.part}:${n.floor}:${n.section || 0}` : n.type === "part" ? "part:" + n.id : "win:" + n.id;
 /** What selectNode takes for a node written by nodeKey as kind:v:f:sc. */
-const nodeArg = (kind, v, f, sc) => kind === "wall" ? {key: v, floor: +f, section: +sc || 0} : kind === "floor" ? {part: +v, floor: +f, section: +sc || 0} : kind === "section" ? {part: +v, index: +f} : kind === "post" ? {id: +v, index: +f} : kind === "main" || kind === "game" || kind === "decor" ? null : kind === "group" ? v : +v;
+const nodeArg = (kind, v, f, sc) => kind === "wall" ? {key: v, floor: +f, section: +sc || 0} : kind === "floor" ? {part: +v, floor: +f, section: +sc || 0} : kind === "section" ? {part: +v, index: +f} : kind === "main" || kind === "decor" ? null : +v;
 /** The tree node of a divider's wall: it is under the section with more floors. */
 const splitNodeArg = key => { const runs = sectionRuns(p, key, (wallsOf(p)[key] || {L: 1}).L); return {key, floor: 0, section: runs.length ? runs[0].sec.index : 0}; };
 function treeNavHtml() {
   const t = buildingTree(p), live = liveWings(p), fmt = v => (+v).toFixed(2).replace(/\.?0+$/, "");
   const multi = id => (id ? (live.find(x => x.id === id) || {floors: 1}).floors : p.floors) > 1;
-  const isSel = n => n.type === "main" ? treeKind === "main" : n.type === "game" ? treeKind === "game" : n.type === "decor" ? treeKind === "decor" : n.type === "deco" ? treeKind === "deco" && decSel === n.id : n.type === "group" ? false : n.type === "object" ? treeKind === "object" && ob.sel === n.id && !((n.children || []).length && ob.pt !== null && ob.pt < n.children.length) : n.type === "post" ? treeKind === "object" && ob.sel === n.id && ob.pt === n.index : n.type === "section" ? treeKind === "section" && wvPart === n.part && wvSec === n.index : n.type === "wall" ? treeKind === "wall" && wvWall === n.key && wvFloor === n.floor && wvSec === (n.section || 0) : n.type === "floor" ? treeKind === "floor" && wvPart === n.part && wvFloor === n.floor && wvSec === (n.section || 0) : n.type === "part" ? treeKind === "part" && wSel === n.id : treeKind === "win" && selId === n.id;
+  const isSel = n => n.type === "main" ? treeKind === "main" : n.type === "decor" ? treeKind === "decor" : n.type === "deco" ? treeKind === "deco" && decSel === n.id : n.type === "section" ? treeKind === "section" && wvPart === n.part && wvSec === n.index : n.type === "wall" ? treeKind === "wall" && wvWall === n.key && wvFloor === n.floor && wvSec === (n.section || 0) : n.type === "floor" ? treeKind === "floor" && wvPart === n.part && wvFloor === n.floor && wvSec === (n.section || 0) : n.type === "part" ? treeKind === "part" && wSel === n.id : treeKind === "win" && selId === n.id;
   const label = (n, parentKey) => {
-    if (n.type === "group") return `${esc(n.name)} <span class="muted">${n.children.length}</span>`;
     if (n.type === "decor") return `Decorations <span class="muted">${(n.children || []).length}</span>`;
     if (n.type === "deco") return `<span translate="no">${esc(n.name)}</span>`;
-    if (n.type === "game") return `Game objects <span class="muted">${(n.children || []).length}</span>`;
-    if (n.type === "object") return esc(n.name) + ((n.children || []).length ? ` <span class="muted">${n.children.length} posts</span>` : "");
-    if (n.type === "post") return esc(n.name) + (n.role ? ` <span class="muted">${n.role === "start" ? "start" : "stop"}</span>` : "");
     if (n.type === "main") return `Main building <span class="muted">${p.width} \u00D7 ${p.depth} m</span>`;
     if (n.type === "section") return `Section ${n.index + 1} <span class="muted">${fmt(n.from)}\u2013${fmt(n.to)} m, ${n.floors} floor${n.floors > 1 ? "s" : ""}</span>`;
     if (n.type === "wall") return `${esc(wallLabel(p, n.key))}${n.span ? ` <span class="muted">${fmt(n.span[0])}\u2013${fmt(n.span[1])} m</span>` : ""}`;
@@ -1341,19 +1275,18 @@ function treeNavHtml() {
   if (treeReveal) {
     treeReveal = false;
     const reveal = (n, trail) => { if (isSel(n)) { trail.forEach(a => treeClosed.delete(nodeKey(a))); return true; } return (n.children || []).some(c => reveal(c, [...trail, n])); };
-    reveal(t, []); t.lost.forEach(l => reveal(l, [])); if (t.game) reveal(t.game, []); reveal(t.decor, []);
+    reveal(t, []); t.lost.forEach(l => reveal(l, [])); reveal(t.decor, []);
   }
-  const objProblems = t.game ? objectProblems(p) : new Map(), rows = [];
+  const rows = [];
   const walk = (n, depth, parentKey) => {
     const k = nodeKey(n), kids = n.children || [], closed = treeClosed.has(k);
     const liData = n.type === "wall" ? `data-wall="${n.key}" data-floor="${n.floor}"${n.span ? ` data-at="${(n.span[0] + n.span[1]) / 2}"` : ""}` : (n.type === "window" || n.type === "door" || n.type === "part") && parentKey && parentKey.wall ? `data-wall="${parentKey.wall}" data-floor="${parentKey.floor}"` : "";
     rows.push(`<li class="tnode t-${n.type}" style="--d:${depth}" ${liData}>${kids.length ? `<button type="button" class="caret" data-toggle="${k}" aria-expanded="${!closed}" aria-label="${closed ? "Show" : "Hide"} what is under it">${closed ? "\u25B8" : "\u25BE"}</button>` : `<span class="caret"></span>`}`
-      + `<button type="button" class="tbtn" data-node="${k}" ${n.type === "window" || n.type === "door" || n.type === "part" ? 'draggable="true"' : ""} aria-pressed="${isSel(n)}">${label(n, parentKey)}</button>${n.type === "object" && objProblems.has(n.id) ? ` <span class="warn" title="${esc(objProblems.get(n.id))}">!</span>` : n.off ? ` <span class="warn" title="${esc(n.off)}">left out</span>` : n.hidden ? ` <span class="warn">hidden</span>` : ""}</li>`);
+      + `<button type="button" class="tbtn" data-node="${k}" ${n.type === "window" || n.type === "door" || n.type === "part" ? 'draggable="true"' : ""} aria-pressed="${isSel(n)}">${label(n, parentKey)}</button>${n.off ? ` <span class="warn" title="${esc(n.off)}">left out</span>` : n.hidden ? ` <span class="warn">hidden</span>` : ""}</li>`);
     if (!closed) for (const c of kids) walk(c, depth + 1, n.type === "wall" ? {wall: n.key, floor: n.floor} : parentKey);
   };
   walk(t, 0, "");
   for (const l of t.lost) walk(l, 1, "");
-  if (t.game) walk(t.game, 0, "");
   walk(t.decor, 0, "");
   return `<ul class="objlist ptree tree">${rows.join("")}</ul>`;
 }
@@ -1471,7 +1404,7 @@ const duplicateDecor = id => { const d = decorNow().find(x => x.id === id); if (
 function bindDecor(host) {
   const add = host.querySelector("#decAdd");
   if (add) add.onclick = () => addDecor(host.querySelector("#decAddSel").value);
-  const plan = host.querySelector("#decPlan"); if (plan) plan.onclick = () => { if (ob.on) leaveObjects(); else enterObjects(); renderTreeUI(); };
+  const plan = host.querySelector("#decPlan"); if (plan) plan.onclick = () => { if (ob.on) leavePlan(); else enterPlan(); renderTreeUI(); };
   const sw = host.querySelector("#decSnapW"); if (sw) sw.onchange = () => { decSnap.walls = sw.checked; saveDecSnap(); };
   const sg = host.querySelector("#decSnapG"); if (sg) sg.onchange = () => { decSnap.grid = sg.checked; saveDecSnap(); };
   const rm = host.querySelector("#decRm"); if (rm) rm.onclick = () => removeDecor(decSel);
@@ -1593,8 +1526,6 @@ function renderTreeNav() {
   if (treeKind === "win" && !p.windows.some(w => w.id === selId)) treeKind = "main";
   if (treeKind === "part" && !(p.wings || []).some(w => w.id === wSel)) treeKind = "main";
   if (treeKind === "wall" && !wallsOf(p)[wvWall]) treeKind = "main";
-  if (treeKind === "object" && !objectsNow().some(o => o.id === ob.sel)) treeKind = "game";
-  if (treeKind === "game" && !allowedTypes(kindOf(p)).length) treeKind = "main";
   if (treeKind === "deco" && !selDecor()) treeKind = "decor";
   if ((treeKind === "floor" || treeKind === "section") && wvPart && !(p.wings || []).some(w => w.id === wvPart)) treeKind = "main";
   { const n = sectionsOf(p, treeKind === "wall" ? wingIdOf(wvWall) : wvPart).length; if (wvSec >= n) wvSec = 0; }
@@ -1651,7 +1582,6 @@ function renderTreeUI() {
   main.innerHTML = treeKind === "main" ? mainCardHtml() : "";
   mainChosen = treeKind === "main"; placeShape();
   wall.innerHTML = treeKind === "wall" ? wallCardHtml() : treeKind === "floor" ? floorCardHtml() : treeKind === "section" ? sectionCardHtml() : "";
-  if (treeKind === "game" || treeKind === "object") renderObjectsCard(wall);
   if (treeKind === "decor" || treeKind === "deco") { wall.innerHTML = decorCardHtml(); bindDecor(wall); }
   if (treeKind === "section" || treeKind === "floor") wall.querySelectorAll("[data-gosplit]").forEach(b => b.onclick = () => selectNode("wall", splitNodeArg(wvPart ? wingSplitKey(wvPart, +b.dataset.gosplit) : "s" + b.dataset.gosplit)));
   if (treeKind === "main") {
@@ -1693,8 +1623,6 @@ function ctxAdds(kind, v, f) {
   if (kind === "main") return [{act: "add-section", label: "Add section", on: p.roofType !== "hip" && (p.splits || []).length < MAX_SPLITS}];
   if (kind === "part") { const w = (p.wings || []).find(x => x.id === +v); return [{act: "add-section", label: "Add section", on: !!w && (w.splits || []).length < MAX_SPLITS}]; }
   if (kind === "decor") return decorNow().length >= MAX_DECOR ? [] : itemList.map(a => ({act: "add-deco:" + a.id, label: "Add " + a.name, on: true}));
-  if (kind === "group") return objectsNow().filter(o => o.type === v).length < MAX_TROUGHS ? [{act: "add-obj:" + v, label: "Add " + objectInfo(kindOf(p), v).name.toLowerCase(), on: true}] : [];
-  if (kind === "game") { const have = new Set(objectsNow().map(o => o.type)); return allowedTypes(kindOf(p)).filter(t => MANY.includes(t) ? objectsNow().filter(o => o.type === t).length < MAX_TROUGHS : !have.has(t)).map(t => ({act: "add-obj:" + t, label: "Add " + objectInfo(kindOf(p), t).name.toLowerCase(), on: true})); }
   return [];
 }
 /* ---------- Duplicating and deleting what is chosen in the tree: the context menu, Ctrl+D and Delete ---------- */
@@ -1744,7 +1672,6 @@ function duplicateDivider(pid, id) {
 }
 /** What a tree node (as nodeKey writes it) can do: {kind, ...ids} for a window or door, a part or a divider, else null (walls, floors and the main building are not copied or deleted). */
 function nodeTarget(kind, v, f) {
-  if (kind === "object" && objectsNow().some(o => o.id === +v)) return {kind: "object", id: +v};
   if (kind === "deco" && decorNow().some(d => d.id === +v)) return {kind: "deco", id: +v};
   if (kind === "section" && +f >= 1) { const w = +v ? (liveWings(p).find(x => x.id === +v) || {splits: []}) : null, dv = (w ? w.splits : splitsOf(p))[+f - 1]; return dv ? {kind: "split", pid: +v, id: dv.id} : null; }
   if (kind === "win" && p.windows.some(w => w.id === +v)) return {kind: "win", id: +v};
@@ -1753,9 +1680,9 @@ function nodeTarget(kind, v, f) {
   return null;
 }
 /** The target of what is chosen now. */
-const chosenTarget = () => treeKind === "deco" ? nodeTarget("deco", decSel) : treeKind === "object" ? nodeTarget("object", ob.sel) : treeKind === "win" ? nodeTarget("win", selId) : treeKind === "part" ? nodeTarget("part", wSel) : treeKind === "wall" ? nodeTarget("wall", wvWall) : treeKind === "section" ? nodeTarget("section", wvPart, wvSec) : null;
-const duplicateTarget = t => t.kind === "deco" ? duplicateDecor(t.id) : t.kind === "object" ? false : t.kind === "win" ? duplicateWindow(t.id) : t.kind === "part" ? duplicatePart(t.id) : duplicateDivider(t.pid, t.id);
-const deleteTarget = t => t.kind === "deco" ? removeDecor(t.id) : t.kind === "object" ? removeObject(t.id) : t.kind === "win" ? removeWindow(t.id) : t.kind === "part" ? removePart(t.id) : removeDivider(t.pid, t.id);
+const chosenTarget = () => treeKind === "deco" ? nodeTarget("deco", decSel) : treeKind === "win" ? nodeTarget("win", selId) : treeKind === "part" ? nodeTarget("part", wSel) : treeKind === "wall" ? nodeTarget("wall", wvWall) : treeKind === "section" ? nodeTarget("section", wvPart, wvSec) : null;
+const duplicateTarget = t => t.kind === "deco" ? duplicateDecor(t.id) : t.kind === "win" ? duplicateWindow(t.id) : t.kind === "part" ? duplicatePart(t.id) : duplicateDivider(t.pid, t.id);
+const deleteTarget = t => t.kind === "deco" ? removeDecor(t.id) : t.kind === "win" ? removeWindow(t.id) : t.kind === "part" ? removePart(t.id) : removeDivider(t.pid, t.id);
 /** Applies what moveBeside / moveToWall gave (or says why not), and chooses the thing that was moved. */
 function applyMove(item, r) {
   if (!r || r.error) { toast((r && r.error) || "It can't be moved there."); return false; }
@@ -1806,14 +1733,14 @@ function showCtx(x, y, target, adds = []) {
   const sib = target && (target.kind === "win" || target.kind === "part") ? siblingsOf(target) : null, groups = [];
   if (adds.length) groups.push(adds.map(a => item(a.act, a.label, "", a.on)).join(""));
   if (sib) groups.push(item("up", "Move up", "Alt+\u2191", sib.i > 0) + item("down", "Move down", "Alt+\u2193", sib.i < sib.list.length - 1));
-  if (target) groups.push((target.kind === "object" ? "" : item("dup", "Duplicate", "Ctrl+D")) + item("del", "Delete", "Del"));
+  if (target) groups.push(item("dup", "Duplicate", "Ctrl+D") + item("del", "Delete", "Del"));
   m.innerHTML = groups.join("<hr>");
   editorEl.appendChild(m); ctxMenu = m;
   const r = m.getBoundingClientRect();
   m.style.left = Math.max(4, Math.min(x, window.innerWidth - r.width - 4)) + "px"; m.style.top = Math.max(4, Math.min(y, window.innerHeight - r.height - 4)) + "px";
   const on = (act, fn) => { const b = m.querySelector(`[data-act="${act}"]`); if (b) b.onclick = () => { closeCtx(); fn(); }; };
   const addRun = {"add-window": () => addOnWall("window"), "add-door": () => addOnWall("door"), "add-part": () => treeKind === "wall" ? addOnWall("part") : addChildPart(treeKind === "part" ? wSel : 0), "add-section": () => addSectionTo(treeKind === "part" ? wSel : 0)};
-  for (const a of adds) on(a.act, a.act.startsWith("add-obj:") ? () => addObject(a.act.slice(8)) : a.act.startsWith("add-deco:") ? () => addDecor(a.act.slice(9)) : addRun[a.act]);
+  for (const a of adds) on(a.act, a.act.startsWith("add-deco:") ? () => addDecor(a.act.slice(9)) : addRun[a.act]);
   if (target) { on("dup", () => duplicateTarget(target)); on("del", () => deleteTarget(target)); on("up", () => moveStep(target, -1)); on("down", () => moveStep(target, 1)); }
   const first = m.querySelector("button:not([disabled])");
   if (first) first.focus();
@@ -1841,208 +1768,29 @@ window.addEventListener("keydown", treeKey);
 const closeCtxOutside = e => { if (ctxMenu && !ctxMenu.contains(e.target)) closeCtx(); };
 window.addEventListener("pointerdown", closeCtxOutside, true); window.addEventListener("resize", closeCtx); window.addEventListener("blur", closeCtx);
 cleanups.push(() => { window.removeEventListener("keydown", treeKey); window.removeEventListener("pointerdown", closeCtxOutside, true); window.removeEventListener("resize", closeCtx); window.removeEventListener("blur", closeCtx); closeCtx(); });
-/* ---------- Game objects ---------- */
-// The game's boxes and icons and the pasture's fence (objects.mjs): a list in the Game objects section, and
-// a plan view of the yard to drag them in (ob.on).
-const ob = {on: false, sel: null, drag: null, pan: [0, 0], saved: null, pt: null};
-/** A box object's sliders: [key, label, step]. */
-const BOX_SLIDERS = [["x", "Left / right (+ to the right)", 0.25], ["z", "Back / front (+ to the front)", 0.25], ["y", "Height above the ground", 0.05], ["w", "Width (left to right)", 0.05],
-  ["d", "Depth (back to front)", 0.05], ["h", "Height", 0.05], ["ix", "Icon left / right", 0.05], ["iz", "Icon back / front", 0.05]];
-const objectsNow = () => p.objects || [];
-const selObject = () => objectsNow().find(o => o.id === ob.sel) || null;
-const objName = o => { const name = objectInfo(kindOf(p), o.type).name, same = objectsNow().filter(x => x.type === o.type); return same.length > 1 ? `${name} ${same.indexOf(same.find(x => x.id === o.id)) + 1}` : name; };
-/** An edit to the objects: snapped, saved and built. */
-function setObjects(list, sel = ob.sel) {
-  p.objects = list; ob.sel = sel;
-  const ruled = applyKindRules(); if (ruled) syncControls(); else syncOutputs();
-  persist(); rebuild(false); renderObjectsUI();
-}
-const snapObj = o => o.type === "pasture" ? snapPasture(o, kindOf(p), p) : snapBox(o, p);
-/** The details of the game objects chosen in the tree: the group (the plan view, the objects that can be added, place them all) or one object (its sliders), in host. */
-function renderObjectsCard(ed) {
-  const kind = kindOf(p), spec = kind.objects || {types: [], required: [], defaults: () => []}, list = objectsNow(), pr = objectProblems(p);
-  if (!allowedTypes(kind).length) { ed.innerHTML = `<p class="hint">This building has no game objects.</p>`; return; }
-  const group = treeKind === "game";
-  if (!list.some(o => o.id === ob.sel)) ob.sel = null;
-  const opt = (v, label, cur) => `<option value="${v}" ${v === cur ? "selected" : ""}>${esc(label)}</option>`;
-  // (one of each, but any number of feed and water troughs)
-  const missing = spec.types.filter(t => MANY.includes(t) ? list.filter(o => o.type === t).length < MAX_TROUGHS : !list.some(o => o.type === t));
-  let html = `<div class="row"><button type="button" class="primary" id="objPlan" ${renderer ? "" : "disabled"}>${ob.on ? "Done moving" : "Move them in the plan view"}</button></div>`;
-  if (group) html += `<p class="hint">What the game needs around the building: where you sleep, tip feed, drop bales, load animals, collect eggs, and the pasture's fence. Add and remove them here, and drag them into place in the plan view.</p>`;
-  if (group) html += objectWarnings(p).map(w => `<p class="warn">${esc(w)}</p>`).join("");
-  if (group && missing.length) html += `<div class="addrow">${missing.map(t => `<button type="button" data-addobj="${t}">+ ${esc(objectInfo(kind, t).name)}</button>`).join("")}</div>`;
-  const o = group ? null : selObject();
-  if (o) {
-    const t = objectInfo(kind, o.type), must = spec.required.includes(o.type), range = (k, label, lo, hi, step, v, unit = " m") =>
-      `<div class="field"><div class="fl"><label for="ob-${k}">${label}</label><output id="ob-${k}-o">${(+v).toFixed(2)}${unit}</output></div><input type="range" id="ob-${k}" data-k="${k}" min="${lo}" max="${hi}" step="${step}" value="${v}"></div>`;
-    html += `<div class="wincard"><h3 class="sub">${esc(t.name)}</h3><p class="hint">${esc(t.hint)}</p>${MANY.includes(o.type) && TROUGH_KINDS.includes(p.kind) && list.filter(x => x.type === o.type).length > 1 ? `<p class="hint">There are several: the animals use all of them, but the game shows the amount of feed (or water) in the first one only.</p>` : ""}${pr.has(o.id) ? `<p class="warn">${esc(pr.get(o.id))}.</p>` : ""}`;
-    if (o.type === "pasture") {
-      const pa = pastureOf(p), ps = spec.pasture;
-      html += `<div class="field"><div class="fl"><label for="ob-wall">Wall</label></div><select id="ob-wall">${WALLS.map(k => opt(k, WALL_NAMES[k], o.wall)).join("")}</select></div>`;
-      if (o.points) {
-        const n = o.points.length, sel = ob.pt !== null && ob.pt < n ? ob.pt : null;
-        html += `<p class="hint"><b>The fence is drawn by hand: ${n} posts.</b> Drag a post in the plan view; press a small dot between two posts to make a new one. The green post is where it starts, the red where it stops: put them at corners of the building (they snap there).</p>`
-          + `<p class="hint">${sel === null ? "Press a post to choose it." : `Post ${sel + 1} of ${n}${sel === 0 ? " (the start)" : sel === n - 1 ? " (the stop)" : ""}. ${[sel < n - 1 ? `<b>${fenceDist(o.points, sel, sel + 1).toFixed(2)} m</b> to the next post` : "", sel > 0 ? `${fenceDist(o.points, sel, sel - 1).toFixed(2)} m from the previous one` : ""].filter(Boolean).join(", ")}.`} The whole fence is ${o.points.slice(1).reduce((s, q, j) => s + fenceDist(o.points, j, j + 1), 0).toFixed(1)} m.</p>`
-          + `<div class="row">${ob.on ? "" : `<button type="button" id="ob-plan" class="primary">Drag the posts in the plan view</button>`}<button type="button" id="ob-addpt" ${n >= MAX_FENCE_POINTS ? "disabled" : ""}>+ Add a post</button><button type="button" id="ob-rmpt" ${sel === null || n <= 2 ? "disabled" : ""}>Remove this post</button><button type="button" id="ob-rect">Back to a rectangle</button></div>`;
-        html += range("a", "Animals go out from the wall’s left end (0: the corner)", OBJECT_LIMITS.end[0], pa.L, 0.25, o.a);
-        html += range("b", "…to the wall’s right end (0: the corner)", OBJECT_LIMITS.end[0], pa.L, 0.25, o.b);
-      } else {
-        html += range("a", "Start, from the wall’s left end (0: the corner)", OBJECT_LIMITS.end[0], pa.L, 0.25, o.a);
-        html += range("b", "End, from the wall’s right end (0: the corner)", OBJECT_LIMITS.end[0], pa.L, 0.25, o.b);
-        html += range("depth", "Depth, out from the wall", ps.depth[0], ps.depth[1], 0.5, o.depth);
-        html += `<p class="hint">At least ${ps.minWidth} m wide. Below 0 it runs past the corner and back along the wall to the building.</p>`
-          + `<div class="row"><button type="button" id="ob-draw">Draw the fence myself</button></div><p class="hint">Draw it with posts in the plan view: any shape, from one corner of the building round to another.</p>`;
-      }
-      // the opening to the pasture, like a door that is only a hole: where along the wall and how big
-      html += `<label class="check"><input type="checkbox" id="ob-nogap" ${o.noGap ? "" : "checked"}> The building’s own opening to the pasture</label>`;
-      html += o.noGap ? `<p class="hint">No opening: add a door and choose the style “Open doorway, framed (no door)” for an empty hole with a frame, wherever you want it.</p>`
-        : `<p class="hint">The animals walk through it (a small hatch for hens). Its middle is measured from the wall’s left end seen from outside.</p>`;
-      if (!o.noGap) html += `<label class="check"><input type="checkbox" id="ob-ramp" ${o.gapRamp ? "checked" : ""}> A ramp down to the ground (needs a foundation)</label>`;
-      if (!o.noGap) html += range("gapAt", "Opening: position (m from the left end)", 0, pa.L, 0.05, pa.mid);
-      if (ps.gapSize && !o.noGap) {
-        html += range("gapW", "Opening: width", GAP_LIMITS.w[0], GAP_LIMITS.w[1], 0.05, pa.gapW);
-        html += range("gapH", "Opening: height", GAP_LIMITS.h[0], GAP_LIMITS.h[1], 0.05, pa.gapH);
-      }
-    } else {
-      // a trough can look like one of the user's items: its size is the model's
-      const looks = o.type === "feedTrough" || o.type === "waterTrough" ? troughLooks(p, o.type) : null, shown = looks && looks.find(a => a.id === o.asset);
-      if (looks && (looks.length || o.asset)) html += `<div class="field"><div class="fl"><label for="ob-look">Look</label></div><select id="ob-look">${opt("", "Plank trough (built in)", o.asset || "")}${looks.map(a => opt(a.id, a.name, o.asset || "")).join("")}${o.asset && !shown ? opt(o.asset, "(an item no longer in your list)", o.asset) : ""}</select></div>`
-        + (shown ? `<p class="hint">Its size comes from the model: ${assetSize(normalizeMeta(shown.meta)).map(v => v.toFixed(2)).join(" × ")} m.</p>`
-          + `<div class="field"><div class="fl"><label for="ob-rot">Rotation</label><output id="ob-rot-o">${Math.round(o.rot || 0)}°</output></div><input type="range" id="ob-rot" data-turn min="0" max="359" step="1" value="${Math.round(o.rot || 0)}"></div>` : "");
-      for (const [k, label, step] of BOX_SLIDERS) {
-      if ((k === "ix" || k === "iz") && !t.icon) continue;
-      if (shown && (k === "w" || k === "d" || k === "h")) continue;
-      const [lo, hi] = OBJECT_LIMITS[k];
-      html += range(k, label, lo, hi, step, o[k]);
-      }
-    }
-    html += `<div class="row">${o.type !== "pasture" ? `<button type="button" id="objTurn">Turn</button>` : ""}<button type="button" id="objRemove" class="danger" ${must ? `disabled title="The ${esc(kind.name.toLowerCase())} needs it"` : ""}>Remove</button></div></div>`;
-  } else if (group) html += `<p class="hint">Choose an object in the tree to change it, or move them in the plan view.</p>`;
-  if (group) html += `<button type="button" id="objAuto">Place all automatically</button>`;
-  ed.innerHTML = html;
-  $("objPlan").onclick = () => ob.on ? leaveObjects() : enterObjects();
-  ed.querySelectorAll("[data-addobj]").forEach(b => b.onclick = () => addObject(b.dataset.addobj));
-  if ($("objAuto")) $("objAuto").onclick = () => { setObjects(sanitize({...p, objects: spec.defaults({...p})}).objects, null); toast("Game objects placed where they go automatically"); };
-  // the settings that belong to the fence (the kind's cardRow fields: the ground, animals walking inside) sit in the pasture's card
-  if (o && o.type === "pasture") {
-    const at = $("objRemove").parentNode;
-    for (const f of Object.values(fieldsFor(kind))) if (f.cardRow && floorRows[f.k]) at.parentNode.insertBefore(floorRows[f.k], at);
-    syncOutputs();
-  }
-  if (!o) return;
-  const swap = next => setObjects(sanitize({...p, objects: list.map(x => x.id === o.id ? next : x)}).objects, o.id);
-  // a look's rotation: the model turns about its middle; the footprint is the box round it
-  const turned = c => {
-    const a = troughLooks(p, c.type).find(x => x.id === c.asset);
-    if (!a) return c;
-    const rot = ((c.rot || 0) % 360 + 360) % 360, [w, d] = turnedSize(normalizeMeta(a.meta), rot), n = {...c, w, d};
-    if (rot) n.rot = rot; else delete n.rot;
-    return n;
-  };
-  if ($("ob-rot")) {
-    const inp = $("ob-rot");
-    inp.oninput = () => {
-      const next = turned({...selObject(), rot: +inp.value});
-      p.objects = objectsNow().map(x => x.id === next.id ? next : x);
-      $("ob-rot-o").textContent = `${Math.round(+inp.value)}°`;
-      applyKindRules(); rebuild(false);
-    };
-    inp.onchange = () => swap(snapObj(turned({...selObject(), rot: +inp.value})));
-  }
-  ed.querySelectorAll(".wincard input[type=range]:not([data-turn])").forEach(inp => {
-    inp.oninput = () => {
-      const k = inp.dataset.k, cur = selObject(), next = {...cur, [k]: +inp.value};
-      p.objects = objectsNow().map(x => x.id === cur.id ? next : x);
-      $(`ob-${k}-o`).textContent = `${(+inp.value).toFixed(2)} m`;
-      applyKindRules(); rebuild(false);
-    };
-    inp.onchange = () => swap(snapObj(selObject()));
-  });
-  if ($("ob-ramp")) $("ob-ramp").onchange = e => { const c = {...selObject()}; if (e.target.checked) c.gapRamp = true; else delete c.gapRamp; swap(snapObj(c)); };
-  if ($("ob-nogap")) $("ob-nogap").onchange = e => { const c = {...selObject()}; if (e.target.checked) delete c.noGap; else c.noGap = true; swap(snapObj(c)); };
-  if ($("ob-wall")) $("ob-wall").onchange = e => swap(snapObj({...selObject(), wall: e.target.value}));
-  // a fence drawn by hand: start it from the rectangle, add and remove posts, go back
-  if ($("ob-draw")) $("ob-draw").onclick = () => { ob.pt = null; swap(snapObj({...selObject(), points: fencePoints(p)})); if (!ob.on) { enterObjects(); } };
-  // the posts are dragged in the plan view: a button to it while the fence is being drawn
-  if ($("ob-plan")) $("ob-plan").onclick = () => { enterObjects(); };
-  if ($("ob-rect")) $("ob-rect").onclick = () => { const c = {...selObject()}; delete c.points; ob.pt = null; swap(snapObj(c)); };
-  if ($("ob-addpt")) $("ob-addpt").onclick = () => {
-    const c = selObject(), pts = c.points.slice(), i = ob.pt !== null && ob.pt < pts.length ? ob.pt : pts.length - 1;
-    let q;
-    if (i < pts.length - 1) {
-      // halfway along the next stretch and 3 m out from it, away from the building (on the line it would not show)
-      const a = pts[i], b2 = pts[i + 1], mx = (a[0] + b2[0]) / 2, mz = (a[1] + b2[1]) / 2;
-      let nx = -(b2[1] - a[1]), nz = b2[0] - a[0]; const nl = Math.hypot(nx, nz) || 1; nx /= nl; nz /= nl;
-      if (nx * mx + nz * mz < 0) { nx = -nx; nz = -nz; }
-      q = snapFencePoint(p, [mx + nx * 3, mz + nz * 3]);
-    }
-    else { const dx = pts[i][0], dz = pts[i][1], l = Math.hypot(dx, dz) || 1; q = l < 1e-6 ? [pts[i][0] + 3, pts[i][1]] : [pts[i][0] + dx / l * 3, pts[i][1] + dz / l * 3]; }   // after the last post: 3 m further out, away from the building
-    pts.splice(i + 1, 0, snapFencePoint(p, q)); ob.pt = i + 1;
-    swap({...c, points: pts});
-    if (!ob.on) { enterObjects(); }
-  };
-  if ($("ob-rmpt")) $("ob-rmpt").onclick = () => {
-    const c = selObject(); if (ob.pt === null || c.points.length <= 2) return;
-    const pts = c.points.filter((_, j) => j !== ob.pt); ob.pt = null;
-    swap({...c, points: pts});
-  };
-  if ($("ob-look")) $("ob-look").onchange = e => {
-    const c = {...selObject()}, a = troughLooks(p, c.type).find(x => x.id === e.target.value);
-    if (!e.target.value) { delete c.asset; delete c.rot; }
-    else if (a) { const [w, d, h] = assetSize(normalizeMeta(a.meta)); delete c.rot; Object.assign(c, {asset: a.id, w, d, h}); }
-    else return;
-    swap(snapObj(c));
-  };
-  if ($("objTurn")) $("objTurn").onclick = () => {
-    const c = selObject(), a = c.asset && troughLooks(p, c.type).find(x => x.id === c.asset);
-    if (a) { swap(snapObj(turned({...c, rot: (c.rot || 0) + 90}))); return; }   // an item's look: a quarter more, the footprint follows
-    swap(snapObj({...c, w: c.d, d: c.w, ix: -c.iz, iz: c.ix})); };
-  $("objRemove").onclick = () => removeObject(o.id);
-}
-
-/** The game objects in the tree: the card of the group or of one object (see renderObjectsCard); setObjects and the plan view draw it again. */
-function renderObjectsUI() { if (treeKind === "game" || treeKind === "object") renderTreeUI(); else renderTreeNav(); }
-/** A new object of a type the building lacks, where the kind puts it to start with. */
-function addObject(type) {
-  const kind = kindOf(p), spec = kind.objects || {defaults: () => []}, list = objectsNow(), def = MANY.includes(type) && (list.some(o => o.type === type) || !spec.defaults({...p}).some(x => x.type === type)) ? nextTroughSpot(p, type) : spec.defaults({...p}).find(x => x.type === type) || sharedDefaults(p, type)[0], id = list.reduce((m, x) => Math.max(m, x.id), 0) + 1;
-  setObjects(sanitize({...p, objects: [...list, {...(def || {type, x: p.width / 2 + 3, z: 0}), id}]}).objects, id);
-  toast(`${objectInfo(kind, type).name} added`);
-  selectNode("object", id);
-}
-/** Takes an object away, unless the building needs it. */
-function removeObject(id) {
-  const o = objectsNow().find(x => x.id === id), spec = kindOf(p).objects || {required: []};
-  if (!o) return false;
-  if (spec.required.includes(o.type)) { toast(`The ${kindOf(p).name.toLowerCase()} needs its ${objName(o).toLowerCase()}`); return false; }
-  treeKind = "game";
-  const group = Object.values(SHARED_GROUPS).find(ts => ts.includes(o.type) && !(kindOf(p).handles || []).some(t => ts.includes(t))) || [o.type];
-  setObjects(objectsNow().filter(x => !group.includes(x.type)), null);
-  return true;
-}
-
-/** The plan view of the yard: the building, its objects and its pasture from above, to drag them in. */
-function enterObjects() {
+/* ---------- The plan view ---------- */
+// The building from above (ob.on), to drag the decorations in.
+const ob = {on: false, drag: null, pan: [0, 0], saved: null};
+function enterPlan() {
   if (!renderer) return;
   if (ins.on) leaveInside();
   ob.on = true; ob.drag = null; ob.pan = [0, 0];
   ob.saved = {...view, target: [...view.target]};
   sunLight.castShadow = false;
-  $("orbitHint").textContent = "Drag objects or the fence’s dots · drag to pan";
-  fitSite(); renderObjectsUI(); updatePlacesMarker();
+  $("orbitHint").textContent = "Drag a decoration · drag to pan";
+  fitSite(); renderTreeNav(); updatePlacesMarker();
 }
-function leaveObjects() {
+function leavePlan() {
   if (!ob.on) return;
   ob.on = false; ob.drag = null;
   sunLight.castShadow = true;
   $("orbitHint").textContent = "Drag to orbit, scroll to zoom";
   Object.assign(view, ob.saved);
-  updateCam(); rebuild(false); renderObjectsUI();
+  updateCam(); rebuild(false); renderTreeNav();
 }
-/** The plan camera over the building, its objects and its pasture, with a few metres round. */
+/** The plan camera over the building and its decorations, with a few metres round. */
 function fitSite() {
   const rs = [{x0: -p.width / 2, x1: p.width / 2, z0: -p.depth / 2, z1: p.depth / 2}];
-  for (const o of objectsNow()) if (o.type !== "pasture") rs.push({x0: o.x - o.w / 2, x1: o.x + o.w / 2, z0: o.z - o.d / 2, z1: o.z + o.d / 2});
-  const pa = pastureOf(p); if (pa) rs.push(pa.rect);
   rs.push(...decorRects(p, decorFind));
   const x0 = Math.min(...rs.map(r => r.x0)) - 3, x1 = Math.max(...rs.map(r => r.x1)) + 3, z0 = Math.min(...rs.map(r => r.z0)) - 3, z1 = Math.max(...rs.map(r => r.z1)) + 3;
   const s = stage.getBoundingClientRect(), aspect = (s.width || 1) / (s.height || 1);
@@ -2059,39 +1807,6 @@ function groundPoint(e) {
   const rc = new THREE.Raycaster(); rc.setFromCamera(v, activeCam());
   const hit = rc.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3());
   return hit ? [hit.x, hit.z] : null;
-}
-/** The distance (m) between two posts of a fence drawn by hand. */
-const fenceDist = (pts, i, j) => Math.hypot(pts[i][0] - pts[j][0], pts[i][1] - pts[j][1]);
-/** The pasture's handles: its two ends (the fence's sides) and its outer edge, [{k, at: [x, z]}]. */
-function pastureHandles() {
-  const pa = pastureOf(p), fo = objectOf(p, "pasture");
-  if (!pa) return [];
-  if (fo && fo.points) {
-    // a fence drawn by hand: its posts (the first green, the last red) and a pale dot between each two
-    const pts = fo.points;
-    return [...pts.map((q, i) => ({k: "p" + i, at: [q[0], q[1]], style: i === 0 ? "start" : i === pts.length - 1 ? "end" : "pt", sel: i === ob.pt})),
-      ...pts.slice(0, -1).map((q, i) => ({k: "m" + i, at: [(q[0] + pts[i + 1][0]) / 2, (q[1] + pts[i + 1][1]) / 2], style: "mid"}))];
-  }
-  const at = (s, d) => { const q = pa.at(s, d); return [q[0], q[2]]; };
-  return [{k: "a", at: at(pa.s0, pa.depth / 2)}, {k: "b", at: at(pa.s1, pa.depth / 2)}, {k: "depth", at: at((pa.s0 + pa.s1) / 2, pa.depth)}];
-}
-/** What's under the pointer in the plan view: a pasture handle (within 1 m), else the smallest box there. */
-function objectAt(q) {
-  const scale = (ortho.right - ortho.left) / ortho.zoom / 60, reach = Math.max(1, scale);
-  const h = pastureHandles().find(x => Math.hypot(x.at[0] - q[0], x.at[1] - q[1]) < reach);
-  if (h) return {id: objectOf(p, "pasture").id, handle: h.k};
-  const hits = objectsNow().filter(o => o.type !== "pasture" && Math.abs(q[0] - o.x) <= o.w / 2 && Math.abs(q[1] - o.z) <= o.d / 2)
-    .sort((a, b) => a.w * a.d - b.w * b.d);
-  return hits.length ? {id: hits[0].id} : null;
-}
-/** A drag of object (or pasture handle) d to ground point q: where it would go, snapped. */
-function dragTo(d, q) {
-  const o = objectsNow().find(x => x.id === d.id);
-  if (!d.handle) return snapBox({...o, x: q[0] - d.off[0], z: q[1] - d.off[1]}, p);
-  if (/^p[0-9]+$/.test(d.handle) && o.points) { const i = +d.handle.slice(1), at = snapFencePoint(p, q); return {...o, points: o.points.map((r, j) => j === i ? at : r)}; }
-  const pa = pastureOf(p), w = pa.w, s = (q[0] - w.o[0]) * w.u[0] + (q[1] - w.o[2]) * w.u[2], dd = (q[0] - w.o[0]) * w.n[0] + (q[1] - w.o[2]) * w.n[2];
-  const next = d.handle === "a" ? {...o, a: s} : d.handle === "b" ? {...o, b: pa.L - s} : {...o, depth: dd};
-  return snapPasture(next, kindOf(p), p);
 }
 let dSel = null;
 const TYPE_NAMES = {frontespis:"Frontespis", gable:"Gable kupa", shed:"Shed kupa"};
@@ -2255,11 +1970,11 @@ function makeThumbs() {
 }
 function enterInside() {
   if (!renderer || !kindOf(p).catalog) return;
-  if (ob.on) leaveObjects();
+  if (ob.on) leavePlan();
   ins.on = true; ins.sel = null; ins.drag = null; ins.pan = [0, 0];
   ins.hist = new History(p.items || []);
   ins.saved = {...view, target: [...view.target]};
-  placesObj.group.visible = false; yardObj.group.visible = false;
+  placesObj.group.visible = false;
   // The shadow pass isn't clipped, so the roof would still shade the floor: no shadows while arranging.
   sunLight.castShadow = false;
   $("insideBar").hidden = false; $("orbitHint").textContent = "Drag a piece to move it · R turns · Delete removes · drag a wall between sections";
@@ -2593,15 +2308,15 @@ function pick(e) {
 }
 
 /**
- * Preview of the game places (gamePlaces): each FS25 box as a faint coloured box with its edges, and
- * its icon floating over where the game shows it. The place being edited is shown stronger.
+ * Preview of the game places (gamePlaces): the sleep point piece as a faint coloured box with its edges and its icon floating over where the game
+ * shows it, and the box of the decoration that is chosen.
  */
-const PLACE_COLORS = {sleep: 0x3d7bd9, food: 0xe08a2c, bales: 0xd9a92a, loading: 0x4caf50, pallets: 0xe0c22c, info: 0x8a8f98};
+const PLACE_COLORS = {sleep: 0x3d7bd9};
 function makePlacesMarker() {
   const group = new THREE.Group(), boxGeo = new THREE.BoxGeometry(1, 1, 1), edgeGeo = new THREE.EdgesGeometry(boxGeo);
   const boxes = {}, icons = {}, textures = {};
   // one canvas texture per glyph, drawn in white on a coloured circle
-  const GLYPHS = {sleep: ["#2f6fd0", drawBed], food: ["#d07a1f", drawFeed], bales: ["#c0901a", drawBale], hen: ["#3f9a43", drawHen], cow: ["#3f9a43", drawCow], sheep: ["#3f9a43", drawSheep], pallet: ["#c9a514", drawPallet], wrench: ["#5a6a78", drawWrench], cart: ["#2f8f6f", drawCart], fuel: ["#c0392b", drawFuel]};
+  const GLYPHS = {sleep: ["#2f6fd0", drawBed]};
   const texture = glyph => {
     if (!textures[glyph]) {
       const c = document.createElement("canvas"); c.width = c.height = 128;
@@ -2632,35 +2347,18 @@ function makePlacesMarker() {
     }
     return icons[id];
   };
-  // the pasture's handles in the yard's plan view: its two ends and its outer edge
-  const handleGeo = new THREE.CylinderGeometry(0.45, 0.45, 0.06, 24), handleMat = new THREE.MeshBasicMaterial({color: 0x2f6fd0, depthTest: false});
-  // (a fence drawn by hand: a handle for each post, green at the start, red at the stop, and a small pale one between two posts to make a new one)
-  const handleMats = {pt: handleMat, start: new THREE.MeshBasicMaterial({color: 0x3f9a43, depthTest: false}), end: new THREE.MeshBasicMaterial({color: 0xd03a2a, depthTest: false}), mid: new THREE.MeshBasicMaterial({color: 0xffffff, transparent: true, opacity: 0.85, depthTest: false})};
-  // the length of the chosen post's next stretch, written over it
-  const lc = document.createElement("canvas"); lc.width = 256; lc.height = 64;
-  const labelTex = new THREE.CanvasTexture(lc), distLabel = new THREE.Sprite(new THREE.SpriteMaterial({map: labelTex, depthTest: false, transparent: true}));
-  distLabel.visible = false; distLabel.renderOrder = 12; distLabel.scale.set(6, 1.5, 1); group.add(distLabel);
-  const setLabel = text => {
-    const x = lc.getContext("2d"); x.clearRect(0, 0, 256, 64);
-    x.fillStyle = "rgba(255,255,255,0.92)"; x.strokeStyle = "#2f6fd0"; x.lineWidth = 3;
-    x.beginPath(); if (x.roundRect) x.roundRect(6, 6, 244, 52, 14); else x.rect(6, 6, 244, 52); x.fill(); x.stroke();
-    x.fillStyle = "#1b2a41"; x.font = "bold 30px sans-serif"; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText(text, 128, 33);
-    labelTex.needsUpdate = true;
-  };
-  const handles = Array.from({length: 3 + 2 * MAX_FENCE_POINTS}, () => { const m = new THREE.Mesh(handleGeo, handleMat); m.visible = false; m.renderOrder = 11; group.add(m); return m; });
   const dispose = () => {
     boxGeo.dispose(); edgeGeo.dispose();
-    handleGeo.dispose(); Object.values(handleMats).forEach(m => m.dispose()); distLabel.material.dispose(); labelTex.dispose();
     Object.values(boxes).forEach(b => { b.mesh.material.dispose(); b.edges.material.dispose(); });
     Object.values(icons).forEach(s => s.material.dispose());
     Object.values(textures).forEach(t => t.dispose());
   };
-  return {group, boxes, icons, handles, handleMats, distLabel, setLabel, boxFor, iconFor, dispose};
+  return {group, boxes, icons, boxFor, iconFor, dispose};
 }
 function updatePlacesMarker() {
   if (!placesObj) return;
   placesObj.group.visible = true;
-  const list = gamePlaces(p), shown = new Set(list.map(x => x.type)), pr = objectProblems(p);
+  const list = gamePlaces(p), shown = new Set(list.map(x => x.type));
   for (const [id, b] of Object.entries(placesObj.boxes)) b.mesh.visible = shown.has(id);
   for (const [id, s] of Object.entries(placesObj.icons)) s.visible = shown.has(id);
   const dr = treeKind === "deco" && selDecor() ? decorRect(selDecor(), decorFind) : null, bd = placesObj.boxFor("decor");
@@ -2670,31 +2368,13 @@ function updatePlacesMarker() {
     bd.mesh.material.color.set(0x2f6fd0); bd.mesh.material.opacity = 0.2; bd.edges.material.color.set(0x2f6fd0); bd.edges.material.opacity = 1;
   }
   for (const x of list) {
-    const b = placesObj.boxFor(x.type), on = x.id === ob.sel, bad = pr.has(x.id);
+    const b = placesObj.boxFor(x.type);
     b.mesh.position.set(...x.box.center); b.mesh.scale.set(...x.box.size);
-    b.mesh.material.opacity = on ? 0.32 : x.type === "info" ? 0.05 : 0.14;
-    b.edges.material.opacity = on || bad ? 1 : 0.35;
-    b.edges.material.color.set(bad ? 0xd03a2a : on ? 0x2f6fd0 : (PLACE_COLORS[x.type] || 0x888888));
-    // the icon over its spot in the game, or a preview-only one over the middle of an icon-less place
+    // the icon over its spot in the game
     if (!x.glyph) continue;
-    const at = x.icon || [x.box.center[0], 0, x.box.center[2]], s = placesObj.iconFor(x.type, x.glyph);
-    s.position.set(at[0], at[1] + 1.3, at[2]);
+    const at = x.icon || [x.box.center[0], 0, x.box.center[2]], sp = placesObj.iconFor(x.type, x.glyph);
+    sp.position.set(at[0], at[1] + 1.3, at[2]);
   }
-  const hs = ob.on || (ob.sel !== null && (objectOf(p, "pasture") || {}).id === ob.sel && (objectOf(p, "pasture") || {}).points) ? pastureHandles() : [];
-  placesObj.handles.forEach((m, i) => {
-    m.visible = !!hs[i];
-    if (!hs[i]) return;
-    m.position.set(hs[i].at[0], 0.05, hs[i].at[1]); m.material = placesObj.handleMats[hs[i].style || "pt"];
-    const sc = hs[i].style === "mid" ? 0.5 : hs[i].sel ? 1.5 : 1; m.scale.set(sc, 1, sc);
-  });
-  // the length of the chosen post's next stretch (of the one before, for the last post), over its middle
-  const fp = objectOf(p, "pasture"), lab = placesObj.distLabel;
-  if (hs.length && fp && fp.points && ob.pt !== null && ob.pt < fp.points.length && fp.points.length > 1) {
-    const n = fp.points.length, j = ob.pt < n - 1 ? ob.pt + 1 : ob.pt - 1, a = fp.points[ob.pt], b2 = fp.points[j];
-    lab.visible = true; lab.position.set((a[0] + b2[0]) / 2, 1.2, (a[1] + b2[1]) / 2);
-    const text = fenceDist(fp.points, ob.pt, j).toFixed(1) + " m";
-    if (lab.userData.text !== text) { lab.userData.text = text; placesObj.setLabel(text); }
-  } else lab.visible = false;
   needs = true;
 }
 function drawBed(x) {
@@ -2703,176 +2383,6 @@ function drawBed(x) {
   x.fillRect(96, 74, 8, 20);             // foot
   x.beginPath(); x.arc(50, 64, 9, 0, Math.PI * 2); x.fill();  // pillow / head
   x.fillRect(62, 56, 42, 16);            // blanket
-}
-function drawCart(x, bg) {
-  // A shopping trolley: a basket on two wheels with a handle.
-  x.beginPath(); x.moveTo(26, 36); x.lineTo(40, 36); x.lineTo(50, 82); x.lineTo(98, 82); x.lineTo(108, 48); x.lineTo(44, 48); x.lineWidth = 9; x.strokeStyle = x.fillStyle; x.lineJoin = "round"; x.stroke();
-  x.beginPath(); x.arc(58, 98, 8, 0, Math.PI * 2); x.arc(90, 98, 8, 0, Math.PI * 2); x.fill();
-}
-function drawFuel(x, bg) {
-  // A pump: a tall body with a window, and a hose with a nozzle at its side.
-  x.beginPath(); x.rect(34, 26, 46, 76); x.fill();
-  x.fillStyle = bg; x.fillRect(42, 36, 30, 20); x.fillStyle = "#fff";
-  x.beginPath(); x.moveTo(80, 50); x.lineTo(96, 50); x.lineTo(96, 84); x.lineWidth = 7; x.strokeStyle = "#fff"; x.stroke();
-  x.fillRect(90, 80, 14, 10);
-}
-function drawWrench(x, bg) {
-  // A spanner: a long handle with an open jaw at the top.
-  x.save(); x.translate(64, 64); x.rotate(-Math.PI / 4);
-  x.beginPath(); x.rect(-8, -10, 16, 56); x.fill();
-  x.beginPath(); x.arc(0, -26, 22, 0, Math.PI * 2); x.fill();
-  x.fillStyle = bg; x.fillRect(-9, -52, 18, 26);
-  x.restore();
-}
-function drawBale(x, bg) {
-  // A square bale: front face, top and side, with two strings.
-  x.beginPath(); x.moveTo(26, 52); x.lineTo(44, 36); x.lineTo(104, 36); x.lineTo(104, 80); x.lineTo(86, 96); x.lineTo(26, 96); x.closePath(); x.fill();
-  x.strokeStyle = bg; x.lineWidth = 4;
-  x.beginPath(); x.moveTo(26, 52); x.lineTo(86, 52); x.lineTo(104, 36); x.moveTo(86, 52); x.lineTo(86, 96);
-  x.moveTo(46, 52); x.lineTo(46, 96); x.moveTo(66, 52); x.lineTo(66, 96); x.stroke();
-}
-/**
- * Preview of an animal building's yard: the starting fence as a see-through net with posts and wires
- * (the places outside are drawn with the other game places).
- */
-function makeYardMarker() {
-  const group = new THREE.Group();
-  // The fence: a see-through green net, dark posts, and dark wires along its top and bottom.
-  const netMat = new THREE.MeshBasicMaterial({color:0x5f7a4a, transparent:true, opacity:0.4, side:THREE.DoubleSide, depthWrite:false});
-  const net = new THREE.Mesh(new THREE.BufferGeometry(), netMat);
-  const postMat = new THREE.MeshLambertMaterial({color:0x3b3f37, side:THREE.DoubleSide});
-  const posts = new THREE.Mesh(new THREE.BufferGeometry(), postMat);
-  posts.castShadow = true;
-  const wireMat = new THREE.LineBasicMaterial({color:0x2f3a2a});
-  const wires = new THREE.LineSegments(new THREE.BufferGeometry(), wireMat);
-  group.add(posts, wires, net);
-  // where the animals can walk: a see-through green picture of the ground (walkarea.mjs), when asked for
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({transparent: true, depthWrite: false, side: THREE.DoubleSide}));
-  ground.rotation.x = -Math.PI / 2; ground.position.y = 0.03; ground.visible = false; ground.renderOrder = 2;
-  group.add(ground);
-  const groundIn = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({transparent: true, depthWrite: false, depthTest: false, side: THREE.DoubleSide}));   // (seen through the walls and roof)
-  groundIn.rotation.x = -Math.PI / 2; groundIn.visible = false; groundIn.renderOrder = 3;
-  group.add(groundIn);
-  const dispose = () => { for (const m of [net, posts, wires, ground, groundIn]) { m.geometry.dispose(); if (m.material.map) m.material.map.dispose(); m.material.dispose(); } };
-  return {group, net, posts, wires, ground, groundIn, dispose};
-}
-/* Icon glyphs, drawn in white on a 128 px circle. */
-function drawFeed(x) {
-  // An ear of grain: a stalk with kernels either side, and two leaves.
-  x.beginPath(); x.moveTo(64, 108); x.lineTo(64, 26); x.stroke();
-  for (let i = 0; i < 4; i++) for (const s of [-1, 1]) {
-    x.beginPath(); x.ellipse(64 + s * 11, 36 + i * 14, 7, 11, s * 0.5, 0, Math.PI * 2); x.fill();
-  }
-  x.beginPath(); x.ellipse(64, 24, 6, 10, 0, 0, Math.PI * 2); x.fill();
-  x.beginPath(); x.moveTo(64, 96); x.quadraticCurveTo(44, 86, 38, 72); x.moveTo(64, 96); x.quadraticCurveTo(84, 86, 90, 72); x.stroke();
-}
-function drawPallet(x) {
-  // An egg standing on a pallet.
-  x.beginPath(); x.ellipse(64, 52, 20, 26, 0, 0, Math.PI * 2); x.fill();
-  x.fillRect(28, 82, 72, 8);
-  for (const px of [28, 59, 90]) x.fillRect(px, 90, 10, 10);
-  x.fillRect(28, 100, 72, 6);
-}
-function drawCow(x, bg) {
-  // A cow's head from the front: ears, horns, head, a pale muzzle with nostrils, eyes.
-  x.beginPath(); x.ellipse(36, 50, 14, 8, -0.4, 0, Math.PI * 2); x.ellipse(92, 50, 14, 8, 0.4, 0, Math.PI * 2); x.fill();
-  x.beginPath(); x.moveTo(50, 40); x.quadraticCurveTo(44, 24, 52, 18); x.moveTo(78, 40); x.quadraticCurveTo(84, 24, 76, 18); x.stroke();
-  x.beginPath(); x.ellipse(64, 62, 22, 28, 0, 0, Math.PI * 2); x.fill();
-  x.beginPath(); x.ellipse(64, 90, 20, 13, 0, 0, Math.PI * 2); x.fill();
-  x.fillStyle = bg;
-  for (const [cx, cy, r] of [[55, 56, 4], [73, 56, 4], [57, 91, 3.5], [71, 91, 3.5]]) { x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill(); }
-}
-function drawSheep(x, bg) {
-  // A sheep in profile: a woolly body of overlapping puffs, a dark head with an ear, and legs.
-  for (const [cx, cy, r] of [[46, 62, 17], [62, 54, 18], [78, 62, 17], [60, 72, 18], [42, 76, 12], [78, 76, 12]]) { x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill(); }
-  x.beginPath(); x.ellipse(98, 58, 9, 13, 0.3, 0, Math.PI * 2); x.fill();
-  x.fillStyle = bg; x.beginPath(); x.ellipse(98, 58, 7, 11, 0.3, 0, Math.PI * 2); x.fill(); x.beginPath(); x.arc(101, 54, 2, 0, Math.PI * 2); x.fillStyle = "#fff"; x.fill();
-  x.strokeStyle = "#fff"; x.lineWidth = 6; x.beginPath(); x.moveTo(46, 88); x.lineTo(46, 108); x.moveTo(74, 88); x.lineTo(74, 108); x.stroke();
-}
-function drawHen(x) {
-  // A hen in profile: body, head with comb and beak, tail, legs.
-  x.beginPath(); x.ellipse(60, 70, 30, 22, 0, 0, Math.PI * 2); x.fill();
-  x.beginPath(); x.arc(84, 42, 13, 0, Math.PI * 2); x.fill();
-  x.beginPath(); x.moveTo(76, 56); x.lineTo(92, 50); x.lineTo(88, 66); x.closePath(); x.fill();
-  x.beginPath(); x.moveTo(96, 40); x.lineTo(108, 45); x.lineTo(96, 48); x.closePath(); x.fill();   // beak
-  x.beginPath(); x.arc(80, 28, 5, 0, Math.PI * 2); x.arc(88, 28, 5, 0, Math.PI * 2); x.fill();     // comb
-  x.beginPath(); x.moveTo(34, 64); x.lineTo(20, 38); x.lineTo(40, 52); x.closePath(); x.fill();    // tail
-  x.beginPath(); x.moveTo(54, 90); x.lineTo(54, 106); x.moveTo(68, 90); x.lineTo(68, 106); x.stroke();
-}
-/** Boxes (6 cm square, h high) standing at the given ground points, as one mesh with normals. */
-function postsGeometry(points, h) {
-  const pos = [], nrm = [], s = 0.03;
-  const quad = (a, b, c, d, n) => { for (const q of [a, b, c, a, c, d]) { pos.push(...q); nrm.push(...n); } };
-  for (const [x, , z] of points) {
-    const P = (i, j, k) => [x + (i ? s : -s), k ? h : 0, z + (j ? s : -s)];
-    quad(P(0,0,0), P(0,0,1), P(1,0,1), P(1,0,0), [0, 0, -1]);
-    quad(P(1,1,0), P(1,1,1), P(0,1,1), P(0,1,0), [0, 0, 1]);
-    quad(P(0,1,0), P(0,1,1), P(0,0,1), P(0,0,0), [-1, 0, 0]);
-    quad(P(1,0,0), P(1,0,1), P(1,1,1), P(1,1,0), [1, 0, 0]);
-    quad(P(0,0,1), P(0,1,1), P(1,1,1), P(1,0,1), [0, 1, 0]);
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute("normal", new THREE.Float32BufferAttribute(nrm, 3));
-  return g;
-}
-function updateYardMarker(geo) {
-  if (!yardObj) return;
-  const kind = kindOf(p);
-  yardObj.group.visible = !!kind.yard;
-  $("walkAreaBtn").hidden = !kind.yard;
-  if (!yardObj.group.visible) return;
-  const yard = kind.yard(geo, p), fence = yard.fence;
-  const h = 1.1, pos = [], wire = [], postAt = [];
-  for (let i = 0; i + 1 < fence.length; i++) {
-    const a = fence[i], b = fence[i + 1];
-    pos.push(a[0], 0, a[2], b[0], 0, b[2], b[0], h, b[2], a[0], 0, a[2], b[0], h, b[2], a[0], h, a[2]);
-    for (const t of [0.05, h]) wire.push(a[0], t, a[2], b[0], t, b[2]);
-    // a post at each corner and at most 2 m apart in between
-    const n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[2] - a[2]) / 2));
-    for (let k = 0; k < n; k++) postAt.push([a[0] + (b[0] - a[0]) * k / n, 0, a[2] + (b[2] - a[2]) * k / n]);
-  }
-  postAt.push(fence[fence.length - 1]);
-  const set = (mesh, g) => { mesh.geometry.dispose(); mesh.geometry = g; };
-  const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-  set(yardObj.net, g);
-  const wg = new THREE.BufferGeometry();
-  wg.setAttribute("position", new THREE.Float32BufferAttribute(wire, 3));
-  set(yardObj.wires, wg);
-  set(yardObj.posts, postsGeometry(postAt, h + 0.1));
-  paintWalkArea(yard);
-}
-/** Paints where the animals can walk (inside the fence, less the building and the troughs) on the ground, if that is switched on. */
-function paintWalkArea(yard) {
-  const btn = $("walkAreaBtn");
-  yardObj.ground.visible = yardObj.groundIn.visible = false;
-  if (!showWalkArea) return;
-  const xs = yard.fence.map(q => q[0]), span = Math.max(...xs) - Math.min(...xs), cell = Math.max(0.2, span / 700);
-  const rects = yard.nav ? yard.nav.rects : cellRects(walkArea(yard.contour || yard.fence, yard.blockers || [], cell));
-  if (!rects.length) return;
-  // one picture of the ground for the yard and one at the building's floor (where the animals can go inside)
-  const paint = (mesh, list, y, ramps) => {
-    if (!list.length) return;
-    const x0 = Math.min(...list.map(r => r.x0)), x1 = Math.max(...list.map(r => r.x1)), z0 = Math.min(...list.map(r => r.z0)), z1 = Math.max(...list.map(r => r.z1));
-    const nx = Math.max(1, Math.ceil((x1 - x0) / cell)), nz = Math.max(1, Math.ceil((z1 - z0) / cell));
-    const cv = document.createElement("canvas"); cv.width = nx; cv.height = nz;
-    const ctx = cv.getContext("2d");
-    ctx.fillStyle = "rgba(70,190,90,0.47)";
-    // (the top row of the picture is the smallest z)
-    for (const r of list) ctx.fillRect(Math.round((r.x0 - x0) / cell), Math.round((r.z0 - z0) / cell), Math.max(1, Math.round((r.x1 - r.x0) / cell)), Math.max(1, Math.round((r.z1 - r.z0) / cell)));
-    for (const ramp of ramps || []) { ctx.beginPath(); ramp.points.forEach(([x, z], k) => ctx[k ? "lineTo" : "moveTo"]((x - x0) / cell, (z - z0) / cell)); ctx.closePath(); ctx.fill(); }
-    if (mesh.material.map) mesh.material.map.dispose();
-    mesh.material.map = new THREE.CanvasTexture(cv); mesh.material.map.magFilter = THREE.NearestFilter; mesh.material.needsUpdate = true;
-    mesh.scale.set(nx * cell, nz * cell, 1);
-    mesh.position.set(x0 + nx * cell / 2, y + 0.03, z0 + nz * cell / 2);
-    mesh.visible = true;
-  };
-  paint(yardObj.ground, rects.filter(r => !r.inside), 0, yard.nav && yard.nav.ramps);
-  paint(yardObj.groundIn, rects.filter(r => r.inside), (rects.find(r => r.inside) || {y: 0}).y, null);
-  const m2 = rects.reduce((sum, r) => sum + (r.x1 - r.x0) * (r.z1 - r.z0), 0);
-  btn.title = t("Animals can walk on about {n} m²: in the yard, and inside the building where they can go in", {n: Math.round(m2)});
-  needs = true;
 }
 // The detail toggle: the far view shows only what the game's simple model (LOD1 in the i3d) keeps.
 let showFar = false;
@@ -2928,12 +2438,10 @@ function rebuild(fit) {
       updateCam();
       updateHighlight();
       updatePlacesMarker();
-      updateYardMarker(geo);
     }
     updateInsideOverlay();
   }
   refreshWin(); refreshDorm(); renderInsideUI();
-  if ($("objPlan")) $("objPlan").disabled = !renderer;
   applyLod();
   Object.keys(G).forEach(m => { if (!showFar || lodKeeps(m)) tris += G[m].i.length / 3; });
   readout.innerHTML = `<span><b>${dims.W.toFixed(1)} \u00D7 ${dims.D.toFixed(1)} m</b>${wingsNow.map(w => ` + <b>${w.ww.toFixed(1)} × ${w.wd.toFixed(1)} m</b> wing`).join("")} footprint</span><span><b>${dims.ridgeY.toFixed(1)} m</b> to the top</span><span><b>${tris.toLocaleString()}</b> triangles</span>`;
@@ -3003,7 +2511,7 @@ function walkStep() {
 function enterWalk() {
   if (walk.on || !renderer || !lastGeo) return;
   if (ins.on) leaveInside();
-  if (ob.on) leaveObjects();
+  if (ob.on) leavePlan();
   walk.on = true; walk.keys.clear(); walk.last = 0;
   walk.walker = makeWalker(lastGeo.collision); walkStart(); walk.ey = walk.pos.y + walk.eye;
   camera.fov = 70; camera.near = 0.05; camera.updateProjectionMatrix();
@@ -3027,7 +2535,6 @@ function leaveWalk() {
 }
 $("lodBtn").onclick = () => { showFar = !showFar; rebuild(false); };
 $("walkBtn").onclick = () => walk.on ? leaveWalk() : enterWalk();
-$("walkAreaBtn").onclick = () => { showWalkArea = !showWalkArea; $("walkAreaBtn").setAttribute("aria-pressed", String(showWalkArea)); $("walkAreaBtn").textContent = showWalkArea ? "Hide where the animals can walk" : "Show where the animals can walk"; if (lastGeo) updateYardMarker(lastGeo); needs = true; };
 cleanups.push(() => { window.removeEventListener("keydown", walkKey); window.removeEventListener("keyup", walkKey); });
 
 /* ---------- Files ---------- */
@@ -3069,7 +2576,7 @@ function renderStoreImage(size) {
     const radius = 0.5 * Math.hypot(dims.W + 2, dims.D + 2, dims.ridgeY);
     cam.position.copy(target).addScaledVector(new THREE.Vector3(0.8, 0.5, 1).normalize(), radius / Math.sin(15 * Math.PI / 180));
     cam.lookAt(target);
-    const hide = [groundObj, gridObj, selMesh, placesObj && placesObj.group, yardObj && yardObj.group].filter(Boolean), was = hide.map(o => o.visible);
+    const hide = [groundObj, gridObj, selMesh, placesObj && placesObj.group].filter(Boolean), was = hide.map(o => o.visible);
     const bg = scene.background, fog = scene.fog;
     hide.forEach(o => o.visible = false); scene.background = null; scene.fog = null;
     r2.render(scene, cam);
@@ -3170,9 +2677,9 @@ function setSettings(obj) { p = sanitize({...obj, kind: p.kind}); selId = null; 
 function snapshot() {
   if (!renderer) return null;
   // The project list's picture is always the whole building, even while arranging the inside.
-  const wasVisible = selMesh.visible, placesVisible = placesObj.group.visible, yardVisible = yardObj.group.visible;
+  const wasVisible = selMesh.visible, placesVisible = placesObj.group.visible;
   const over = [ghost, marks, planLines].map(o => o.visible), clip = renderer.clippingPlanes;
-  selMesh.visible = false; placesObj.group.visible = false; yardObj.group.visible = false;
+  selMesh.visible = false; placesObj.group.visible = false;
   [ghost, marks, planLines].forEach(o => o.visible = false); renderer.clippingPlanes = [];
   renderer.render(scene, camera);
   [ghost, marks, planLines].forEach((o, i) => o.visible = over[i]); renderer.clippingPlanes = clip;
@@ -3180,7 +2687,7 @@ function snapshot() {
   const c = document.createElement("canvas"); c.width = W; c.height = H;
   const k = Math.max(W / src.width, H / src.height), sw = W / k, sh = H / k;
   c.getContext("2d").drawImage(src, (src.width - sw) / 2, (src.height - sh) / 2, sw, sh, 0, 0, W, H);
-  selMesh.visible = wasVisible; placesObj.group.visible = placesVisible; yardObj.group.visible = yardVisible; needs = true;
+  selMesh.visible = wasVisible; placesObj.group.visible = placesVisible; needs = true;
   return c.toDataURL("image/jpeg", 0.8);
 }
 
@@ -3191,7 +2698,6 @@ function destroy() {
   for (const m of Object.keys(meshes)) { if (meshes[m]) meshes[m].geometry.dispose(); const mat = matObjs[m]; if (mat) { if (mat.map) mat.map.dispose(); if (mat.normalMap) mat.normalMap.dispose(); mat.dispose(); } }
   for (const o of Object.values(fitMeshes)) { o.geometry.dispose(); o.material.map.dispose(); o.material.normalMap.dispose(); o.material.dispose(); }
   if (placesObj) placesObj.dispose();
-  if (yardObj) yardObj.dispose();
   if (interiorTex) interiorTex.dispose();
   for (const g of itemGeos.values()) if (g) g.dispose();
   if (itemMat) itemMat.dispose();
