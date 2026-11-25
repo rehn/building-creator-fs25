@@ -191,11 +191,9 @@ export default function Builder({ initial, onChange, onReady }: { initial: Recor
             </div>
           </section>
         ) : (
-          <section className="hx-card" aria-label="Game mod">
-            <h3 className="hx-card-h">{t("Game mod")}</h3>
-            <RangeField key="mod-price" label="Price in the shop" unit="" step={100} min={0} max={100000} hardMax={10000000} value={model.mod.price} onCommit={v => change(sanitize({ ...model, mod: { ...model.mod, price: Math.round(v) } }))} />
-            <RangeField key="mod-upkeep" label="Upkeep per day" unit="" step={1} min={0} max={1000} hardMax={100000} value={model.mod.upkeep} onCommit={v => change(sanitize({ ...model, mod: { ...model.mod, upkeep: Math.round(v) } }))} />
-            <label className="check"><input type="checkbox" checked={model.mod.sellable} onChange={e => change(sanitize({ ...model, mod: { ...model.mod, sellable: e.target.checked } }))} /> Can be bought and sold in the shop</label>
+          <section className="hx-card" aria-label="The prop">
+            <h3 className="hx-card-h">{t("The prop")}</h3>
+            <p className="hint">{t("A prop has no shop or game settings of its own. Put it in a mod (Mods): the mod is what the game gets, with its price and the rest.")}</p>
           </section>
         )}
       </aside>

@@ -935,9 +935,6 @@
   "A picture with a see-through background (a logo) is put on this colour, so it is not black round the edges.": "En bild med genomskinlig bakgrund (en logga) läggs på den här färgen, så att den inte blir svart runt kanterna.",
   "Saved in My items.": "Sparad i Mina objekt.",
   "The item in My items is updated.": "Objektet i Mina objekt är uppdaterat.",
-  "Price in the shop": "Pris i butiken",
-  "Upkeep per day": "Underhåll per dag",
-  "Can be bought and sold in the shop": "Kan köpas och säljas i butiken",
   "Turn the texture": "Vrid texturen",
   "Solid (players and vehicles cannot pass through)": "Fast (spelare och fordon kan inte gå igenom)",
   "Shine (0 matt, 1 glossy)": "Glans (0 matt, 1 blank)",
@@ -1104,5 +1101,6 @@
   "Delete folder": "Ta bort mappen",
   "Delete the folder “{name}”? What is in it stays, in no folder.": "Ta bort mappen “{name}”? Det som ligger i den blir kvar, utan mapp.",
   "Animals": "Djur",
-  "How many animals the yard of the mod holds. The yard takes at most as many as it has room for.": "Hur många djur modens gård rymmer. Gården tar som mest så många som det finns plats för."
+  "How many animals the yard of the mod holds. The yard takes at most as many as it has room for.": "Hur många djur modens gård rymmer. Gården tar som mest så många som det finns plats för.",
+  "A prop has no shop or game settings of its own. Put it in a mod (Mods): the mod is what the game gets, with its price and the rest.": "En rekvisita har inga egna butiks- eller spelinställningar. Lägg den i en mod (Mods): det är modden spelet får, med pris och allt annat."
 }

@@ -75,18 +75,12 @@ function cleanItem(raw) {
   return raw && typeof raw === "object" && !Array.isArray(raw) && typeof raw.id === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(raw.id) ? {id: raw.id} : null;
 }
 
-/** The game mod's settings: shop price, daily upkeep (both whole numbers in range) and whether it can be bought and sold. */
-function cleanMod(raw) {
-  const o = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
-  return {price: Math.round(clamp(num(o.price, 1000), 0, 10000000)), upkeep: Math.round(clamp(num(o.upkeep, 0), 0, 100000)), sellable: o.sellable !== false};
-}
-
 /** The project as it can be kept and built: bad input becomes an empty project, the rest is cleaned (ids 1.. in order, at most MAX_PARTS). */
 export function sanitize(raw) {
   const o = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
   const parts = (Array.isArray(o.parts) ? o.parts : []).filter(p => p && typeof p === "object" && !Array.isArray(p)).slice(0, MAX_PARTS);
   const materials = cleanMaterials(o.materials), ids = new Set(materials.map(m => m.id));
-  return {format: FORMAT, version: VERSION, kind: "prop", mod: cleanMod(o.mod), item: cleanItem(o.item), materials, parts: parts.map((p, k) => { const c = cleanPart(p, k + 1); c.faces = cleanFaces(c.shape, p.faces, ids); c.faceRot = cleanRot(c.shape, p.faceRot); return c; })};
+  return {format: FORMAT, version: VERSION, kind: "prop", item: cleanItem(o.item), materials, parts: parts.map((p, k) => { const c = cleanPart(p, k + 1); c.faces = cleanFaces(c.shape, p.faces, ids); c.faceRot = cleanRot(c.shape, p.faceRot); return c; })};
 }
 
 /** The colour a face is drawn in: its material row's if it has one, else the part's own. */
