@@ -25,7 +25,11 @@ export const DOOR_STYLES = [
   {id: "gate", name: "Fence gate (stängselgrind)"},
   {id: "lowgate", name: "Low steel gate (grind, as high as a fence)"},
   {id: "hole", name: "Open doorway, framed (no door)"},
+  // (a small opening for hens, 40 x 50 cm at the floor: the size is the style's, not the door's; not a style for the whole building)
+  {id: "henhatch", name: "Hen hatch (small, at the floor)"},
 ];
+/** The size of a hen hatch: 40 cm wide and 50 cm high, at the floor (as the hen house's own). */
+export const HATCH_SIZE = {w: 0.4, h: 0.5};
 /** Doors for the rooms of a house (inner walls): lighter and finer than the outer doors; not offered as the building's door style. */
 // (the glazed door of the rooms is drawn with a hole for its glass, like the panelled outer door)
 export const INNER_DOOR_STYLES = [

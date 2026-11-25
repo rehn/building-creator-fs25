@@ -31,7 +31,7 @@ test("sanitize: the building's window and door styles, by kind, and only known o
   assert.equal(cow().winStyle, "stall");
   assert.equal(sanitize({winStyle: "nope", doorStyle: "nope"}).winStyle, "casement");
   for (const s of WINDOW_STYLES) assert.equal(sanitize({winStyle: s.id}).winStyle, s.id);
-  for (const s of DOOR_STYLES) assert.equal(sanitize({doorStyle: s.id}).doorStyle, s.id);
+  for (const s of DOOR_STYLES.filter(d => d.id !== "henhatch")) assert.equal(sanitize({doorStyle: s.id}).doorStyle, s.id);
 });
 
 /* ---------- A door where a window was ---------- */
@@ -95,7 +95,7 @@ test("sliding door: hangs outside the wall on a rail and slides along it", () =>
   assert.ok(wide[0].motion.translation.some((v, i) => Math.sign(v) === -Math.sign(wide[1].motion.translation[i]) && v !== 0));
 });
 test("every preset builds and exports with every window and door style", () => {
-  for (const pr of PRESETS) for (const winStyle of WINDOW_STYLES.map(s => s.id)) for (const doorStyle of DOOR_STYLES.map(s => s.id)) {
+  for (const pr of PRESETS) for (const winStyle of WINDOW_STYLES.map(s => s.id)) for (const doorStyle of DOOR_STYLES.filter(d => d.id !== "henhatch").map(s => s.id)) {
     const p = sanitize({...pr.settings, winStyle, doorStyle});
     assert.doesNotThrow(() => buildI3d(p), `${pr.id} ${winStyle} ${doorStyle}`);
   }
