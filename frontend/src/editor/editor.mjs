@@ -556,6 +556,7 @@ function makeMesh(m) {
 let roofsHidden = false;
 function showRoofs() {
   for (const m of Object.keys(meshes)) meshes[m].visible = !((roofsHidden || ins.on) && slotOf(m) === "roof");
+  needs = true;   // (the view is drawn only when something asks: without this the change shows at the next click in it)
   const b = $("roofBtn");
   if (b) { b.setAttribute("aria-pressed", String(roofsHidden || ins.on)); b.textContent = roofsHidden || ins.on ? "Show roof" : "Hide roof"; b.disabled = ins.on; }
 }

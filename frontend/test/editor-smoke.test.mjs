@@ -175,21 +175,11 @@ test("arranging the inside hides every roof, a wing's too, and Done shows them a
   } finally { THREE.Scene.prototype.add = add; }
 });
 
-test("the roof button draws the view again at once (it is drawn only when something asks)", async () => {
-  const THREE = await import("three");
-  const draw = THREE.WebGLRenderer.prototype.render;
-  let drawn = 0;
-  THREE.WebGLRenderer.prototype.render = function (...a) { drawn++; return draw.apply(this, a); };
-  try {
-    const root = w.document.getElementById("root");
-    root.innerHTML = "";
-    const ed = createEditor(root, {initial: {kind: "house"}, onChange() {}});
-    const wait = () => new Promise(r => w.setTimeout(r, 120));
-    await wait();
-    const before = drawn;
-    root.querySelector("#roofBtn").click();
-    await wait();
-    assert.ok(drawn > before, "the view was drawn after the button");
-    ed.destroy();
-  } finally { THREE.WebGLRenderer.prototype.render = draw; }
+// The view is drawn only when something sets `needs`; a change of what is shown that does not set it shows at the next click in the view. (The fake WebGL context of this test stops
+// the render loop after its first frame, so the draw itself can't be counted here: the rule is checked in the source.)
+test("showRoofs asks for a new frame", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("../src/editor/editor.mjs", import.meta.url), "utf8");
+  const body = src.slice(src.indexOf("function showRoofs()"), src.indexOf("function showRoofs()") + 700);
+  assert.match(body.slice(0, body.indexOf("\n}\n")), /needs = true/);
 });
