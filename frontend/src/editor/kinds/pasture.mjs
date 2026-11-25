@@ -5,7 +5,6 @@ import { wallsOf } from "../layout.mjs";
 import { pastureOf, footprints } from "../objects.mjs";
 
 export const OPPOSITE = {front: "back", back: "front", left: "right", right: "left"};
-export const wallLength = (p, wall) => (wall === "front" || wall === "back") ? p.width : p.depth;
 /** The walls with a door (the window list's ground-floor doors). */
 const doorWalls = p => new Set((p.windows || []).filter(w => w.type === "door" && w.floor === 0).map(w => w.wall));
 /**
@@ -66,15 +65,6 @@ export function teleportFor(l, {W, D}) {
   const [x, , z] = l.box.center, alongX = Math.abs(x) - W / 2 > Math.abs(z) - D / 2;
   return alongX ? [x + Math.sign(x || 1) * 3, 0, z] : [x, 0, z + Math.sign(z || 1) * 3];
 }
-/**
- * The settings the rest of the kind reads, from its pasture object: pastureWall, fenceDepth and
- * pastureMid (where on that wall the animals go out: the opening set on the pasture, else the middle of the stretch it encloses), pastureGapW and pastureGapH (its size).
- */
-export function withPasture(q) {
-  const pa = pastureOf(q);
-  return pa ? {...q, pastureWall: pa.wall, fenceDepth: pa.depth, pastureMid: pa.mid, pastureGapW: pa.gapW, pastureGapH: pa.gapH, pastureNoGap: pa.noGap, pastureRamp: pa.gapRamp} : q;
-}
-
 /** Two pallet spawn lines inside a pallet trigger box, along its longer side: 50 cm in from its ends and 80 cm either side of its middle. */
 export function palletLines(box) {
   const [cx, , cz] = box.center, [sw, , sd] = box.size, long = sw >= sd;
@@ -99,18 +89,6 @@ export function cornerStripes(r, arm = 1, w = 0.25) {
     quad(cx, cx + sx * w, cz + sz * w, cz + sz * az); // arm along z
   }
   return g;
-}
-
-/**
- * The ground under the building, for the meadow's clear task (the game paints the meadow over the area it takes from the fence and the walking area, and the barn's floor
- * must not get grass): the convex hull of the building's footprints (the main building and every part), grown by margin m, as [[x, z] ...] in order round it.
- */
-export function footprintHull(p, margin = 0.5) {
-  const pts = footprints(p).flatMap(r => [[r.x0 - margin, r.z0 - margin], [r.x1 + margin, r.z0 - margin], [r.x1 + margin, r.z1 + margin], [r.x0 - margin, r.z1 + margin]]);
-  pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
-  const half = list => { const h = []; for (const q of list) { while (h.length >= 2 && cross(h[h.length - 2], h[h.length - 1], q) <= 0) h.pop(); h.push(q); } h.pop(); return h; };
-  return [...half(pts), ...half(pts.slice().reverse())];
 }
 
 /**

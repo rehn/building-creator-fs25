@@ -11,15 +11,9 @@ const intake = {type: "intake", x: 0, z: 2, w: 5, d: 4, h: 2, ix: 0, iz: 0};
 const sleep = {type: "sleep", x: 0, z: 6, w: 1.8, d: 1.8, h: 2.2, ix: 0, iz: 0};
 const fills = xml => (xml.match(/fillTypes="([^"]*)"/) || [])[1];
 
-test("every kind can have an intake", () => {
-  for (const id of ["house", "shed", "chicken", "cow", "sheep", "dealership", "fuelstation"]) assert.ok(allowedTypes(kindOf({kind: id})).includes("intake"), id);
-  assert.deepEqual(SHARED_GROUPS.intake, ["intake"]);
-  assert.deepEqual(SHARED.intake.types, ["intake"]);
-  assert.equal(sharedDefaults(sanitize({kind: "house"}), "intake").length, 1);
-});
 
 test("a house with an intake is a selling station: the game's own type, the unload nodes and the grain the settings say", () => {
-  const p = sanitize({kind: "house", objects: [intake], buyBarley: true, grainPrice: 150});
+  const p = sanitize({kind: "modframe", objects: [intake], buyBarley: true, grainPrice: 150});
   const xml = placeableXml(p, "Silo");
   assert.match(xml, /<placeable type="sellingStation">/);
   assert.deepEqual(modTypesFor(p, "FS25_Silo"), []);
@@ -34,7 +28,7 @@ test("a house with an intake is a selling station: the game's own type, the unlo
 
 test("the station is turned 0 90 0, so its icon lands where the editor shows the box (x -> -z, z -> x: a point at local (a, b) is at world (b, -a))", () => {
   for (const [x, z] of [[3, -2], [-4, 1.5], [0, 5]]) {
-    const p = sanitize({kind: "house", objects: [{...intake, x, z}]});
+    const p = sanitize({kind: "modframe", objects: [{...intake, x, z}]});
     const i3d = buildI3d(p);
     assert.match(i3d, /name="unloadStationTrailer"[^>]*rotation="0 90 0"/);
     const t = i3d.match(/name="unloadMarkerTrailer"[^>]*translation="([^"]+)"/)[1].split(" ").map(Number);
@@ -44,29 +38,29 @@ test("the station is turned 0 90 0, so its icon lands where the editor shows the
 
 test("the game's hopper stands on the ground: its link node is the middle of the box (h / 2 up), so it is moved down that far (and 1 cm under the ground)", () => {
   for (const h of [1.5, 3]) {
-    const xml = placeableXml(sanitize({kind: "house", objects: [{...intake, h}]}), "S");
+    const xml = placeableXml(sanitize({kind: "modframe", objects: [{...intake, h}]}), "S");
     const y = +xml.match(/linkNode="unloadNodeTrailer" position="[-\d.]+ ([-\d.]+) /)[1];
     assert.ok(Math.abs(y + h / 2 + 0.01) < 0.002, `h ${h}: y ${y}`);
   }
 });
 
 test("with no grain ticked it buys wheat; the hopper can be left out", () => {
-  const p = sanitize({kind: "house", objects: [intake]});
+  const p = sanitize({kind: "modframe", objects: [intake]});
   assert.equal(fills(placeableXml(p, "S")), "WHEAT");
   assert.match(placeableXml(p, "S"), /sellingStationGenericMedium/);
-  assert.doesNotMatch(placeableXml(sanitize({kind: "house", objects: [intake], siloHopper: false}), "S"), /sellingStationGenericMedium/);
+  assert.doesNotMatch(placeableXml(sanitize({kind: "modframe", objects: [intake], siloHopper: false}), "S"), /sellingStationGenericMedium/);
 });
 
 test("the grain settings are on every building", () => {
-  const h = sanitize({kind: "house"});
+  const h = sanitize({kind: "modframe"});
   assert.equal(h.buyWheat, false);
   assert.equal(h.grainPrice, 100);
   assert.equal(h.siloHopper, true);
-  assert.equal(sanitize({kind: "cow"}).grainPrice, 100);
+  assert.equal(sanitize({kind: "modframe"}).grainPrice, 100);
 });
 
 test("an intake with a sleep point: one type with both sets of specializations, one <hotspots> and one <triggerMarkers>", () => {
-  const p = sanitize({kind: "house", objects: [intake, sleep]});
+  const p = sanitize({kind: "modframe", objects: [intake, sleep]});
   const types = modTypesFor(p, "FS25_M");
   assert.equal(types.length, 1);
   assert.equal(types[0].parent, "simplePlaceable");

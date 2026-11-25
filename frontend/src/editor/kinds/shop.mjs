@@ -15,6 +15,6 @@ const SHOPS = {
   decoration: {category: "decoration", type: "placeable", brush: "decoration", tab: "decoration"},
 };
 /** The kinds whose shop place is a choice. */
-export const SHOP_KINDS = ["house", "shed", "dealership", "defaultdealer"];
+export const SHOP_KINDS = ["house", "shed", "dealership"];
 /** The shop place of a building: its choice (p.shopCategory), or `own` (the kind's) for "auto" and anything unknown. */
 export const shopFor = (p, own) => SHOPS[p && p.shopCategory] || own;

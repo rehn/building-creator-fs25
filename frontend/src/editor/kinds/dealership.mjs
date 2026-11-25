@@ -77,14 +77,11 @@ export default {
   hides: ["Interior", "Kupor (dormers)"],
   /** Settings as this kind uses them: no sleep point, rooms or dormers. */
   normalize: p => ({...p, interior: false, dormers: []}),
-  // (the vehicle buying station and the type that has it: kinds/vehicleshop.mjs and gameobjects.mjs, as for any building with a shop counter)
   placeable: p => ({type: "simplePlaceable", fn: "$l10n_function_decoration", shop: shopFor(p, SHEDS)}),
-  description: p => `A ${(+p.width).toFixed(1)} x ${(+p.depth).toFixed(1)} m dealership made with House to i3d. Buy ${vehiclesFor(p).length} vehicles at the counter.`,
+  description: p => `A ${(+p.width).toFixed(1)} x ${(+p.depth).toFixed(1)} m dealership hall made with House to i3d.`,
   furnish,
   catalog: CATALOG,
   autoFurnish,
-  // the game objects: the counter and the spawn area are both needed
-  objects: {types: ["counter", "spawn"], required: ["counter", "spawn"], defaults: defaultObjects},
   presets: [
     {id: "maskinaffar", name: "Maskinaffär", blurb: "20 × 12 m showroom hall with a wide sliding door, a counter at the front and a spawn area for the machines you buy.", settings: {
       ...paint, width: 20, depth: 12, floors: 1, floorHeight: 5, foundation: 0.3, foundationColor: "#8C8A84",

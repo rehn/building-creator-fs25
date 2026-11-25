@@ -2,9 +2,6 @@
 // it an FS25 farmhouse placeable. Imports only the i3d writer; the core hands in the rest.
 import { shopFor } from "./shop.mjs";
 const FARMHOUSES = {category: "farmhouses", type: "placeable", brush: "buildings", tab: "farmhouses"};   // (the shop place of the kind: shop.mjs lets the player choose another)
-import { SHARED, sharedDefaults } from "./gameobjects.mjs";
-/** Whether the house is a farmhouse (you can sleep in it): a sleep point object outside, or the sleep point piece placed in a room. */
-const hasSleep = SHARED.sleep.has;
 import { CATALOG, autoFurnish } from "./furniture.mjs";
 
 export default {
@@ -26,11 +23,8 @@ export default {
   sections: [],
   hides: [],
   normalize: p => ({...p, interior: true}),
-  // (a sleep point makes it a farmhouse: gameobjects.mjs sharedPlaceable)
   placeable: p => ({type: "simplePlaceable", fn: "$l10n_function_decoration", shop: shopFor(p, FARMHOUSES)}),
-  description: p => `A ${(+p.width).toFixed(1)} x ${(+p.depth).toFixed(1)} m house made with House to i3d.${hasSleep(p) ? " Sleep here to skip the night." : ""}`,
-  // the sleep point is optional: with one, the house is a farmhouse in the game
-  objects: {types: ["sleep"], required: [], defaults: p => sharedDefaults(p, "sleep")},
+  description: p => `A ${(+p.width).toFixed(1)} x ${(+p.depth).toFixed(1)} m house made with House to i3d.`,
   presets: [
     {id: "farmhouse", name: "Farmhouse", blurb: "Two-storey red farmhouse with a porch. Players can sleep here.", settings: {}},
   ],

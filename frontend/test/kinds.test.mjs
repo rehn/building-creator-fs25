@@ -50,15 +50,7 @@ test("presets: every preset of every kind makes a valid project and exports", ()
   }
 });
 
-test("settings: a kind's own settings only exist on that kind", () => {
-  assert.equal("hens" in sanitize({}), false, "a farmhouse has no hens");
-  assert.equal(sanitize({ kind: "chicken" }).hens, 30);
-});
 
-test("settings: kinds can share a key with their own ranges (a hen house's and a cow barn's pasture depth)", () => {
-  assert.equal(sanitize({ kind: "chicken", fenceDepth: 7 }).fenceDepth, 7, "a hen pasture may be 7 m deep");
-  assert.equal(sanitize({ kind: "cow", fenceDepth: 7 }).fenceDepth, 10, "a cow pasture at least 10 m");
-});
 
 test("kinds: every kind has a plural name for its group heading", () => {
   for (const k of KINDS) assert.ok(k.plural && k.plural !== k.name, `${k.id}: plural`);

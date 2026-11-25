@@ -73,7 +73,8 @@ const handled = (kind, types) => (kind.handles || []).some(t => types.includes(t
 /** The kind's objects spec, or one with nothing. */
 const specOf = kind => kind.objects || {types: [], required: [], defaults: () => []};
 /** The types a building of this kind can have: the kind's own and the shared ones. */
-export const allowedTypes = kind => [...new Set([...specOf(kind).types, ...Object.values(SHARED_GROUPS).filter(ts => !handled(kind, ts)).flat()])];
+/** The types a building can have: none (the game objects belong to the mod, docs/PLAN_MALLAR.md), but for the mod's frame (kind.gameObjects): its own and the shared ones. */
+export const allowedTypes = kind => (kind.gameObjects ? [...new Set([...specOf(kind).types, ...Object.values(SHARED_GROUPS).filter(ts => !handled(kind, ts)).flat()])] : []);
 
 /**
  * The objects as the building can have them: known types its kind takes, one of each, numbers in range;
@@ -227,9 +228,6 @@ export function footprints(p) {
   for (const w of liveWings(p)) out.push(w.rect);
   return out;
 }
-
-/** The building's footprints as boxes the animals' walking area is cut by (2 m high): the main rectangle and every part. */
-export const blockersOf = p => footprints(p).map(r => ({center: [(r.x0 + r.x1) / 2, 1, (r.z0 + r.z1) / 2], size: [r.x1 - r.x0, 2, r.z1 - r.z0]}));
 
 const overlap = (a, b, m = 0) => a.x0 < b.x1 - m && b.x0 < a.x1 - m && a.z0 < b.z1 - m && b.z0 < a.z1 - m;
 const rectOf = o => ({x0: o.x - o.w / 2, x1: o.x + o.w / 2, z0: o.z - o.d / 2, z1: o.z + o.d / 2});

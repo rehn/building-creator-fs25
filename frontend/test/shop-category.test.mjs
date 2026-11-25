@@ -36,15 +36,3 @@ test("a house made into a shop is not in the farmhouses unless it is told to be"
   assert.match(xml({shopCategory: "decoration"}), /<placeable type="simplePlaceable">/);
 });
 
-test("the kinds that are a simple building take the choice; a barn or a station keeps its own place", () => {
-  assert.deepEqual(SHOP_KINDS.slice().sort(), ["dealership", "defaultdealer", "house", "shed"]);
-  for (const id of SHOP_KINDS) {
-    const preset = PRESETS.find(x => x.kind === id);
-    assert.ok(preset, id);
-    assert.equal(where(placeableXml(sanitize({...preset.settings, shopCategory: "decoration"}), "x")).category, "decoration", id);
-  }
-  for (const id of ["chicken", "cow", "sheep", "fuelstation"]) {
-    const preset = PRESETS.find(x => x.kind === id), own = where(placeableXml(sanitize(preset.settings), "x")).category;
-    assert.equal(where(placeableXml(sanitize({...preset.settings, shopCategory: "decoration"}), "x")).category, own, `${id} ignores it`);
-  }
-});

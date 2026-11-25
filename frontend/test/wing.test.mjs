@@ -109,9 +109,6 @@ test("wings: a door on a wing works, and a house keeps one door of its own when 
   const q = sanitize(p);
   assert.equal(q.windows.filter(w => w.type === "door").length, 1);
   assert.equal(buildGeometry(q).opsByWall.w1End.ops.filter(o => o.kind === "door").length, 1);
-  const { sleepPoint } = await import("../src/editor/model.mjs");
-  const sp = sleepPoint(buildGeometry(sanitize({...q, objects: undefined})), sanitize({...q, objects: undefined}));
-  assert.ok(sp.trigger.center[2] < -3.5 - 5, "in front of the wing's end");
   const off = sanitize({...q, wings: []});
   assert.ok(off.windows.some(w => w.type === "door" && !WING_WALLS.includes(w.wall)));
 });

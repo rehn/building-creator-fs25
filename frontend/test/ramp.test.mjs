@@ -36,17 +36,3 @@ test("ramp: a door with a ramp slopes down to the ground (in the collision too) 
   assert.notEqual(Math.round(steps[0] * 100), Math.round(h[1] * 100), "not the steps");
 });
 
-test("ramp: an empty doorway and the pasture's opening can have one too", () => {
-  const p0 = barn({foundation: 0.5}), wall = objectOf(p0, "pasture").wall;
-  const hole = sanitize({...p0, windows: [...p0.windows, {id: 9, type: "door", floor: 0, wall, pos: 0.1, w: 3, h: 3, style: "hole", ramp: true}]});
-  const gh = buildGeometry(hole), eh = opWith(gh, o => o.hole);
-  const a = heights(gh, eh, [0.5, 1.5]);
-  assert.ok(a[0] > a[1] && a[1] > 0, JSON.stringify(a));
-  const gap = sanitize({...p0, objects: p0.objects.map(o => o.type === "pasture" ? {...o, gapRamp: true} : o)});
-  assert.equal(objectOf(gap, "pasture").gapRamp, true);
-  const gg = buildGeometry(gap), eg = opWith(gg, o => o.kind === "hatch");
-  const b = heights(gg, eg, [0.5, 1.5]);
-  assert.ok(b[0] > b[1] && b[1] > 0, JSON.stringify(b));
-  const none = buildGeometry(p0), en = opWith(none, o => o.kind === "hatch");
-  assert.equal(heights(none, en, [1.5])[0], null, "no ramp unless asked for");
-});

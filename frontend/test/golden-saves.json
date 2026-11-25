@@ -48,19 +48,19 @@
   "hidden": 0,
   "ops": {
    "front": 2,
-   "back": 1,
+   "back": 0,
    "right": 0,
    "left": 1
   },
   "triangles": {
-   "walls": 200,
-   "trim": 400,
+   "walls": 180,
+   "trim": 274,
    "roof": 108,
    "glass": 8,
    "door": 112,
    "foundation": 24,
    "iron": 80,
-   "fittings": 3664
+   "fittings": 3524
   },
   "box": [
    [
@@ -68,11 +68,11 @@
     2.32
    ],
    [
-    -0.03,
+    0,
     3.6
    ],
    [
-    -1.9,
+    -1.8,
     2.2
    ]
   ],
@@ -85,21 +85,21 @@
   "doors": 1,
   "hidden": 0,
   "ops": {
-   "front": 6,
+   "front": 5,
    "back": 0,
    "right": 1,
    "left": 1
   },
   "triangles": {
-   "walls": 284,
-   "trim": 1260,
+   "walls": 220,
+   "trim": 1134,
    "roof": 108,
    "glass": 24,
    "door": 224,
    "foundation": 24,
    "gutter": 1888,
    "iron": 160,
-   "fittings": 9424
+   "fittings": 9300
   },
   "box": [
    [
@@ -107,7 +107,7 @@
     4.92
    ],
    [
-    -0.03,
+    0,
     3.46
    ],
    [
@@ -124,21 +124,21 @@
   "doors": 1,
   "hidden": 0,
   "ops": {
-   "front": 9,
+   "front": 8,
    "back": 8,
    "right": 1,
    "left": 0
   },
   "triangles": {
-   "walls": 592,
-   "trim": 1256,
+   "walls": 492,
+   "trim": 1118,
    "roof": 108,
    "glass": 64,
    "door": 204,
    "foundation": 36,
    "gutter": 3512,
    "iron": 172,
-   "fittings": 24816
+   "fittings": 23448
   },
   "box": [
    [
@@ -146,7 +146,7 @@
     11
    ],
    [
-    -0.03,
+    0,
     4.42
    ],
    [
@@ -161,23 +161,23 @@
   "parts": [],
   "windows": 40,
   "doors": 1,
-  "hidden": 2,
+  "hidden": 0,
   "ops": {
    "front": 6,
-   "back": 5,
+   "back": 6,
    "right": 0,
    "left": 2
   },
   "triangles": {
-   "walls": 512,
-   "trim": 2352,
+   "walls": 508,
+   "trim": 2614,
    "roof": 116,
-   "glass": 44,
+   "glass": 52,
    "door": 344,
    "foundation": 48,
    "gutter": 3512,
    "iron": 160,
-   "fittings": 21396
+   "fittings": 22672
   },
   "box": [
    [
@@ -189,7 +189,7 @@
     8.63
    ],
    [
-    -5.45,
+    -5.12,
     5.12
    ]
   ],
@@ -203,19 +203,19 @@
   "hidden": 0,
   "ops": {
    "front": 3,
-   "back": 1,
+   "back": 0,
    "right": 1,
    "left": 1
   },
   "triangles": {
-   "walls": 268,
-   "trim": 764,
+   "walls": 248,
+   "trim": 722,
    "roof": 108,
    "glass": 16,
    "door": 172,
    "foundation": 36,
    "iron": 80,
-   "fittings": 8148
+   "fittings": 9652
   },
   "box": [
    [
@@ -227,7 +227,7 @@
     4.78
    ],
    [
-    -3.95,
+    -3.4,
     4
    ]
   ],
@@ -240,21 +240,21 @@
   "doors": 1,
   "hidden": 0,
   "ops": {
-   "front": 9,
+   "front": 8,
    "back": 8,
    "right": 1,
    "left": 0
   },
   "triangles": {
-   "walls": 704,
-   "trim": 1756,
+   "walls": 620,
+   "trim": 1714,
    "roof": 128,
    "glass": 64,
    "door": 204,
    "foundation": 44,
    "gutter": 3560,
    "iron": 172,
-   "fittings": 53876
+   "fittings": 54624
   },
   "box": [
    [
@@ -267,7 +267,7 @@
    ],
    [
     -8.62,
-    8.95
+    8.62
    ]
   ],
   "i3dBytes": true,
@@ -280,19 +280,19 @@
   "hidden": 0,
   "ops": {
    "front": 3,
-   "back": 1,
+   "back": 0,
    "right": 1,
    "left": 1
   },
   "triangles": {
-   "walls": 260,
-   "trim": 764,
+   "walls": 240,
+   "trim": 722,
    "roof": 108,
    "glass": 16,
    "door": 172,
    "foundation": 36,
    "iron": 80,
-   "fittings": 4536
+   "fittings": 7480
   },
   "box": [
    [
@@ -304,7 +304,7 @@
     4.82
    ],
    [
-    -3.95,
+    -3.4,
     4
    ]
   ],
@@ -318,20 +318,20 @@
   "hidden": 0,
   "ops": {
    "front": 4,
-   "back": 5,
+   "back": 4,
    "right": 0,
    "left": 2
   },
   "triangles": {
-   "walls": 434,
-   "trim": 1900,
+   "walls": 382,
+   "trim": 1858,
    "roof": 112,
    "glass": 36,
    "door": 304,
    "foundation": 48,
    "gutter": 3512,
    "iron": 160,
-   "fittings": 12078
+   "fittings": 12474
   },
   "box": [
    [
@@ -343,7 +343,7 @@
     7.35
    ],
    [
-    -4.95,
+    -4.62,
     4.62
    ]
   ],
@@ -356,21 +356,21 @@
   "doors": 1,
   "hidden": 0,
   "ops": {
-   "front": 7,
+   "front": 6,
    "back": 6,
    "right": 1,
    "left": 0
   },
   "triangles": {
-   "walls": 554,
-   "trim": 1380,
+   "walls": 486,
+   "trim": 1338,
    "roof": 120,
    "glass": 48,
    "door": 204,
    "foundation": 36,
    "gutter": 3512,
    "iron": 172,
-   "fittings": 18474
+   "fittings": 18558
   },
   "box": [
    [
@@ -383,7 +383,7 @@
    ],
    [
     -6.62,
-    6.95
+    6.62
    ]
   ],
   "i3dBytes": true,
@@ -617,123 +617,6 @@
   "xml": true
  },
  "preset traktorhandlare": {
-  "parts": [],
-  "windows": 13,
-  "doors": 1,
-  "hidden": 0,
-  "ops": {
-   "front": 3,
-   "back": 0,
-   "right": 1,
-   "left": 1
-  },
-  "triangles": {
-   "walls": 216,
-   "trim": 326,
-   "roof": 108,
-   "glass": 16,
-   "doorSheet": 124,
-   "foundation": 36,
-   "gutter": 3560,
-   "iron": 172,
-   "fittings": 1720
-  },
-  "box": [
-   [
-    -6.51,
-    6.52
-   ],
-   [
-    0,
-    6.35
-   ],
-   [
-    -5.12,
-    5.5
-   ]
-  ],
-  "i3dBytes": true,
-  "xml": true
- },
- "preset kartensbutik": {
-  "parts": [],
-  "windows": 25,
-  "doors": 1,
-  "hidden": 0,
-  "ops": {
-   "front": 5,
-   "back": 0,
-   "right": 2,
-   "left": 2
-  },
-  "triangles": {
-   "walls": 412,
-   "trim": 846,
-   "roof": 116,
-   "glass": 32,
-   "doorSheet": 124,
-   "foundation": 36,
-   "gutter": 3560,
-   "iron": 172,
-   "fittings": 3548
-  },
-  "box": [
-   [
-    -10.51,
-    10.52
-   ],
-   [
-    0,
-    7.85
-   ],
-   [
-    -6.62,
-    7
-   ]
-  ],
-  "i3dBytes": true,
-  "xml": true
- },
- "preset lillabutiken": {
-  "parts": [],
-  "windows": 13,
-  "doors": 1,
-  "hidden": 0,
-  "ops": {
-   "front": 3,
-   "back": 0,
-   "right": 1,
-   "left": 1
-  },
-  "triangles": {
-   "walls": 216,
-   "trim": 326,
-   "roof": 108,
-   "glass": 16,
-   "doorSheet": 124,
-   "foundation": 36,
-   "gutter": 3560,
-   "iron": 172,
-   "fittings": 1720
-  },
-  "box": [
-   [
-    -6.51,
-    6.52
-   ],
-   [
-    0,
-    6.35
-   ],
-   [
-    -5.12,
-    5.5
-   ]
-  ],
-  "i3dBytes": true,
-  "xml": true
- },
- "preset affar": {
   "parts": [],
   "windows": 13,
   "doors": 1,
@@ -1364,7 +1247,7 @@
   "parts": [],
   "windows": 22,
   "doors": 1,
-  "hidden": 1,
+  "hidden": 0,
   "ops": {
    "front": 5,
    "back": 6,
@@ -1372,16 +1255,16 @@
    "left": 2
   },
   "triangles": {
-   "walls": 404,
-   "trim": 2556,
+   "walls": 372,
+   "trim": 2690,
    "roof": 108,
-   "glass": 52,
+   "glass": 56,
    "door": 132,
    "foundation": 36,
    "chimney": 24,
    "gutter": 3608,
    "iron": 80,
-   "fittings": 11676
+   "fittings": 12844
   },
   "box": [
    [
@@ -1393,7 +1276,7 @@
     9.33
    ],
    [
-    -4.45,
+    -4.12,
     4.5
    ]
   ],
@@ -1421,7 +1304,7 @@
   "hidden": 0,
   "ops": {
    "front": 5,
-   "back": 8,
+   "back": 7,
    "right": 2,
    "left": 2,
    "w1End": 0,
@@ -1429,8 +1312,8 @@
    "w1Right": 0
   },
   "triangles": {
-   "walls": 714,
-   "trim": 1160,
+   "walls": 626,
+   "trim": 1010,
    "roof": 220,
    "glass": 56,
    "door": 132,
@@ -1438,7 +1321,7 @@
    "chimney": 24,
    "gutter": 5676,
    "iron": 80,
-   "fittings": 5506
+   "fittings": 12518
   },
   "box": [
    [
@@ -1446,7 +1329,7 @@
     5.52
    ],
    [
-    -0.03,
+    0,
     9.33
    ],
    [
@@ -1606,7 +1489,7 @@
   ],
   "windows": 22,
   "doors": 1,
-  "hidden": 1,
+  "hidden": 0,
   "ops": {
    "front": 6,
    "back": 6,
@@ -1620,16 +1503,16 @@
    "w1D1": 0
   },
   "triangles": {
-   "walls": 680,
-   "trim": 2618,
+   "walls": 636,
+   "trim": 2752,
    "roof": 222,
-   "glass": 52,
+   "glass": 56,
    "door": 132,
    "foundation": 56,
    "chimney": 24,
    "gutter": 5676,
    "iron": 80,
-   "fittings": 17726
+   "fittings": 52622
   },
   "box": [
    [
@@ -1641,7 +1524,7 @@
     12.07
    ],
    [
-    -7.95,
+    -7.62,
     17.52
    ]
   ],

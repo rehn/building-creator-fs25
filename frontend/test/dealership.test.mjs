@@ -34,50 +34,9 @@ test("the vehicle list comes from the game: paths, prices, and every vehicle bel
   assert.equal(sold, VEHICLES.length, "each vehicle is in exactly one group");
 });
 
-test("the counter and the spawn area are needed, and the counter may stand inside the building", () => {
-  const p = shop({objects: []});
-  assert.ok(objectOf(p, "counter") && objectOf(p, "spawn"), "added when missing");
-  assert.equal(objectProblems(p).size, 0, "no problems to start with");
-  const spawn = objectOf(p, "spawn");
-  assert.ok(spawn.z - spawn.d / 2 >= p.depth / 2 - 0.01, "the spawn area is outside the front wall");
-});
 
-test("the placeable is the mod's own type with a vehicle buying station", () => {
-  const p = shop({sellTractors: true, sellLoaders: false, sellTransport: false}), xml = placeableXml(p, "Stora Affären"), i3d = buildI3d(p);
-  assert.match(xml, /<placeable type="FS25_StoraAffaren\.simplePlaceableWithVehicleShop">/);
-  assert.match(xml, /<vehicleBuyingStation>\s*<trigger node="shopTrigger" text="Buy vehicles"\/>/);
-  assert.match(xml, /<spawnPlace startNode="vehicleSpawnStart01" endNode="vehicleSpawnEnd01"/);
-  assert.match(xml, /markerIconShopping\.i3d/);
-  const items = [...xml.matchAll(/<storeItem xmlFilename="([^"]+)" price="(\d+)" transportCosts="0"\/>/g)];
-  assert.equal(items.length, vehiclesFor(p).length);
-  assert.ok(items.every(m => /^\$data\/vehicles\/.+\.xml$/.test(m[1]) && +m[2] > 0));
-  for (const n of ["shopTrigger", "markerShop", "vehicleSpawnStart01", "vehicleSpawnEnd01"]) {
-    assert.match(i3d, new RegExp(`name="${n}"`), n);
-    assert.match(xml, new RegExp(`<i3dMapping id="${n}"`), `${n} mapped`);
-  }
-  assert.match(i3d, /name="shopTrigger"[^>]*collisionFilterMask="0x100000"/);
-});
 
-test("the groups ticked decide what is sold; with none ticked it sells tractors; prices follow the setting", () => {
-  const off = Object.fromEntries(DEALER_GROUPS.map(g => [g.key, false]));
-  const names = p => vehiclesFor(p).map(v => v[3]);
-  assert.ok(names({...off, sellTractors: true}).every(c => /^tractors/.test(c)));
-  assert.deepEqual(vehiclesFor(off), vehiclesFor({...off, sellTractors: true}));
-  const all = vehiclesFor(Object.fromEntries(DEALER_GROUPS.map(g => [g.key, true])));
-  assert.equal(all.length, VEHICLES.length);
-  const base = placeableXml(shop({...off, sellTractors: true}), "x"), half = placeableXml(shop({...off, sellTractors: true, sellPrice: 50}), "x");
-  const price = xml => +/storeItem xmlFilename="[^"]+" price="(\d+)"/.exec(xml)[1];
-  assert.equal(price(half), Math.round(price(base) / 2));
-});
 
-test("modDesc defines the placeable type; other buildings have none; a mod of several buildings gets it once", () => {
-  const p = shop(), desc = modDescXml(p, "Affär");
-  assert.match(desc, /<placeableTypes>\s*<type name="simplePlaceableWithVehicleShop" parent="simplePlaceable" className="Placeable" filename="\$dataS\/scripts\/placeables\/Placeable\.lua">\s*<specialization name="vehicleBuyingStation"\/>/);
-  assert.doesNotMatch(modDescXml(sanitize({kind: "shed"}), "Skjul"), /placeableTypes/);
-  const multi = modDescXmlMulti([{xml: "a/house.xml"}], {title: "Mod", types: modTypesFor(p, "FS25_Affar")});
-  assert.equal(multi.match(/<type name="simplePlaceableWithVehicleShop"/g).length, 1);
-  assert.equal(modName("Affär"), "FS25_Affar");
-});
 
 test("a dealership has pieces for the showroom", () => {
   const cat = catalogFor(shop());

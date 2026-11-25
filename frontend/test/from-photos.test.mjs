@@ -33,9 +33,8 @@ test("from photos: every kind's request is a valid answer schema with a guide to
   }
   // a kind's own settings are there, with its own range
   const cow = photoRequest("cow");
-  assert.ok(cow.schema.properties.settings.properties.cows);
-  assert.match(cow.schema.properties.pasture.properties.depth.description, new RegExp(`${KIND.cow.objects.pasture.depth[0]} to`), "the pasture with the kind's own range");
-  assert.ok(!photoRequest("house").schema.properties.settings.properties.cows);
+  assert.ok(!cow.schema.properties.settings.properties.cows, "a building has no animals: they are the mod's");
+  assert.ok(!cow.schema.properties.pasture && !cow.schema.properties.objects, "no pasture or game objects either");
   assert.throws(() => photoRequest("spaceship"));
 });
 
@@ -80,14 +79,6 @@ test("from photos: a poor answer still makes a building", () => {
   assert.ok(p.windows.some(w => w.type === "door"));
 });
 
-test("from photos: animal buildings are told the app makes the animals' doorway", () => {
-  assert.match(photoRequest("cow").guide, /pasture's wall by itself/);
-  assert.match(photoRequest("chicken").guide, /pasture's wall by itself/);
-  assert.doesNotMatch(photoRequest("house").guide, /pasture.wall/);
-  assert.ok(photoRequest("cow").schema.properties.pasture && !photoRequest("house").schema.properties.pasture);
-  const p = applyAnswer("cow", {settings: {}, openings: [], pasture: {wall: "left", depth: 25}});
-  assert.deepEqual([p.pastureWall, p.fenceDepth], ["left", 25], "the answer's pasture becomes the barn's");
-});
 
 test("from photos: a house's answer can have wings, with openings on their walls", () => {
   const {schema, guide} = photoRequest("house");
@@ -149,42 +140,11 @@ test("from photos: a long barn with an arm and an annex becomes parts, wall mate
   const doors = p.windows.filter(w => w.type === "door");
   assert.deepEqual(doors.map(d => d.opens).sort(), [false, true, true], "a door shut for good doesn't open");
   assert.deepEqual(p.windows.filter(w => w.type === "window").map(w => w.opens), [undefined], "windows have no such setting");
-  // the feed pad where Claude put it: beside the right wall, 6 m out, 1.2 m from its left end ... and the rest where the barn puts them
-  const food = p.objects.find(o => o.type === "food");
-  assert.ok(Math.abs(food.x - (20 + 6)) < 1e-6 && Math.abs(food.z - (6 - 1.2)) < 1e-6, `${food.x}, ${food.z}`);   // (a right wall runs from the front corner back)
-  assert.deepEqual(p.objects.map(o => o.type).sort(), ["bales", "feedTrough", "food", "info", "loading", "pasture", "waterTrough"]);
-  assert.equal(p.pastureWall, "back");
+  // (a building has no game objects: the feed pad Claude saw is not kept; they are the mod's)
+  assert.deepEqual(p.objects, []);
 });
 
-test("from photos: the guide explains wall materials, doors that open, parts and game objects", () => {
-  const cow = photoRequest("cow"), house = photoRequest("house");
-  assert.match(cow.guide, /plastered/);
-  assert.match(cow.guide, /wallSplit to "floor"/);
-  assert.match(cow.guide, /"opens"/);
-  assert.match(cow.guide, /milk room or porch/);
-  assert.match(cow.guide, /food \(Feed pad/);
-  assert.ok(cow.schema.properties.objects.items.properties.type.enum.every(t => t !== "pasture" && t !== "info"));
-  assert.deepEqual(house.schema.properties.objects.items.properties.type.enum, ["sleep"]);
-  assert.ok(cow.schema.properties.openings.items.properties.opens);
-  assert.ok(cow.schema.properties.openings.items.required.includes("opens"));
-});
 
-test("from photos: what is wrong with an answer is listed for the admin", async () => {
-  const { answerProblems } = await import("../src/editor/fromPhotos.mjs");
-  assert.deepEqual(answerProblems("cow", longBarn), [], "the plan's barn has nothing wrong");
-  // a wing in the pasture, one too close to another, and a feed pad inside the building
-  const bad = {...longBarn, pasture: {wall: "back", depth: 25}, wings: [{...longBarn.wings[0], wall: "back"}, {...longBarn.wings[0], wall: "back", along: 0.9}], objects: [{type: "food", wall: "back", along: 0.5, out: 0.5}]};
-  const msgs = answerProblems("cow", bad).join(" | ");
-  assert.match(msgs, /Extension 2 was left out: It is too close/);
-  assert.match(msgs, /wing stands in the pasture/i);
-  assert.match(msgs, /Feed pad: It.s in the building/);
-  // too many cows for the floor
-  assert.match(answerProblems("cow", {...longBarn, settings: {...longBarn.settings, width: 10, depth: 8, cows: 90}, wings: []}).join(" "), /cows are limited to/);
-  // windows over a wing are hidden
-  const over = {...longBarn, openings: [...longBarn.openings, {wall: "front", type: "window", floor: 0, along: 0.2, width: 1, height: 1, sill: 1, porch: "none", opens: true}]};
-  assert.match(answerProblems("cow", over).join(" "), /hidden/);
-  assert.deepEqual(answerProblems("house", {settings: {}, openings: []}), [], "a plain house");
-});
 
 test("sections: the answer can divide the building (and a part) across, each section with its floors and its attic", () => {
   const {schema, guide} = photoRequest("house");

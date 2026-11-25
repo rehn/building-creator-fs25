@@ -53,7 +53,6 @@ export default {
   catalog: shed.catalog,
   autoFurnish: shed.autoFurnish,
   outside,
-  objects: {types: ["pump"], required: ["pump"], defaults: pumpDefaults, labels: {}},
   presets: [
     {id: "bensinmack", name: "Bensinmack", blurb: "12 × 7 m canopy on posts with a flat, white roof and a blue edge, over four pumps on an island: fills diesel.", settings: {
       ...base, wallColor: "#F2F2F0", trimColor: "#2A4F94", roofMaterial: "seamed", roofColor: "#F2F2F0", width: 12, depth: 7, floorHeight: 4.6, foundation: 0.1, overhang: 0.8, roofTilt: 3, gutters: false, downpipes: 0,

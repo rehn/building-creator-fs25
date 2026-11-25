@@ -3,130 +3,13 @@
 // pasture and eat and drink at troughs along the barn's pasture wall; feed and bales go in outside
 // the fence, water is automatic. Swedish barn presets: a red ladugård, a small fähus, a lösdriftsstall.
 // Imports only the i3d writer and the pure helpers; the core hands in the rest (see kinds/index.mjs).
-import { tg, shape } from "../i3d.mjs";
-import { roomOf, furnisher, wallsOf, footprint, toWorld, isSplitWall, WALL_T } from "../layout.mjs";
-import { animalNav, navMesh, KEEP } from "../walkarea.mjs";
-import { wallLength, yardFrame, shellOf, teleportFor, withPasture, pastureWallFor, cornerStripes, palletLines, footprintHull, contourClosure, navContourNodes, ccwFence } from "./pasture.mjs";
-import { objectOf, objectsOf, boxOf, iconOf, boxFrom, pastureOf, insidePoly, footprints, blockersOf, animalEntrances } from "../objects.mjs";
-import { placeOnWall, placeOnBuilding } from "../places.mjs";
+import { roomOf, furnisher } from "../layout.mjs";
 import { tone, shade, arc, strawBale, strawLitter } from "./props.mjs";
 import { INNER_WALL } from "./innerwall.mjs";
-import { wallSlabs, PASTURE_GROUNDS, MAX_COWS, cowCap, cowsOf, COW, troughFrom, cowObjects, defaultsOf, cowScene, COW_MIN_WIDTH, COW_PLACEABLE } from "../mod/yard.mjs";
-export { PASTURE_GROUNDS, MAX_COWS, cowCap, COW, troughFrom, defaultsOf, cowScene } from "../mod/yard.mjs";
-const MIN_PASTURE_WIDTH = COW_MIN_WIDTH;
-
-/* ---------- The doorway and the troughs ---------- */
-/**
- * What a piece on the floor keeps the animals out of, as boxes {x0, x1, z0, z1}: its footprint, or, for a piece with solids of its own (an inner wall), those: the
- * stretches that reach the floor, the doorway open (animals can't open a door, so a wall with one is solid all along).
- */
-function animalBlockers(it) {
-  const def = CATALOG[it.type];
-  if (!def || def.ghost) return [];
-  if (!def.solids) return [footprint(it, def)];
-  return def.solids(Math.round(it.door) >= 2 ? {...it, door: 3} : it, {ceil: 3}).filter(([, , , , y0]) => y0 < 0.3).map(([x0, x1, z0, z1]) => {
-    const a = toWorld(it, x0, z0), b = toWorld(it, x1, z1);
-    return {x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]), z0: Math.min(a[1], b[1]), z1: Math.max(a[1], b[1]), keep: KEEP.innerWall};
-  });
-}
-/**
- * The walls across the building and across its parts (the walls between sections) as blocks on the floor for the animals, like an inner wall: all of each wall but its framed empty doorways
- * (a door in it, open or shut, counts as closed: animals don't open doors). [{x0, x1, z0, z1, keep}] in the plan; geo.opsByWall has the openings.
- */
-function dividerBlocks(p, geo) {
-  const out = [], frames = wallsOf(p);
-  for (const key of Object.keys(frames)) {
-    if (!isSplitWall(key)) continue;
-    const w = frames[key], holes = ((geo.opsByWall || {})[key] || {ops: []}).ops.filter(o => o.kind === "hatch" && o.hole && o.t0 < 0.3).sort((a, b) => a.s0 - b.s0), parts = [];
-    let s = 0;
-    for (const o of holes) { if (o.s0 > s + 0.05) parts.push([s, o.s0]); s = Math.max(s, o.s1); }
-    if (w.L > s + 0.05) parts.push([s, w.L]);
-    for (const [a, b] of parts) {
-      const q = [[a, -WALL_T], [a, 0], [b, -WALL_T], [b, 0]].map(([sv, d]) => [w.o[0] + w.u[0] * sv + w.n[0] * d, w.o[2] + w.u[2] * sv + w.n[2] * d]);
-      out.push({x0: Math.min(...q.map(c => c[0])), x1: Math.max(...q.map(c => c[0])), z0: Math.min(...q.map(c => c[1])), z1: Math.max(...q.map(c => c[1])), keep: KEEP.innerWall});
-    }
-  }
-  return out;
-}
-/**
- * Where the animals walk when they can go inside (p.animalsInside, and the pasture has its doorway): the yard (the fence, less the building and the troughs),
- * the building's floor (less the pieces standing on it), and the ramp through the doorway between them, as {rects, ramp} (walkarea.mjs animalNav). Null otherwise.
- */
-function animalsInside(p, geo, fence, blockers) {
-  const entrances = p.animalsInside === false ? [] : animalEntrances(p);
-  if (!entrances.length || !fence || fence.length < 3) return null;
-  const w = wallsOf(p)[entrances[0].wall];
-  if (!w) return null;
-  // (the ramp, and a way out over the margin kept off the wall)
-  const F = p.foundation || 0, run = Math.max(F > 0.02 ? Math.max(0.8, F * 5) : 0.6, KEEP.wall + 0.4);
-  const at = (s, d) => [w.o[0] + w.u[0] * s + w.n[0] * d, w.o[2] + w.u[2] * s + w.n[2] * d];
-  const rooms = roomOf(p, openings(p)).floorRects;
-  const items = [...(p.items || []).flatMap(animalBlockers), ...dividerBlocks(p, geo)];
-  const nav = animalNav({fence, blockers, rooms, items: items.map(b => ({...b})), doors: entrances.map(e => ({a: at(e.s0, run), b: at(e.s1, run), c: at(e.s1, -WALL_T), d: at(e.s0, -WALL_T)})), floorY: F < 0.03 ? F + 0.03 : F + 0.004});   // (the top of the floor: see FLOOR_LIFT in model.mjs)
-  if (!nav) return null;
-  nav.blockers = [...wallSlabs(p, entrances, openings(p)), ...items.map(box), ...blockers.filter(b => b.keep === KEEP.trough)];
-  return nav;
-}
-/** A blocker box from a floor rectangle {x0, x1, z0, z1}: 2 m high. */
-const box = r => ({center: [(r.x0 + r.x1) / 2, 1, (r.z0 + r.z1) / 2], size: [r.x1 - r.x0, 2, r.z1 - r.z0]});
-/** The cows' doorway: an open hole in the pasture wall (1.6 x 2.2 m in the middle of the stretch it encloses, unless the pasture says where and how big), kept clear inside. */
-export function openings(p) {
-  if (p.pastureNoGap) return [];
-  const L = wallLength(p, p.pastureWall), m = p.pastureMid ?? L / 2, w = p.pastureGapW ?? 1.6, h = Math.min(p.pastureGapH ?? 2.2, p.floors * p.floorHeight - 0.3);
-  return [{wall: p.pastureWall, s0: m - w / 2, s1: m + w / 2, t1: h, clear: w, what: "the cows' doorway", plain: true, ramp: !!p.pastureRamp}];
-}
-/**
- * Where a cow barn's gameplay places are, from built geometry. All points in world space.
- *   fence:        as the hen house's (yardFrame), at least 16 m along the pasture wall
- *   feedTrough, waterTrough: {outer, inner (rects), top, bottom, planeMin, planeMax, plane: [x, z], size: [sx, sz]}
- *   foodPlaces, waterPlaces: [{pos, rot}] where cows stand to eat and drink, facing the trough
- *   food:         the feed pad (tip feed onto it) outside the fence; bales: where bales are dropped
- *   loading:      animal trailer spot further out on the feed side; info; blockers: kept out of the walking area
- *   markers:      {food, bales, animals, teleport}; areas: ground leveled for the troughs and the pad
- */
-export function cowYard(geo, p, cfg = COW) {
-  const yf = yardFrame(geo, p, cfg.minWidth), {at, boxAt, rectOf} = yf;
-  // The pasture: the building's pasture object, or (placing things to start with) its wall and depth.
-  const pa = pastureOf(p), past = pa ? pa.w : yf.past, fence = ccwFence(pa ? pa.fence : yf.fence);
-  const {feedTroughs: fts, waterTroughs: wts} = cowObjects(geo, p, yf, cfg);
-  const fromObj = e => (({center: [x, , z], size: [w, h, d]}) => ({x, z, w, d, h, asset: e.look && e.look.asset, rot: e.look && e.look.rot}))(e.box);
-  const rects = footprints(p);
-  // (every trough has places where animals stand; the game has one fill plane for the food and one for the water: the first trough's)
-  const feedTroughs = fts.map(e => troughFrom(fromObj(e), fence, rects)), waterTroughs = wts.map(e => troughFrom(fromObj(e), fence, rects));
-  const feedTrough = feedTroughs[0] || null, waterTrough = waterTroughs[0] || null;
-  const foodPlaces = feedTroughs.flatMap(t => t.places), waterPlaces = waterTroughs.flatMap(t => t.places);
-  const troughs = [...feedTroughs, ...waterTroughs];
-  // The game objects: where the building has them (objects.mjs); to start with, the feed pad and bales
-  // outside the fence on the feed side, the trailer spot further out, the info area round the barn.
-  const {food, bales, loading, info, pallets} = cowObjects(geo, p, yf, cfg);
-  // (the area as the game makes it: the fence, closed along the building)
-  const contour = [...fence, ...navContourNodes(fence, footprints(p)).map(([x, z]) => [x, 0, z])];
-  const nav = animalsInside(p, geo, contour, [...blockersOf(p).map(b => ({...b, keep: KEEP.wall})), ...troughs.map(t => ({...t.box, keep: KEEP.trough}))]);
-  return {
-    nav, contour,
-    ...(pallets && {pallet: {lines: palletLines(pallets.box), trigger: pallets.box, stripes: cornerStripes(rectOf(pallets.box))}}),
-    fence, feedTrough, waterTrough, feedTroughs, waterTroughs, foodPlaces, waterPlaces, food: food.box, bales: bales && bales.box, loading: loading.box, info: info.box,
-    blockers: [...blockersOf(p), ...troughs.map(t => t.box)],
-    markers: {food: food.icon, bales: bales && bales.icon, animals: loading.icon, teleport: teleportFor(loading, geo.dims)},
-    areas: [food.box, ...(bales ? [bales.box] : []), ...(pallets ? [pallets.box] : []), ...troughs.map(t => t.box)].map(rectOf),
-  };
-}
-/** The troughs, drawn outside the walls (c: {p, geo, abox, paint} from the core). The fill planes are separate i3d nodes. */
-export const outsideOf = cfg => c => {
-  const y = cowYard(c.geo, c.p, cfg);
-  for (const t of [...y.feedTroughs, ...y.waterTroughs]) drawTrough(c, t);
-};
-/** A trough (troughFrom's): the user's item it looks like if it has one, else planks round a hollow, with collision. */
-export function drawTrough(c, t) {
-  // one of the user's items: its own model and collision, in the box's place
-  if (t.asset && c.asset(t.asset, t.plane[0], t.plane[1], t.rot || 0)) return;
-  c.paint(COLORS.concrete, "concrete");
-  const o = t.outer, i = t.inner;
-  c.abox("fittings", [o.x0, 0, o.z0], [o.x1, t.bottom, o.z1]);                 // the base, up to the trough's floor
-  for (const [a, b] of [[[o.x0, o.z0], [i.x0, o.z1]], [[i.x1, o.z0], [o.x1, o.z1]], [[i.x0, o.z0], [i.x1, i.z0]], [[i.x0, i.z1], [i.x1, o.z1]]])
-    c.abox("fittings", [a[0], t.bottom, a[1]], [b[0], t.top, b[1]]);          // its four sides
-  c.abox("collision", [o.x0, 0, o.z0], [o.x1, t.top, o.z1]);
-}
+import { shopFor } from "./shop.mjs";
+const BARNS = {category: "sheds", type: "placeable", brush: "buildings", tab: "sheds"};   // (the shop place of the kind: shop.mjs lets the player choose another)
+import { cowCap } from "../mod/yard.mjs";
+export { PASTURE_GROUNDS, MAX_COWS, cowCap, COW, troughFrom } from "../mod/yard.mjs";
 
 /* ---------- Inside ---------- */
 export const COLORS = {concrete: "#9A968C", floor: "#8A857B", rubber: "#2E2E2C", steel: "#A9AFB3", wood: "#A47A4E", straw: "#DDBF73", hay: "#B7B064", bale: "#D9BC6A",
@@ -304,7 +187,7 @@ for (const [k, g] of Object.entries({"innerwall":"Walls and doors","stalls":"Hou
  * Returns {style, items}.
  */
 function autoFurnish(p) {
-  const room = roomOf(p, openings(p)), n = cowsOf(p), f = furnisher(room, CATALOG), {items} = f;
+  const room = roomOf(p, []), n = cowCap(p), f = furnisher(room, CATALOG), {items} = f;
   const style = n <= 10 ? "fahus" : n <= 40 ? "ladugard" : "losdrift";
   let placed = 0;
   for (let k = 0; k < 6 && placed < n; k++) {
@@ -327,9 +210,6 @@ function autoFurnish(p) {
   return {style, items};
 }
 
-/* ---------- Export ---------- */
-/** Scene nodes and placeable XML for the pasture (c: export context from the core). */
-export const sceneOf = cfg => c => cowScene(c, cowYard(c.geo, c.p, cfg), cfg, cfg.count(c.p), {rects: footprints(c.p), clear: footprintHull(c.p), ground: c.p.pastureGround, under: c.p.groundUnder});
 /* ---------- The kind ---------- */
 // (an old red barn: heavy studs, far apart and uneven, seen from inside)
 const swedishRed = {wallCladding: "lockpanel", wallColor: "#8E2A1E", trimColor: "#F2EFE8", studSpacing: 0.9, studWidth: 0.08, studIrregular: 0.5};
@@ -339,52 +219,33 @@ export default {
   plural: "Cow barns",
   category: "animals",
   walkIn: true,
-  glyph: "cow",
-  yard: (geo, p) => cowYard(geo, p),
-  defaults: {ceiling: false, insideSame: true, animalsInside: true, pastureGround: "grass", cows: 12, pastureWall: "back", fenceDepth: 15, winStyle: "stall", doorStyle: "xbrace"},
-  sections: [
-    {title: "Cows", tab: "game", hint: "Cows graze in the pasture and come in through a wide doorway in the pasture side; they eat and drink at troughs along that wall. Fill feed (or drop bales) at the feed place outside the fence; water is automatic. The pasture, the feed pad and the rest are under Game objects. This is a barn without milking (like the game’s small cow barn).", fields: [
-      {k: "cows", label: "Cows", min: 1, max: MAX_COWS, step: 1},
-      {k: "pastureGround", cardRow: true, label: "Ground in the pasture", type: "select", options: PASTURE_GROUNDS},
-      {k: "animalsInside", cardRow: true, label: "The animals can walk inside through the doorway", type: "check"}]},
-  ],
+  defaults: {ceiling: false, insideSame: true, winStyle: "stall", doorStyle: "xbrace"},
+  sections: [],
   hides: ["Interior", "Kupor (dormers)"],
-  /**
-   * Settings as this kind uses them: no sleep point, rooms or dormers; at least 6 x 6 m (troughs on
-   * both sides of the doorway); no more cows than fit; the pasture's wall and depth from its object.
-   */
-  normalize: p => {
-    const q = {...p, interior: false, dormers: [], width: Math.max(6, p.width), depth: Math.max(6, p.depth)};
-    return withPasture({...q, cows: Math.min(q.cows, cowCap(q))});
-  },
-  openings,
-  placeable: () => COW_PLACEABLE,
-  description: p => `A ${(+p.width).toFixed(1)} x ${(+p.depth).toFixed(1)} m cow barn for ${cowsOf(p)} cows, made with House to i3d.`,
+  /** Settings as this kind uses them: no sleep point, rooms or dormers; at least 6 x 6 m. */
+  normalize: p => ({...p, interior: false, dormers: [], width: Math.max(6, p.width), depth: Math.max(6, p.depth)}),
+  placeable: p => ({type: "simplePlaceable", fn: "$l10n_function_decoration", shop: shopFor(p, BARNS)}),
+  description: p => `A ${(+p.width).toFixed(1)} x ${(+p.depth).toFixed(1)} m cow barn made with House to i3d.`,
   furnish,
-  outside: outsideOf(COW),
   catalog: CATALOG,
   autoFurnish,
-  scene: sceneOf(COW),
-  // the game objects: the bale drop is optional
-  objects: {types: ["food", "bales", "loading", "feedTrough", "waterTrough", "info", "pasture"], required: ["food", "loading", "info", "pasture"],
-    pasture: {minWidth: MIN_PASTURE_WIDTH, depth: [10, 60], gapSize: true}, defaults: defaultsOf(COW)},
   presets: [
     {id: "ladugard", name: "Röd ladugård", blurb: "16 × 9 m red Swedish barn for 20 cows: falu red boards, white trim, a fieldstone base and lanterns on the ridge.", settings: {
-      cows: 20, pastureWall: "back", fenceDepth: 18, ...swedishRed,
+      ...swedishRed,
       width: 16, depth: 9, floors: 1, floorHeight: 3.2, foundation: 0.6, foundationColor: "#8C8A84", roofType: "gable", ridge: "width", roofPitch: 40, overhang: 0.5,
       roofMaterial: "tiles", roofColor: "#2F2F2F", chimney: false, gutters: true, downpipes: 2, ventilators: 2,
       winFront: 6, winBack: 6, winLeft: 1, winRight: 0, winW: 0.8, winH: 0.6, sill: 1.5,
       doorWall: "left", doorPos: 0, doorW: 2.4, doorH: 2.6, doorColor: "#5B1E16", entrance: "none",
       modPrice: 45000, modUpkeep: 120}},
     {id: "fahus", name: "Fähus", blurb: "8 × 6 m small cowshed for 6 cows, red boards and a red tile roof.", settings: {
-      cows: 6, pastureWall: "back", fenceDepth: 14, ...swedishRed, wallColor: "#7A2418",
+      ...swedishRed, wallColor: "#7A2418",
       width: 8, depth: 6, floors: 1, floorHeight: 2.6, foundation: 0.4, foundationColor: "#8C8A84", roofType: "gable", ridge: "width", roofPitch: 30, overhang: 0.4,
       roofMaterial: "tiles", roofColor: "#7A2E1F", chimney: false, gutters: false, downpipes: 0, ventilators: 0,
       winFront: 2, winBack: 0, winLeft: 1, winRight: 1, winW: 0.7, winH: 0.5, sill: 1.4,
       doorWall: "front", doorPos: -0.5, doorW: 1.2, doorH: 2.1, doorColor: "#F2EFE8", entrance: "none", doorStyle: "zbrace",
       modPrice: 15000, modUpkeep: 40}},
     {id: "losdriftsstall", name: "Lösdriftsstall", blurb: "30 × 16 m modern loose-housing barn for 70 cows, a low metal roof and lanterns along the ridge.", settings: {
-      cows: 70, pastureWall: "front", fenceDepth: 30,
+      fenceDepth: 30,
       wallCladding: "lockpanel", wallColor: "#A8A398", trimColor: "#3B3F42",
       width: 30, depth: 16, floors: 1, floorHeight: 3.6, foundation: 0.3, foundationColor: "#8C8A84", roofType: "gable", ridge: "width", roofPitch: 15, overhang: 0.5,
       roofMaterial: "metal", roofColor: "#4A4F52", chimney: false, gutters: true, downpipes: 2, ventilators: 4,
