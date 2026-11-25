@@ -7,6 +7,8 @@ import { api, type ProjectSummary, type Template } from "@/lib/api";
 import { useUser } from "@/lib/useUser";
 import { TopBar } from "@/components/TopBar";
 import { confirmDialog, promptDialog } from "@/components/dialog.mjs";
+import { FolderSelect, askFolderName } from "@/components/FolderSelect";
+import { useFolders } from "@/lib/useFolders";
 import { sanitize as newProp } from "@/builder/model.mjs";
 import { PRESETS, CATEGORIES, KINDS, groupByKind } from "@/editor/model.mjs";
 
@@ -187,14 +189,10 @@ export default function HousesPage() {
   };
   // Folders (a map's name): the buildings are grouped under them when there are any; a building moves with the select on its card.
   const folderOf = (h: ProjectSummary) => h.folder ?? "";
-  const folders = [...new Set((houses ?? []).map(folderOf).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  const NEW_FOLDER = "\u0000new";
-  const move = async (h: ProjectSummary, to: string) => {
-    let folder = to;
-    if (to === NEW_FOLDER) {
-      folder = (await promptDialog(t("Folder name"), "", { title: t("New folder…"), confirm: t("Create"), maxLength: 60 }))?.trim() ?? "";
-      if (!folder) return;
-    }
+  // (the folders are the app's own: the same as the mods', and one made before anything is in it is here too)
+  const appFolders = useFolders(!!user, (houses ?? []).map(folderOf));
+  const folders = appFolders.names;
+  const move = async (h: ProjectSummary, folder: string) => {
     if (folder === folderOf(h)) return;
     run(async () => {
       const p = await api.updateProject(h.id, { folder });
@@ -236,11 +234,7 @@ export default function HousesPage() {
                       <button type="button" onClick={() => duplicate(h)} disabled={busy}>Duplicate</button>
                       <button type="button" className="danger" onClick={() => remove(h)} disabled={busy}>Delete</button>
                     </div>
-                    <select className="move" value={folderOf(h)} onChange={e => move(h, e.target.value)} disabled={busy} aria-label={t("Move {name} to a folder", { name: h.name })}>
-                      <option value="">{t("No folder")}</option>
-                      {folders.map(f => <option key={f} value={f} translate="no">{f}</option>)}
-                      <option value={NEW_FOLDER}>{t("New folder\u2026")}</option>
-                    </select>
+                    <FolderSelect className="move" value={folderOf(h)} folders={folders} onChoose={f => move(h, f)} onCreate={appFolders.add} disabled={busy} label={t("Move {name} to a folder", { name: h.name })} />
                   </div>
                 </article>
               ))}
@@ -250,7 +244,7 @@ export default function HousesPage() {
 
   // What the tabs show: buildings or props, then one folder, then one kind of building (a tab whose list has gone empty falls back to all).
   const inTab = (houses ?? []).filter(h => (tab === "props") === isProp(h));
-  const tabFolders = [...new Set(inTab.map(folderOf).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const tabFolders = folders;   // (all the app's folders: one that nothing of this tab is in shows with 0)
   const hasLoose = inTab.some(h => !folderOf(h));
   const folderNow = folderSel === "*" || (folderSel === "" ? hasLoose && tabFolders.length > 0 : tabFolders.includes(folderSel)) ? folderSel : "*";
   const inFolder = inTab.filter(h => folderNow === "*" || folderOf(h) === folderNow);
@@ -287,6 +281,7 @@ export default function HousesPage() {
             {tabBtn("*", t("All folders"), inTab.length, folderNow === "*", () => { setFolderSel("*"); setKindSel("*"); })}
             {tabFolders.map(f => tabBtn("f:" + f, f, inTab.filter(h => folderOf(h) === f).length, folderNow === f, () => { setFolderSel(f); setKindSel("*"); }, true))}
             {hasLoose && tabBtn("", t("Not in a folder"), inTab.filter(h => !folderOf(h)).length, folderNow === "", () => { setFolderSel(""); setKindSel("*"); })}
+            <button type="button" className="starttab link" onClick={async () => { const name = await askFolderName(); if (!name) return; try { await appFolders.add(name); setFolderSel(name); setKindSel("*"); } catch (e) { setError((e as Error).message); } }}>{t("New folder…")}</button>
           </div>
         )}
         {!choosing && groups.length > 1 && (

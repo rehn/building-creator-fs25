@@ -14,6 +14,7 @@ import (
 type Mod struct {
 	ID        string          `json:"id"`
 	Name      string          `json:"name"`
+	Folder    string          `json:"folder"`         // "" is no folder; the folders are the app's own, the buildings' too (folders.go)
 	Data      json.RawMessage `json:"data,omitempty"` // only when one mod is fetched
 	Items     []ModItem       `json:"items,omitempty"`
 	ItemCount int             `json:"itemCount"`
@@ -48,9 +49,10 @@ var ErrBadRef = errors.New("store: a mod item points at something the user can't
 
 // ModUpdate: what is changed (nil / empty: left as it is). Items replaces the whole list.
 type ModUpdate struct {
-	Name  *string
-	Data  json.RawMessage
-	Items *[]ModItem
+	Name   *string
+	Folder *string // "" takes it out of its folder; a move alone is not a change of the mod (the version stays)
+	Data   json.RawMessage
+	Items  *[]ModItem
 }
 
 // CreateMod stores a new, empty mod.
@@ -72,9 +74,9 @@ func scanMod(row scanner, withData bool) (Mod, error) {
 	var created, updated int64
 	var err error
 	if withData {
-		err = row.Scan(&m.ID, &m.Name, &m.Version, &created, &updated, &m.ItemCount, &data)
+		err = row.Scan(&m.ID, &m.Name, &m.Version, &created, &updated, &m.ItemCount, &m.Folder, &data)
 	} else {
-		err = row.Scan(&m.ID, &m.Name, &m.Version, &created, &updated, &m.ItemCount)
+		err = row.Scan(&m.ID, &m.Name, &m.Version, &created, &updated, &m.ItemCount, &m.Folder)
 	}
 	if errors.Is(err, sql.ErrNoRows) {
 		return Mod{}, ErrNotFound
@@ -89,7 +91,7 @@ func scanMod(row scanner, withData bool) (Mod, error) {
 	return m, nil
 }
 
-const modCols = `m.id, m.name, m.version, m.created_at, m.updated_at, (SELECT COUNT(*) FROM mod_items i WHERE i.mod_id = m.id)`
+const modCols = `m.id, m.name, m.version, m.created_at, m.updated_at, (SELECT COUNT(*) FROM mod_items i WHERE i.mod_id = m.id), m.folder`
 
 // modItemsSQL reads a mod's items with the names of the projects they point at.
 const modItemsSQL = `SELECT i.id, i.kind, i.ref_id, i.type, i.x, i.z, i.rot, i.y, COALESCE(p.name, ''), CASE WHEN p.id IS NULL THEN 1 ELSE 0 END
@@ -202,9 +204,14 @@ func (s *Store) UpdateMod(ctx context.Context, userID int64, id string, u ModUpd
 			}
 		}
 	}
-	cur.Version++
+	if u.Folder != nil {
+		cur.Folder = *u.Folder
+	}
+	if !(u.Folder != nil && u.Name == nil && len(u.Data) == 0 && u.Items == nil) {
+		cur.Version++ // (a move alone is not a change of the mod: the zip made from it is still of it)
+	}
 	now := s.ms()
-	if _, err := tx.exec(ctx, `UPDATE mods SET name = ?, data = ?, version = ?, updated_at = ? WHERE id = ?`, cur.Name, string(cur.Data), cur.Version, now, id); err != nil {
+	if _, err := tx.exec(ctx, `UPDATE mods SET name = ?, data = ?, folder = ?, version = ?, updated_at = ? WHERE id = ?`, cur.Name, string(cur.Data), cur.Folder, cur.Version, now, id); err != nil {
 		return Mod{}, err
 	}
 	if cur.Items, err = s.modItems(ctx, tx, id); err != nil {

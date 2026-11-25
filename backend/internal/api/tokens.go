@@ -411,6 +411,7 @@ type modItemV1 struct {
 type modV1 struct {
 	ID        string          `json:"id"`
 	Name      string          `json:"name"`
+	Folder    string          `json:"folder"` // the app's folder it is in ("" none)
 	Version   int64           `json:"version"`
 	ItemCount int             `json:"itemCount"`
 	UpdatedAt time.Time       `json:"updatedAt"`
@@ -420,7 +421,7 @@ type modV1 struct {
 }
 
 func newModV1(m store.Mod) modV1 {
-	out := modV1{ID: m.ID, Name: m.Name, Version: m.Version, ItemCount: m.ItemCount, UpdatedAt: m.UpdatedAt, Data: m.Data}
+	out := modV1{ID: m.ID, Name: m.Name, Folder: m.Folder, Version: m.Version, ItemCount: m.ItemCount, UpdatedAt: m.UpdatedAt, Data: m.Data}
 	for _, it := range m.Items {
 		v := modItemV1{ModItem: it}
 		if it.Kind == store.ModBuilding && !it.Missing {

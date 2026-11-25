@@ -78,10 +78,15 @@ export interface ModPost {
   missing: boolean;
 }
 
+/** A folder of the app (the same for buildings, props and mods) and what is in it. */
+export interface AppFolder { name: string; buildings: number; mods: number }
+
 /** A mod: a container of buildings and props (docs/PLAN_MOD.md). The list has only itemCount; one mod has its items and plan data. */
 export interface Mod {
   id: string;
   name: string;
+  /** The app's folder it is in ("" or missing: none): the same folders as the buildings'. */
+  folder?: string;
   data?: Record<string, unknown>;
   items?: ModPost[];
   itemCount: number;
@@ -227,8 +232,12 @@ export const api = {
 
   mods: () => request<Mod[]>("GET", "/mods"),
   mod: (id: string) => request<Mod>("GET", "/mods/" + encodeURIComponent(id)),
+  /** The folders of the app: the ones that were made and the ones something is in, with what is in each. */
+  folders: () => request<{ folders: AppFolder[] }>("GET", "/folders"),
+  /** Makes a folder that nothing is in yet (making one that is there is fine). */
+  createFolder: (name: string) => request<{ name: string }>("POST", "/folders", { name }),
   createMod: (name: string) => request<Mod>("POST", "/mods", { name }),
-  updateMod: (id: string, patch: { name?: string; items?: Pick<ModPost, "id" | "kind" | "ref" | "type" | "x" | "z" | "y" | "rot">[]; data?: Record<string, unknown>; version?: number }) =>
+  updateMod: (id: string, patch: { name?: string; folder?: string; items?: Pick<ModPost, "id" | "kind" | "ref" | "type" | "x" | "z" | "y" | "rot">[]; data?: Record<string, unknown>; version?: number }) =>
     request<Mod>("PATCH", "/mods/" + encodeURIComponent(id), patch),
   deleteMod: (id: string) => request<void>("DELETE", "/mods/" + encodeURIComponent(id)),
   /** The game mod of the whole mod (a zip), made from saved version `version` of the mod, kept for other programs to fetch (GET /api/v1/mods/{id}/mod.zip). */

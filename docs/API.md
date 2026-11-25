@@ -401,3 +401,7 @@ A mod is exported as **one** placeable (docs/PLAN_MALLAR.md). The editor makes t
 | `GET /api/v1/mods/{id}/mod.zip` | The game mod, `FS25_<Name>.zip`, with an `ETag` (send `If-None-Match` to get `304`). 404 until one has been made |
 
 Not tried in the game or with the map app.
+
+## Folders (2026-11-25)
+
+The app's folders are one list for buildings, props and mods. A mod has `folder` ("" none) in `GET /api/v1/mods` and `GET /api/v1/mods/{id}`. `GET /api/v1/folders` is still the folders **buildings** are in, with how many (a folder made in the app with nothing in it is not listed), and `POST /api/v1/folders/rename` also moves the mods in the folder to the new name (409 `folder_exists` when the new name holds a building or a mod).

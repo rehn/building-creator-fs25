@@ -1098,5 +1098,6 @@
   "The zip was not kept on the server (other programs can't fetch it): {why}": "Zippen sparades inte på servern (andra program kan inte hämta den): {why}",
   "Hide roof": "Dölj tak",
   "Show roof": "Visa tak",
-  "Hide the roof to see into the building, and show it again": "Dölj taket för att se in i byggnaden, och visa det igen"
+  "Hide the roof to see into the building, and show it again": "Dölj taket för att se in i byggnaden, och visa det igen",
+  "Folder": "Mapp"
 }
