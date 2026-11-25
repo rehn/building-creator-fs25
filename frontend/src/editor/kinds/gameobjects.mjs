@@ -12,6 +12,19 @@ import { intakeScene, intakeDefaults } from "./grainintake.mjs";
 import { pumpScene, pumpDefaults } from "./fuelpump.mjs";
 import { palletScene, palletDefaults } from "./palletshop.mjs";
 
+/**
+ * The nodes with the given names (at any depth) turned round the Y axis, about the point [cx, cz], by deg degrees (as three.js turns: x' = x cos + z sin, z' = -x sin + z cos): each is put in a group at
+ * the point that is turned, with a group inside it that moves the node back (translation minus the point), so the node keeps its own coordinates and turns with everything it has under it. Used for an
+ * object that is turned (a mod's game objects, o.turn): its nodes are made for the unturned box and turned afterwards. No turn: the same nodes.
+ */
+export function turnNodes(nodes, names, [cx, cz], deg) {
+  if (!deg || !names.length) return nodes;
+  const set = new Set(names);
+  const wrap = n => tg(`${n.name}Turn`, [cx, 0, cz], [tg(`${n.name}Off`, [-cx, 0, -cz], [n])], {rotation: [0, deg, 0]});
+  const walk = list => list.map(n => (set.has(n.name) ? wrap(n) : n.children.length ? {...n, children: walk(n.children)} : n));
+  return walk(nodes);
+}
+
 /** The specializations each of the game's placeable types has of its own on top of simplePlaceable (sdk/xmlDoku/placeableTypes.xml). */
 const GAME_TYPES = {
   farmhouse: ["farmhouse", "wardrobe", "cartridgePlayer", "npcSpot"],
@@ -97,26 +110,27 @@ function workshopDefaults(p) {
  * kind.handles, and the shared export leaves it alone.
  */
 export const SHARED = {
-  sleep: {types: ["sleep"], has: p => !!objectOf(p, "sleep") || (p.items || []).some(it => it.type === "sleeppoint"), scene: sleepScene, defaults: sleepDefaults,
+  // parts: for each object type the nodes of its box (by name) that turn with it (turnNodes): the sleep point's spawn point and camera come from the building, so they stay
+  sleep: {parts: {sleep: ["sleepingTrigger", "sleepTriggerMarker"]}, types: ["sleep"], has: p => !!objectOf(p, "sleep") || (p.items || []).some(it => it.type === "sleeppoint"), scene: sleepScene, defaults: sleepDefaults,
     gameType: "farmhouse", specializations: GAME_TYPES.farmhouse, fn: "$l10n_function_farmHouse", name: "SleepPoint",
     note: `Sleep point: use <placeable type="farmhouse" ...> so the player can sleep here, as in the base game's farmhouses.`},
-  workshop: {types: ["workshop"], has: p => !!objectOf(p, "workshop"), scene: workshopScene, defaults: workshopDefaults,
+  workshop: {parts: {workshop: ["vehicleTrigger", "playerTrigger", "markerWrench"]}, types: ["workshop"], has: p => !!objectOf(p, "workshop"), scene: workshopScene, defaults: workshopDefaults,
     gameType: "garageWorkshopSolarPanels", specializations: GAME_TYPES.garageWorkshopSolarPanels, fn: "$l10n_function_workshop", name: "Workshop",
     note: `Vehicle workshop: use <placeable type="garageWorkshopSolarPanels" ...>, as in the base game's garages with a workshop.`},
   // a shop counter and a delivery place: the player buys vehicles (kinds/vehicleshop.mjs); the game has no type for it, so the mod defines one
-  vehicleshop: {types: ["counter", "spawn"], has: p => !!objectOf(p, "counter") && !!objectOf(p, "spawn"), scene: shopScene, defaults: shopDefaults,
+  vehicleshop: {parts: {counter: ["shopTrigger", "markerShop"], spawn: ["vehicleSpawnStart01"]}, types: ["counter", "spawn"], has: p => !!objectOf(p, "counter") && !!objectOf(p, "spawn"), scene: shopScene, defaults: shopDefaults,
     gameType: null, specializations: ["vehicleBuyingStation"], fn: null, name: "VehicleShop",
     note: `Vehicle shop: add the placeable type to your modDesc.xml (<placeableTypes>, parent simplePlaceable, specialization vehicleBuyingStation).`},
   // the game's unload station and the selling station that buys the grain tipped in it (kinds/grainintake.mjs); the game's own type for it is sellingStation
-  intake: {types: ["intake"], has: p => !!objectOf(p, "intake"), scene: intakeScene, defaults: intakeDefaults,
+  intake: {parts: {intake: ["unloadStationTrailer"]}, types: ["intake"], has: p => !!objectOf(p, "intake"), scene: intakeScene, defaults: intakeDefaults,
     gameType: "sellingStation", specializations: GAME_TYPES.sellingStation, fn: null, name: "Intake",
     note: `Grain intake: use <placeable type="sellingStation" ...> with canBeSold and showInStore false for a map to place, as the base game's selling points (mapUS/sellingPoints).`},
   // the fuel area: the game's own gas station is a buyingStation (kinds/fuelpump.mjs)
-  pump: {types: ["pump"], has: p => !!objectOf(p, "pump"), scene: pumpScene, defaults: pumpDefaults,
+  pump: {parts: {pump: ["gasStationTrigger", "mapPosition"]}, types: ["pump"], has: p => !!objectOf(p, "pump"), scene: pumpScene, defaults: pumpDefaults,
     gameType: "buyingStation", specializations: GAME_TYPES.buyingStation, fn: null, name: "FuelPump",
     note: `Fuel area: use <placeable type="buyingStation" ...> with canBeSold and showInStore false for a map to place, as the base game's gasStation (mapUS/sellingPoints).`},
   // the pallet shop: the game's warehouse is a sellingStation with a palletBuyingStation (kinds/palletshop.mjs)
-  warehouse: {types: ["palletcounter", "palletspawn", "unload"], has: p => !!objectOf(p, "palletcounter") && !!objectOf(p, "palletspawn") && !!objectOf(p, "unload"), scene: palletScene, defaults: palletDefaults,
+  warehouse: {parts: {palletcounter: ["palletBuyingActivationTrigger", "palletBuyingActivationTriggerMarker"], palletspawn: ["palletSpawner"], unload: ["unloadTrigger", "unloadTriggerMarker", "unloadTriggerAINode", "palletTrigger"]}, types: ["palletcounter", "palletspawn", "unload"], has: p => !!objectOf(p, "palletcounter") && !!objectOf(p, "palletspawn") && !!objectOf(p, "unload"), scene: palletScene, defaults: palletDefaults,
     gameType: "warehouse", specializations: GAME_TYPES.warehouse, fn: null, name: "PalletShop",
     note: `Pallet shop: use <placeable type="warehouse" ...>: a selling station with a pallet buying station, as the base game's warehouses (mapEU/warehouseEU, mapAS/warehouseAS).`},
 };
@@ -147,7 +161,12 @@ export function mergeContainers(xml, tags = ["triggerMarkers", "hotspots", "sell
 /** The nodes and XML of the shared objects the building has, merged. c: the export context. */
 export function sharedScene(c) {
   const out = {nodes: [], xml: "", areas: []};
-  for (const t of sharedOf(c.p, c.kind)) { const s = SHARED[t].scene(c); out.nodes.push(...s.nodes); out.xml += s.xml; out.areas.push(...s.areas); }
+  for (const t of sharedOf(c.p, c.kind)) {
+    const s = SHARED[t].scene(c);
+    // (an object that is turned: its nodes turn about its middle)
+    for (const [type, names] of Object.entries(SHARED[t].parts || {})) { const o = objectOf(c.p, type); if (o && o.turn) s.nodes = turnNodes(s.nodes, names, [o.x, o.z], o.turn); }
+    out.nodes.push(...s.nodes); out.xml += s.xml; out.areas.push(...s.areas);
+  }
   return out;
 }
 
