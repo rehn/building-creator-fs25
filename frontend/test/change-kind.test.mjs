@@ -11,7 +11,7 @@ test("every kind can be changed to every other", () => {
   assert.deepEqual(CONVERTIBLE_KINDS.slice().sort(), ["chicken", "cow", "dealership", "fuelstation", "house", "shed", "sheep"]);
 });
 
-test("a house becomes a shed: the form stays, the furniture is listed as lost", () => {
+test("a house becomes a shed: the form and the furniture stay", () => {
   const p = farm(), r = changeKind(p, "shed");
   assert.equal(r.ok, true);
   const q = r.settings;
@@ -21,8 +21,8 @@ test("a house becomes a shed: the form stays, the furniture is listed as lost", 
   assert.equal(q.wings.length, 1, "so does the part");
   assert.equal(q.windows.length, p.windows.length, "and the windows and doors");
   assert.deepEqual(q.objects, [], "a building has no game objects");
-  assert.ok(r.lost.items.length > 0 && r.lost.items.some(n => /bed/i.test(n)), `lost: ${r.lost.items}`);
-  assert.ok(!q.items.some(it => it.type === "bed"));
+  assert.deepEqual(r.lost.items, [], "every building has every piece: the furniture stays");
+  assert.ok(q.items.some(it => it.type === "bed"));
 });
 
 

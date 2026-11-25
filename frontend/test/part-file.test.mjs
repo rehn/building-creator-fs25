@@ -92,11 +92,10 @@ test("a part's pieces go with it: moved to the same place in the new part, those
   assert.ok(it.x > a.rect.x0 && it.x < a.rect.x1 && it.z > a.rect.z0 && it.z < a.rect.z1, "inside the new part");
   // the same place seen from the part: its middle (the table was in the middle)
   assert.ok(Math.hypot(it.x - (a.rect.x0 + a.rect.x1) / 2, it.z - (a.rect.z0 + a.rect.z1) / 2) < 0.6, "in the middle of the part");
-  // a hen house has no tables: the piece is left out, with a note
+  // every building has every piece (the inside look is only how a new one is furnished), so a hen house keeps the table
   const hen = sanitize({kind: "chicken", width: 12, depth: 8, items: []}), rh = importPart(hen, "left", f);
   assert.ok(!rh.error, rh.error);
-  assert.equal(sanitize({...hen, ...rh.settings}).items.filter(x => x.type === "table").length, 0);
-  assert.ok(rh.notes.some(n => /table|piece/i.test(n)), "says so: " + rh.notes);
+  assert.equal(sanitize({...hen, ...rh.settings}).items.filter(x => x.type === "table").length, 1);
 });
 
 test("a part file survives a round trip: out of one building and into an empty one gives the same part", () => {

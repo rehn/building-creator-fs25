@@ -37,6 +37,6 @@ test("sleep point piece: it may stand on the bed, but must be inside the room", 
   assert.match([...problems(out.items, catalogFor(out), roomOf(out)).values()].join(), /outside/i);
 });
 
-test("sleep point piece: barns don't have it", () => {
-  assert.equal(catalogFor(sanitize({kind: "cow"})).sleeppoint, undefined);
+test("sleep point piece: every kind has it (every building has every piece)", () => {
+  assert.ok(catalogFor(sanitize({kind: "cow"})).sleeppoint);
 });
