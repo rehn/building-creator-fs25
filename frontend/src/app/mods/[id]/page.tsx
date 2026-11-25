@@ -322,7 +322,7 @@ export default function ModPage() {
       <TopBar user={user} />
       <main className="modedit">
         <aside className="hx-panel modedit-tree" aria-label={t("The mod")}>
-          <p className="hint"><Link href="/mods">{t("All mods")}</Link></p>
+          <p><Link className="btn back" href="/mods" aria-label={t("All mods")}>‹ {t("Mods")}</Link></p>
           {!mod && !error && !userError && <p className="loading">Loading the mod…</p>}
           {tree}
         </aside>

@@ -132,3 +132,4 @@ one filled `--accent`). Sliders pair with an editable number (click the number t
 - "My items" and props are still two places; a later step may merge them under one tab.
 
 - **The header stays in the editors** (2026-11-25): a building's page has the top bar (brand, app switch, Buildings / Mods / Items / Textures, settings) above its own bar (back, name, status, settings file), as the other pages have it. The editor fills what is left of the window.
+- **A back button in the editors** (2026-11-25): the building, the prop and the mod each have `‹ Buildings` / `‹ Buildings` / `‹ Mods` (`.btn.back`) as the first thing under the top bar, in the editor's own bar or at the top of the mod's tree, so they look alike. The text is translated (`‹ {t("Buildings")}`).

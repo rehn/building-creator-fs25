@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { api, ApiError, templatePhotoUrl, type Project, type Template } from "@/lib/api";
 import { useUser } from "@/lib/useUser";
 import { TopBar } from "@/components/TopBar";
+import { t } from "@/i18n/index.mjs";
 import type { EditorHandle, Settings } from "@/editor/editor.mjs";
 import { authorName } from "@/editor/model.mjs";
 
@@ -171,7 +172,7 @@ export default function ProjectPage() {
     <div className="editor-page">
       <TopBar user={user} />
       <div className="editor-bar">
-        <Link className="btn back" href="/" aria-label="Back to my houses">‹ Houses</Link>
+        <Link className="btn back" href="/" aria-label={t("Back to my buildings")}>‹ {t("Buildings")}</Link>
         <label className="sr" htmlFor="houseName">House name</label>
         <input
           id="houseName" className="name" value={name} maxLength={100} disabled={!project}
