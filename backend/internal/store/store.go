@@ -410,6 +410,7 @@ func openPostgres(url string) (*Store, error) {
 			`ALTER TABLE users ADD COLUMN IF NOT EXISTS sso_sub TEXT`,
 			`ALTER TABLE mod_items ADD COLUMN IF NOT EXISTS y DOUBLE PRECISION NOT NULL DEFAULT 0`,
 			`ALTER TABLE mods ADD COLUMN IF NOT EXISTS folder TEXT NOT NULL DEFAULT ''`,
+			`ALTER TABLE mods ADD COLUMN IF NOT EXISTS thumbnail TEXT NOT NULL DEFAULT ''`,
 			`CREATE UNIQUE INDEX IF NOT EXISTS users_sso_sub ON users (sso_sub)`,
 			projectIndexes[0], projectIndexes[1],
 		} {
@@ -467,7 +468,7 @@ func openSQLite(path string) (*Store, error) {
 		return nil, fmt.Errorf("updating schema: %w", err)
 	}
 	for _, c := range [][3]string{{"projects", "folder", "TEXT NOT NULL DEFAULT ''"}, {"projects", "source_id", "TEXT NOT NULL DEFAULT ''"},
-		{"projects", "generated_version", "INTEGER NOT NULL DEFAULT 0"}, {"api_tokens", "can_write", "INTEGER NOT NULL DEFAULT 0"}, {"users", "sso_sub", "TEXT"}, {"mod_items", "y", "REAL NOT NULL DEFAULT 0"}, {"mods", "folder", "TEXT NOT NULL DEFAULT ''"}} {
+		{"projects", "generated_version", "INTEGER NOT NULL DEFAULT 0"}, {"api_tokens", "can_write", "INTEGER NOT NULL DEFAULT 0"}, {"users", "sso_sub", "TEXT"}, {"mod_items", "y", "REAL NOT NULL DEFAULT 0"}, {"mods", "folder", "TEXT NOT NULL DEFAULT ''"}, {"mods", "thumbnail", "TEXT NOT NULL DEFAULT ''"}} {
 		if err := addColumnSQLite(db, c[0], c[1], c[2]); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("updating schema: %w", err)

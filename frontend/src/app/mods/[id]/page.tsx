@@ -257,6 +257,21 @@ export default function ModPage() {
   };
   const options: ProjectSummary[] = mod ? choices(projects, draft, adding) : [];
   const loading = draft.some(p => !p.missing && !shapes[p.ref]);
+  // The preview of the mod in the list of mods: a picture of the view, made a little after the mod has changed and its buildings are drawn, and saved (it is not a change of the mod: its version stays).
+  useEffect(() => {
+    if (!mod || loading || draft.length === 0) return;
+    const timer = setTimeout(async () => {
+      const m = modRef.current, url = view.current?.thumbnail(320);
+      if (!m || !url || url === m.thumbnail) return;
+      try {
+        const made = await api.updateMod(m.id, { thumbnail: url, version: m.version });
+        setMod(x => x && { ...x, thumbnail: made.thumbnail, version: made.version });
+      } catch { /* the next change tries again */ }
+    }, 2500);
+    return () => clearTimeout(timer);
+    // (not on the picture itself: saving it must not make another)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, objects, shapes, loading, mod?.id]);
   const failed = draft.filter(p => !p.missing && shapes[p.ref] === "error").length;
   const open = (p: ModPost) => (p.kind === "prop" ? `/builder/${p.ref}` : `/projects/${p.ref}`);
   const put = (pid: string, patch: { x?: number; z?: number; y?: number; rot?: number }) => change(placePost(draftRef.current, pid, patch));

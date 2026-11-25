@@ -28,11 +28,12 @@ type modItemInput struct {
 }
 
 type modInput struct {
-	Name    *string         `json:"name"`
-	Folder  *string         `json:"folder"` // "" takes the mod out of its folder
-	Data    json.RawMessage `json:"data"`
-	Items   *[]modItemInput `json:"items"`
-	Version int64           `json:"version"`
+	Name      *string         `json:"name"`
+	Folder    *string         `json:"folder"`    // "" takes the mod out of its folder
+	Thumbnail *string         `json:"thumbnail"` // the preview picture, a small JPEG or PNG data URL ("" takes it away)
+	Data      json.RawMessage `json:"data"`
+	Items     *[]modItemInput `json:"items"`
+	Version   int64           `json:"version"`
 }
 
 func modError(w http.ResponseWriter, err error) {
@@ -73,6 +74,13 @@ func checkMod(w http.ResponseWriter, in *modInput) (store.ModUpdate, bool) {
 			}
 		}
 		upd.Folder = &folder
+	}
+	if in.Thumbnail != nil {
+		if !validThumbnail(*in.Thumbnail) {
+			writeError(w, http.StatusBadRequest, "invalid_thumbnail", "The preview must be a small JPEG or PNG.")
+			return upd, false
+		}
+		upd.Thumbnail = in.Thumbnail
 	}
 	if present(in.Data) {
 		if !validData(in.Data) {

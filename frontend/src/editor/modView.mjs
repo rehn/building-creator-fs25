@@ -205,7 +205,7 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
   const hasMap = key => maps.has(key);
 
   /** A square picture (size px) of the middle of the view without the marks of what is chosen, as {width, height, rgba}: the icon and the shop picture of the game mod. Null if it cannot be had. */
-  function picture(size) {
+  function square(size, out) {
     try {
       const keep = [selected, selectedObject], keepAxes = showAxes;
       fit(); selected = null; selectedObject = null; showAxes = false;   // (a picture for the shop shows no axes)
@@ -215,9 +215,12 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
       x.fillStyle = "#e9ece4"; x.fillRect(0, 0, size, size);
       x.drawImage(canvas, (canvas.width - side) / 2, (canvas.height - side) / 2, side, side, 0, 0, size, size);
       [selected, selectedObject] = keep; showAxes = keepAxes; redraw();
-      return {width: size, height: size, rgba: x.getImageData(0, 0, size, size).data};
+      return out(c, x);
     } catch { return null; }
   }
+  function picture(size) { return square(size, (c, x) => ({width: size, height: size, rgba: x.getImageData(0, 0, size, size).data})); }
+  /** The same picture as a small JPEG data URL, for the mod's preview in the list of mods. Null if it cannot be had. */
+  function thumbnail(size) { return square(size, c => c.toDataURL("image/jpeg", 0.8)); }
 
   function fit() {
     const b = new THREE.Box3();
@@ -336,7 +339,7 @@ export function createModView(canvas, {onSelect = () => {}, onMove = () => {}, o
   if (ro) ro.observe(canvas);
 
   return {
-    show, showObjects, select, selectPoint, setMap, hasMap, picture, refit: () => { fit(); redraw(); },
+    show, showObjects, select, selectPoint, setMap, hasMap, picture, thumbnail, refit: () => { fit(); redraw(); },
     dispose() {
       if (raf) cancelAnimationFrame(raf);
       canvas.removeEventListener("pointerdown", down); canvas.removeEventListener("pointermove", move); canvas.removeEventListener("pointerup", up); canvas.removeEventListener("pointercancel", up);

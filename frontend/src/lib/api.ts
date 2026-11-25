@@ -87,6 +87,8 @@ export interface Mod {
   name: string;
   /** The app's folder it is in ("" or missing: none): the same folders as the buildings'. */
   folder?: string;
+  /** A small picture of the mod (a data URL) that the page makes from its view; "" or missing: none yet. */
+  thumbnail?: string;
   data?: Record<string, unknown>;
   items?: ModPost[];
   itemCount: number;
@@ -241,7 +243,7 @@ export const api = {
   /** Deletes a folder: what is in it stays, in no folder. */
   deleteFolder: (name: string) => request<void>("DELETE", "/folders?name=" + encodeURIComponent(name)),
   createMod: (name: string) => request<Mod>("POST", "/mods", { name }),
-  updateMod: (id: string, patch: { name?: string; folder?: string; items?: Pick<ModPost, "id" | "kind" | "ref" | "type" | "x" | "z" | "y" | "rot">[]; data?: Record<string, unknown>; version?: number }) =>
+  updateMod: (id: string, patch: { name?: string; folder?: string; thumbnail?: string; items?: Pick<ModPost, "id" | "kind" | "ref" | "type" | "x" | "z" | "y" | "rot">[]; data?: Record<string, unknown>; version?: number }) =>
     request<Mod>("PATCH", "/mods/" + encodeURIComponent(id), patch),
   deleteMod: (id: string) => request<void>("DELETE", "/mods/" + encodeURIComponent(id)),
   /** The game mod of the whole mod (a zip), made from saved version `version` of the mod, kept for other programs to fetch (GET /api/v1/mods/{id}/mod.zip). */

@@ -102,7 +102,7 @@ export default function ModsPage() {
           <div className="grid">
             {shown.map(m => (
               <article className="house" key={m.id}>
-                <Link className="thumb" href={`/mods/${m.id}`} aria-label={m.name} translate="no"><div className="none">{t("No preview yet")}</div></Link>
+                <Link className="thumb" href={`/mods/${m.id}`} aria-label={m.name} translate="no">{m.thumbnail ? <img src={m.thumbnail} alt="" /> : <div className="none">{t("No preview yet")}</div>}</Link>
                 <div className="info">
                   <Link className="name" href={`/mods/${m.id}`} translate="no">{m.name}</Link>
                   <small>{t("Buildings and props: {count}", { count: m.itemCount })}</small>
