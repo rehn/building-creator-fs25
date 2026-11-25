@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { api, ApiError, type Project } from "@/lib/api";
 import { useUser } from "@/lib/useUser";
+import { TopBar } from "@/components/TopBar";
 import { exportI3dAtlas, atlasFiles, atlasDdsFiles, type TextureMaps } from "@/builder/atlas.mjs";
 import { exportMod, MOD_STEM } from "@/builder/mod.mjs";
 import { makeItem } from "@/builder/item.mjs";
@@ -153,8 +154,9 @@ export default function BuilderPage() {
   }
   return (
     <div className="editor-page">
+      <TopBar user={user} />
       <div className="editor-bar">
-        <Link className="btn back" href="/" aria-label="Back to my buildings">‹ Buildings</Link>
+        <Link className="btn back" href="/" aria-label={t("Back to my buildings")}>‹ {t("Buildings")}</Link>
         <label className="sr" htmlFor="propName">Name</label>
         <input id="propName" className="name" value={name} maxLength={100} disabled={!project} onChange={e => setName(e.target.value)} onBlur={commitName}
           onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
