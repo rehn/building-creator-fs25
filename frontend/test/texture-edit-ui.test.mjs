@@ -27,6 +27,15 @@ test("the photo can be shown for the crop or for the perspective, with four corn
   assert.match(page, /<QuadEditor /);
   for (const text of ["Perspective", "Remove the correction"]) assert.ok(page.includes(text), text);
   assert.match(page, /quad: Quad \| null/);
-  assert.match(page, /prepareSource\(n\.original, \{ quad: n\.quad,/);
+  assert.match(page, /quad: n\.quad,/, "the quadrilateral goes into prepareSource");
   assert.match(page, /onPointerUp/, "the picture is made again when a corner is let go, not at every move");
+});
+
+test("the photo can be retouched: a brush that clones from a place or paints, strokes kept in the draft and laid on the photo as it was read", () => {
+  assert.match(page, /function RetouchEditor\(/);
+  assert.match(page, /<RetouchEditor /);
+  for (const text of ["Retouch", "Clone", "Paint", "Brush size", "Softness", "Choose another source", "Undo the last stroke", "Remove the retouching"]) assert.ok(page.includes(text), text);
+  assert.match(page, /strokes: Stroke\[\]/);
+  assert.match(page, /prepareSource\(n\.original, \{ strokes: n\.strokes, quad: n\.quad,/);
+  assert.match(page, /retouch\(draft\.original, draft\.strokes\)/, "the photo as it is shown while retouching, and under the corners");
 });

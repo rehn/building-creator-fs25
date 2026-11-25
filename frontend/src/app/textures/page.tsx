@@ -8,13 +8,15 @@ import { useUser } from "@/lib/useUser";
 import { TopBar } from "@/components/TopBar";
 import { t } from "@/i18n/index.mjs";
 import { makePhotoTexture, photoTextureDds, squareCrop, nearestPow2 } from "@/editor/photoTexture.mjs";
-import { prepareSource, COLOR_LIMITS } from "@/editor/photoEdit.mjs";
+import { prepareSource, retouch, COLOR_LIMITS } from "@/editor/photoEdit.mjs";
 import { confirmDialog } from "@/components/dialog.mjs";
 
 type Picture = { width: number; height: number; rgba: Uint8ClampedArray };
 /** Four corners (top left, top right, bottom right, bottom left) as fractions of the photo. */
 type Quad = [number, number][];
-type Draft = { file: File; original: Picture; picture: Picture; flipX: boolean; flipY: boolean; turn: number; quad: Quad | null; brightness: number; contrast: number; saturation: number; hue: number; name: string; zoom: number; cx: number; cy: number; rotate: number; flatten: number; size: number; meters: number; seamless: boolean; bump: number; mine: boolean; whole: boolean; background: string; margin: number };
+/** A stroke of the retouching brush (photoEdit.mjs retouch): r a share of the shorter side, soft 0-1, points as fractions of the photo as it was read. */
+type Stroke = { type: "clone" | "paint"; r: number; soft: number; points: [number, number][]; dx?: number; dy?: number; color?: string };
+type Draft = { file: File; original: Picture; picture: Picture; flipX: boolean; flipY: boolean; turn: number; quad: Quad | null; strokes: Stroke[]; brightness: number; contrast: number; saturation: number; hue: number; name: string; zoom: number; cx: number; cy: number; rotate: number; flatten: number; size: number; meters: number; seamless: boolean; bump: number; mine: boolean; whole: boolean; background: string; margin: number };
 
 /** The part of the picture that is used: all of it for a logo or a sign (stretched to the square), else the square frame. */
 const cropOf = (d: Draft) => d.whole ? { x: 0, y: 0, w: 1, h: 1 } : squareCrop(d.picture.width, d.picture.height, d);
@@ -28,6 +30,8 @@ const TEXT = {
   straighten: "For a photo taken at an angle: lines that slope down to the right are levelled with a plus.",
   flatten: "If the photo is lighter on one side, you see a step where it repeats. This takes that shading out, sideways only, so horizontal bands stay.",
   frame: "The frame shows the part of the photo that is used.",
+  clone: "Click where to copy from, then paint over what should be covered. The brush takes from the same distance away as it goes on.",
+  paint: "Paint over a spot with the colour chosen below.",
   perspective: "Drag the four corners onto the corners of the surface as it looks in the photo (a wall or a board photographed at an angle). What is inside them is made upright and square.",
   right: "I have the right to use this photo, and to put it in a mod I share.",
 };
@@ -89,6 +93,65 @@ function SourceView({ d }: { d: Draft }) {
   return <canvas ref={canvas} className="tex-source" aria-label="The photo, with a frame round the part that is used" />;
 }
 
+/** The photo (as it is after the retouching so far) with the brush: it shows where it will work, and for a clone where it takes from. A stroke is laid on the photo when the pointer is let go. */
+function RetouchEditor({ picture, tool, size, soft, color, from, offset, onFrom, onOffset, onStroke }: {
+  picture: Picture; tool: "clone" | "paint"; size: number; soft: number; color: string;
+  from: [number, number] | null; offset: [number, number] | null;
+  onFrom: (p: [number, number] | null) => void; onOffset: (o: [number, number]) => void; onStroke: (s: Stroke) => void;
+}) {
+  const base = useRef<HTMLCanvasElement>(null), over = useRef<HTMLCanvasElement>(null);
+  const full = useMemo(() => canvasOfPicture(picture), [picture]);
+  const k = Math.min(1, 480 / Math.max(picture.width, picture.height)), cw = Math.round(picture.width * k), ch = Math.round(picture.height * k);
+  const [hover, setHover] = useState<[number, number] | null>(null);
+  const stroke = useRef<[number, number][] | null>(null);
+  const off = useRef<[number, number] | null>(offset);
+  off.current = offset;
+  useEffect(() => { const c = base.current; if (c) c.getContext("2d")!.drawImage(full, 0, 0, cw, ch); }, [full, cw, ch]);
+  const ring = (g: CanvasRenderingContext2D, x: number, y: number, rad: number, c: string) => { g.beginPath(); g.arc(x, y, rad, 0, Math.PI * 2); g.lineWidth = 3; g.strokeStyle = "#000"; g.stroke(); g.lineWidth = 1.5; g.strokeStyle = c; g.stroke(); };
+  const draw = () => {
+    const c = over.current; if (!c) return;
+    const g = c.getContext("2d")!; g.clearRect(0, 0, cw, ch);
+    const rad = Math.max(2, size / 100 * Math.min(cw, ch)), pts = stroke.current;
+    if (pts && pts.length > 1) { g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(x * cw, y * ch) : g.moveTo(x * cw, y * ch))); g.lineWidth = rad * 2; g.lineCap = "round"; g.lineJoin = "round"; g.strokeStyle = tool === "paint" ? color : "rgba(255,255,255,.35)"; g.globalAlpha = 0.45; g.stroke(); g.globalAlpha = 1; }
+    if (tool === "clone" && from && !off.current) ring(g, from[0] * cw, from[1] * ch, rad, "#0f0");
+    if (hover) {
+      ring(g, hover[0] * cw, hover[1] * ch, rad, "#fff");
+      if (tool === "clone" && off.current) ring(g, (hover[0] + off.current[0]) * cw, (hover[1] + off.current[1]) * ch, rad, "#0f0");
+    }
+  };
+  useEffect(draw);
+  const at = (e: React.PointerEvent<HTMLCanvasElement>): [number, number] => {
+    const r = e.currentTarget.getBoundingClientRect();
+    return [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))];
+  };
+  const down = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const p = at(e);
+    if (tool === "clone" && !from) { onFrom(p); return; }   // (the first click of a clone says where to take from)
+    if (tool === "clone" && !off.current && from) { const o: [number, number] = [from[0] - p[0], from[1] - p[1]]; off.current = o; onOffset(o); }
+    stroke.current = [p]; e.currentTarget.setPointerCapture(e.pointerId); draw();
+  };
+  const move = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const p = at(e); setHover(p);
+    const pts = stroke.current; if (!pts) return;
+    const last = pts[pts.length - 1], gap = Math.hypot((p[0] - last[0]) * cw, (p[1] - last[1]) * ch);
+    if (gap >= Math.max(1, size / 100 * Math.min(cw, ch) * 0.25)) pts.push(p);
+  };
+  const up = () => {
+    const pts = stroke.current; stroke.current = null;
+    if (!pts) return;
+    const o = off.current;
+    if (tool === "clone" && !o) return;
+    onStroke({ type: tool, r: size / 100, soft: soft / 100, points: pts, ...(tool === "clone" && o ? { dx: o[0], dy: o[1] } : { color }) });
+  };
+  return (
+    <div style={{ position: "relative", width: cw, maxWidth: "100%" }}>
+      <canvas ref={base} className="tex-source" width={cw} height={ch} aria-hidden="true" />
+      <canvas ref={over} width={cw} height={ch} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerLeave={() => setHover(null)}
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", touchAction: "none", cursor: "crosshair" }} aria-label={t("The photo, to retouch with a brush")} />
+    </div>
+  );
+}
+
 const DEFAULT_QUAD: Quad = [[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9]];
 
 /** The photo as it was read, with four corners to drag onto the corners of a surface photographed at an angle. The photo is made upright when a corner is let go (not at every move: it takes a moment). */
@@ -138,7 +201,11 @@ export default function TexturesPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [mode, setMode] = useState<"crop" | "perspective">("crop");   // what the photo shows: the frame of the crop, or the four corners of the perspective
+  const [mode, setMode] = useState<"crop" | "perspective" | "retouch">("crop");
+  // the brush: a clone or paint, its size and softness (per cent) and colour; for a clone where it takes from (and then how far away: it keeps that distance)
+  const [brush, setBrush] = useState({ tool: "clone" as "clone" | "paint", size: 4, soft: 50, color: "#ffffff" });
+  const [clone, setClone] = useState<{ from: [number, number] | null; off: [number, number] | null }>({ from: null, off: null });
+  const retouched = useMemo(() => (draft ? retouch(draft.original, draft.strokes) : null), [draft?.original, draft?.strokes]);   // (the photo as it is shown while retouching and under the corners)   // what the photo shows: the frame of the crop, or the four corners of the perspective
   const [editing, setEditing] = useState<{ tex: Texture; name: string; meters: number } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -146,10 +213,10 @@ export default function TexturesPage() {
 
   async function pick(files: FileList | null) {
     const file = files?.[0]; if (!file) return;
-    setError(""); setEditing(null); setMode("crop");
+    setError(""); setEditing(null); setMode("crop"); setClone({ from: null, off: null });
     try {
       const picture = await readPicture(file);
-      setDraft({ file, original: picture, picture, flipX: false, flipY: false, turn: 0, quad: null, brightness: 0, contrast: 0, saturation: 0, hue: 0, name: file.name.replace(/\.[^.]+$/, "").slice(0, 100), zoom: 1, cx: 0.5, cy: 0.5, rotate: 0, flatten: 0, size: 1024, meters: 1, seamless: false, bump: 2, mine: false, whole: false, background: "#ffffff", margin: 0 });
+      setDraft({ file, original: picture, picture, flipX: false, flipY: false, turn: 0, quad: null, strokes: [], brightness: 0, contrast: 0, saturation: 0, hue: 0, name: file.name.replace(/\.[^.]+$/, "").slice(0, 100), zoom: 1, cx: 0.5, cy: 0.5, rotate: 0, flatten: 0, size: 1024, meters: 1, seamless: false, bump: 2, mine: false, whole: false, background: "#ffffff", margin: 0 });
     } catch { setError(t("That file isn’t a picture the browser can read (use a JPEG, PNG or WebP).")); }
   }
 
@@ -197,12 +264,12 @@ export default function TexturesPage() {
 
   const change = (patch: Partial<Draft>) => setDraft(d => d && { ...d, ...patch });
   /** A flip or a turn of the photo: the picture the rest works on is made again from the photo as it was read, and the frame goes back to the middle. */
-  const flipTurn = (f: (d: Draft) => Partial<Pick<Draft, "flipX" | "flipY" | "turn" | "quad">>) => setDraft(d => {
+  const flipTurn = (f: (d: Draft) => Partial<Pick<Draft, "flipX" | "flipY" | "turn" | "quad" | "strokes">>) => setDraft(d => {
     if (!d) return d;
     const n = { ...d, ...f(d) };
-    return { ...n, picture: prepareSource(n.original, { quad: n.quad, flipX: n.flipX, flipY: n.flipY, turn: n.turn }), cx: 0.5, cy: 0.5 };
+    return { ...n, picture: prepareSource(n.original, { strokes: n.strokes, quad: n.quad, flipX: n.flipX, flipY: n.flipY, turn: n.turn }), cx: 0.5, cy: 0.5 };
   });
-  const edited = (d: Draft) => d.flipX || d.flipY || d.turn !== 0 || d.quad !== null || d.brightness !== 0 || d.contrast !== 0 || d.saturation !== 0 || d.hue !== 0;
+  const edited = (d: Draft) => d.flipX || d.flipY || d.turn !== 0 || d.quad !== null || d.strokes.length > 0 || d.brightness !== 0 || d.contrast !== 0 || d.saturation !== 0 || d.hue !== 0;
   const colorSlider = (k: "brightness" | "contrast" | "saturation" | "hue", label: string, d: Draft) => (
     <label>{label} <small>{k === "hue" ? `${d[k]}°` : `${Math.round(d[k] * 100)} %`}</small>
       <input type="range" min={COLOR_LIMITS[k][0]} max={COLOR_LIMITS[k][1]} step={k === "hue" ? 1 : 0.01} value={d[k]} onChange={e => change({ [k]: Number(e.target.value) })} />
@@ -216,9 +283,29 @@ export default function TexturesPage() {
         <div className="seg" role="group" aria-label={t("What the photo shows")}>
           <button type="button" aria-pressed={mode === "crop"} onClick={() => setMode("crop")}>{t("Crop")}</button>
           <button type="button" aria-pressed={mode === "perspective"} onClick={() => setMode("perspective")}>{t("Perspective")}</button>
+          <button type="button" aria-pressed={mode === "retouch"} onClick={() => setMode("retouch")}>{t("Retouch")}</button>
         </div>
-        {mode === "perspective" ? <QuadEditor picture={draft.original} quad={draft.quad} onChange={q => flipTurn(() => ({ quad: q }))} /> : <SourceView d={draft} />}
-        <p className="hint">{mode === "perspective" ? TEXT.perspective : TEXT.frame}</p>
+        {mode === "perspective" ? <QuadEditor picture={retouched ?? draft.original} quad={draft.quad} onChange={q => flipTurn(() => ({ quad: q }))} />
+          : mode === "retouch" ? <RetouchEditor picture={retouched ?? draft.original} tool={brush.tool} size={brush.size} soft={brush.soft} color={brush.color} from={clone.from} offset={clone.off}
+            onFrom={p => setClone({ from: p, off: null })} onOffset={o => setClone(c => ({ ...c, off: o }))} onStroke={s => flipTurn(d => ({ strokes: [...d.strokes, s] }))} />
+          : <SourceView d={draft} />}
+        <p className="hint">{mode === "perspective" ? TEXT.perspective : mode === "retouch" ? (brush.tool === "clone" ? TEXT.clone : TEXT.paint) : TEXT.frame}</p>
+        {mode === "retouch" && (
+          <div className="item-fields">
+            <div className="seg" role="group" aria-label={t("The brush")}>
+              <button type="button" aria-pressed={brush.tool === "clone"} onClick={() => setBrush(b => ({ ...b, tool: "clone" }))}>{t("Clone")}</button>
+              <button type="button" aria-pressed={brush.tool === "paint"} onClick={() => setBrush(b => ({ ...b, tool: "paint" }))}>{t("Paint")}</button>
+            </div>
+            <label>{t("Brush size")} <small>{brush.size} %</small> <input type="range" min={1} max={20} step={1} value={brush.size} onChange={e => setBrush(b => ({ ...b, size: Number(e.target.value) }))} /></label>
+            <label>{t("Softness")} <small>{brush.soft} %</small> <input type="range" min={0} max={100} step={5} value={brush.soft} onChange={e => setBrush(b => ({ ...b, soft: Number(e.target.value) }))} /></label>
+            {brush.tool === "paint" && <label>{t("Colour")} <input type="color" value={brush.color} onChange={e => setBrush(b => ({ ...b, color: e.target.value }))} /></label>}
+            <div className="row">
+              {brush.tool === "clone" && clone.from && <button type="button" onClick={() => setClone({ from: null, off: null })}>{t("Choose another source")}</button>}
+              <button type="button" disabled={draft.strokes.length === 0} onClick={() => flipTurn(d => ({ strokes: d.strokes.slice(0, -1) }))}>{t("Undo the last stroke")}</button>
+              <button type="button" disabled={draft.strokes.length === 0} onClick={() => flipTurn(() => ({ strokes: [] }))}>{t("Remove the retouching")}</button>
+            </div>
+          </div>
+        )}
         {mode === "perspective" && draft.quad && <div className="row"><button type="button" onClick={() => flipTurn(() => ({ quad: null }))}>{t("Remove the correction")}</button></div>}
         <Preview d={draft} />
         <p className="hint">{t("Shown twice across and down, so you can see where it repeats.")}</p>
@@ -242,7 +329,7 @@ export default function TexturesPage() {
           {colorSlider("saturation", t("Saturation"), draft)}
           {colorSlider("hue", t("Colour shift"), draft)}
           <p className="hint">{t("The colour is the picture's only: the relief and the shine are worked out from the photo as it is.")}</p>
-          {edited(draft) && <div className="row"><button type="button" onClick={() => { flipTurn(() => ({ flipX: false, flipY: false, turn: 0, quad: null })); change({ brightness: 0, contrast: 0, saturation: 0, hue: 0 }); }}>{t("Reset the edits")}</button></div>}
+          {edited(draft) && <div className="row"><button type="button" onClick={() => { flipTurn(() => ({ flipX: false, flipY: false, turn: 0, quad: null, strokes: [] })); setClone({ from: null, off: null }); change({ brightness: 0, contrast: 0, saturation: 0, hue: 0 }); }}>{t("Reset the edits")}</button></div>}
         </fieldset>
         <label>Fill see-through parts with <input type="color" value={draft.background} onChange={e => change({ background: e.target.value })} /></label>
         <p className="hint">A picture with a see-through background (a logo) is put on this colour, so it is not black round the edges.</p>
