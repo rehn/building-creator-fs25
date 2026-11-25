@@ -236,6 +236,10 @@ export const api = {
   folders: () => request<{ folders: AppFolder[] }>("GET", "/folders"),
   /** Makes a folder that nothing is in yet (making one that is there is fine). */
   createFolder: (name: string) => request<{ name: string }>("POST", "/folders", { name }),
+  /** Renames a folder: what is in it, buildings, props and mods, follows. Not into a name that holds something (409). */
+  renameFolder: (from: string, to: string) => request<{ name: string }>("POST", "/folders/rename", { from, to }),
+  /** Deletes a folder: what is in it stays, in no folder. */
+  deleteFolder: (name: string) => request<void>("DELETE", "/folders?name=" + encodeURIComponent(name)),
   createMod: (name: string) => request<Mod>("POST", "/mods", { name }),
   updateMod: (id: string, patch: { name?: string; folder?: string; items?: Pick<ModPost, "id" | "kind" | "ref" | "type" | "x" | "z" | "y" | "rot">[]; data?: Record<string, unknown>; version?: number }) =>
     request<Mod>("PATCH", "/mods/" + encodeURIComponent(id), patch),

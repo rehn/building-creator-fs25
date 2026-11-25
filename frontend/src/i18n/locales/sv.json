@@ -1099,5 +1099,8 @@
   "Hide roof": "Dölj tak",
   "Show roof": "Visa tak",
   "Hide the roof to see into the building, and show it again": "Dölj taket för att se in i byggnaden, och visa det igen",
-  "Folder": "Mapp"
+  "Folder": "Mapp",
+  "Rename folder": "Byt namn på mappen",
+  "Delete folder": "Ta bort mappen",
+  "Delete the folder “{name}”? What is in it stays, in no folder.": "Ta bort mappen “{name}”? Det som ligger i den blir kvar, utan mapp."
 }

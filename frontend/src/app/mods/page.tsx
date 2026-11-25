@@ -8,6 +8,7 @@ import { useUser } from "@/lib/useUser";
 import { useFolders } from "@/lib/useFolders";
 import { TopBar } from "@/components/TopBar";
 import { FolderSelect, askFolderName } from "@/components/FolderSelect";
+import { FolderActions } from "@/components/FolderActions";
 import { t } from "@/i18n/index.mjs";
 import { confirmDialog, promptDialog } from "@/components/dialog.mjs";
 
@@ -82,6 +83,11 @@ export default function ModsPage() {
             {folders.map(f => tab("f:" + f, f, mods.filter(m => folderOf(m) === f).length, folderNow === f, () => setFolderSel(f), true))}
             {hasLoose && tab("", t("Not in a folder"), mods.filter(m => !folderOf(m)).length, folderNow === "", () => setFolderSel(""))}
             <button type="button" className="starttab link" onClick={async () => { const name = await askFolderName(); if (!name) return; try { await appFolders.add(name); setFolderSel(name); } catch (e) { setError((e as Error).message); } }}>{t("New folder…")}</button>
+            {folderNow !== "*" && folderNow !== "" && (
+              <FolderActions folder={folderNow} disabled={busy} onError={setError}
+                onRename={async to => { const from = folderNow; await appFolders.rename(from, to); setMods(l => (l ?? []).map(m => (folderOf(m) === from ? { ...m, folder: to } : m))); setFolderSel(to); }}
+                onDelete={async () => { const from = folderNow; await appFolders.remove(from); setMods(l => (l ?? []).map(m => (folderOf(m) === from ? { ...m, folder: "" } : m))); setFolderSel("*"); }} />
+            )}
           </div>
         )}
         {(error || userError) && <p className="error" role="alert">{error || userError}</p>}

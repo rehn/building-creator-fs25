@@ -14,5 +14,15 @@ export function useFolders(enabled: boolean, own: (string | undefined)[] = []) {
     await api.createFolder(name);
     setList(l => (l.some(f => f.name === name) ? l : [...l, { name, buildings: 0, mods: 0 }]));
   }, []);
-  return { names: folderNames(list.map(f => f.name), own), add };
+  /** Renames one on the server (what is in it follows there); the page changes what it holds itself. */
+  const rename = useCallback(async (from: string, to: string) => {
+    await api.renameFolder(from, to);
+    setList(l => l.filter(f => f.name !== to).map(f => (f.name === from ? { ...f, name: to } : f)));
+  }, []);
+  /** Deletes one on the server (what is in it stays, in no folder); the page takes its own out of it. */
+  const remove = useCallback(async (name: string) => {
+    await api.deleteFolder(name);
+    setList(l => l.filter(f => f.name !== name));
+  }, []);
+  return { names: folderNames(list.map(f => f.name), own), add, rename, remove };
 }

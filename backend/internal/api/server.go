@@ -140,6 +140,8 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /api/assets/{id}/files/{name}", s.requireUser(s.assetFile))
 	m.HandleFunc("GET /api/folders", s.requireUser(s.listAppFolders))
 	m.HandleFunc("POST /api/folders", s.requireUser(s.createAppFolder))
+	m.HandleFunc("POST /api/folders/rename", s.requireUser(s.renameAppFolder))
+	m.HandleFunc("DELETE /api/folders", s.requireUser(s.deleteAppFolder))
 	m.HandleFunc("GET /api/mods", s.requireUser(s.listMods))
 	m.HandleFunc("POST /api/mods", s.requireUser(s.createMod))
 	m.HandleFunc("GET /api/mods/{id}", s.requireUser(s.getMod))

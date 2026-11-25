@@ -405,3 +405,5 @@ Not tried in the game or with the map app.
 ## Folders (2026-11-25)
 
 The app's folders are one list for buildings, props and mods. A mod has `folder` ("" none) in `GET /api/v1/mods` and `GET /api/v1/mods/{id}`. `GET /api/v1/folders` is still the folders **buildings** are in, with how many (a folder made in the app with nothing in it is not listed), and `POST /api/v1/folders/rename` also moves the mods in the folder to the new name (409 `folder_exists` when the new name holds a building or a mod).
+
+A folder is renamed and deleted with the session (the app), not with a token: `POST /api/folders/rename {from, to}` (200 `{name}`; 404 no such folder; 409 `folder_exists` when `to` holds a building or a mod) and `DELETE /api/folders?name=` (204; what is in it stays, in no folder; 409 `folder_clash` when a building made by a map program would meet one with the same source id that is in no folder).
