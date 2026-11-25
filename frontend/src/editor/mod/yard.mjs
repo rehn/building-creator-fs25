@@ -198,7 +198,16 @@ export const SHEEP = {...COW, count: sheepOf, minWidth: SHEEP_MIN_WIDTH, foodPer
   fence: "sheepNetFence/sheepNetFence", pallets: {fills: "WOOL GOATMILK", max: 8}};
 
 /* ---------- The husbandry the game reads ---------- */
-const quad = (sx, sz) => ({p: [-sx/2, 0, -sz/2, -sx/2, 0, sz/2, sx/2, 0, sz/2, sx/2, 0, -sz/2], n: [0,1,0, 0,1,0, 0,1,0, 0,1,0], uv: [0,0, 0,1, 1,1, 1,0], i: [0, 1, 2, 0, 2, 3]});
+/**
+ * A horizontal plane sx along x and sz along z about its middle, turned `turn` degrees round Y (as three.js turns: x' = x cos + z sin, z' = -x sin + z cos) IN ITS CORNERS, not by a rotation of its node:
+ * the game moves a food or water plane up and down and, seen in a cow yard (2026-11-25), did not turn it with its trough, so the hay lay across the trough that was turned a quarter.
+ */
+export const planeQuad = (sx, sz, turn = 0) => {
+  const corners = [[-sx / 2, -sz / 2], [-sx / 2, sz / 2], [sx / 2, sz / 2], [sx / 2, -sz / 2]];
+  const a = turn * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a), r = v => Math.round(v * 1e9) / 1e9 || 0;
+  const p = corners.flatMap(([x, z]) => (turn ? [r(x * ca + z * sa), 0, r(-x * sa + z * ca)] : [x, 0, z]));
+  return {p, n: [0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0], uv: [0, 0, 0, 1, 1, 1, 1, 0], i: [0, 1, 2, 0, 2, 3]};
+};
 
 /**
  * The nodes, placeable XML and ground areas of a yard y (cowYard's shape) for n animals of cfg's kind. rects: what the way back along the fence goes round (footprints); clear: the polygon [[x, z] ...]
@@ -210,7 +219,7 @@ export function cowScene(c, y, cfg, n, {rects, clear, ground, under, troughs = f
   const stripesMat = y.pallet && doc.material("warningStripes_mat", {}, ["diffuse", "normal", "specular"].map((k, i) =>
     [["Texture", "Normalmap", "Glossmap"][i], `$data/shared/warningStripes_${k}.png`])); // the game finds the .dds
   const forage = doc.material("forage_mat", {diffuseColor: "0.42 0.45 0.2 1"}), water = doc.material("water_mat", {diffuseColor: "0.22 0.36 0.45 1"});
-  const plane = (name, t, mat) => shape(name, {translation: [t.plane[0], t.planeMax, t.plane[1]], ...(t.turn ? {rotation: [0, t.turn, 0]} : {}), shapeId: doc.shape(name, quad(...t.size)), castsShadows: false, receiveShadows: true, materialIds: mat});
+  const plane = (name, t, mat) => shape(name, {translation: [t.plane[0], t.planeMax, t.plane[1]], shapeId: doc.shape(name, planeQuad(...t.size, t.turn)), castsShadows: false, receiveShadows: true, materialIds: mat});
   const places = (group, name, list) => tg(group, [0, 0, 0], list.map((q, i) => tg(`${name}${i + 1}`, q.pos, [], {rotation: [0, q.rot, 0]})));
   const blocker = (b, i) => c.box(i ? `navmeshBlocker${i + 1}` : "navmeshBlocker", b, {static: true, collisionFilterGroup: "0x800000", collisionFilterMask: "0x1", buildNavMeshMask: "0xfe"});
   const nodes = [tg(cfg.animal === "COW" ? "cowFeatures" : "animalFeatures", [0, 0, 0], [
@@ -351,7 +360,6 @@ export function henScene(c, y, n, rects) {
   const ft = y.feedTroughs || [], wt = y.waterTroughs || [];
   const floor = y.nav && {...y.nav, rects: y.nav.rects.filter(r => r.inside)}, forage = (y.nav || ft.length) && doc.material("forage_mat", {diffuseColor: "0.42 0.45 0.2 1"});
   // a trough as the cow barn draws it: a base, four sides round a hollow, a collision box; a water trough has a water surface in the hollow
-  const quad = (sx, sz) => ({p: [-sx / 2, 0, -sz / 2, -sx / 2, 0, sz / 2, sx / 2, 0, sz / 2, sx / 2, 0, -sz / 2], n: [0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0], uv: [0, 0, 0, 1, 1, 1, 1, 0], i: [0, 1, 2, 0, 2, 3]});
   const drawTrough = (prefix, k, t, water) => troughNodes(c, prefix, k, t, water);
   const stripesMat = doc.material("warningStripes_mat", {}, ["diffuse", "normal", "specular"].map((k, i) =>
     [["Texture", "Normalmap", "Glossmap"][i], `$data/shared/warningStripes_${k}.png`])); // the game finds the .dds
@@ -373,7 +381,7 @@ export function henScene(c, y, n, rects) {
       : y.blockers.map(blocker)),
     // the troughs: drawn; the first feed trough has the game's food plane (it rises and falls with the feed) and the places where the hens stand to eat
     ...ft.flatMap((t, k) => drawTrough("feedTrough", k, t, false)), ...wt.flatMap((t, k) => drawTrough("waterTrough", k, t, true)),
-    ...(ft.length ? [shape("foodPlane", {translation: [ft[0].plane[0], ft[0].planeMax, ft[0].plane[1]], ...(ft[0].turn ? {rotation: [0, ft[0].turn, 0]} : {}), shapeId: doc.shape("foodPlane", quad(...ft[0].size)), castsShadows: false, receiveShadows: true, materialIds: forage}),
+    ...(ft.length ? [shape("foodPlane", {translation: [ft[0].plane[0], ft[0].planeMax, ft[0].plane[1]], shapeId: doc.shape("foodPlane", planeQuad(...ft[0].size, ft[0].turn)), castsShadows: false, receiveShadows: true, materialIds: forage}),
       tg("foodPlaces", [0, 0, 0], ft.flatMap(t => t.places).map((q, i) => tg(`foodPlace${i + 1}`, q.pos, [], {rotation: [0, q.rot, 0]})))] : []),
     tg("fence1", [0, 0, 0], y.fence.map((q, i) => tg(`fence1Node${i + 1}`, q))),
     // the ground under and round the building: the meadow's clear task takes the grass away there (and paints dirt), so the grass ends a little outside the walls
