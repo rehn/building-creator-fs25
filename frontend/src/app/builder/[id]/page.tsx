@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { api, ApiError, type Project } from "@/lib/api";
 import { useUser } from "@/lib/useUser";
-import { TopBar } from "@/components/TopBar";
+import { EditorShell } from "@/components/EditorShell";
 import { exportI3dAtlas, atlasFiles, atlasDdsFiles, type TextureMaps } from "@/builder/atlas.mjs";
 import { exportMod, MOD_STEM } from "@/builder/mod.mjs";
 import { makeItem } from "@/builder/item.mjs";
@@ -153,20 +153,20 @@ export default function BuilderPage() {
     return (<main className="page"><p className="error" role="alert">{loadError || userError}</p><Link className="btn" href="/">Back to my buildings</Link></main>);
   }
   return (
-    <div className="editor-page">
-      <TopBar user={user} />
-      <div className="editor-bar">
-        <Link className="btn back" href="/" aria-label={t("Back to my buildings")}>‹ {t("Buildings")}</Link>
-        <label className="sr" htmlFor="propName">Name</label>
-        <input id="propName" className="name" value={name} maxLength={100} disabled={!project} onChange={e => setName(e.target.value)} onBlur={commitName}
-          onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
-        <span className={"status" + (status === "error" || status === "conflict" ? " bad" : "")} role="status">{project ? STATUS_TEXT[status] : ""}</span>
+    <EditorShell
+      user={user} back={{ href: "/", label: t("Buildings"), aria: t("Back to my buildings") }}
+      nameId="propName" nameLabel="Name" name={name} onName={setName} onCommitName={commitName} nameDisabled={!project}
+      status={project ? STATUS_TEXT[status] : ""} bad={status === "error" || status === "conflict"}
+      notes={<>
         {note && <span className="status bad" role="alert">{note}</span>}
         {done && <span className="status" role="status">{done}</span>}
+      </>}
+      actions={<>
         <button type="button" disabled={!project} onClick={() => download(false)}>Download i3d + atlas</button>
         <button type="button" disabled={!project} onClick={() => download(true)}>Download game mod</button>
         <button type="button" disabled={!project} onClick={saveItem}>Save as item</button>
-      </div>
+      </>}
+    >
       {status === "conflict" && (
         <div className="editor-bar" role="alert">
           <span className="status bad">This project was changed in another tab or browser.</span>
@@ -177,6 +177,6 @@ export default function BuilderPage() {
       {project
         ? <Builder initial={project.data} onChange={m => { latest.current = m; queue({ data: m }); }} onReady={h => { handle.current = h; }} />
         : <p className="loading">Loading…</p>}
-    </div>
+    </EditorShell>
   );
 }

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { api, ApiError, templatePhotoUrl, type Project, type Template } from "@/lib/api";
 import { useUser } from "@/lib/useUser";
-import { TopBar } from "@/components/TopBar";
+import { EditorShell } from "@/components/EditorShell";
 import { t } from "@/i18n/index.mjs";
 import type { EditorHandle, Settings } from "@/editor/editor.mjs";
 import { authorName } from "@/editor/model.mjs";
@@ -169,19 +169,11 @@ export default function ProjectPage() {
   }
 
   return (
-    <div className="editor-page">
-      <TopBar user={user} />
-      <div className="editor-bar">
-        <Link className="btn back" href="/" aria-label={t("Back to my buildings")}>‹ {t("Buildings")}</Link>
-        <label className="sr" htmlFor="houseName">House name</label>
-        <input
-          id="houseName" className="name" value={name} maxLength={100} disabled={!project}
-          onChange={e => setName(e.target.value)} onBlur={commitName}
-          onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-        />
-        <span className={"status" + (status === "error" || status === "conflict" ? " bad" : "")} role="status">
-          {project ? STATUS_TEXT[status] : ""}
-        </span>
+    <EditorShell
+      user={user} back={{ href: "/", label: t("Buildings"), aria: t("Back to my buildings") }}
+      nameId="houseName" nameLabel="House name" name={name} onName={setName} onCommitName={commitName} nameDisabled={!project}
+      status={project ? STATUS_TEXT[status] : ""} bad={status === "error" || status === "conflict"}
+      actions={<>
         <input ref={fileInput} type="file" accept=".json,application/json" hidden onChange={async e => {
           const f = e.target.files?.[0];
           if (f && editor.current) await editor.current.importSettings(f);
@@ -189,7 +181,8 @@ export default function ProjectPage() {
         }} />
         <button type="button" disabled={!project} onClick={() => fileInput.current?.click()}>Import settings</button>
         <button type="button" disabled={!project} onClick={() => editor.current?.exportSettings(name)}>Download settings</button>
-      </div>
+      </>}
+    >
       {template && <TemplateBar template={template} status={publishing} onPublish={publishTemplate} />}
       {status === "conflict" && (
         <div className="editor-bar" role="alert">
@@ -208,7 +201,7 @@ export default function ProjectPage() {
             if (ed && (!project.thumbnail || !project.modelVersion || !full)) queue({ data: ed.getSettings() }, 1500);
           }} />
         : <p className="loading">Loading…</p>}
-    </div>
+    </EditorShell>
   );
 }
 
