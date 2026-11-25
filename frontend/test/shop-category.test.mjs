@@ -43,7 +43,7 @@ test("the kinds that are a simple building take the choice; a barn or a station 
     assert.ok(preset, id);
     assert.equal(where(placeableXml(sanitize({...preset.settings, shopCategory: "decoration"}), "x")).category, "decoration", id);
   }
-  for (const id of ["chicken", "cow", "sheep", "grainsilo", "fuelstation"]) {
+  for (const id of ["chicken", "cow", "sheep", "fuelstation"]) {
     const preset = PRESETS.find(x => x.kind === id), own = where(placeableXml(sanitize(preset.settings), "x")).category;
     assert.equal(where(placeableXml(sanitize({...preset.settings, shopCategory: "decoration"}), "x")).category, own, `${id} ignores it`);
   }

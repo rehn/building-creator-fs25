@@ -8,7 +8,7 @@ const farm = () => sanitize({kind: "house", width: 11, depth: 7, floors: 1, roof
   decor: [{asset: "s1gn01", x: 6, z: 2, rot: 90, y: 1}], wings: [{id: 1, wall: "right", pos: 0.5, width: 3, depth: 3, floors: 1}]});
 
 test("the convertible types are the simple walk-in buildings", () => {
-  assert.deepEqual(CONVERTIBLE_KINDS.slice().sort(), ["dealership", "defaultdealer", "fuelstation", "grainsilo", "house", "shed", "warehouse"]);
+  assert.deepEqual(CONVERTIBLE_KINDS.slice().sort(), ["dealership", "defaultdealer", "fuelstation", "house", "shed", "warehouse"]);
 });
 
 test("a house becomes a shed: the form stays, the furniture is listed as lost, the sleep point stays (any building may have one)", () => {
