@@ -156,6 +156,7 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /api/textures", s.requireUser(s.listTextures))
 	m.HandleFunc("POST /api/textures", s.requireUser(s.createTexture))
 	m.HandleFunc("GET /api/textures/{id}/{kind}", s.requireUser(s.textureFile))
+	m.HandleFunc("PUT /api/textures/{id}", s.requireUser(s.replaceTexture))
 	m.HandleFunc("PATCH /api/textures/{id}", s.requireUser(s.updateTexture))
 	m.HandleFunc("DELETE /api/textures/{id}", s.requireUser(s.deleteTexture))
 

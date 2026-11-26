@@ -56,51 +56,10 @@ func (s *Server) listTextures(w http.ResponseWriter, r *http.Request, u store.Us
 
 // createTexture stores a texture: a multipart form with name, size, meters, thumb (a small JPEG data URL) and the files diffuse, normal, specular.
 func (s *Server) createTexture(w http.ResponseWriter, r *http.Request, u store.User) {
-	allowSlowUpload(w)
-	if mt, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); mt != "multipart/form-data" {
-		writeError(w, http.StatusUnsupportedMediaType, "unsupported_media_type", "Send the texture as a form.")
+	fields, files, ok := readTextureForm(w, r)
+	if !ok {
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 3*maxTextureFile+maxThumbBytes+(1<<20))
-	mr, err := r.MultipartReader()
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_form", "Send the texture as a form.")
-		return
-	}
-	fields := map[string]string{}
-	files := map[string][]byte{}
-	for {
-		part, err := mr.NextPart()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			textureTooBig(w, err)
-			return
-		}
-		name := part.FormName()
-		switch name {
-		case "name", "size", "meters", "thumb":
-			b, err := io.ReadAll(io.LimitReader(part, maxThumbBytes+1))
-			if err != nil {
-				textureTooBig(w, err)
-				return
-			}
-			fields[name] = string(b)
-		case "diffuse", "normal", "specular":
-			b, err := io.ReadAll(io.LimitReader(part, maxTextureFile+1))
-			if err != nil {
-				textureTooBig(w, err)
-				return
-			}
-			if len(b) > maxTextureFile {
-				writeError(w, http.StatusRequestEntityTooLarge, "too_large", "A texture file is too big (4 MB at most).")
-				return
-			}
-			files[name] = b
-		}
-	}
-
 	name, ok := cleanText(fields["name"], 100)
 	if !ok {
 		writeError(w, http.StatusBadRequest, "invalid_name", "Use a name of 1 to 100 characters.")
@@ -140,6 +99,55 @@ func (s *Server) createTexture(w http.ResponseWriter, r *http.Request, u store.U
 		return
 	}
 	writeJSON(w, http.StatusCreated, tx)
+}
+
+// readTextureForm reads the form of a texture (create and replace): the fields name, size, meters, thumb and the files diffuse, normal, specular. It has written the error when it is not ok.
+func readTextureForm(w http.ResponseWriter, r *http.Request) (map[string]string, map[string][]byte, bool) {
+	allowSlowUpload(w)
+	if mt, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); mt != "multipart/form-data" {
+		writeError(w, http.StatusUnsupportedMediaType, "unsupported_media_type", "Send the texture as a form.")
+		return nil, nil, false
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 3*maxTextureFile+maxThumbBytes+(1<<20))
+	mr, err := r.MultipartReader()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_form", "Send the texture as a form.")
+		return nil, nil, false
+	}
+	fields := map[string]string{}
+	files := map[string][]byte{}
+	for {
+		part, err := mr.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			textureTooBig(w, err)
+			return nil, nil, false
+		}
+		name := part.FormName()
+		switch name {
+		case "name", "size", "meters", "thumb":
+			b, err := io.ReadAll(io.LimitReader(part, maxThumbBytes+1))
+			if err != nil {
+				textureTooBig(w, err)
+				return nil, nil, false
+			}
+			fields[name] = string(b)
+		case "diffuse", "normal", "specular":
+			b, err := io.ReadAll(io.LimitReader(part, maxTextureFile+1))
+			if err != nil {
+				textureTooBig(w, err)
+				return nil, nil, false
+			}
+			if len(b) > maxTextureFile {
+				writeError(w, http.StatusRequestEntityTooLarge, "too_large", "A texture file is too big (4 MB at most).")
+				return nil, nil, false
+			}
+			files[name] = b
+		}
+	}
+	return fields, files, true
 }
 
 func textureTooBig(w http.ResponseWriter, err error) {
@@ -200,4 +208,51 @@ func (s *Server) deleteTexture(w http.ResponseWriter, r *http.Request, u store.U
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// replaceTexture replaces the maps and the preview of a texture that is edited again (PUT /api/textures/{id}, the form of a new texture; the name and meters only if sent).
+func (s *Server) replaceTexture(w http.ResponseWriter, r *http.Request, u store.User) {
+	fields, files, ok := readTextureForm(w, r)
+	if !ok {
+		return
+	}
+	var d store.TextureData
+	if v, has := fields["name"]; has {
+		name, ok := cleanText(v, 100)
+		if !ok {
+			writeError(w, http.StatusBadRequest, "invalid_name", "Use a name of 1 to 100 characters.")
+			return
+		}
+		d.Name = name
+	}
+	if v, has := fields["meters"]; has {
+		meters, err := strconv.ParseFloat(v, 64)
+		if err != nil || !validMeters(meters) {
+			writeError(w, http.StatusBadRequest, "invalid_meters", "The real size must be more than 0 and at most 100 metres.")
+			return
+		}
+		d.Meters = meters
+	}
+	size, err := strconv.Atoi(fields["size"])
+	if err != nil || !validTextureSide(size) {
+		writeError(w, http.StatusBadRequest, "invalid_size", "The size must be a power of two from 64 to 2048.")
+		return
+	}
+	if !validThumbnail(fields["thumb"]) {
+		writeError(w, http.StatusBadRequest, "invalid_thumb", "The preview picture is not valid or is too big.")
+		return
+	}
+	for _, k := range []string{"diffuse", "normal", "specular"} {
+		if side, ok := ddsSide(files[k]); !ok || side != size {
+			writeError(w, http.StatusBadRequest, "invalid_files", "The "+k+" map is missing, or isn't a DDS file of the size given.")
+			return
+		}
+	}
+	d.Size, d.Thumb, d.Diffuse, d.Normal, d.Specular = size, fields["thumb"], files["diffuse"], files["normal"], files["specular"]
+	tx, err := s.st.ReplaceTexture(r.Context(), u.ID, r.PathValue("id"), d)
+	if err != nil {
+		textureError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, tx)
 }
