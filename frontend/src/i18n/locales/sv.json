@@ -1133,5 +1133,17 @@
   "Edit picture": "Redigera bilden",
   "Save changes": "Spara ändringar",
   "The picture of that texture could not be read.": "Texturens bild gick inte att läsa.",
-  "You are editing “{name}”. Save puts the new picture in its place: what uses it gets the new picture.": "Du redigerar “{name}”. Spara lägger den nya bilden på dess plats: det som använder den får den nya bilden."
+  "You are editing “{name}”. Save puts the new picture in its place: what uses it gets the new picture.": "Du redigerar “{name}”. Spara lägger den nya bilden på dess plats: det som använder den får den nya bilden.",
+  "Type in the game": "Typ i spelet",
+  "Several game objects: the mod defines its own type": "Flera spelobjekt: modden definierar en egen typ",
+  "Farmhouse: the player can sleep": "Bondgård: spelaren kan sova",
+  "Garage with a workshop": "Garage med verkstad",
+  "Selling point: grain intake": "Inköpsställe: spannmålsinlastning",
+  "Buying station: fuel area": "Köpstation: tankplats",
+  "Warehouse: pallet shop": "Lager: pallbutik",
+  "Vehicle shop: the mod defines its type": "Fordonsbutik: modden definierar sin typ",
+  "Chicken pen": "Hönshage",
+  "Cow pen": "Kohage",
+  "Sheep pen": "Fårhage",
+  "Making the mod this type takes away: {names}. (Undo brings it back.)": "Att göra modden till den här typen tar bort: {names}. (Ångra tar tillbaka det.)"
 }

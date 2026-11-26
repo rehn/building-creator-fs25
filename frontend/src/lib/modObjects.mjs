@@ -190,3 +190,37 @@ export function fenceProblems(objects, rects) {
   }
   return out;
 }
+
+/**
+ * The types of placeable a mod can be made into, to choose from (Lars): the game's own, as the exporter makes them from the mod's game objects (kinds/modframe.mjs placeable, kinds/gameobjects.mjs
+ * sharedPlaceable). id is the group of game objects the type needs ("decoration" needs none), group the same or null, gameType the game's type (null: the game has none, the mod defines it), name for the player.
+ */
+export const PLACEABLE_TYPES = [
+  {id: "decoration", group: null, gameType: "simplePlaceable", name: "Decoration"},
+  {id: "sleep", group: "sleep", gameType: "farmhouse", name: "Farmhouse: the player can sleep"},
+  {id: "workshop", group: "workshop", gameType: "garageWorkshopSolarPanels", name: "Garage with a workshop"},
+  {id: "intake", group: "intake", gameType: "sellingStation", name: "Selling point: grain intake"},
+  {id: "pump", group: "pump", gameType: "buyingStation", name: "Buying station: fuel area"},
+  {id: "warehouse", group: "warehouse", gameType: "warehouse", name: "Warehouse: pallet shop"},
+  {id: "vehicleshop", group: "vehicleshop", gameType: null, name: "Vehicle shop: the mod defines its type"},
+  {id: "hens", group: "hens", gameType: "chickenHusbandryPasture", name: "Chicken pen"},
+  {id: "cows", group: "cows", gameType: "cowHusbandryPasture", name: "Cow pen"},
+  {id: "sheep", group: "sheep", gameType: "sheepHusbandry", name: "Sheep pen"},
+];
+
+/** The groups of game objects a mod has (the animals' objects are of the mod's animal). */
+const groupsIn = (objects, animal) => [...new Set(objects.map(o => groupOf(o.type, animal)).filter(Boolean))];
+
+/** What type the mod is: "decoration" with no game objects, the group's id with one group, "several" with more (the exporter then makes a type of the mod's own). */
+export const placeableOf = (objects, animal = "hens") => {
+  const g = groupsIn(objects, animal);
+  return g.length === 0 ? "decoration" : g.length === 1 ? g[0] : "several";
+};
+
+/** What choosing a type changes: the groups to take away (the ones the type does not need) and the group to add (null: nothing, it is there or the type needs none). */
+export function typeChange(objects, typeId, animal = "hens") {
+  const t = PLACEABLE_TYPES.find(x => x.id === typeId);
+  if (!t) throw new Error("There is no placeable type " + typeId + ".");
+  const present = groupsIn(objects, animal);
+  return {remove: present.filter(g => g !== t.group), add: t.group && !present.includes(t.group) ? t.group : null};
+}
