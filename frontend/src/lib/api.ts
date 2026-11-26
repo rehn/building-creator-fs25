@@ -258,6 +258,8 @@ export const api = {
     if (!res.ok) throw new ApiError(res.status, "file", `Couldn't load the ${kind} map (${res.status}).`);
     return res.arrayBuffer();
   },
+  /** A texture that is edited again: the finished maps, the preview and the size replace the old ones (the form of a new texture; the name and meters only if sent). */
+  replaceTexture: (id: string, form: FormData) => send<Texture>("PUT", "/textures/" + encodeURIComponent(id), form),
   updateTexture: (id: string, patch: { name?: string; meters?: number }) => request<Texture>("PATCH", "/textures/" + encodeURIComponent(id), patch),
   deleteTexture: (id: string) => request<void>("DELETE", "/textures/" + encodeURIComponent(id)),
 

@@ -1129,5 +1129,9 @@
   "Softness": "Mjukhet",
   "The brush": "Penseln",
   "The photo, to retouch with a brush": "Fotot, att retuschera med en pensel",
-  "Undo the last stroke": "Ångra senaste penseldraget"
+  "Undo the last stroke": "Ångra senaste penseldraget",
+  "Edit picture": "Redigera bilden",
+  "Save changes": "Spara ändringar",
+  "The picture of that texture could not be read.": "Texturens bild gick inte att läsa.",
+  "You are editing “{name}”. Save puts the new picture in its place: what uses it gets the new picture.": "Du redigerar “{name}”. Spara lägger den nya bilden på dess plats: det som använder den får den nya bilden."
 }

@@ -10,13 +10,14 @@ import { t } from "@/i18n/index.mjs";
 import { makePhotoTexture, photoTextureDds, squareCrop, nearestPow2 } from "@/editor/photoTexture.mjs";
 import { prepareSource, retouch, COLOR_LIMITS } from "@/editor/photoEdit.mjs";
 import { confirmDialog } from "@/components/dialog.mjs";
+import { decodeDds } from "@/editor/dds.mjs";
 
 type Picture = { width: number; height: number; rgba: Uint8ClampedArray };
 /** Four corners (top left, top right, bottom right, bottom left) as fractions of the photo. */
 type Quad = [number, number][];
 /** A stroke of the retouching brush (photoEdit.mjs retouch): r a share of the shorter side, soft 0-1, points as fractions of the photo as it was read. */
 type Stroke = { type: "clone" | "paint"; r: number; soft: number; points: [number, number][]; dx?: number; dy?: number; color?: string };
-type Draft = { file: File; original: Picture; picture: Picture; flipX: boolean; flipY: boolean; turn: number; quad: Quad | null; strokes: Stroke[]; brightness: number; contrast: number; saturation: number; hue: number; name: string; zoom: number; cx: number; cy: number; rotate: number; flatten: number; size: number; meters: number; seamless: boolean; bump: number; mine: boolean; whole: boolean; background: string; margin: number };
+type Draft = { file: File; original: Picture; picture: Picture; flipX: boolean; flipY: boolean; turn: number; quad: Quad | null; strokes: Stroke[]; replacing: string | null; brightness: number; contrast: number; saturation: number; hue: number; name: string; zoom: number; cx: number; cy: number; rotate: number; flatten: number; size: number; meters: number; seamless: boolean; bump: number; mine: boolean; whole: boolean; background: string; margin: number };
 
 /** The part of the picture that is used: all of it for a logo or a sign (stretched to the square), else the square frame. */
 const cropOf = (d: Draft) => d.whole ? { x: 0, y: 0, w: 1, h: 1 } : squareCrop(d.picture.width, d.picture.height, d);
@@ -36,6 +37,12 @@ const TEXT = {
   right: "I have the right to use this photo, and to put it in a mod I share.",
 };
 const SIZES = [256, 512, 1024, 2048];
+
+/** A draft of a picture as it is read: nothing edited, the frame the whole picture, 1024 pixels, a metre. */
+const blankDraft = (file: File, picture: Picture, extra: Partial<Draft> = {}): Draft => ({
+  file, original: picture, picture, flipX: false, flipY: false, turn: 0, quad: null, strokes: [], replacing: null, brightness: 0, contrast: 0, saturation: 0, hue: 0, name: "",
+  zoom: 1, cx: 0.5, cy: 0.5, rotate: 0, flatten: 0, size: 1024, meters: 1, seamless: false, bump: 2, mine: false, whole: false, background: "#ffffff", margin: 0, ...extra,
+});
 const MAX_SIDE = 3072; // a bigger photo is shrunk while it is read (memory)
 const PREVIEW = 256;
 
@@ -216,8 +223,19 @@ export default function TexturesPage() {
     setError(""); setEditing(null); setMode("crop"); setClone({ from: null, off: null });
     try {
       const picture = await readPicture(file);
-      setDraft({ file, original: picture, picture, flipX: false, flipY: false, turn: 0, quad: null, strokes: [], brightness: 0, contrast: 0, saturation: 0, hue: 0, name: file.name.replace(/\.[^.]+$/, "").slice(0, 100), zoom: 1, cx: 0.5, cy: 0.5, rotate: 0, flatten: 0, size: 1024, meters: 1, seamless: false, bump: 2, mine: false, whole: false, background: "#ffffff", margin: 0 });
+      setDraft(blankDraft(file, picture, { name: file.name.replace(/\.[^.]+$/, "").slice(0, 100) }));
     } catch { setError(t("That file isn’t a picture the browser can read (use a JPEG, PNG or WebP).")); }
+  }
+
+  /** A saved texture is edited again: its finished picture is opened as if it were a photo, and Save puts the result in the same texture (so what uses it gets the new picture). */
+  async function editPicture(x: Texture) {
+    setError(""); setEditing(null); setBusy(true);
+    try {
+      const d = decodeDds(new Uint8Array(await api.textureFile(x.id, "diffuse")));
+      const picture = { width: d.width, height: d.height, rgba: new Uint8ClampedArray(d.data) };
+      setMode("crop"); setClone({ from: null, off: null });
+      setDraft(blankDraft(new File([], x.name), picture, { name: x.name, size: x.size, meters: x.meters, mine: true, replacing: x.id }));   // (the right to the photo was said when it was made)
+    } catch { setError(t("The picture of that texture could not be read.")); } finally { setBusy(false); }
   }
 
   async function save() {
@@ -239,8 +257,8 @@ export default function TexturesPage() {
       form.append("diffuse", blobOf(dds.diffuse), "diffuse.dds");
       form.append("normal", blobOf(dds.normal), "normal.dds");
       form.append("specular", blobOf(dds.specular), "specular.dds");
-      const made = await api.createTexture(form);
-      setItems(list => [made, ...(list ?? [])]);
+      const made = draft.replacing ? await api.replaceTexture(draft.replacing, form) : await api.createTexture(form);
+      setItems(list => (draft.replacing ? (list ?? []).map(x => (x.id === made.id ? made : x)) : [made, ...(list ?? [])]));
       setDraft(null);
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
@@ -311,6 +329,7 @@ export default function TexturesPage() {
         <p className="hint">{t("Shown twice across and down, so you can see where it repeats.")}</p>
       </div>
       <div className="item-fields">
+        {draft.replacing && <p className="hint">{t("You are editing “{name}”. Save puts the new picture in its place: what uses it gets the new picture.", { name: draft.name })}</p>}
         <label>Name <input type="text" value={draft.name} maxLength={100} onChange={e => change({ name: e.target.value })} /></label>
         <label className="choice"><input type="checkbox" checked={draft.whole} onChange={e => change({ whole: e.target.checked })} /> Keep the whole picture (for a logo or a sign)</label>
         <p className="hint">The whole picture is stretched to the square, nothing is cut off. On a face set to “Fit to face” it comes back at its own proportions. Zoom, straighten and the seamless option are not used.</p>
@@ -359,7 +378,7 @@ export default function TexturesPage() {
         </label>
         <p className="hint">The texture is private to you. A mod you share contains it, so you answer for the right to share it.</p>
         <div className="row">
-          <button type="button" className="primary" onClick={save} disabled={busy || !draft.name.trim() || !draft.mine || draft.meters <= 0}>{busy ? "Making the texture…" : "Save texture"}</button>
+          <button type="button" className="primary" onClick={save} disabled={busy || !draft.name.trim() || !draft.mine || draft.meters <= 0}>{busy ? "Making the texture…" : draft.replacing ? t("Save changes") : "Save texture"}</button>
           <button type="button" onClick={() => setDraft(null)} disabled={busy}>Cancel</button>
         </div>
       </div>
@@ -407,6 +426,7 @@ export default function TexturesPage() {
                       <small>{x.size} × {x.size} px · {x.meters} m</small>
                     </div>
                     <div className="actions">
+                      <button type="button" onClick={() => editPicture(x)} disabled={busy}>{t("Edit picture")}</button>
                       <button type="button" onClick={() => { setDraft(null); setEditing({ tex: x, name: x.name, meters: x.meters }); }} disabled={busy}>Change</button>
                       <button type="button" className="danger" onClick={() => remove(x)} disabled={busy}>Delete</button>
                     </div>
