@@ -66,6 +66,35 @@ export function missingFiles(i3dText, names) {
   return readI3d(i3dText).own.map(base).filter(f => !have.has(stem(f)));
 }
 
+const normPath = p => String(p).replace(/\\/g, "/").split("/").reduce((o, s) => { if (s === "..") o.pop(); else if (s && s !== ".") o.push(s); return o; }, []).join("/");
+
+/**
+ * Sorts the picked files (paths: a file's path in the picked folder, or just its name) by what the i3d at i3dPath needs. Written for the folder
+ * fs25ModelExporter makes: the i3d's own files at the paths it names (relative to it), the game's textures at data/<rest> for "$data/<rest>" (copies, so
+ * the preview can draw them; the item keeps the $data reference and the game's own file). A .dds stands in for a .png and the other way round.
+ * Files picked flat (all in one folder) are matched by name.
+ * -> {own: paths to upload, game: Map("$data/..." -> the path of its copy), missing: names of own files not picked, leftOut: paths the item does not use}.
+ */
+export function sortFiles(i3dText, i3dPath, paths) {
+  const info = readI3d(i3dText), dir = normPath(i3dPath).split("/").slice(0, -1).join("/"), at = p => (dir ? dir + "/" : "") + p;
+  const gameDir = at("data/").toLowerCase(), isGame = p => normPath(p).toLowerCase().startsWith(gameDir);
+  const index = new Map(paths.map(p => [normPath(p).toLowerCase(), p]));
+  const find = rel => {
+    const k = normPath(rel).toLowerCase(), other = k.replace(/\.(png|dds)$/, m => m === ".png" ? ".dds" : ".png");
+    return index.get(k) ?? (other !== k ? index.get(other) : undefined);
+  };
+  const flat = paths.filter(p => !isGame(p) && normPath(p) !== normPath(i3dPath));
+  const own = [], missing = [];
+  for (const ref of info.own) {
+    const hit = find(at(ref)) ?? flat.find(p => stem(p) === stem(ref));
+    if (hit && !isGame(hit)) own.push(hit); else missing.push(base(ref));
+  }
+  const game = new Map();
+  for (const ref of info.game) { const hit = find(at("data/" + ref.replace(/^\$data\//, ""))); if (hit) game.set(ref, hit); }
+  const used = new Set(own);
+  return {own, game, missing, leftOut: paths.filter(p => !used.has(p) && !isGame(p) && normPath(p) !== normPath(i3dPath))};
+}
+
 /**
  * The triangles of an .obj ({positions: flat [x, y, z, ...], uvs: flat [u, v, ...] per corner or null, box: {min, max}}), leaving out the
  * groups (Giants Editor writes one per node, "g name") named in skip. uvs: when every corner of every face has a texture coordinate (f v/vt ...), else null.

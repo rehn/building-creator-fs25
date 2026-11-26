@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   assetType, assetIdOf, readI3d, missingFiles, readObj, normalizeMeta, assetSize, assetDef, withAssets,
-  placement, assetFolder, flattenI3d, nameFromFile, splitItems, troughAssets, importSettings, withImportSettings, turnedSize,
+  placement, assetFolder, flattenI3d, nameFromFile, splitItems, troughAssets, importSettings, withImportSettings, turnedSize, sortFiles,
 } from "../src/editor/assets.mjs";
 
 // What Giants Editor writes for a prop: the collision is the root (nonRenderable), the mesh a child,
@@ -281,4 +281,48 @@ test("normalizeMeta: a list picture is kept only when it is a small JPEG or PNG 
   assert.equal(normalizeMeta({icon: "data:text/html;base64,PHNjcmlwdD4="}).icon, "", "not an image");
   assert.equal(normalizeMeta({icon: ok + "A".repeat(30000)}).icon, "", "too big");
   assert.equal(normalizeMeta({}).icon, "");
+});
+
+// An export from fs25ModelExporter: a folder with the i3d, its .shapes, its own textures at the paths the i3d names, and the game's textures under data/.
+const EXPORTED = `<i3D name="gardenWell02.i3d">
+  <Files>
+    <File fileId="1" filename="$data/maps/mapEU/textures/props/gardenWell02_diffuse.png"/>
+    <File fileId="2" filename="textures/gardenWell02_normal.png"/>
+    <File fileId="3" filename="$data/shared/missing_spec.png"/>
+  </Files>
+  <Shapes externalShapesFile="gardenWell02.i3d.shapes"/>
+  <Scene><Shape name="well" shapeId="1" materialIds="1"/></Scene>
+</i3D>`;
+
+test("sortFiles: an exported folder: own files by path, the game's copies apart, nothing missing", () => {
+  const paths = ["gardenWell02/gardenWell02.i3d", "gardenWell02/gardenWell02.i3d.shapes", "gardenWell02/textures/gardenWell02_normal.dds",
+    "gardenWell02/data/maps/mapEU/textures/props/gardenWell02_diffuse.dds"];
+  const r = sortFiles(EXPORTED, "gardenWell02/gardenWell02.i3d", paths);
+  assert.deepEqual(r.own, ["gardenWell02/gardenWell02.i3d.shapes", "gardenWell02/textures/gardenWell02_normal.dds"]);
+  assert.deepEqual([...r.game], [["$data/maps/mapEU/textures/props/gardenWell02_diffuse.png", "gardenWell02/data/maps/mapEU/textures/props/gardenWell02_diffuse.dds"]]);
+  assert.deepEqual(r.missing, []);
+  assert.deepEqual(r.leftOut, []);
+});
+
+test("sortFiles: a game copy is never an own file, not even when an own file has its stem; it is not left out either", () => {
+  const i3d = EXPORTED.replace("textures/gardenWell02_normal.png", "gardenWell02_diffuse.png");
+  const paths = ["m/a.i3d", "m/gardenWell02.i3d.shapes", "m/data/maps/mapEU/textures/props/gardenWell02_diffuse.dds", "m/stray.txt"];
+  const r = sortFiles(i3d, "m/a.i3d", paths);
+  assert.deepEqual(r.own, ["m/gardenWell02.i3d.shapes"]);
+  assert.deepEqual(r.missing, ["gardenWell02_diffuse.png"]);
+  assert.deepEqual(r.leftOut, ["m/stray.txt"]);
+});
+
+test("sortFiles: flat picks work as before (by name), folders are not needed", () => {
+  const r = sortFiles(EXPORTED, "gardenWell02.i3d", ["gardenWell02.i3d", "gardenWell02.i3d.shapes", "gardenWell02_normal.dds", "other.png"]);
+  assert.deepEqual(r.own, ["gardenWell02.i3d.shapes", "gardenWell02_normal.dds"]);
+  assert.equal(r.game.size, 0);
+  assert.deepEqual(r.missing, []);
+  assert.deepEqual(r.leftOut, ["other.png"]);
+});
+
+test("sortFiles: a $data reference with no copy is fine (the game has it), an own file that is not there is missing", () => {
+  const r = sortFiles(EXPORTED, "w/gardenWell02.i3d", ["w/gardenWell02.i3d", "w/gardenWell02.i3d.shapes"]);
+  assert.equal(r.game.size, 0);
+  assert.deepEqual(r.missing, ["gardenWell02_normal.png"]);
 });

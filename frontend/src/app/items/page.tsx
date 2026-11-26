@@ -7,7 +7,7 @@ import { TopBar } from "@/components/TopBar";
 import { t } from "@/i18n/index.mjs";
 import { KINDS } from "@/editor/model.mjs";
 import { i3dToObj } from "@/editor/shapesObj.mjs";
-import { diffuseFiles, readI3d, missingFiles, readObj, normalizeMeta, assetSize, nameFromFile, splitItems, importSettings, withImportSettings } from "@/editor/assets.mjs";
+import { diffuseFiles, readI3d, sortFiles, readObj, normalizeMeta, assetSize, nameFromFile, splitItems, importSettings, withImportSettings } from "@/editor/assets.mjs";
 import { createItemView, itemIcon, ddsPicture } from "@/editor/itemView.mjs";
 import { confirmDialog } from "@/components/dialog.mjs";
 
@@ -62,10 +62,23 @@ type Draft = {
 // An i3d is ISO-8859-1 text: written back the same way.
 const latin1 = (text: string, name: string) => new File([Uint8Array.from(text, c => c.charCodeAt(0) & 255)], name);
 const stemOf = (name: string) => name.split(/[\\/]/).pop()!.toLowerCase().replace(/\.(png|dds)$/, "");
-const fromPicked = (picked: File[]) => async (stem: string) => {
-  const f = picked.find(x => stemOf(x.name) === stem && /\.dds$/i.test(x.name));
-  return f ? { name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) } : null;
+// Where a picked file lies in the folder that was picked or dropped ("model/textures/x.dds"); just its name when files were picked one by one.
+const paths = new WeakMap<File, string>();
+const pathOf = (f: File) => paths.get(f) ?? (f.webkitRelativePath || f.name);
+// The picture of a file the i3d names: its own (found by name) or one of the game's ($data/...: the copy from the export, which is only used to draw
+// the preview and is not uploaded).
+const fromPicked = (own: File[], game: Map<string, File>) => async (ref: string) => {
+  const f = ref.startsWith("$") ? game.get(ref) : own.find(x => stemOf(x.name) === stemOf(ref));
+  return f && /\.dds$/i.test(f.name) ? { name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) } : null;
 };
+/** What the i3d needs of the picked files (sortFiles), as files. */
+function sortedFiles(i3dText: string, i3d: File, picked: File[]) {
+  const sorted: { own: string[]; game: Map<string, string>; missing: string[]; leftOut: string[] } = sortFiles(i3dText, pathOf(i3d), picked.map(pathOf)), file = (p: string) => picked.find(f => pathOf(f) === p)!;
+  return {
+    own: sorted.own.map(file), missing: sorted.missing, leftOut: sorted.leftOut.map(file),
+    game: new Map([...sorted.game].map(([ref, p]) => [ref, file(p)] as [string, File])),
+  };
+}
 
 /**
  * The picked files with an .obj among them: the one someone picked, or else one made from the i3d and its .shapes file (the same .obj Giants Editor
@@ -93,15 +106,13 @@ async function draftsFrom(files: File[]): Promise<Draft[]> {
   const i3d = picked.find(f => /\.i3d$/i.test(f.name))!, obj = picked.find(f => /\.obj$/i.test(f.name))!;
   const i3dText = await textOf(i3d), parts = splitItems(i3dText, await textOf(obj));
   if (parts.length < 2) return [first];
-  const names = picked.map(f => f.name);
   return Promise.all(parts.map(async part => {
-    const info = readI3d(part.i3d), need = new Set(info.own.map(stemOf));
-    const own = picked.filter(f => f !== i3d && f !== obj && need.has(stemOf(f.name)));
+    const info = readI3d(part.i3d), { own, missing, game } = sortedFiles(part.i3d, i3d, picked);
     const objPart = readObj(part.obj, info.hidden);
-    const look = await lookOf(part.i3d, objPart.uvs, fromPicked(picked));
+    const look = await lookOf(part.i3d, objPart.uvs, fromPicked(own, game));
     return {
-      files: [latin1(part.i3d, part.i3dFile), new File([part.obj], part.objFile), ...own],
-      name: part.name, positions: objPart.positions, look: look.look, missing: missingFiles(part.i3d, names), ignored: [], shared: false,
+      files: [latin1(part.i3d, part.i3dFile), new File([part.obj], part.objFile), ...own.filter(f => f !== i3d && f !== obj)],
+      name: part.name, positions: objPart.positions, look: look.look, missing, ignored: [], shared: false,
       meta: normalizeMeta({i3d: part.i3dFile, obj: part.objFile, hidden: info.hidden, box: objPart.box, mount: "floor", turn: 0, kinds: [], texture: look.texture}),
     } as Draft;
   }));
@@ -112,15 +123,14 @@ async function draftFrom(picked: File[]): Promise<Draft> {
   if (i3ds.length !== 1) throw new Error(i3ds.length ? "Pick only one .i3d file." : "Pick the item's .i3d file too.");
   if (objs.length !== 1) throw new Error(objs.length ? "Pick only one .obj file." : "Pick the item's .i3d.shapes file too (or an .obj of it: in Giants Editor, select it, then File → Export → OBJ). It's used for the preview and to place it.");
   const i3dText = await textOf(i3ds[0]), info = readI3d(i3dText);
-  const names = picked.map(f => f.name), missing = missingFiles(i3dText, names);
+  const { own, missing, game, leftOut } = sortedFiles(i3dText, i3ds[0], picked);
   const obj = readObj(await textOf(objs[0]), info.hidden);
-  const look = await lookOf(i3dText, obj.uvs, fromPicked(picked));
-  // Upload what the item uses; leave out anything else that was picked.
-  const needed = new Set(info.own.map(p => p.split(/[\\/]/).pop()!.toLowerCase().replace(/\.(png|dds)$/, "")));
-  const keep = picked.filter(f => f === i3ds[0] || f === objs[0] || needed.has(f.name.toLowerCase().replace(/\.(png|dds)$/, "")));
+  const look = await lookOf(i3dText, obj.uvs, fromPicked(own, game));
+  // Upload what the item uses (not the game's copies, they stay in the game); leave out anything else that was picked.
+  const keep = picked.filter(f => f === i3ds[0] || f === objs[0] || own.includes(f));
   return {
     files: keep, name: nameFromFile(i3ds[0].name), positions: obj.positions, look: look.look, missing,
-    ignored: picked.filter(f => !keep.includes(f)).map(f => f.name), shared: false,
+    ignored: leftOut.filter(f => f !== objs[0]).map(f => f.name), shared: false,
     meta: normalizeMeta({i3d: i3ds[0].name, obj: objs[0].name, hidden: info.hidden, box: obj.box, mount: "floor", turn: 0, kinds: [], texture: look.texture}),
   };
 }
@@ -132,12 +142,13 @@ const withIcon = (d: Draft) => ({ ...d.meta, icon: pictureOf(d), iconV: ICON_VER
 /** The look of a saved item: from its meta.texture, or else found in its i3d (the one picture it uses), from the files stored with it. */
 async function lookOfAsset(a: Asset, meta: Meta, uvs: number[] | null): Promise<{ texture: string; look?: Look }> {
   const names = a.files.map(f => f.name);
-  const find = async (stem: string) => {
-    const name = names.find(n => stemOf(n) === stem && /\.dds$/i.test(n));
+  const find = async (ref: string) => {
+    // the game's own pictures are not stored with the item
+    const name = ref.startsWith("$") ? undefined : names.find(n => stemOf(n) === stemOf(ref) && /\.dds$/i.test(n));
     return name ? { name, bytes: new Uint8Array(await api.assetFile(a.id, name)) } : null;
   };
   if (meta.texture) {
-    const f = uvs ? await find(stemOf(meta.texture)).catch(() => null) : null;
+    const f = uvs ? await find(meta.texture).catch(() => null) : null;
     const picture = f && ddsPicture(f.bytes);
     return picture && uvs ? { texture: f!.name, look: { uvs, picture } } : { texture: meta.texture };
   }
@@ -146,15 +157,37 @@ async function lookOfAsset(a: Asset, meta: Meta, uvs: number[] | null): Promise<
 }
 
 /**
- * How an item is drawn: when its i3d uses exactly one picture of its own (diffuse) for what is drawn, and the .obj has texture coordinates, and the
- * picture is a DDS the browser can decode: {texture (the file's name), look}. Otherwise grey (texture "").
+ * How an item is drawn: when its i3d uses exactly one picture (diffuse) for what is drawn, and the .obj has texture coordinates, and the picture is
+ * a DDS the browser can decode: {texture (the file's name), look}. A game picture ($data/...) is drawn only when find has a copy of it (an export
+ * from fs25ModelExporter has); it is not a file of the item, so texture stays "" and the editor's 3D view draws the item grey. Otherwise grey too.
  */
-async function lookOf(i3dText: string, uvs: number[] | null, find: (stem: string) => Promise<{ name: string; bytes: Uint8Array } | null>): Promise<{ texture: string; look?: Look }> {
+async function lookOf(i3dText: string, uvs: number[] | null, find: (ref: string) => Promise<{ name: string; bytes: Uint8Array } | null>): Promise<{ texture: string; look?: Look }> {
   const one = diffuseFiles(i3dText);
-  if (one.length !== 1 || one[0].startsWith("$") || !uvs) return { texture: "" };
-  const file = await find(stemOf(one[0]));
+  if (one.length !== 1 || !uvs) return { texture: "" };
+  const file = await find(one[0]);
   const picture = file && ddsPicture(file.bytes);
-  return picture ? { texture: file.name, look: { uvs, picture } } : { texture: "" };
+  return picture ? { texture: one[0].startsWith("$") ? "" : file.name, look: { uvs, picture } } : { texture: "" };
+}
+
+/** The files of what was dropped, folders too (their files with the path in the folder, see pathOf). */
+async function droppedFiles(dt: DataTransfer): Promise<File[]> {
+  const out: File[] = [];
+  const walk = async (entry: FileSystemEntry, dir: string): Promise<void> => {
+    if (entry.isFile) {
+      const f = await new Promise<File>((ok, no) => (entry as FileSystemFileEntry).file(ok, no));
+      paths.set(f, dir + f.name); out.push(f);
+    } else if (entry.isDirectory) {
+      const reader = (entry as FileSystemDirectoryEntry).createReader();
+      for (;;) {   // readEntries gives a part of the list at a time
+        const part = await new Promise<FileSystemEntry[]>((ok, no) => reader.readEntries(ok, no));
+        if (!part.length) break;
+        for (const e of part) await walk(e, dir + entry.name + "/");
+      }
+    }
+  };
+  const entries = [...dt.items].map(i => i.webkitGetAsEntry?.()).filter((e): e is FileSystemEntry => !!e);
+  for (const e of entries) await walk(e, "");
+  return out;
 }
 
 export default function ItemsPage() {
@@ -166,6 +199,7 @@ export default function ItemsPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const folderInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (user) api.assets().then(setItems).catch(e => setError(e.message));
@@ -199,9 +233,9 @@ export default function ItemsPage() {
     try { await action(); } catch (e) { setError(e instanceof Error ? e.message : "Something went wrong."); }
     setBusy(false);
   }
-  const pick = (list: FileList | null) => list && list.length && run(async () => {
+  const pick = (list: ArrayLike<File> | null) => list && list.length && run(async () => {
     setDraft(null); setQueue([]);
-    const [first, ...rest] = await draftsFrom([...list]);
+    const [first, ...rest] = await draftsFrom(Array.from(list));
     setDraft(startFrom(first)); setQueue(rest); setTotal(rest.length + 1);
   });
   // on to the next item of an export (or done)
@@ -337,13 +371,20 @@ export default function ItemsPage() {
   return (
     <>
       <TopBar user={user} />
-      <main className="page">
+      <main className="page" onDragOver={e => { if (user && !busy) e.preventDefault(); }} onDrop={e => {
+        if (!user || busy) return;
+        e.preventDefault();
+        const dropped = droppedFiles(e.dataTransfer);   // started before the first await: the event's items are gone after it
+        dropped.then(files => { pick(files); }, err => setError(err instanceof Error ? err.message : "Something went wrong."));
+      }}>
         <div className="page-head">
           <h2>Items</h2>
           <button className="primary" type="button" onClick={() => fileInput.current?.click()} disabled={!user || busy}>Import an item</button>
+          <button type="button" onClick={() => folderInput.current?.click()} disabled={!user || busy}>Import a folder</button>
           <input ref={fileInput} type="file" multiple hidden accept=".i3d,.shapes,.obj,.png,.dds" onChange={e => { pick(e.target.files); e.target.value = ""; }} />
+          <input ref={folderInput} type="file" hidden {...({ webkitdirectory: "" } as object)} onChange={e => { pick(e.target.files); e.target.value = ""; }} />
         </div>
-        <p className="hint">{t("Items you made in Giants Editor or in the modeller, to place inside your buildings or beside them. Pick the item's .i3d, its .i3d.shapes and any textures of its own (.dds or .png). Textures that come with the game ($data/...) need not be picked: the game has them, but this app can't see them, so an item that uses them is shown grey here and looks right in the game. An .obj of the item is not needed; if you pick one it is used for the preview instead.")}</p>
+        <p className="hint">{t("Items you made in Giants Editor or in the modeller, to place inside your buildings or beside them. Pick the item's .i3d, its .i3d.shapes and any textures of its own (.dds or .png), or pick or drop a whole folder from fs25ModelExporter. Textures that come with the game ($data/...) need not be picked: the game has them. A copy of them in the folder (data/...) is used for the preview here but is not saved with the item. An .obj of the item is not needed; if you pick one it is used for the preview instead.")}</p>
         {(error || userError) && <p className="error" role="alert">{error || userError}</p>}
         {form}
         {!items && !error && !userError && <p className="loading">Loading your items…</p>}
