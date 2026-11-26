@@ -24,7 +24,7 @@ import { FolderSelect } from "@/components/FolderSelect";
 import { useFolders } from "@/lib/useFolders";
 import { addPost, removePost, setPostType, placePost, choices, payload, modState, sameModState } from "@/lib/mods.mjs";
 import { History } from "@/editor/layout.mjs";
-import { groupsFree, addGroup, removeGroup, setObjectOf, settingsFor, objectsOfData, setPoint, addPoint, removePoint, animalOfData, countOfData, ANIMALS, groupOf, GROUPS, entranceBuilding, fenceProblems, fenceProblemList, insertPoint, MIN_POSTS } from "@/lib/modObjects.mjs";
+import { PLACEABLE_TYPES, placeableOf, typeChange, groupsFree, addGroup, removeGroup, setObjectOf, settingsFor, objectsOfData, setPoint, addPoint, removePoint, animalOfData, countOfData, ANIMALS, groupOf, GROUPS, entranceBuilding, fenceProblems, fenceProblemList, insertPoint, MIN_POSTS } from "@/lib/modObjects.mjs";
 
 type Kind = { id: string; name: string };
 type Groups = ReturnType<typeof projectGroups>;
@@ -349,6 +349,28 @@ export default function ModPage() {
     if (added) setSel({ kind: "object", object: added.id });
   }
 
+  /**
+   * The type of placeable the mod is made into (the game's own types: PLACEABLE_TYPES): what the type needs is added and what belongs to another type is taken away (asked first; one save,
+   * so Undo brings it back). The exporter makes the type of the mod's game objects, so this is the way to choose it.
+   */
+  async function chooseType(typeId: string) {
+    const { remove, add } = typeChange(objects, typeId, animal) as { remove: string[]; add: string | null };
+    if (remove.length === 0 && add === null) return;
+    if (remove.length) {
+      const names = remove.map(g => t(GROUPS.find((x: { id: string; name: string }) => x.id === g)?.name ?? g)).join(", ");
+      if (!await confirmDialog(t("Making the mod this type takes away: {names}. (Undo brings it back.)", { names }), { title: t("Type in the game"), confirm: t("Continue") })) return;
+    }
+    let next: ModObject[] = objects;
+    for (const g of remove) { const o = next.find(x => groupOf(x.type, animal) === g); if (o) next = removeGroup(next, o.id, animal) as ModObject[]; }
+    if (add) {
+      const door = entranceBuilding(draft.map(p => ({ kind: p.kind, rot: p.rot, data: datas.current.get(p.ref) }))), wall: string = door.wall;
+      const a = add in ANIMALS && door.index >= 0 ? around(draft[door.index].id) : around();
+      next = addGroup(next, add, settingsFor(a), a.at, { wall }) as ModObject[];
+    }
+    setObjects(next);
+    save(add && add in ANIMALS ? { objects: next, animal: add } : { objects: next });
+  }
+
   /** One row of the tree, as the building editor draws it: a caret (when it has children) and a button. */
   const row = (key: string, depth: number, label: string, on: boolean, choose: () => void, opts: { kids?: boolean; hint?: string; strong?: boolean; add?: () => void; warn?: string } = {}) => (
     <TreeRow key={key} depth={depth} label={label} on={on} onChoose={choose} hint={opts.hint} strong={opts.strong} warn={opts.warn}
@@ -430,6 +452,12 @@ export default function ModPage() {
               </section>
               <section className="hx-card">
                 <h3 className="hx-card-h">{t("Game mod")}</h3>
+                <label className="stack">{t("Type in the game")}
+                  <select value={placeableOf(objects, animal)} onChange={e => chooseType(e.target.value)} disabled={busy}>
+                    {placeableOf(objects, animal) === "several" && <option value="several" disabled>{t("Several game objects: the mod defines its own type")}</option>}
+                    {PLACEABLE_TYPES.map((x: { id: string; name: string; gameType: string | null }) => <option key={x.id} value={x.id}>{t(x.name)}{x.gameType ? ` (${x.gameType})` : ""}</option>)}
+                  </select>
+                </label>
                 <p className="hint">{t("Makes the whole mod as one placeable in the game: the buildings and props where you have put them, and the game objects. Put the zip in the game's mods folder.")}</p>
                 <div className="row"><button type="button" className="primary" onClick={generate} disabled={busy || draft.length === 0}>{t("Generate game mod")}</button></div>
                 {made && <p className="hint">{t("Made {file}.", { file: made.name })} {t("Not tried in the game yet.")}</p>}
