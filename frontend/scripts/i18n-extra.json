@@ -80,7 +80,7 @@
   "(an item no longer in your list)",
   "Its size comes from the model: {value} m.",
   "Pick the item's .i3d.shapes file too (or an .obj of it: in Giants Editor, select it, then File → Export → OBJ). It's used for the preview and to place it.",
-  "Items you made in Giants Editor or in the modeller, to place inside your buildings or beside them. Pick the item's .i3d, its .i3d.shapes and any textures of its own (.dds or .png). Textures that come with the game ($data/...) need not be picked: the game has them, but this app can't see them, so an item that uses them is shown grey here and looks right in the game. An .obj of the item is not needed; if you pick one it is used for the preview instead.",
+  "Items you made in Giants Editor or in the modeller, to place inside your buildings or beside them. Pick the item's .i3d, its .i3d.shapes and any textures of its own (.dds or .png), or pick or drop a whole folder from fs25ModelExporter. Textures that come with the game ($data/...) need not be picked: the game has them. A copy of them in the folder (data/...) is used for the preview here but is not saved with the item. An .obj of the item is not needed; if you pick one it is used for the preview instead.",
   "Sleep point",
   "Vehicle workshop",
   "Vehicle shop",
