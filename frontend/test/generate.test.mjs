@@ -34,7 +34,7 @@ test("parseGenerate: a building without an id or the same id twice is one failed
 });
 
 // a fake Go API that remembers what it was sent
-function fakeApi({ kept = [] } = {}) {
+function fakeApi({ kept = [], editedSettings = null } = {}) {
   const log = { posts: [], puts: [] };
   let n = 0;
   const fetchImpl = async (url, init) => {
@@ -47,6 +47,8 @@ function fakeApi({ kept = [] } = {}) {
       const status = kept.includes(body.sourceId) ? "kept" : "created";
       return json(status === "created" ? 201 : 200, { status, building: { id: "id" + ++n, name: body.name, kind: body.settings.kind, version: 1 } });
     }
+    const one = u.pathname.match(/^\/api\/v1\/buildings\/([^/]+)$/);
+    if (one && (init?.method || "GET") === "GET") return editedSettings ? json(200, { id: one[1], version: 4, edited: true, settings: editedSettings }) : json(404, { error: "not_found" });
     const m = u.pathname.match(/^\/api\/v1\/buildings\/([^/]+)\/model$/);
     if (m && init.method === "PUT") { log.puts.push({ id: m[1], version: u.searchParams.get("version"), form: init.body, auth: init.headers.get("authorization") }); return new Response(null, { status: 204 }); }
     return json(404, { error: "not_found" });
@@ -89,6 +91,30 @@ test("generate: a building a person has changed is kept: no files are made or se
   assert.equal(out.buildings[0].kept, true);
   assert.equal(made, 0);
   assert.equal(log.puts.length, 0);
+});
+
+test("generate: a kept building answers with its real placement and parts, from what is saved in the app", async () => {
+  const { fetchImpl, log } = fakeApi({ kept: ["way/1"], editedSettings: { kind: "house", width: 14, depth: 9, wings: [] } });
+  const out = await generate(parseGenerate({ folder: "A", buildings: [b("way/1")] }), { api: "http://api", authorization: "Bearer bc_x", fetchImpl, make: fakeMake });
+  const e = out.buildings[0];
+  assert.equal(e.kept, true);
+  assert.equal(e.placement.width, 14);
+  assert.equal(e.placement.depth, 9);
+  assert.equal(e.footprint.parts.length, 1);
+  assert.equal(e.version, 4);
+  assert.equal(log.puts.length, 0);
+});
+
+test("generate in scenery mode: a kept building comes with its files, made from what is saved in the app", async () => {
+  const { fetchImpl } = fakeApi({ kept: ["way/1"], editedSettings: { kind: "house", width: 14, depth: 9, wings: [] } });
+  const seen = [];
+  const make = async (settings, name, opts) => { seen.push({ settings, opts }); return { files: new Map([["house.i3d", new Uint8Array([1, 2])]]) }; };
+  const out = await generate(parseGenerate({ folder: "A", mode: "scenery", textureSize: 256, buildings: [b("way/1")] }), { api: "http://api", authorization: "Bearer bc_x", fetchImpl, make });
+  assert.equal(out.buildings[0].kept, true);
+  assert.equal(out.buildings[0].files[0].path, "house.i3d");
+  assert.equal(seen[0].settings.width, 14);
+  assert.equal(seen[0].opts.textureSize, 256);
+  assert.equal(Object.keys(out.blobs).length, 1);
 });
 
 test("generate: a failure while making files is that building's error", async () => {

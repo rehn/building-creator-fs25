@@ -7,6 +7,7 @@
 // Each building is made one after the other: the work (surfaces, DDS) is CPU and runs on Node's one thread anyway.
 import { osmToHouse } from "../editor/osm.mjs";
 import { sceneryAnswer } from "./scenery.mjs";
+import { editedGeometry } from "./edited.mjs";
 
 export const MAX_BUILDINGS = 20;
 const MODES = ["placeable", "scenery"];
@@ -49,6 +50,16 @@ const apiError = async res => {
   return { status: res.status, error: { code: e?.error || "api_error", message: e?.message || `The API answered ${res.status}.` } };
 };
 
+/** What is saved for a building now: {settings, version}, or null when it cannot be read (the answer then has the footprint's own placement). */
+async function currentSettings(fetchImpl, base, headers, id) {
+  try {
+    const res = await fetchImpl(`${base}/api/v1/buildings/${id}`, { headers: new Headers(headers) });
+    if (!res.ok) return null;
+    const b = await res.json();
+    return b && b.settings && typeof b.settings === "object" ? { settings: b.settings, version: b.version } : null;
+  } catch { return null; }
+}
+
 export async function generate(parsed, { api, authorization, fetchImpl = fetch, make, onProgress }) {
   const base = api.replace(/\/+$/, "");
   const headers = { authorization, accept: "application/json" };
@@ -76,8 +87,18 @@ export async function generate(parsed, { api, authorization, fetchImpl = fetch, 
     const { status, building } = await res.json();
     const entry = { ok: true, id: b.id, buildingId: building.id, name: building.name, kind: building.kind, version: building.version, placement: r.placement, footprint: r.footprint, notes: r.notes };
     if (status === "kept") {
-      // a person changed it in the app: left alone, and the placement is from the footprint, not from what the person has made of it
-      out.push({ ...entry, kept: true, edited: true, notes: [...r.notes, "Changed in the app since it was generated, so it was left as it is."] });
+      // a person changed it in the app: left alone. Its placement, parts and files are those of what is saved there, with its middle where the footprint put it
+      // (a generated building does not remember where it stands; the program that sent the footprint does)
+      const kept = { ...entry, kept: true, edited: true, notes: [...r.notes, "Changed in the app since it was generated, so it was left as it is."] };
+      const cur = await currentSettings(fetchImpl, base, headers, building.id);
+      if (!cur) { out.push(kept); continue; }
+      const g = editedGeometry(cur.settings, r.placement);
+      Object.assign(kept, { version: cur.version, placement: g.placement, footprint: g.footprint });
+      if (scenery) {
+        try { kept.files = sceneryAnswer((await make(cur.settings, building.name, { textureSize: parsed.textureSize })).files, blobs); }
+        catch (e) { out.push({ ok: false, id: b.id, buildingId: building.id, code: "files_failed", error: `The files could not be made: ${e && e.message ? e.message : e}` }); continue; }
+      }
+      out.push(kept);
       continue;
     }
     if (scenery) {
