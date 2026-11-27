@@ -10,6 +10,7 @@ This page says what exists today, and (clearly marked) what is planned for makin
 | [What a token may do](#get-apiv1me) (`GET /api/v1/me`) | Works today |
 | [Folders](#folders) (`?folder=`, `GET /api/v1/folders`) | Works today |
 | [Creating buildings and sending their files](#writing-buildings-v1-write-tokens) (`POST /api/v1/buildings`, `PUT .../model`, tokens that may write) | Works today (not yet tried against a real map program) |
+| [A building as it is saved now, as scenery](#get-apiv1buildingsidscenery) (`GET /api/v1/buildings/{id}/scenery`) | Works today (not tried with a map program) |
 | [Generating buildings from OSM footprints](#generating-buildings-from-osm-planned) (`POST /api/v1/generate`) | **Available**, in both modes (`"placeable"` by default, `"scenery"`); see `docs/PLAN_OSM.md` |
 
 ## Basics
@@ -254,7 +255,7 @@ Answer, `200`, in the order you sent them (a building that could not be made has
 | `footprint` | The whole building (main part **and wings**) as rectangles: `{ "angle": 0, "parts": [{ "part": "main", "x": 1210.5, "y": 880.7, "width": 12, "depth": 7 }, { "part": "wing", ... }] }`. Each rectangle's middle `x, y` is in the map's plane (metres, x east, y north); every rectangle is turned by the same `angle` (degrees counter-clockwise from east) with `width` along the building's x axis. The first is the main part, equal to `placement`. Use it to clear trees, level the ground or check overlaps |
 | `notes` | What was guessed, fitted or left out. Show them to the user or log them |
 | `ok: false` | `error` says why and `code` is one of `invalid_footprint` (fewer than three points or no numbers), `too_small` (under 6 m2, or a main part under 2.5 m on a side), `too_large` (main part over 60 x 50 m; the long side counts as the width), `degenerate` (no shape found), `invalid_building` (missing or repeated id), `files_failed` (or the API's own code); the building was not made |
-| `kept: true` | A person changed it in the app, so it was left alone and no files were made. `placement` is then computed from the footprint you sent, not from the building as it is now |
+| `kept: true` | A person changed it in the app, so it was left alone and not made again. `placement` and `footprint` are then those of the building **as it is saved now** (its middle where your footprint put it, its size and wings from the app), `version` is its current one and, in `"scenery"` mode, `files` and `blobs` are made from it, so a map program can use the answer as it is. If the saved building cannot be read, the answer has what the footprint gives and no files |
 
 A request that is wrong as a whole (not JSON, no `folder`, more than 20 buildings, a bad token) gets a 4xx error as in [Basics](#basics).
 
@@ -277,6 +278,28 @@ Then poll `GET /api/v1/generate/{jobId}` (the same token; every few seconds is f
 - A request that is wrong as a whole still gets its 4xx at once, not a job. The token is checked when the job starts, so a bad one shows as `failed`.
 - One job runs at a time; up to 4 wait or run per server (`GENERATE_MAX_JOBS`), then `429 busy`: try again later.
 - A job and its answer are kept in the server's memory for 10 minutes after it finishes (`GENERATE_JOB_TTL_MINUTES`) and are lost if the server restarts: fetch `result` once and keep it. A job that is gone, or belongs to another token, gives `404 not_found`; send the batch again (the buildings are only updated, see [Regenerating](#regenerating)).
+
+### `GET /api/v1/buildings/{id}/scenery`
+
+A building as it is saved now, as scenery: for a map program that placed it from an OSM footprint and wants to update it after a person changed it in the app (any token that sees the building).
+Poll `GET /api/v1/buildings?folder=...` (`version`, `edited`, `sourceId`), then fetch the ones that changed.
+
+| Query | |
+|---|---|
+| `textureSize` | 256, 512 (default) or 1024 |
+| `x`, `y`, `angle` | All three or none: where the **middle of the main part** stands in the map's plane (metres, x east, y north) and the angle of its width axis (degrees counter-clockwise from east), as you got them in `placement` when you generated it. A generated building does not remember where it stands, so you give it. Then the answer has `placement` and `footprint` in the shape generate gives |
+
+```json
+{ "buildingId": "0e7c3f5a...", "name": "Storgatan 4", "version": 7, "sourceId": "way/123456", "edited": true,
+  "local": { "width": 14, "depth": 9, "parts": [ { "part": "main", "x": 0, "z": 0, "width": 14, "depth": 9 }, { "part": "wing", "x": 4.5, "z": -7.5, "width": 5, "depth": 6 } ] },
+  "placement": { "x": 1210.5, "y": 880.7, "angle": 0, "width": 14, "depth": 9 },
+  "footprint": { "angle": 0, "parts": [ { "part": "main", "x": 1210.5, "y": 880.7, "width": 14, "depth": 9 }, { "part": "wing", "x": 1215, "y": 888.2, "width": 5, "depth": 6 } ] },
+  "files": [ { "path": "house.i3d", "sha256": "...", "size": 123456 } ], "blobs": { "<sha256>": "<base64>" } }
+```
+
+`local` is the parts in the building's own coordinates (x along the front wall, z towards the front, so north is -z; the middle of the main part at 0, 0), always there. `files` and `blobs` are as in
+[Scenery mode](#scenery-mode). `ETag` (version, size and middle): send it back as `If-None-Match` to get `304`. The id stays the same when a person edits the building. `404` for a building that is not yours.
+Not tried with a map program.
 
 ### Scenery mode
 
@@ -310,7 +333,7 @@ The answer is large (a few MB per building before sharing), so ask for a few bui
 
 In the building's own coordinates the front wall is at `+z` (z points towards the viewer when looking at the plan from above, so **north is -z**).
 Turning that into the game's coordinates is the map program's job: a map whose world x is east and world z is south uses `worldX = x`, `worldZ = -y`,
-and rotates the building about the vertical axis by `angle`. The sign of the rotation in the game's i3d convention is **not yet checked in the game**; try one L-shaped building and flip it if it comes out mirrored.
+and rotates the building about the vertical axis by `angle`. The map program fs25map-creator checked the rotation in the game on 2026-11-22 with the reference building below: `worldX = x`, `worldZ = -y` and the angle as given need no flip. Another program should still place the reference building first.
 
 ### Reference building
 
