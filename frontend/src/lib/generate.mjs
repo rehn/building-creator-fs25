@@ -91,7 +91,7 @@ export async function generate(parsed, { api, authorization, fetchImpl = fetch, 
       // (a generated building does not remember where it stands; the program that sent the footprint does)
       const kept = { ...entry, kept: true, edited: true, notes: [...r.notes, "Changed in the app since it was generated, so it was left as it is."] };
       const cur = await currentSettings(fetchImpl, base, headers, building.id);
-      if (!cur) { out.push(kept); continue; }
+      if (!cur) { out.push({ ...kept, fallback: true }); continue; }   // fallback: the saved building could not be read, so this is the footprint's own answer
       const g = editedGeometry(cur.settings, r.placement);
       Object.assign(kept, { version: cur.version, placement: g.placement, footprint: g.footprint });
       if (scenery) {

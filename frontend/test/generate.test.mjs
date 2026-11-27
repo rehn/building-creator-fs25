@@ -91,6 +91,7 @@ test("generate: a building a person has changed is kept: no files are made or se
   assert.equal(out.buildings[0].kept, true);
   assert.equal(made, 0);
   assert.equal(log.puts.length, 0);
+  assert.equal(out.buildings[0].fallback, true);   // the saved building could not be read: the answer is the footprint's own
 });
 
 test("generate: a kept building answers with its real placement and parts, from what is saved in the app", async () => {
@@ -102,6 +103,7 @@ test("generate: a kept building answers with its real placement and parts, from 
   assert.equal(e.placement.depth, 9);
   assert.equal(e.footprint.parts.length, 1);
   assert.equal(e.version, 4);
+  assert.equal(e.fallback, undefined);
   assert.equal(log.puts.length, 0);
 });
 

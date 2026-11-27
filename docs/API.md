@@ -94,7 +94,7 @@ All of the user's buildings.
 | `kind` | `house`, `chicken`, `cow`, `sheep`, `shed`, `dealership`, `defaultdealer` |
 | `icon` | Path of the picture (PNG or JPEG), empty if there is none |
 | `i3d`, `obj`, `mtl`, `mod` | Paths of the files (`mod` is `mod.zip`, the editor's export; the game mod is `/api/v1/buildings/{id}/game-mod.zip`). Relative to the base address |
-| `version` | Goes up every time the building is saved with its files. The files are those of this version. Keep what you made from a file for as long as the version is the same |
+| `version` | Goes up by one every time a person saves the building in the app or it is generated again (not when it is only moved to another folder), so a higher number than the one you kept means it changed. The files are those of this version. Keep what you made from a file for as long as the version is the same |
 | `hasModel` | `false` when the building has not been saved since its files were kept. Its files give 404 until it is saved (opened and saved in the editor, or generated) |
 | `updatedAt` | When it was last changed |
 | `folder` | The map the building belongs to, `""` for none (see [Folders](#folders)) |
@@ -255,7 +255,7 @@ Answer, `200`, in the order you sent them (a building that could not be made has
 | `footprint` | The whole building (main part **and wings**) as rectangles: `{ "angle": 0, "parts": [{ "part": "main", "x": 1210.5, "y": 880.7, "width": 12, "depth": 7 }, { "part": "wing", ... }] }`. Each rectangle's middle `x, y` is in the map's plane (metres, x east, y north); every rectangle is turned by the same `angle` (degrees counter-clockwise from east) with `width` along the building's x axis. The first is the main part, equal to `placement`. Use it to clear trees, level the ground or check overlaps |
 | `notes` | What was guessed, fitted or left out. Show them to the user or log them |
 | `ok: false` | `error` says why and `code` is one of `invalid_footprint` (fewer than three points or no numbers), `too_small` (under 6 m2, or a main part under 2.5 m on a side), `too_large` (main part over 60 x 50 m; the long side counts as the width), `degenerate` (no shape found), `invalid_building` (missing or repeated id), `files_failed` (or the API's own code); the building was not made |
-| `kept: true` | A person changed it in the app, so it was left alone and not made again. `placement` and `footprint` are then those of the building **as it is saved now** (its middle where your footprint put it, its size and wings from the app), `version` is its current one and, in `"scenery"` mode, `files` and `blobs` are made from it, so a map program can use the answer as it is. If the saved building cannot be read, the answer has what the footprint gives and no files |
+| `kept: true` | A person changed it in the app, so it was left alone and not made again. `placement` and `footprint` are then those of the building **as it is saved now** (its middle where your footprint put it, its size and wings from the app), `version` is its current one and, in `"scenery"` mode, `files` and `blobs` are made from it, so a map program can use the answer as it is. If the saved building cannot be read, the answer has what the footprint gives, no files and `"fallback": true` (a normal `kept` answer has no `fallback`) |
 
 A request that is wrong as a whole (not JSON, no `folder`, more than 20 buildings, a bad token) gets a 4xx error as in [Basics](#basics).
 
