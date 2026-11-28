@@ -1,10 +1,10 @@
-// The modeller (docs/PLAN_BUILDER.md), step 1: a project is a list of parts built from primitives (box, cylinder), each with its base at
+// The modeller (docs/PLAN_BUILDER.md), step 1: a project is a list of parts built from primitives (box, cylinder, cone, ball, pipe, bent pipe), each with its base at
 // x, y, z, turned about its own middle (rotX, rotZ, then rotY last: R = Ry * Rx * Rz), with a colour. This file is the model: sanitize, a mesh per part and the i3d export.
 // Pure, no DOM. It imports the i3d writer only, never the house editor (editor.mjs, model.mjs): the two views share the export code, not each other.
 import { I3dDoc, tg, shape, boxMesh, v3 } from "../editor/i3d.mjs";
 
 export const FORMAT = "fs25-builder", VERSION = 1, MAX_PARTS = 200, MAX_MATERIALS = 32;
-export const SHAPES = ["box", "cylinder"];
+export const SHAPES = ["box", "cylinder", "cone", "sphere", "pipe", "bend"];
 const DEFAULT_COLOR = "#9aa3a8";
 
 const num = (v, d) => { v = +v; return Number.isFinite(v) ? v : d; };
@@ -17,7 +17,7 @@ const color = c => (typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c) ? c.toLow
 /** A part as the model keeps it: known shape, every number in range. id: its place in the list. */
 function cleanPart(raw, id) {
   const turn = v => round(((num(v, 0) % 360) + 540) % 360 - 180);   // (-180, 180]
-  return {
+  const part = {
     id, name: text(raw.name, `part${id}`), shape: SHAPES.includes(raw.shape) ? raw.shape : "box",
     x: round(clamp(num(raw.x, 0), -200, 200)), y: round(clamp(num(raw.y, 0), -10, 100)), z: round(clamp(num(raw.z, 0), -200, 200)),
     rotX: turn(raw.rotX), rotY: turn(raw.rotY), rotZ: turn(raw.rotZ),
@@ -26,29 +26,45 @@ function cleanPart(raw, id) {
     color: color(raw.color),
     faces: {}, faceRot: {}, collision: raw.collision !== false,
   };
+  if (part.shape === "pipe" || part.shape === "bend") part.t = round(Math.min(clamp(num(raw.t, 0.05), 0.005, 25), part.r * 0.9));   // (the wall leaves a hole)
+  if (part.shape === "bend") {
+    part.bendR = round(clamp(num(raw.bendR, 1), part.r * 1.1, 50)); part.bendA = round(clamp(num(raw.bendA, 90), 5, 180));
+    part.h = round(clamp((part.bendR + part.r) * (part.bendA >= 90 ? 1 : Math.sin(part.bendA * Math.PI / 180)), 0.01, 100));   // (its real height: the turn is about h/2)
+  }
+  if (part.shape === "sphere") part.h = round(clamp(part.r * 2, 0.01, 50));   // (a ball is turned about its middle, which is r up: h is what placedMesh and groundPart use)
+  return part;
 }
 
-/** The faces a shape has, in the order its mesh draws them: box -x +x -y +y -z +z (two triangles each), cylinder side, bottom, top. */
+/** The faces a shape has, in the order its mesh draws them: box -x +x -y +y -z +z (two triangles each), cylinder side, bottom, top, cone side, bottom, ball one surface. */
 const BOX_FACES = [["nx", "Left (-x)"], ["px", "Right (+x)"], ["ny", "Bottom (-y)"], ["py", "Top (+y)"], ["nz", "Back (-z)"], ["pz", "Front (+z)"]];
 const CYLINDER_FACES = [["side", "Side"], ["bottom", "Bottom"], ["top", "Top"]];
-export const partFaces = part => (part.shape === "cylinder" ? CYLINDER_FACES : BOX_FACES).map(([id, label]) => ({id, label}));
+const CONE_FACES = [["side", "Side"], ["bottom", "Bottom"]];
+const SPHERE_FACES = [["surface", "Surface"]];
+const PIPE_FACES = [["outer", "Outside"], ["inner", "Inside"], ["top", "Top"], ["bottom", "Bottom"]];
+const BEND_FACES = [["outer", "Outside"], ["inner", "Inside"], ["start", "Start"], ["end", "End"]];
+const facesOf = shape => ({cylinder: CYLINDER_FACES, cone: CONE_FACES, sphere: SPHERE_FACES, pipe: PIPE_FACES, bend: BEND_FACES}[shape] || BOX_FACES);
+export const partFaces = part => facesOf(part.shape).map(([id, label]) => ({id, label}));
 
 /** For each triangle of partMesh(part) the face it is on. */
 export function faceOfTriangle(part) {
   if (part.shape === "cylinder") return [...Array(part.seg * 2).fill("side"), ...Array(part.seg).fill("bottom"), ...Array(part.seg).fill("top")];
+  if (part.shape === "cone") return [...Array(part.seg).fill("side"), ...Array(part.seg).fill("bottom")];
+  if (part.shape === "pipe") return ["outer", "inner", "top", "bottom"].flatMap(f => Array(part.seg * 2).fill(f));
+  if (part.shape === "bend") { const n = bendSteps(part.seg, part.bendA) * part.seg * 2; return [...Array(n).fill("outer"), ...Array(n).fill("inner"), ...Array(part.seg * 2).fill("start"), ...Array(part.seg * 2).fill("end")]; }
+  if (part.shape === "sphere") return Array(part.seg * (sphereRings(part.seg) * 2 - 2)).fill("surface");
   return BOX_FACES.flatMap(([id]) => [id, id]);
 }
 
 /** The faces of a part keep only what exists: a face its shape has, pointing at a material row that exists. */
 function cleanFaces(shape, raw, materialIds) {
-  const out = {}, has = new Set((shape === "cylinder" ? CYLINDER_FACES : BOX_FACES).map(f => f[0]));
+  const out = {}, has = new Set(facesOf(shape).map(f => f[0]));
   if (raw && typeof raw === "object" && !Array.isArray(raw)) for (const [f, m] of Object.entries(raw)) if (has.has(f) && typeof m === "number" && materialIds.has(m)) out[f] = m;
   return out;
 }
 
 /** The quarter turns of faces' textures: {faceId: 90 | 180 | 270}, only for faces the shape has (0 is the same as none). */
 function cleanRot(shape, raw) {
-  const out = {}, has = new Set((shape === "cylinder" ? CYLINDER_FACES : BOX_FACES).map(f => f[0]));
+  const out = {}, has = new Set(facesOf(shape).map(f => f[0]));
   if (raw && typeof raw === "object" && !Array.isArray(raw)) for (const [f, d] of Object.entries(raw)) if (has.has(f) && (d === 90 || d === 180 || d === 270)) out[f] = d;
   return out;
 }
@@ -111,6 +127,13 @@ export function partUv(model, part) {
       nx: v => [z(v), y(v)], px: v => [-z(v), y(v)], nz: v => [-x(v), y(v)], pz: v => [x(v), y(v)], py: v => [x(v), -z(v)], ny: v => [x(v), z(v)],
       top: v => [x(v), -z(v)], bottom: v => [x(v), z(v)],
       side: v => [-Math.round((v >> 1)) / part.seg * 2 * Math.PI * part.r, y(v)],
+      outer: v => part.shape === "bend" ? [-(v % (part.seg + 1)) / part.seg * 2 * Math.PI * part.r, Math.floor(v / (part.seg + 1)) / bendSteps(part.seg, part.bendA) * part.bendR * part.bendA * Math.PI / 180]
+        : [-Math.round((v >> 1)) / part.seg * 2 * Math.PI * part.r, y(v)],
+      inner: v => part.shape === "bend" ? [(v % (part.seg + 1)) / part.seg * 2 * Math.PI * (part.r - part.t), Math.floor(v / (part.seg + 1)) / bendSteps(part.seg, part.bendA) * part.bendR * part.bendA * Math.PI / 180]
+        : [Math.round((v >> 1)) / part.seg * 2 * Math.PI * (part.r - part.t), y(v)],
+      start: v => [x(v), z(v)],
+      end: v => { const a = part.bendA * Math.PI / 180; return [(x(v) - part.bendR * (1 - Math.cos(a))) * -Math.cos(a) + (y(v) - part.bendR * Math.sin(a)) * Math.sin(a), z(v)]; },
+      surface: v => [-(v % (part.seg + 1)) / part.seg * 2 * Math.PI * part.r, y(v)],
     }[f];
     const rot = part.faceRot[f] || 0;   // (a quarter turn of the texture on the face: u and v swap, one of them runs the other way)
     const fit = row.texture.fit;
@@ -161,9 +184,119 @@ function cylinderMesh(r, h, seg) {
   return g;
 }
 
+/** Closed cone mesh on its base: radius r, height h, seg sides; the side has a vertex pair per column (base, point) like the cylinder's, the base is flat. */
+function coneMesh(r, h, seg) {
+  const g = {p: [], n: [], uv: [], i: []}, len = Math.hypot(h, r);
+  const at = k => [Math.cos(k % seg / seg * 2 * Math.PI), Math.sin(k % seg / seg * 2 * Math.PI)];
+  for (let k = 0; k <= seg; k++) {
+    const [c, s] = at(k), n = [h * c / len, r / len, h * s / len];
+    g.p.push(r * c, 0, r * s, 0, h, 0); g.n.push(...n, ...n); g.uv.push(k / seg, 0, (k + 0.5) / seg, 1);
+  }
+  for (let k = 0; k < seg; k++) g.i.push(k * 2, k * 2 + 1, (k + 1) * 2);
+  const centre = g.p.length / 3, ring = centre + 1;
+  g.p.push(0, 0, 0); g.n.push(0, -1, 0); g.uv.push(0.5, 0.5);
+  for (let k = 0; k < seg; k++) { const [c, s] = at(k); g.p.push(r * c, 0, r * s); g.n.push(0, -1, 0); g.uv.push(0.5 + c / 2, 0.5 + s / 2); }
+  for (let k = 0; k < seg; k++) g.i.push(centre, ring + k, ring + (k + 1) % seg);
+  return g;
+}
+
+/** Closed pipe mesh on its base: outer radius r, wall t, height h, seg sides. Two walls (a vertex pair per column like the cylinder's) and a flat ring at each end. */
+function pipeMesh(r, t, h, seg) {
+  const g = {p: [], n: [], uv: [], i: []}, ri = r - t;
+  const at = k => [Math.cos(k % seg / seg * 2 * Math.PI), Math.sin(k % seg / seg * 2 * Math.PI)];
+  for (const [rad, sign] of [[r, 1], [ri, -1]]) {   // the outside, then the inside (its normals point at the axis, its triangles the other way)
+    const base = g.p.length / 3;
+    for (let k = 0; k <= seg; k++) {
+      const [c, s] = at(k);
+      g.p.push(rad * c, 0, rad * s, rad * c, h, rad * s); g.n.push(sign * c, 0, sign * s, sign * c, 0, sign * s); g.uv.push(k / seg, 0, k / seg, 1);
+    }
+    for (let k = 0; k < seg; k++) {
+      const loK = base + k * 2, hiK = loK + 1, loJ = loK + 2, hiJ = loK + 3;
+      g.i.push(...(sign > 0 ? [loK, hiJ, loJ, loK, hiK, hiJ] : [loK, loJ, hiJ, loK, hiJ, hiK]));
+    }
+  }
+  for (const [y, up] of [[h, true], [0, false]]) {   // the ends: a ring of two vertices (outer, inner) per column
+    const base = g.p.length / 3;
+    for (let k = 0; k <= seg; k++) {
+      const [c, s] = at(k);
+      g.p.push(r * c, y, r * s, ri * c, y, ri * s); g.n.push(0, up ? 1 : -1, 0, 0, up ? 1 : -1, 0); g.uv.push(0.5 + c / 2, 0.5 + s / 2, 0.5 + ri / r * c / 2, 0.5 + ri / r * s / 2);
+    }
+    for (let k = 0; k < seg; k++) {
+      const oK = base + k * 2, iK = oK + 1, oJ = oK + 2, iJ = oK + 3;
+      g.i.push(...(up ? [iK, iJ, oK, iJ, oJ, oK] : [iK, oK, iJ, iJ, oK, oJ]));
+    }
+  }
+  return g;
+}
+
+/** The steps along a bend of angle deg (a full circle of seg sides would be seg steps; at least 2). */
+const bendSteps = (seg, deg) => Math.max(2, Math.round(seg * deg / 360));
+
+/**
+ * A bent pipe: the pipe's middle line is an arc of radius br (bendR) and angle a degrees round the point (br, 0, 0), in the x-y plane,
+ * starting at the origin going up (the start ring lies on y = 0) and curving towards +x. Outer radius r, wall t, seg sides.
+ */
+function bendMesh(r, t, br, deg, seg) {
+  const g = {p: [], n: [], uv: [], i: []}, steps = bendSteps(seg, deg), a = deg * Math.PI / 180, ri = r - t;
+  const frame = i => { const f = a * i / steps; return {c: [br - br * Math.cos(f), br * Math.sin(f), 0], rho: [-Math.cos(f), Math.sin(f), 0], tan: [Math.sin(f), Math.cos(f), 0]}; };
+  const dir = (fr, k) => { const th = k % seg / seg * 2 * Math.PI, c = Math.cos(th), s = Math.sin(th); return [fr.rho[0] * c, fr.rho[1] * c, s, c, s]; };
+  for (const [rad, sign] of [[r, 1], [ri, -1]]) {
+    const base = g.p.length / 3;
+    for (let i = 0; i <= steps; i++) {
+      const fr = frame(i);
+      for (let k = 0; k <= seg; k++) {
+        const d = dir(fr, k);
+        g.p.push(fr.c[0] + rad * d[0], fr.c[1] + rad * d[1], fr.c[2] + rad * d[2]); g.n.push(sign * d[0], sign * d[1], sign * d[2]); g.uv.push(k / seg, i / steps);
+      }
+    }
+    for (let i = 0; i < steps; i++) for (let k = 0; k < seg; k++) {
+      const p0 = base + i * (seg + 1) + k, p1 = p0 + 1, q0 = p0 + seg + 1, q1 = q0 + 1;
+      g.i.push(...(sign > 0 ? [p0, p1, q1, p0, q1, q0] : [p0, q1, p1, p0, q0, q1]));
+    }
+  }
+  for (const [i, sign] of [[0, -1], [steps, 1]]) {   // the two ends: a ring (outer, inner per column) facing along the pipe's direction
+    const fr = frame(i), base = g.p.length / 3, n = fr.tan.map(x => x * sign);
+    for (let k = 0; k <= seg; k++) {
+      const d = dir(fr, k);
+      g.p.push(fr.c[0] + r * d[0], fr.c[1] + r * d[1], fr.c[2] + r * d[2], fr.c[0] + ri * d[0], fr.c[1] + ri * d[1], fr.c[2] + ri * d[2]);
+      g.n.push(...n, ...n); g.uv.push(0.5 + d[3] / 2, 0.5 + d[4] / 2, 0.5 + ri / r * d[3] / 2, 0.5 + ri / r * d[4] / 2);
+    }
+    for (let k = 0; k < seg; k++) {
+      const oK = base + k * 2, iK = oK + 1, oJ = oK + 2, iJ = oK + 3;
+      g.i.push(...(sign > 0 ? [iK, oK, iJ, iJ, oK, oJ] : [iK, iJ, oK, iJ, oJ, oK]));
+    }
+  }
+  return g;
+}
+
+/** The rings of a ball with seg sides (half as many, at least 3). */
+const sphereRings = seg => Math.max(3, Math.round(seg / 2));
+
+/** Ball mesh standing on y = 0: radius r, seg columns, sphereRings(seg) rings; smooth normals. The poles' triangles that would have no area are left out. */
+function sphereMesh(r, seg) {
+  const g = {p: [], n: [], uv: [], i: []}, rings = sphereRings(seg);
+  for (let j = 0; j <= rings; j++) {
+    const a = j / rings * Math.PI, sa = Math.sin(a), ca = Math.cos(a);   // (a = 0 at the bottom)
+    for (let k = 0; k <= seg; k++) {
+      const f = k % seg / seg * 2 * Math.PI, c = Math.cos(f), s = Math.sin(f);
+      g.p.push(r * sa * c, r * (1 - ca), r * sa * s); g.n.push(sa * c, -ca, sa * s); g.uv.push(k / seg, j / rings);
+    }
+  }
+  for (let j = 0; j < rings; j++) for (let k = 0; k < seg; k++) {
+    const a = j * (seg + 1) + k, b = a + 1, c = a + seg + 1, d = c + 1;
+    if (j > 0) g.i.push(a, d, b);
+    if (j < rings - 1) g.i.push(a, c, d);
+  }
+  return g;
+}
+
 /** A part's mesh in its own frame: standing on y = 0, centred on x = z = 0 (the node places and turns it). */
 export function partMesh(part) {
   if (part.shape === "cylinder") return cylinderMesh(part.r, part.h, part.seg);
+  if (part.shape === "cone") return coneMesh(part.r, part.h, part.seg);
+  if (part.shape === "sphere") return sphereMesh(part.r, part.seg);
+  if (part.shape === "pipe") return pipeMesh(part.r, part.t, part.h, part.seg);
+  if (part.shape === "bend") return bendMesh(part.r, part.t, part.bendR, part.bendA, part.seg);
   const g = boxMesh([part.w, part.h, part.d]);
   for (let k = 1; k < g.p.length; k += 3) g.p[k] += part.h / 2;
   return g;
