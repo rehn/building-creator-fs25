@@ -37,15 +37,19 @@ export default function Builder({ initial, onChange, onReady }: { initial: Recor
   const canvas = useRef<HTMLCanvasElement>(null);
   const view = useRef<BuilderView | null>(null);
   const [face, setFace] = useState<string | null>(null);
+  // what a click in the view does: "object" chooses a part and a drag moves it, "material" chooses a face of a part
+  const [mode, setMode] = useState<"object" | "material">("object");
   const [library, setLibrary] = useState<Texture[]>([]);   // the user's saved textures (My textures)
   const [loaded, setLoaded] = useState(0);                // how many texture pictures the view has got (a change redraws)
   const asked = useRef(new Set<string>());
   const pick = useRef<(id: number | null, face: string | null) => void>(() => {});
   pick.current = (id, f) => { setChosen(id); setFace(id === null ? null : f); };
+  const moved = useRef<(id: number, at: { x: number; y: number; z: number }) => void>(() => {});
+  moved.current = (id, at) => { const next = updatePart(modelRef.current, id, at); setModel(next); onChange(next); };
 
   useEffect(() => {
     if (!canvas.current) return;
-    const v = createBuilderView(canvas.current, { onPick: (id, f) => pick.current(id, f) });
+    const v = createBuilderView(canvas.current, { onPick: (id, f) => pick.current(id, f), onMoveEnd: (id, at) => moved.current(id, at) });
     view.current = v;
     v.show(model, chosen, face); v.frame(model);
     onReady?.({ snapshot: v.snapshot, picture: v.picture, setItemId: id => { const next = sanitize({ ...modelRef.current, item: { id } }); setModel(next); onChange(next); } });
@@ -53,7 +57,8 @@ export default function Builder({ initial, onChange, onReady }: { initial: Recor
     // (mounted once; later changes are drawn by the effect below)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  useEffect(() => { view.current?.show(model, chosen, face); }, [model, chosen, face, loaded]);
+  useEffect(() => { view.current?.setMode(mode); }, [mode]);
+  useEffect(() => { view.current?.show(model, chosen, mode === "material" ? face : null); }, [model, chosen, face, mode, loaded]);
   useEffect(() => { api.textures().then(setLibrary).catch(() => setLibrary([])); }, []);
   // the pictures of the textures the materials use, fetched once each and handed to the view
   useEffect(() => {
@@ -101,7 +106,7 @@ export default function Builder({ initial, onChange, onReady }: { initial: Recor
             ))}
           </>}
         </ul>
-        {model.parts.length === 0 && <p className="hint">Add a box or a cylinder to start. Drag in the view to turn, scroll to zoom, click a part to choose it.</p>}
+        {model.parts.length === 0 && <p className="hint">Add a box or a cylinder to start. Drag in the view to turn, scroll to zoom, click a part to choose it and drag it to move it (shift: up and down).</p>}
         <p className="hint axes"><b style={{ color: "#d33" }}>x</b> red, <b style={{ color: "#2a2" }}>y</b> green (up), <b style={{ color: "#33d" }}>z</b> blue.</p>
       </aside>
 
@@ -131,10 +136,10 @@ export default function Builder({ initial, onChange, onReady }: { initial: Recor
             </section>
             <section className="hx-card" aria-label="Faces">
               <h3 className="hx-card-h">{t("Faces")}</h3>
-              <p className="hint">Click a face in the view, or pick it here, to give it a material.</p>
+              <p className="hint">Switch the view to Material, then click a face in it, or pick it here, to give it a material.</p>
               <div className="seg wrap">
                 {partFaces(part).map(f => (
-                  <button type="button" key={f.id} aria-pressed={face === f.id} onClick={() => setFace(face === f.id ? null : f.id)}>{f.label}</button>
+                  <button type="button" key={f.id} aria-pressed={face === f.id} onClick={() => { setMode("material"); setFace(face === f.id ? null : f.id); }}>{f.label}</button>
                 ))}
               </div>
               {face && (
@@ -200,6 +205,10 @@ export default function Builder({ initial, onChange, onReady }: { initial: Recor
 
       <div className="modedit-stage">
         <canvas ref={canvas} aria-label="3D view of the parts" />
+        <div className="seg modedit-modes" role="group" aria-label={t("What a click in the view does")}>
+          <button type="button" aria-pressed={mode === "object"} title={t("Click a part to choose it, drag it to move it (shift: up and down)")} onClick={() => setMode("object")}>Object</button>
+          <button type="button" aria-pressed={mode === "material"} title={t("Click a face to give it a material")} onClick={() => setMode("material")}>Material</button>
+        </div>
       </div>
     </div>
   );
