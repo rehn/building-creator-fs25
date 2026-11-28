@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { api, type User } from "@/lib/api";
+import { inFrame } from "@/lib/frameParent.mjs";
 import { AppSwitch } from "./AppSwitch";
 import { Brand } from "./Brand";
 import { LanguageSelect } from "./LanguageSelect";
@@ -17,6 +18,8 @@ export function TopBar({ user }: { user: User | null }) {
   async function logout() {
     try { await api.logout(); } finally { router.replace("/login"); }
   }
+  // (AppConfig shows the pages only after the browser has started them, so there is no server-made bar to differ from.)
+  if (inFrame()) return null;
   const on = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
   const logoutBtn = (
     <button type="button" className="iconbtn" onClick={logout} aria-label="Log out" title="Log out">

@@ -8,3 +8,8 @@ export function notifyBuildingSaved(id, version, win = globalThis.window) {
   win.parent.postMessage({ type: "fs25-building-saved", id, version }, origin);
   return true;
 }
+
+// True when the app is shown in an iframe (the map app): the top bar is left out there, the page around it has its own.
+export function inFrame(win = globalThis.window) {
+  return !!win && win.parent !== win;
+}
