@@ -10,15 +10,12 @@ import { EditorShell } from "@/components/EditorShell";
 import { exportI3dAtlas, atlasFiles, atlasDdsFiles, type TextureMaps } from "@/builder/atlas.mjs";
 import { makeItem } from "@/builder/item.mjs";
 import { t } from "@/i18n/index.mjs";
-import { decodeDds } from "@/editor/dds.mjs";
+import { loadMaps } from "@/lib/textureMaps";
 
-/** The atlas's DDS files: the user's textures the atlas is made of are fetched (diffuse and normal) and put together. */
+/** The atlas's DDS files: the textures the atlas is made of (the user's are fetched, the building surfaces made)  (diffuse and normal) and put together. */
 async function atlasPictures(layout: Parameters<typeof atlasDdsFiles>[0], ids: string[]) {
   const maps = new Map<string, TextureMaps>();
-  for (const id of ids) {
-    const [d, n] = await Promise.all((["diffuse", "normal"] as const).map(async k => decodeDds(new Uint8Array(await api.textureFile(id, k)))));
-    maps.set(id, { size: d.width, diffuse: new Uint8ClampedArray(d.data), normal: new Uint8ClampedArray(n.data) });
-  }
+  for (const id of ids) maps.set(id, await loadMaps(id));
   return atlasDdsFiles(layout, id => maps.get(id) ?? null);
 }
 import type { BuilderHandle, BuilderModel } from "@/builder/Builder";

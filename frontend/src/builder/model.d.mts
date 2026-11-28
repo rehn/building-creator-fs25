@@ -1,7 +1,9 @@
 export interface Part {
-  id: number; name: string; shape: "box" | "cylinder";
+  id: number; name: string; shape: "box" | "cylinder" | "cone" | "sphere" | "pipe" | "bend";
   x: number; y: number; z: number; rotX: number; rotY: number; rotZ: number;
   w: number; h: number; d: number; r: number; seg: number; color: string;
+  /** pipe and bend: the wall; bend: the radius and angle (degrees) of the arc the pipe follows */
+  t?: number; bendR?: number; bendA?: number;
   /** face id -> material id (a face drawn in a material row instead of the part\u2019s colour) */
   faces: Record<string, number>;
   /** face id -> quarter turn of its texture (90, 180 or 270; none = 0) */

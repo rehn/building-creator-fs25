@@ -5,7 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import { addMaterial, addPart, duplicatePart, groundPart, partFaces, removeMaterial, removePart, sanitize, setFaceMaterial, setFaceRotation, updateMaterial, updatePart, MAX_MATERIALS, type BuilderProject, type Part } from "./model.mjs";
 import { createBuilderView, type BuilderView } from "./view.mjs";
 import { api, type Texture } from "@/lib/api";
-import { decodeDds } from "@/editor/dds.mjs";
+import { loadDiffuse } from "@/lib/textureMaps";
+import { SURFACE_TEXTURES, parseSurfaceTextureId, surfaceTextureId, surfaceTextureMeters } from "./surfaceTextures.mjs";
 import { RangeField } from "@/components/RangeField";
 import { TreeRow } from "@/components/TreeRow";
 import { usePanelSizes } from "@/components/usePanelSizes";
@@ -14,12 +15,13 @@ import { t } from "@/i18n/index.mjs";
 export type BuilderModel = BuilderProject;
 export interface BuilderHandle { snapshot: () => string | null; picture: (size: number) => Promise<{ width: number; height: number; rgba: Uint8ClampedArray } | null>; setItemId: (id: string) => void }
 
-type Num = "x" | "y" | "z" | "rotX" | "rotY" | "rotZ" | "w" | "d" | "h" | "r" | "seg";
+type Num = "x" | "y" | "z" | "rotX" | "rotY" | "rotZ" | "w" | "d" | "h" | "r" | "seg" | "t" | "bendR" | "bendA";
 // label, step, the slider's ends, the ends of what may be typed (what the model allows), unit
 const NUM: Record<Num, [string, number, number, number, number, number, string]> = {
   x: ["x", 0.05, -10, 10, -200, 200, "m"], y: ["y", 0.05, 0, 10, -10, 100, "m"], z: ["z", 0.05, -10, 10, -200, 200, "m"],
   rotX: ["Tilt forward, around x (degrees)", 5, -180, 180, -180, 180, "°"], rotY: ["Turn, around y (degrees)", 5, -180, 180, -180, 180, "°"], rotZ: ["Tilt sideways, around z (degrees)", 5, -180, 180, -180, 180, "°"],
   seg: ["Sides (more is rounder)", 1, 6, 64, 6, 64, ""], w: ["Width", 0.05, 0.05, 10, 0.01, 50, "m"], d: ["Depth", 0.05, 0.05, 10, 0.01, 50, "m"], h: ["Height", 0.05, 0.05, 10, 0.01, 50, "m"], r: ["Radius", 0.05, 0.05, 5, 0.01, 25, "m"],
+  t: ["Wall thickness", 0.01, 0.01, 0.5, 0.005, 25, "m"], bendR: ["Bend radius (to the middle of the pipe)", 0.05, 0.1, 5, 0.01, 50, "m"], bendA: ["Bend angle (degrees)", 5, 5, 180, 5, 180, "°"],
 };
 
 /** What the tree has chosen when no part is: the prop itself (its game mod settings) or the materials. */
@@ -66,7 +68,7 @@ export default function Builder({ initial, onChange, onReady }: { initial: Recor
       const id = m.texture?.id;
       if (!id || asked.current.has(id)) continue;
       asked.current.add(id);
-      api.textureFile(id, "diffuse").then(buf => { const d = decodeDds(new Uint8Array(buf)); view.current?.setTexture(id, { width: d.width, height: d.height, rgba: d.data }); setLoaded(n => n + 1); }).catch(() => asked.current.delete(id));
+      loadDiffuse(id).then(d => { view.current?.setTexture(id, d); setLoaded(n => n + 1); }).catch(() => asked.current.delete(id));
     }
   }, [model.materials]);
 
@@ -82,7 +84,7 @@ export default function Builder({ initial, onChange, onReady }: { initial: Recor
   const field = (k: Num) => {
     const [label, step, min, max, hardMin, hardMax, unit] = NUM[k];
     return <RangeField key={`${part?.id}-${k}`} label={label} step={step} min={min} max={max} hardMin={hardMin} hardMax={hardMax} unit={unit}
-      value={part ? part[k] : 0} onLive={v => live({ [k]: v })} onCommit={v => set({ [k]: v })} />;
+      value={part?.[k] ?? 0} onLive={v => live({ [k]: v })} onCommit={v => set({ [k]: v })} />;
   };
   const choosePart = (id: number) => { setChosen(id); setFace(null); };
   const chooseNode = (n: Node) => { setChosen(null); setFace(null); setNode(n); };
@@ -95,6 +97,10 @@ export default function Builder({ initial, onChange, onReady }: { initial: Recor
         <div className="mtree-menu">
           <button type="button" onClick={() => add("box")}>+ Box</button>
           <button type="button" onClick={() => add("cylinder")}>+ Cylinder</button>
+          <button type="button" onClick={() => add("cone")}>+ Cone</button>
+          <button type="button" onClick={() => add("sphere")}>+ Ball</button>
+          <button type="button" onClick={() => add("pipe")}>+ Pipe</button>
+          <button type="button" onClick={() => add("bend")}>+ Bent pipe</button>
         </div>
         <ul className="tree" role="tree">
           <TreeRow depth={0} label={t("The prop")} strong on={chosen === null && node === "root"} onChoose={() => chooseNode("root")} folded={closed} onFold={() => setClosed(c => !c)} />
@@ -132,7 +138,8 @@ export default function Builder({ initial, onChange, onReady }: { initial: Recor
             </section>
             <section className="hx-card" aria-label="Size">
               <h3 className="hx-card-h">{t("Size")}</h3>
-              {(part.shape === "cylinder" ? (["r", "h", "seg"] as const) : (["w", "h", "d"] as const)).map(field)}
+              {(part.shape === "sphere" ? (["r", "seg"] as const) : part.shape === "pipe" ? (["r", "t", "h", "seg"] as const) : part.shape === "bend" ? (["r", "t", "bendR", "bendA", "seg"] as const)
+                : part.shape === "cylinder" || part.shape === "cone" ? (["r", "h", "seg"] as const) : (["w", "h", "d"] as const)).map(field)}
             </section>
             <section className="hx-card" aria-label="Faces">
               <h3 className="hx-card-h">{t("Faces")}</h3>
@@ -170,20 +177,29 @@ export default function Builder({ initial, onChange, onReady }: { initial: Recor
               {model.materials.map(m => (
                 <li key={m.id} className="builder-material">
                   <div className="builder-material-head">
-                    <input type="color" aria-label="Colour" value={m.color} onChange={e => change(updateMaterial(model, m.id, { color: e.target.value }))} />
+                    <input type="color" aria-label="Colour" value={m.color} onChange={e => {
+                      // (a building surface is drawn in the row's colour: its texture id says the colour)
+                      const s = m.texture && parseSurfaceTextureId(m.texture.id);
+                      change(updateMaterial(model, m.id, s ? { color: e.target.value, texture: { ...m.texture!, id: surfaceTextureId(s.kind, e.target.value) } } : { color: e.target.value }));
+                    }} />
                     <input type="text" translate="no" aria-label="Name" maxLength={60} value={m.name} onChange={e => change(updateMaterial(model, m.id, { name: e.target.value }))} />
                     <button type="button" className="danger" aria-label="Delete this material" onClick={() => change(removeMaterial(model, m.id))}>×</button>
                   </div>
                   <label className="field">Texture
-                    <select value={m.texture?.id ?? ""} onChange={e => {
-                      const tx = library.find(x => x.id === e.target.value);
-                      change(updateMaterial(model, m.id, { texture: tx ? { id: tx.id, meters: tx.meters, fit: m.texture?.fit ?? false } : null }));
+                    <select value={m.texture ? (parseSurfaceTextureId(m.texture.id) ? "surface:" + parseSurfaceTextureId(m.texture.id)!.kind : m.texture.id) : ""} onChange={e => {
+                      const v = e.target.value, fit = m.texture?.fit ?? false, tx = library.find(x => x.id === v);
+                      const texture = v.startsWith("surface:") ? { id: surfaceTextureId(v.slice(8), m.color), meters: surfaceTextureMeters(v.slice(8)), fit } : tx ? { id: tx.id, meters: tx.meters, fit } : null;
+                      change(updateMaterial(model, m.id, { texture }));
                     }}>
                       <option value="">Colour only</option>
-                      {m.texture && !library.some(x => x.id === m.texture!.id) && <option value={m.texture.id}>{"A texture that is gone"}</option>}
-                      {library.map(tx => <option key={tx.id} value={tx.id}>{tx.name}</option>)}
+                      {m.texture && !parseSurfaceTextureId(m.texture.id) && !library.some(x => x.id === m.texture!.id) && <option value={m.texture.id}>{"A texture that is gone"}</option>}
+                      <optgroup label={t("Surfaces of the buildings")}>
+                        {SURFACE_TEXTURES.map(s => <option key={s.kind} value={"surface:" + s.kind}>{t(s.label)}</option>)}
+                      </optgroup>
+                      {library.length > 0 && <optgroup label={t("My textures")}>{library.map(tx => <option key={tx.id} value={tx.id}>{tx.name}</option>)}</optgroup>}
                     </select>
                   </label>
+                  {m.texture && parseSurfaceTextureId(m.texture.id) && <p className="hint">The colour above is the colour of this surface.</p>}
                   <RangeField key={`${m.id}-smooth`} label="Shine (0 matt, 1 glossy)" unit="" step={0.05} min={0} max={1} value={m.smoothness} onCommit={v => change(updateMaterial(model, m.id, { smoothness: v }))} />
                   <RangeField key={`${m.id}-metal`} label="Metal (0 none, 1 bare metal)" unit="" step={0.05} min={0} max={1} value={m.metalness} onCommit={v => change(updateMaterial(model, m.id, { metalness: v }))} />
                   {m.texture && <label className="check"><input type="checkbox" checked={m.texture.fit} onChange={e => change(updateMaterial(model, m.id, { texture: { id: m.texture!.id, meters: m.texture!.meters, fit: e.target.checked } }))} /> Fit to face (the picture once over the whole face)</label>}
