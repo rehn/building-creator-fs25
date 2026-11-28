@@ -1,10 +1,13 @@
-// The modeller's 3D view (docs/PLAN_BUILDER.md): the parts on a ground grid, drag to turn, wheel to zoom, click a part to choose it.
+// The modeller's 3D view (docs/PLAN_BUILDER.md): the parts on a ground grid, drag to turn, wheel to zoom, click a part to choose it,
+// drag a part to move it (mode "object"; shift: up and down) or click a face to choose it (mode "material").
 // three.js only; it knows nothing about the house editor. The model comes from model.mjs (partMesh gives each part's mesh).
 import * as THREE from "three";
 import { partMesh, partUv, faceOfTriangle, faceColor, faceMaterial } from "./model.mjs";
+import { rayPlane, dragTarget } from "./drag.mjs";
 
-/** Mounts a view on canvas. show(model, selectedId, selectedFace) draws the parts; onPick(id | null, faceId | null) is told which part and face was clicked; dispose() frees it. */
-export function createBuilderView(canvas, {onPick = () => {}} = {}) {
+/** Mounts a view on canvas. show(model, selectedId, selectedFace) draws the parts; onPick(id | null, faceId | null) is told which part and face was clicked
+ * (in mode "object" no face: the part only); onMoveEnd(id, {x, y, z}) is told where a part was dragged to, when the mouse is let go; setMode("object" | "material"); dispose() frees it. */
+export function createBuilderView(canvas, {onPick = () => {}, onMoveEnd = () => {}} = {}) {
   const renderer = new THREE.WebGLRenderer({canvas, antialias: true, preserveDrawingBuffer: true});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   const scene = new THREE.Scene();
@@ -114,24 +117,49 @@ export function createBuilderView(canvas, {onPick = () => {}} = {}) {
     render();
   }
 
-  // orbit: drag; zoom: wheel; a press that hardly moves is a click
-  let drag = null;
-  const down = e => { canvas.setPointerCapture(e.pointerId); drag = {x: e.clientX, y: e.clientY, moved: 0}; };
+  // orbit: drag; zoom: wheel; a press that hardly moves is a click; in mode "object" a press on a part drags the part (on the ground, with shift up and down)
+  let mode = "object", drag = null;
+  const rayOf = e => {
+    const r = canvas.getBoundingClientRect(), ray = new THREE.Raycaster();
+    ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
+    return ray;
+  };
+  const down = e => {
+    canvas.setPointerCapture(e.pointerId); drag = {x: e.clientX, y: e.clientY, moved: 0, part: null};
+    if (mode !== "object" || !shown) return;
+    const hit = rayOf(e).intersectObjects(meshes, false)[0], part = hit && shown[0].parts.find(p => p.id === hit.object.userData.id);
+    if (!part) return;
+    if (part.id !== shown[1]) onPick(part.id, null);   // (a part is chosen as it is taken, so it can be chosen and moved in one go)
+    drag.part = {id: part.id, h: part.h, at: [part.x, part.y, part.z], start: [part.x, part.y, part.z], from: hit.point.toArray(), vertical: false, current: null};
+  };
+  const dragPart = (e, p) => {
+    const vertical = e.shiftKey, ray = rayOf(e);
+    // the plane the mouse moves in: the ground through where the part was taken, or (shift) a wall facing the camera
+    const dir = camera.getWorldDirection(new THREE.Vector3()), normal = vertical ? [-dir.x, 0, -dir.z] : [0, 1, 0];
+    if (vertical && Math.hypot(normal[0], normal[2]) < 1e-6) return;
+    const now = rayPlane(ray.ray.origin.toArray(), ray.ray.direction.toArray(), p.from, normal);
+    if (!now) return;
+    if (vertical !== p.vertical) { p.vertical = vertical; p.start = p.current || p.start; p.from = now; return; }   // (shift pressed or let go: carry on from here)
+    p.current = dragTarget(p.start, p.from, now, vertical);
+    const mesh = meshes.find(m => m.userData.id === p.id);
+    if (mesh) { mesh.position.set(p.current[0], p.current[1] + p.h / 2, p.current[2]); render(); }
+  };
   const move = e => {
     if (!drag) return;
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
     drag.x = e.clientX; drag.y = e.clientY; drag.moved += Math.abs(dx) + Math.abs(dy);
+    if (drag.part) { if (drag.moved >= 4) { canvas.style.cursor = "move"; dragPart(e, drag.part); } return; }
     look.theta -= dx * 0.008; look.phi = Math.min(Math.PI - 0.05, Math.max(0.05, look.phi - dy * 0.008));
     render();
   };
   const up = e => {
     if (!drag) return;
-    const click = drag.moved < 4; drag = null;
+    const click = drag.moved < 4, moved = drag.part && drag.part.current, part = drag.part; drag = null; canvas.style.cursor = "";
+    if (moved) { onMoveEnd(part.id, {x: moved[0], y: moved[1], z: moved[2]}); return; }
+    if (!click && part) { if (shown) show(...shown); return; }   // (taken and put back where it was: draw it there again)
     if (!click) return;
-    const r = canvas.getBoundingClientRect(), ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
-    const ray = new THREE.Raycaster(); ray.setFromCamera(ndc, camera);
-    const hit = ray.intersectObjects(meshes, false)[0];
-    onPick(hit ? hit.object.userData.id : null, hit ? hit.object.userData.faces[hit.faceIndex] ?? null : null);
+    const hit = rayOf(e).intersectObjects(meshes, false)[0];
+    onPick(hit ? hit.object.userData.id : null, hit && mode === "material" ? hit.object.userData.faces[hit.faceIndex] ?? null : null);
   };
   const wheel = e => { e.preventDefault(); look.dist = Math.min(200, Math.max(0.5, look.dist * Math.exp(e.deltaY * 0.001))); render(); };
   canvas.addEventListener("pointerdown", down); canvas.addEventListener("pointermove", move); canvas.addEventListener("pointerup", up);
@@ -142,7 +170,7 @@ export function createBuilderView(canvas, {onPick = () => {}} = {}) {
 
   return {
     // A small picture for the project list (the server refuses a data URL over 300 KB, which a full-size canvas on a big or retina window is).
-    show, frame, setTexture, hasTexture, snapshot: () => {
+    show, frame, setTexture, hasTexture, setMode: m => { mode = m === "material" ? "material" : "object"; }, snapshot: () => {
       try {
         render();
         const W = 480, H = 300, c = document.createElement("canvas"); c.width = W; c.height = H;
