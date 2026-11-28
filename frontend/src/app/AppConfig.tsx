@@ -3,6 +3,7 @@
 // and sets the language (the `lang` cookie; English if none) and translates what the pages show (i18n/dom.mjs).
 import { useEffect, useState } from "react";
 import { setMaxParts } from "@/editor/layout.mjs";
+import { setParentOrigin } from "@/lib/frameParent.mjs";
 import { setLang } from "@/i18n/index.mjs";
 import { startTranslating } from "@/i18n/dom.mjs";
 
@@ -11,7 +12,7 @@ function load(): Promise<void> {
   if (!loaded) {
     loaded = fetch("/config", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
-      .then((c) => { if (c && c.maxParts !== undefined) setMaxParts(c.maxParts); })
+      .then((c) => { if (c && c.maxParts !== undefined) setMaxParts(c.maxParts); if (c) setParentOrigin(c.parentOrigin); })
       .catch(() => undefined);   // (the defaults stand if the server doesn't answer)
   }
   return loaded;

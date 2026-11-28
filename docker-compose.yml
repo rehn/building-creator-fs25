@@ -28,6 +28,8 @@ services:
       API_URL: http://api:8080
       # The most parts (wings, at any depth) a building can have besides its main part (12, at most 40).
       MAX_PARTS: ${MAX_PARTS:-12}
+      # Origins that may show the app in an iframe, space separated. Empty: nobody.
+      FRAME_ANCESTORS: ${FRAME_ANCESTORS:-}
     ports:
       - "3000:3000"
     depends_on:

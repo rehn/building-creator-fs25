@@ -293,6 +293,7 @@ To release, push a tag like `v1.0.0` (`git tag v1.0.0 && git push origin v1.0.0`
 | `TRUST_PROXY` | api | `false` | Use `X-Forwarded-For` for rate limiting. Set `true` only when the API is reachable through the web app alone, as in docker-compose |
 | `API_URL` | web | `http://api:8080` | Where the web app finds the API |
 | `MAX_PARTS` | web | `12` | The most extensions a building can have besides its main part, at any depth (at most 40). Helm: `web.maxParts` |
+| `FRAME_ANCESTORS` | web | empty | Origins (space or comma separated, e.g. `https://map.example.se`) that may show the app in an iframe, sent as `Content-Security-Policy: frame-ancestors 'self' <origins>`; empty: `frame-ancestors 'none'`. The first one also gets a `fs25-building-saved` message when a building is saved in the iframe. Helm: `web.frameAncestors` |
 
 ## Backups
 

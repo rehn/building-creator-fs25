@@ -40,6 +40,7 @@ web=$(doc Deployment hus-building-creator-fs25-web)
 has "$web" 'value: "http://hus-building-creator-fs25-api:8080"' "web finds the API service"
 has "$web" 'name: MAX_PARTS' "web gets MAX_PARTS"
 has "$web" 'value: "12"' "MAX_PARTS is 12 to start with"
+has "$web" 'name: FRAME_ANCESTORS' "web gets FRAME_ANCESTORS"
 keep=$out; out=$(render --set publicUrl=https://hus.example.se --set adminEmail=me@example.se --set web.maxParts=20)
 has "$(doc Deployment hus-building-creator-fs25-web)" 'value: "20"' "web.maxParts sets MAX_PARTS"
 out=$keep
