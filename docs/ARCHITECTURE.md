@@ -225,7 +225,7 @@ named "legacy" in a few places in model.mjs, but they are a second input format,
   The most parts is a setting: the web container's MAX_PARTS variable (12 if not set, at most HARD_MAX_PARTS = 40; Helm web.maxParts, docker-compose MAX_PARTS), served by
   the web app's /config route and applied at start by AppConfig.tsx (layout.mjs setMaxParts; MAX_WINGS is a live binding).
 - Embedding: no X-Frame-Options; src/proxy.ts sets `Content-Security-Policy: frame-ancestors 'self' <FRAME_ANCESTORS>` (or 'none' when unset) per request, because next.config headers() is fixed at build time. Inside an iframe the building page
-  posts `{type:"fs25-building-saved", id, version}` to the first FRAME_ANCESTORS origin (served as parentOrigin by /config; lib/frameParent.mjs). The session cookie is SameSite=Lax, host-only, so a same-site (subdomain) iframe sends it. Not tried in a browser iframe.
+  posts `{type:"fs25-building-saved", id, version}` to the first FRAME_ANCESTORS origin (served as parentOrigin by /config; lib/frameParent.mjs). The session cookie is SameSite=Lax, host-only, so a same-site (subdomain) iframe sends it. In an iframe TopBar renders nothing (lib/frameParent.mjs inFrame), the page around has its own bar. Not tried in a browser iframe.
 - Saves must keep building: test/golden-saves.test.mjs builds representative saves (every preset, wing types, old formats) and compares a summary (parts, openings, triangles per material, size)
   with test/golden-saves.json, made with the code from before the parts tree. A change that should alter old saves updates it on purpose (UPDATE_GOLDEN=1 npm test). Saves are migrated when
   loaded (sanitize), nothing in the database changes.

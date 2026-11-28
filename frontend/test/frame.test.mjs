@@ -40,3 +40,16 @@ test("notifyBuildingSaved tells the parent only inside an iframe and only with a
   assert.equal(notifyBuildingSaved("b1", 3, framed), true);
   assert.deepEqual(sent, [[{ type: "fs25-building-saved", id: "b1", version: 3 }, "https://map.example.se"]]);
 });
+
+test("inFrame is true only when the page's parent is another window", async () => {
+  const { inFrame } = await import("../src/lib/frameParent.mjs");
+  const top = {}; top.parent = top;
+  assert.equal(inFrame(top), false);
+  assert.equal(inFrame({ parent: {} }), true);
+  assert.equal(inFrame(undefined), false);
+});
+
+test("the top bar is left out inside an iframe", () => {
+  const src = readFileSync(new URL("../src/components/TopBar.tsx", import.meta.url), "utf8");
+  assert.match(src, /inFrame\(\)\) return null/);
+});
