@@ -15,7 +15,7 @@ import { KINDS, sanitize, modName } from "@/editor/model.mjs";
 import { OBJECT_TYPES, OBJECT_LIMITS } from "@/editor/objects.mjs";
 import { createModView } from "@/editor/modView.mjs";
 import { projectGroups, boundsOf, footprint, turnedBy, mapKey, proceduralPicture, feetOf, buildingFeet, stretchCuts } from "@/editor/modPlan.mjs";
-import { decodeDds } from "@/editor/dds.mjs";
+import { loadDiffuse, loadMaps } from "@/lib/textureMaps";
 import { makeModPackage } from "@/editor/modExport.mjs";
 import { confirmDialog } from "@/components/dialog.mjs";
 import { RangeField } from "@/components/RangeField";
@@ -180,7 +180,7 @@ export default function ModPage() {
         if (!live) { mapsAsked.current.delete(key); continue; }
         await new Promise(r => setTimeout(r, 30));   // (let the page draw between two heavy ones)
         try {
-          if (map.textureId) { const d = decodeDds(new Uint8Array(await api.textureFile(map.textureId, "diffuse"))); view.current?.setMap(key, { width: d.width, height: d.height, rgba: d.data }); }
+          if (map.textureId) view.current?.setMap(key, await loadDiffuse(map.textureId));
           else view.current?.setMap(key, proceduralPicture(map));
         } catch { /* the group stays in its colour */ }
       }
@@ -231,10 +231,7 @@ export default function ModPage() {
         loadTextures: async (ids: string[]) => {
           const maps = new Map<string, { size: number; diffuse: Uint8ClampedArray; normal: Uint8ClampedArray }>();
           for (const id of ids) {
-            try {
-              const [d, n] = await Promise.all((["diffuse", "normal"] as const).map(async k => decodeDds(new Uint8Array(await api.textureFile(id, k)))));
-              maps.set(id, { size: d.width, diffuse: new Uint8ClampedArray(d.data), normal: new Uint8ClampedArray(n.data) });
-            } catch { /* grey */ }
+            try { maps.set(id, await loadMaps(id)); } catch { /* grey */ }
           }
           return maps;
         },
