@@ -98,6 +98,8 @@ web:
   replicas: 1
   # The most parts (wings, at any depth) a building can have besides its main part (12 if not set, at most 40).
   maxParts: 12
+  # Origins that may show the app in an iframe, space separated (e.g. "https://map.example.se"). Empty: nobody (frame-ancestors 'none').
+  frameAncestors: ""
   resources: {}
   podAnnotations: {}
   nodeSelector: {}

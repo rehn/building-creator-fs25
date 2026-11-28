@@ -9,6 +9,7 @@ import { EditorShell } from "@/components/EditorShell";
 import { t } from "@/i18n/index.mjs";
 import type { EditorHandle, Settings } from "@/editor/editor.mjs";
 import { authorName } from "@/editor/model.mjs";
+import { notifyBuildingSaved } from "@/lib/frameParent.mjs";
 
 const Editor = dynamic(() => import("@/editor/Editor"), {
   ssr: false,
@@ -111,6 +112,7 @@ export default function ProjectPage() {
       version.current = p.version;
       savedName.current = p.name;
       if (patch.data) await sendModel(p.version, patch.data, p.name);
+      notifyBuildingSaved(id, p.version);
       set(pending.current.data || pending.current.name !== undefined ? "dirty" : "saved");
     } catch (e) {
       pending.current = { ...patch, ...pending.current };
